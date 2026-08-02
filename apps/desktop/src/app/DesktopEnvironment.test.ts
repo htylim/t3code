@@ -111,6 +111,27 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
+  it.effect("gives fork builds a distinct app identity while sharing production state", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment({
+        appVersion: "0.0.31-fork.1",
+        isPackaged: true,
+      });
+
+      assert.equal(environment.isDevelopment, false);
+      assert.equal(environment.stateDir, "/Users/alice/.t3/userdata");
+      assert.equal(environment.userDataDirName, "t3code");
+      assert.deepEqual(environment.branding, {
+        baseName: "T3 Code",
+        stageLabel: "Fork",
+        displayName: "T3 Code (Fork)",
+      });
+      assert.equal(environment.appUserModelId, "com.htylim.t3code.fork");
+      assert.equal(environment.linuxDesktopEntryName, "t3code-fork.desktop");
+      assert.equal(environment.linuxWmClass, "t3code-fork");
+    }),
+  );
+
   it.effect("uses a configured app user model id override", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment(

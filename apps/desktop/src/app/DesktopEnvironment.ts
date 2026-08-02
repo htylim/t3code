@@ -4,6 +4,7 @@ import type {
   DesktopRuntimeArch,
   DesktopRuntimeInfo,
 } from "@t3tools/contracts";
+import { FORK_DESKTOP_APP_ID, isForkDesktopVersion } from "@t3tools/shared/desktopBuildIdentity";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -86,6 +87,10 @@ function resolveDesktopAppStageLabel(input: {
     return "Dev";
   }
 
+  if (isForkDesktopVersion(input.appVersion)) {
+    return "Fork";
+  }
+
   return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Alpha";
 }
 
@@ -156,6 +161,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     appVersion: input.appVersion,
   });
   const displayName = branding.displayName;
+  const isFork = !isDevelopment && isForkDesktopVersion(input.appVersion);
   const stateDir = path.join(
     baseDir,
     isDevelopment && Option.isNone(configuredBaseDir) ? "dev" : "userdata",
@@ -201,10 +207,18 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
+      isDevelopment
+        ? "com.t3tools.t3code.dev"
+        : isFork
+          ? FORK_DESKTOP_APP_ID
+          : "com.t3tools.t3code",
     ),
-    linuxDesktopEntryName: isDevelopment ? "t3code-dev.desktop" : "t3code.desktop",
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
+    linuxDesktopEntryName: isDevelopment
+      ? "t3code-dev.desktop"
+      : isFork
+        ? "t3code-fork.desktop"
+        : "t3code.desktop",
+    linuxWmClass: isDevelopment ? "t3code-dev" : isFork ? "t3code-fork" : "t3code",
     userDataDirName,
     legacyUserDataDirName,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),

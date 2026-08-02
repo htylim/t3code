@@ -206,6 +206,10 @@
     "./devProxy": {
       "types": "./src/devProxy.ts",
       "import": "./src/devProxy.ts"
+    },
+    "./desktopBuildIdentity": {
+      "types": "./src/desktopBuildIdentity.ts",
+      "import": "./src/desktopBuildIdentity.ts"
     }
   },
   "scripts": {

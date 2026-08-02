@@ -90,12 +90,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.equal(resolveDesktopUpdateChannel("0.0.17"), "latest");
   });
 
-  it("switches desktop packaging product names to nightly for nightly builds", () => {
+  it("switches desktop packaging product names for downstream channels", () => {
     assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (Alpha)");
     assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Code (Nightly)");
+    assert.equal(resolveDesktopProductName("0.0.17-fork.1"), "T3 Code (Fork)");
   });
 
-  it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
+  it("selects desktop packaging icons for each downstream channel", () => {
     assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17"), {
       macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
       linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
@@ -107,12 +108,45 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
       windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
     });
+
+    assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17-fork.1"), {
+      macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+    });
   });
 
-  it("switches the bundled splash and favicon branding for nightly versions", () => {
+  it("selects bundled splash and favicon branding for each downstream channel", () => {
     assert.equal(resolveDesktopWebAssetBrand("0.0.17"), "production");
     assert.equal(resolveDesktopWebAssetBrand("0.0.17-nightly.20260413.42"), "nightly");
+    assert.equal(resolveDesktopWebAssetBrand("0.0.17-fork.1"), "production");
   });
+
+  it.effect("packages fork builds as a separate app without an upstream update feed", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "0.0.17-fork.1",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+
+      assert.equal(config.appId, "com.htylim.t3code.fork");
+      assert.equal(config.productName, "T3 Code (Fork)");
+      assert.notProperty(config, "publish");
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: { T3CODE_DESKTOP_UPDATE_REPOSITORY: "pingdotgg/t3code" },
+          }),
+        ),
+      ),
+    ),
+  );
 
   it.effect("resolves GitHub desktop publish config from Effect config", () =>
     Effect.gen(function* () {

@@ -41,6 +41,26 @@ describe("branding", () => {
     expect(branding.APP_DISPLAY_NAME).toBe("T3 Code (Nightly)");
   });
 
+  it("uses injected fork branding when available", async () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        desktopBridge: {
+          getAppBranding: () => ({
+            baseName: "T3 Code",
+            stageLabel: "Fork",
+            displayName: "T3 Code (Fork)",
+          }),
+        },
+      },
+    });
+
+    const branding = await import("./branding");
+
+    expect(branding.APP_STAGE_LABEL).toBe("Fork");
+    expect(branding.APP_DISPLAY_NAME).toBe("T3 Code (Fork)");
+  });
+
   it("normalizes hosted app channel metadata", async () => {
     vi.stubEnv("VITE_HOSTED_APP_CHANNEL", "nightly");
 
@@ -118,9 +138,12 @@ describe("branding logic", () => {
 });
 
 describe("resolveSidebarV2Default", () => {
-  it.each(["Nightly", "Dev", "nightly", " dev "])("enables the beta for %s builds", (stage) => {
-    expect(resolveSidebarV2Default(stage)).toBe(true);
-  });
+  it.each(["Nightly", "Fork", "Dev", "nightly", " fork ", " dev "])(
+    "enables the beta for %s builds",
+    (stage) => {
+      expect(resolveSidebarV2Default(stage)).toBe(true);
+    },
+  );
 
   it.each(["Alpha", "Latest", ""])("leaves the beta off for %s builds", (stage) => {
     expect(resolveSidebarV2Default(stage)).toBe(false);

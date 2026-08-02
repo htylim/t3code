@@ -14,14 +14,14 @@ export function formatAppDisplayName(input: {
 /**
  * Whether the sidebar v2 beta is on by default for a build stage.
  *
- * Nightly and local dev opt in; Alpha and Latest stay on v1. This is resolved
+ * Nightly, Fork, and local dev opt in; Alpha and Latest stay on v1. This is resolved
  * from the client's own stage label rather than the connected server's version:
  * v2 only exists in the client, so a stable client on a nightly server has
  * nothing to turn on.
  */
 export function resolveSidebarV2Default(stageLabel: string): boolean {
   const stage = stageLabel.trim().toLowerCase();
-  return stage === "nightly" || stage === "dev";
+  return stage === "nightly" || stage === "fork" || stage === "dev";
 }
 
 /**

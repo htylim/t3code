@@ -3,6 +3,11 @@
 import * as NodeModule from "node:module";
 
 import { fromYaml } from "@t3tools/shared/schemaYaml";
+import {
+  DEFAULT_DESKTOP_APP_ID,
+  isForkDesktopVersion,
+  resolveDesktopAppId,
+} from "@t3tools/shared/desktopBuildIdentity";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { clerkFrontendApiHostnameFromPublishableKey } from "@t3tools/shared/relayAuth";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
@@ -35,7 +40,6 @@ import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "com.t3tools.t3code";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -783,6 +787,7 @@ function normalizePasskeyRpDomain(value: string): string {
 
 export function resolveMacPasskeySigningConfiguration(
   env: Readonly<Record<string, string | undefined>>,
+  appId = DEFAULT_DESKTOP_APP_ID,
 ): MacPasskeySigningConfiguration {
   const teamId = env.T3CODE_APPLE_TEAM_ID?.trim().toUpperCase() ?? "";
   if (!APPLE_TEAM_ID_PATTERN.test(teamId)) {
@@ -818,7 +823,7 @@ export function resolveMacPasskeySigningConfiguration(
   }
 
   return {
-    appId: DESKTOP_APP_ID,
+    appId,
     teamId,
     rpDomains: uniqueRpDomains,
     provisioningProfilePath,
@@ -1516,6 +1521,10 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 export function resolveDesktopProductName(version: string): string {
+  if (isForkDesktopVersion(version)) {
+    return "T3 Code (Fork)";
+  }
+
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "T3 Code (Nightly)"
     : (desktopPackageJson.productName ?? "T3 Code");
@@ -1536,7 +1545,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     | undefined,
 ) {
   const buildConfig: Record<string, unknown> = {
-    appId: DESKTOP_APP_ID,
+    appId: resolveDesktopAppId(version),
     productName: resolveDesktopProductName(version),
     artifactName: "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
@@ -1551,7 +1560,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     extraResources: DESKTOP_EXTRA_RESOURCES,
   };
   const updateChannel = resolveDesktopUpdateChannel(version);
-  const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
+  const publishConfig = isForkDesktopVersion(version)
+    ? undefined
+    : yield* resolveGitHubPublishConfig(updateChannel);
   if (publishConfig) {
     buildConfig.publish = [publishConfig];
   } else if (mockUpdates) {
@@ -1862,7 +1873,11 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const configuredMacPasskeySigning =
     options.platform === "mac" && options.signed
       ? yield* Effect.try({
-          try: () => resolveMacPasskeySigningConfiguration(loadRepoEnv({ repoRoot })),
+          try: () =>
+            resolveMacPasskeySigningConfiguration(
+              loadRepoEnv({ repoRoot }),
+              resolveDesktopAppId(appVersion),
+            ),
           catch: MacPasskeySigningConfigurationResolutionError.fromCause,
         })
       : undefined;

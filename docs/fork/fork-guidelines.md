@@ -70,6 +70,23 @@ vp run dev
 `vp run dev` starts the server and web client and prints a one-time pairing URL. Use
 `vp run dev:desktop` for desktop development.
 
+## Build the Fork desktop app
+
+Use a SemVer prerelease ending in `-fork` or `-fork.<identifier>` to select the downstream desktop
+identity:
+
+```bash
+vp run dist:desktop:dmg --build-version 0.0.31-fork.1
+```
+
+The artifact is written to `release/` and installs as `T3 Code (Fork)` with the bundle identifier
+`com.htylim.t3code.fork`. Fork builds deliberately keep using `~/.t3/userdata`, so they see the same
+projects, threads, and settings as the upstream packaged app. The shared user-data lock means Fork
+and upstream desktop apps must not run at the same time.
+
+Fork artifacts do not include an upstream auto-update feed. Build and install a new artifact to
+update the fork, incrementing the final fork version identifier for each release.
+
 Run the smallest relevant tests, lint checks, and type checks for each change. Do not point a
 development server at `~/.t3/userdata`, and do not set `VITE_HTTP_URL` or `VITE_WS_URL`.
 

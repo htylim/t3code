@@ -28,3 +28,17 @@ upstream.
 - Scope: Repository workflow and documentation only; no runtime behavior changed.
 - Verification: Confirmed `main` tracks `upstream/main`, `fork` tracks `origin/fork`, and both began
   at the same upstream commit.
+
+## 2026-08-02 — Add Fork desktop identity
+
+- Upstream baseline: `e60821f0e`
+- Change: Desktop versions ending in `-fork` or `-fork.<identifier>` package as `T3 Code (Fork)`
+  with bundle identifier `com.htylim.t3code.fork`. The desktop branding contract and environment
+  identification pill expose the `Fork` stage in the UI. Fork artifacts omit the upstream update
+  feed.
+- Reason: Keep the fork installed beside T3 Code Nightly and make the active app unmistakable.
+- Scope: Desktop packaging and runtime identity, shared desktop branding contracts, web branding,
+  sidebar environment identification, and fork build guidance. Production state remains shared at
+  `~/.t3/userdata`.
+- Verification: Focused shared, desktop environment, desktop artifact, web branding, and sidebar
+  identification tests.
