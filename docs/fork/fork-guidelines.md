@@ -72,6 +72,15 @@ vp run dev
 
 ## Build the Fork desktop app
 
+Desktop packaging requires Rust and Cargo because it compiles the native resource monitor bundled
+with the app. Install Rust with [rustup](https://rustup.rs/), then make Cargo available in the current
+shell:
+
+```bash
+source "$HOME/.cargo/env"
+cargo --version
+```
+
 Use a SemVer prerelease ending in `-fork` or `-fork.<identifier>` to select the downstream desktop
 identity:
 
@@ -86,6 +95,14 @@ and upstream desktop apps must not run at the same time.
 
 Fork artifacts do not include an upstream auto-update feed. Build and install a new artifact to
 update the fork, incrementing the final fork version identifier for each release.
+
+Before the first install, back up `~/.t3/userdata` and fully quit every running T3 Code app. Open the
+DMG, drag `T3 Code (Fork)` into `/Applications`, then right-click the installed app and choose
+**Open** because local builds are unsigned.
+
+T3 Code Nightly and T3 Code Fork can remain installed together. They cannot run together: both use
+the same production database, settings, logs, and Electron user-data lock. Quit one before starting
+the other. Giving the apps separate bundle identifiers does not isolate their shared runtime state.
 
 Run the smallest relevant tests, lint checks, and type checks for each change. Do not point a
 development server at `~/.t3/userdata`, and do not set `VITE_HTTP_URL` or `VITE_WS_URL`.

@@ -40,5 +40,7 @@ upstream.
 - Scope: Desktop packaging and runtime identity, shared desktop branding contracts, web branding,
   sidebar environment identification, and fork build guidance. Production state remains shared at
   `~/.t3/userdata`.
-- Verification: Focused shared, desktop environment, desktop artifact, web branding, and sidebar
-  identification tests.
+- Verification: Passed 70 focused shared, desktop environment, desktop artifact, web branding, and
+  sidebar identification tests, plus targeted lint and type checks. Built the unsigned Apple Silicon
+  `0.0.31-fork.1` DMG, verified its disk-image checksum, and confirmed its name, version, and bundle
+  identifier from the packaged `Info.plist`.
