@@ -1,7 +1,5 @@
 # T3 Code
 
-Read `docs/fork/AGENTS.md` for instructions specific to the fork.
-
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs (Codex, Claude Code, Cursor, Grok, OpenCode) and serves web, desktop, and mobile clients.
 
 You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.
@@ -148,3 +146,9 @@ Full glossary with file links: `docs/internals/glossary.md`
 
 - Don't verify with browsers or computer use unless the user explicitly agrees or requests it.
 - Security is important, but should not be over-indexed on, especially for dev mode/maintainer-only features.
+
+## Fork
+
+This is a Fork of the T3 Code project.
+
+Read `docs/fork/AGENTS.md` for instructions specific to the fork.

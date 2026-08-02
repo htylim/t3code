@@ -44,3 +44,14 @@ upstream.
   sidebar identification tests, plus targeted lint and type checks. Built the unsigned Apple Silicon
   `0.0.31-fork.1` DMG, verified its disk-image checksum, and confirmed its name, version, and bundle
   identifier from the packaged `Info.plist`.
+
+## 2026-08-02 — Restore Copy Thread ID in Sidebar v2
+
+- Upstream baseline: `e60821f0e`
+- Change: Added the missing **Copy Thread ID** action to the Sidebar v2 thread context menu with the
+  same clipboard confirmation and failure feedback as the traditional sidebar.
+- Reason: Sidebar v2 replaced the traditional sidebar menu without carrying this useful action over.
+- Scope: Web and desktop thread context menus rendered by `SidebarV2`.
+- Verification: Passed targeted lint and the web type check. In an isolated web environment,
+  right-clicked a real Sidebar v2 thread, selected **Copy Thread ID**, observed the success toast,
+  and confirmed the clipboard value matched that thread's ID in the isolated database.

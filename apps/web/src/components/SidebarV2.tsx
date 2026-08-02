@@ -12,7 +12,7 @@ import {
   scopeThreadRef,
   scopedThreadKey,
 } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef, SidebarProjectGroupingMode } from "@t3tools/contracts";
+import type { ScopedThreadRef, SidebarProjectGroupingMode, ThreadId } from "@t3tools/contracts";
 import {
   AlarmClockIcon,
   AlarmClockOffIcon,
@@ -1214,6 +1214,26 @@ export default function SidebarV2() {
       );
     },
   });
+  const { copyToClipboard: copyThreadIdToClipboard } = useCopyToClipboard<{
+    threadId: ThreadId;
+  }>({
+    onCopy: ({ threadId }) => {
+      toastManager.add({
+        type: "success",
+        title: "Thread ID copied",
+        description: threadId,
+      });
+    },
+    onError: (error) => {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Failed to copy thread ID",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    },
+  });
   const { copyToClipboard: copyBranchToClipboard } = useCopyToClipboard<{ branch: string }>({
     target: "branch name",
     onCopy: ({ branch }) => {
@@ -2352,6 +2372,7 @@ export default function SidebarV2() {
               { id: "mark-unread", label: "Mark unread" },
               { id: "copy-path", label: "Copy path", icon: "copy" },
               ...(thread.branch ? [{ id: "copy-branch", label: "Copy branch", icon: "copy" }] : []),
+              { id: "copy-thread-id", label: "Copy Thread ID", icon: "copy" },
               { id: "delete", label: "Delete", destructive: true, icon: "trash" },
             ],
             position,
@@ -2440,6 +2461,9 @@ export default function SidebarV2() {
               copyBranchToClipboard(thread.branch, { branch: thread.branch });
             }
             return;
+          case "copy-thread-id":
+            copyThreadIdToClipboard(thread.id, { threadId: thread.id });
+            return;
           case "delete": {
             if (confirmThreadDelete) {
               const confirmed = await settlePromise(() =>
@@ -2479,6 +2503,7 @@ export default function SidebarV2() {
       confirmThreadDelete,
       copyBranchToClipboard,
       copyPathToClipboard,
+      copyThreadIdToClipboard,
       deleteThread,
       handleMultiSelectContextMenu,
       markThreadUnread,
