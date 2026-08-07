@@ -3,11 +3,12 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import {
-  type ClientOrchestrationCommand,
+  type ClientOrchestrationOperation,
   type IsoDateTime,
   type OrchestrationCommand,
   OrchestrationDispatchCommandError,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
+  type ThreadForkOperation,
 } from "@t3tools/contracts";
 
 import { createAttachmentId, resolveAttachmentPath } from "../attachmentStore.ts";
@@ -16,9 +17,9 @@ import { parseBase64DataUrl } from "../imageMime.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 
 export const canonicalizeClientCommandTimestamps = (
-  command: ClientOrchestrationCommand,
+  command: ClientOrchestrationOperation,
   receivedAt: IsoDateTime,
-): ClientOrchestrationCommand => {
+): ClientOrchestrationOperation => {
   const canonicalCommand =
     "createdAt" in command
       ? {
@@ -43,7 +44,9 @@ export const canonicalizeClientCommandTimestamps = (
   };
 };
 
-export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
+export type NormalizedClientOrchestrationOperation = OrchestrationCommand | ThreadForkOperation;
+
+export const normalizeDispatchCommand = (command: ClientOrchestrationOperation) =>
   Effect.gen(function* () {
     const receivedAt = DateTime.formatIso(yield* DateTime.now);
     const canonicalCommand = canonicalizeClientCommandTimestamps(command, receivedAt);
@@ -51,6 +54,10 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
     const path = yield* Path.Path;
     const serverConfig = yield* ServerConfig;
     const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
+
+    if (canonicalCommand.type === "thread.fork") {
+      return canonicalCommand satisfies ThreadForkOperation;
+    }
 
     const normalizeProjectWorkspaceRoot = (workspaceRoot: string) =>
       workspacePaths.normalizeWorkspaceRoot(workspaceRoot).pipe(

@@ -71,6 +71,7 @@ import {
   projectThreadDetailSnapshot,
 } from "./orchestration/ActivityPayloadProjection.ts";
 import { normalizeDispatchCommand } from "./orchestration/Normalizer.ts";
+import { dispatchClientOperation } from "./orchestration/ClientOperationDispatcher.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
@@ -1023,7 +1024,11 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.dispatchCommand,
             Effect.gen(function* () {
-              const normalizedCommand = yield* normalizeDispatchCommand(command);
+              const normalizedOperation = yield* normalizeDispatchCommand(command);
+              if (normalizedOperation.type === "thread.fork") {
+                return yield* dispatchClientOperation(normalizedOperation);
+              }
+              const normalizedCommand = normalizedOperation;
               const shouldStopSessionAfterArchive =
                 normalizedCommand.type === "thread.archive"
                   ? yield* projectionSnapshotQuery
@@ -1039,7 +1044,9 @@ const makeWsRpcLayer = (
                         Effect.orElseSucceed(() => false),
                       )
                   : false;
-              const result = yield* dispatchNormalizedCommand(normalizedCommand);
+              const result = yield* dispatchClientOperation(normalizedCommand, {
+                dispatchCommand: dispatchNormalizedCommand,
+              });
               if (normalizedCommand.type === "thread.archive") {
                 if (shouldStopSessionAfterArchive) {
                   yield* Effect.gen(function* () {
@@ -1051,7 +1058,7 @@ const makeWsRpcLayer = (
                       threadId: normalizedCommand.threadId,
                       createdAt: yield* nowIso,
                     });
-
+                    if (stopCommand.type === "thread.fork") return;
                     yield* dispatchNormalizedCommand(stopCommand);
                   }).pipe(
                     Effect.catchCause((cause) =>

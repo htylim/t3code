@@ -5,9 +5,11 @@ import {
   collapseExpandedComposerCursor,
   detectComposerTrigger,
   expandCollapsedComposerCursor,
+  executeWebForkSubmission,
   isCollapsedCursorAdjacentToInlineToken,
   parseStandaloneComposerSlashCommand,
   replaceTextRange,
+  resolveComposerSubmissionAction,
   shouldSubmitComposerOnEnter,
 } from "./composer-logic";
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
@@ -370,5 +372,62 @@ describe("parseStandaloneComposerSlashCommand", () => {
 
   it("ignores slash commands with extra message text", () => {
     expect(parseStandaloneComposerSlashCommand("/plan explain this")).toBeNull();
+  });
+
+  it("web exact /fork bypasses provider turn submission", () => {
+    expect(
+      resolveComposerSubmissionAction({
+        text: " /fork ",
+        attachmentCount: 0,
+        contextCount: 0,
+        planFollowUpAvailable: true,
+      }),
+    ).toBe("fork");
+  });
+
+  it("web routes ordinary text through an available plan follow-up", () => {
+    expect(
+      resolveComposerSubmissionAction({
+        text: "Refine the testing steps",
+        attachmentCount: 0,
+        contextCount: 0,
+        planFollowUpAvailable: true,
+      }),
+    ).toBe("plan-follow-up");
+  });
+
+  it("web /fork with extra context follows provider turn submission", () => {
+    expect(
+      resolveComposerSubmissionAction({ text: "/fork", attachmentCount: 1, contextCount: 0 }),
+    ).toBe("message");
+  });
+
+  it("web navigates to the canonical target after command acceptance", async () => {
+    const events: string[] = [];
+    const succeeded = await executeWebForkSubmission({
+      fork: async () => {
+        events.push("dispatch", "navigate:target");
+        return { ok: true };
+      },
+      clearCommand: () => events.push("clear"),
+      reportError: () => events.push("error"),
+    });
+    expect(succeeded).toBe(true);
+    expect(events).toEqual(["dispatch", "navigate:target", "clear"]);
+  });
+
+  it("web clears the exact command on success and preserves it and the target id on failure", async () => {
+    let draft = "/fork";
+    const targetId = "target-retained";
+    const succeeded = await executeWebForkSubmission({
+      fork: async () => ({ ok: false, message: targetId }),
+      clearCommand: () => {
+        draft = "";
+      },
+      reportError: (message) => expect(message).toBe(targetId),
+    });
+    expect(succeeded).toBe(false);
+    expect(draft).toBe("/fork");
+    expect(targetId).toBe("target-retained");
   });
 });

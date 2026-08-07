@@ -39,6 +39,36 @@ directory to route session and turn operations for a thread, so callers name a t
 Adding a driver means writing the driver plus adapter and adding it to `BUILT_IN_DRIVERS`. No
 orchestration, contract, or client change is required for the common case.
 
+## Native thread forking
+
+Codex, Claude Agent, and OpenCode adapters advertise native session-fork support. Cursor and Grok
+explicitly advertise it as unsupported until their ACP agents negotiate and pass tests for
+`session/fork`. The capability is also included in provider snapshots so clients can offer `/fork`
+only for the provider instance already bound to the source thread.
+
+The adapter boundary exposes `forkSession` and returns a provider-specific resume cursor for the
+new native session. [`ProviderService`][service] first recovers the source's durable binding and
+routes the request to that same provider instance. It persists the target binding before returning.
+If a request is retried with the same target thread ID, the service recovers that binding instead of
+forking the provider session again.
+
+[`ThreadForkService`][fork-service] coordinates the rest of the operation. Under the source and
+project mutation locks, it validates one authoritative snapshot, copies completed timeline items
+and attachments to target-owned IDs, asks the provider to fork its current head, and captures a
+target-namespaced checkpoint baseline in the shared workspace. Only then does it send one internal
+`thread.copy.create` command through the orchestration engine.
+
+`thread.fork` is a client operation rather than a pure orchestration command. The shared
+[`ClientOperationDispatcher`][operation-dispatcher] routes it to `ThreadForkService`; ordinary
+commands continue directly to the engine. Materializing the target emits only existing events:
+`thread.created`, `thread.unsettled`, `thread.message-sent`, `thread.activity-appended`, and
+`thread.session-set`. No fork event, source relationship, or fork status is stored. Replaying the
+events therefore produces an ordinary thread without reading the source.
+
+The source and target deliberately share the project, branch, checkout, and worktree path, while
+their provider bindings, attachment IDs, and checkpoint refs remain independent. See the
+[thread-forking user guide][fork-user] for the shipped behavior.
+
 ## How provider work is requested
 
 Clients never call a provider directly. They dispatch orchestration commands over the RPC method
@@ -90,3 +120,6 @@ when a request opens (approval) or user input is requested, via
 [ingest]: ../../apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.ts
 [cmd]: ../../apps/server/src/orchestration/Layers/ProviderCommandReactor.ts
 [checkpoint]: ../../apps/server/src/orchestration/Layers/CheckpointReactor.ts
+[fork-service]: ../../apps/server/src/orchestration/Layers/ThreadForkService.ts
+[operation-dispatcher]: ../../apps/server/src/orchestration/ClientOperationDispatcher.ts
+[fork-user]: ../user/thread-forking.md

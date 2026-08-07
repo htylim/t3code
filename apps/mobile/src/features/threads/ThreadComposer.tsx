@@ -14,6 +14,10 @@ import {
   serializeComposerFileLink,
   type ComposerTrigger,
 } from "@t3tools/shared/composerTrigger";
+import {
+  buildBuiltInComposerCommands,
+  resolveThreadForkEligibility,
+} from "@t3tools/shared/composerCommands";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
@@ -101,6 +105,7 @@ export interface ThreadComposerProps {
   readonly serverConfig: T3ServerConfig | null;
   readonly queueCount: number;
   readonly activeThreadBusy: boolean;
+  readonly isForking: boolean;
   readonly environmentId: EnvironmentId;
   readonly projectCwd: string | null;
   readonly editorRef?: RefObject<ComposerEditorHandle | null>;
@@ -279,7 +284,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
   const hasContent = props.draftMessage.trim().length > 0 || props.draftAttachments.length > 0;
   const isExpanded = isFocused;
-  const canSend = hasContent;
+  const canSend = hasContent && !props.isForking;
 
   const onPressImage = useCallback(
     (uri: string) => {
@@ -309,8 +314,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     props.selectedThread.session?.status === "running" ||
     props.selectedThread.session?.status === "starting";
 
-  const sendLabel =
-    props.connectionState !== "connected" || props.activeThreadBusy || props.queueCount > 0
+  const sendLabel = props.isForking
+    ? "Forking"
+    : props.connectionState !== "connected" || props.activeThreadBusy || props.queueCount > 0
       ? "Queue"
       : "Send";
   const currentModelSelection = props.selectedThread.modelSelection;
@@ -332,6 +338,18 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       ) ?? null
     );
   }, [props.serverConfig, props.selectedThread.modelSelection.instanceId]);
+  const forkEligibility = useMemo(
+    () =>
+      resolveThreadForkEligibility({
+        routeKind: "server",
+        thread: props.selectedThread,
+        environmentSupportsThreadFork:
+          props.serverConfig?.environment.capabilities.threadFork === true,
+        providers: props.serverConfig?.providers ?? [],
+        queuedTurnCount: props.queueCount + (props.isForking ? 1 : 0),
+      }),
+    [props.isForking, props.queueCount, props.selectedThread, props.serverConfig],
+  );
 
   // ── Trigger detection ────────────────────────────────────
   const [composerSelection, setComposerSelection] = useState(() => ({
@@ -371,29 +389,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
 
     if (composerTrigger.kind === "slash-command") {
       const q = composerTrigger.query.toLowerCase();
-      const allBuiltIn = [
-        {
-          id: "cmd:model",
-          type: "slash-command" as const,
-          command: "model",
-          label: "/model",
-          description: "Switch model",
-        },
-        {
-          id: "cmd:plan",
-          type: "slash-command" as const,
-          command: "plan",
-          label: "/plan",
-          description: "Switch to plan mode",
-        },
-        {
-          id: "cmd:default",
-          type: "slash-command" as const,
-          command: "default",
-          label: "/default",
-          description: "Switch to default mode",
-        },
-      ];
+      const allBuiltIn = buildBuiltInComposerCommands({ forkEligibility }).map((command) => ({
+        ...command,
+        id: `cmd:${command.id}`,
+        type: "slash-command" as const,
+      }));
       const builtIn = allBuiltIn.filter((item) => item.command.includes(q));
 
       const providerCommands: ComposerCommandItem[] = [];
@@ -509,7 +509,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     }
 
     return [];
-  }, [composerTrigger, pathSearch.entries, selectedProviderStatus]);
+  }, [composerTrigger, forkEligibility, pathSearch.entries, selectedProviderStatus]);
 
   // ── Handle command selection ──────────────────────────────
   const { onChangeDraftMessage, onUpdateInteractionMode, draftMessage, onSendMessage } = props;
@@ -519,15 +519,17 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     if (inFlightThreadIdsRef.current.has(threadKey)) return;
     inFlightThreadIdsRef.current.add(threadKey);
     try {
-      await onSendMessage();
+      const messageId = await onSendMessage();
       // Sending a prompt starts agent work: arm the lock-screen card while the
       // app is foregrounded and the activity token can be registered. Armed
       // after the send so its preference read and native Activity start don't
       // contend with the queued-message feedback on the tap frame.
-      armAgentAwarenessLiveActivityForLocalWork({
-        threadTitle: props.selectedThread.title,
-        projectTitle: props.environmentLabel ?? "T3 Code",
-      });
+      if (messageId !== null) {
+        armAgentAwarenessLiveActivityForLocalWork({
+          threadTitle: props.selectedThread.title,
+          projectTitle: props.environmentLabel ?? "T3 Code",
+        });
+      }
     } finally {
       inFlightThreadIdsRef.current.delete(threadKey);
     }
@@ -557,6 +559,18 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         onUpdateInteractionMode(item.command);
         return;
       }
+      if (item.type === "slash-command" && item.command === "fork") {
+        const result = replaceTextRange(
+          draftMessage,
+          composerTrigger.rangeStart,
+          composerTrigger.rangeEnd,
+          "/fork",
+        );
+        setComposerSelection({ start: result.cursor, end: result.cursor });
+        onChangeDraftMessage(result.text);
+        void handleSend();
+        return;
+      }
 
       let replacement = "";
       if (item.type === "path") {
@@ -578,7 +592,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       setComposerSelection({ start: result.cursor, end: result.cursor });
       onChangeDraftMessage(result.text);
     },
-    [composerTrigger, draftMessage, onChangeDraftMessage, onUpdateInteractionMode],
+    [composerTrigger, draftMessage, handleSend, onChangeDraftMessage, onUpdateInteractionMode],
   );
 
   // ── Model menu ───────────────────────────────────────────
@@ -893,8 +907,14 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
           </Animated.View>
         ) : null}
 
+        {props.isForking ? (
+          <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)}>
+            <Text className="pt-2 text-xs text-foreground-muted">Forking…</Text>
+          </Animated.View>
+        ) : null}
+
         {/* Queue count */}
-        {props.queueCount > 0 ? (
+        {props.queueCount > 0 && !props.isForking ? (
           <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)}>
             <Text className="pt-2 text-xs text-foreground-muted">
               {props.queueCount} queued message{props.queueCount === 1 ? "" : "s"} will send

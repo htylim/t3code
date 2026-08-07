@@ -26,6 +26,21 @@ const baseProviderSnapshot = {
 };
 
 describe("ServerProvider", () => {
+  it("defaults provider thread-fork support to false for legacy snapshots", () => {
+    const parsed = decodeServerProvider(baseProviderSnapshot);
+
+    expect(parsed.supportsThreadFork).toBe(false);
+  });
+
+  it("decodes advertised provider thread-fork support", () => {
+    const parsed = decodeServerProvider({
+      ...baseProviderSnapshot,
+      supportsThreadFork: true,
+    });
+
+    expect(parsed.supportsThreadFork).toBe(true);
+  });
+
   it("defaults capability arrays when decoding provider snapshots", () => {
     const parsed = decodeServerProvider({
       instanceId: "codex",

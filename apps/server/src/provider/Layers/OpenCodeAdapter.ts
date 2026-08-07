@@ -1682,6 +1682,31 @@ export function makeOpenCodeAdapter(
       },
     );
 
+    const forkSession: OpenCodeAdapterShape["forkSession"] = Effect.fn("forkSession")(
+      function* (input) {
+        const context = yield* ensureSessionContext(sessions, input.sourceThreadId);
+        const response = yield* runOpenCodeSdk("session.fork", () =>
+          context.client.session.fork({
+            sessionID: context.openCodeSessionId,
+            directory: input.cwd,
+          }),
+        ).pipe(Effect.mapError(toRequestError));
+        if (!response.data) {
+          return yield* new ProviderAdapterRequestError({
+            provider: PROVIDER,
+            method: "session.fork",
+            detail: "OpenCode session.fork returned no session payload.",
+          });
+        }
+        return {
+          resumeCursor: {
+            schemaVersion: OPENCODE_RESUME_VERSION,
+            sessionId: response.data.id,
+          },
+        };
+      },
+    );
+
     const stopAll: OpenCodeAdapterShape["stopAll"] = () =>
       Effect.gen(function* () {
         const contexts = [...sessions.values()];
@@ -1701,6 +1726,7 @@ export function makeOpenCodeAdapter(
       provider: PROVIDER,
       capabilities: {
         sessionModelSwitch: "in-session",
+        sessionFork: "native",
       },
       startSession,
       sendTurn,
@@ -1712,6 +1738,7 @@ export function makeOpenCodeAdapter(
       hasSession,
       readThread,
       rollbackThread,
+      forkSession,
       stopAll,
       get streamEvents() {
         return Stream.fromQueue(runtimeEvents);

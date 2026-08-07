@@ -44,6 +44,7 @@ import {
 } from "@t3tools/shared/model";
 import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
+import { resolveThreadForkEligibility } from "@t3tools/shared/composerCommands";
 import { truncate } from "@t3tools/shared/String";
 import { nextTerminalId, resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
 import { Debouncer } from "@tanstack/react-pacer";
@@ -76,7 +77,9 @@ import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
   collapseExpandedComposerCursor,
+  executeWebForkSubmission,
   parseStandaloneComposerSlashCommand,
+  resolveComposerSubmissionAction,
 } from "../composer-logic";
 import {
   derivePendingApprovals,
@@ -118,6 +121,7 @@ import {
 } from "../types";
 import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
+import { useForkThreadAction } from "../hooks/useThreadActions";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -1206,6 +1210,7 @@ function ChatViewContent(props: ChatViewProps) {
   const revertThreadCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
     reportFailure: false,
   });
+  const forkThread = useForkThreadAction();
   const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
   const closePreview = useAtomCommand(previewEnvironment.close, "preview close");
   const { environments } = useEnvironments();
@@ -1302,6 +1307,7 @@ function ChatViewContent(props: ChatViewProps) {
   >({});
   const [isConnecting, _setIsConnecting] = useState(false);
   const [isRevertingCheckpoint, setIsRevertingCheckpoint] = useState(false);
+  const [isForking, setIsForking] = useState(false);
   const [maximizedRightPanelThreadKey, setMaximizedRightPanelThreadKey] = useState<string | null>(
     null,
   );
@@ -3987,6 +3993,17 @@ function ChatViewContent(props: ChatViewProps) {
   });
   const supportsSettlement = serverConfig?.environment.capabilities.threadSettlement === true;
   const supportsSnooze = serverConfig?.environment.capabilities.threadSnooze === true;
+  const forkEligibility = useMemo(
+    () =>
+      resolveThreadForkEligibility({
+        routeKind,
+        thread: activeThreadShell,
+        environmentSupportsThreadFork: serverConfig?.environment.capabilities.threadFork === true,
+        providers: serverConfig?.providers ?? [],
+        queuedTurnCount: isSendBusy || isForking ? 1 : 0,
+      }),
+    [activeThreadShell, isForking, isSendBusy, routeKind, serverConfig],
+  );
   const nowMinute = useNowMinute();
   const snoozeNow = new Date().toISOString();
   const activeThreadSnoozed =
@@ -4692,6 +4709,7 @@ function ChatViewContent(props: ChatViewProps) {
     if (
       !activeThread ||
       isSendBusy ||
+      isForking ||
       isConnecting ||
       threadDetailLoading ||
       activeEnvironmentUnavailable ||
@@ -4700,16 +4718,8 @@ function ChatViewContent(props: ChatViewProps) {
       notifyDirectAnnotationAttached();
       return;
     }
-    if (activePendingProgress) {
-      if (directAnnotation) {
-        notifyDirectAnnotationAttached();
-        return;
-      }
-      onAdvanceActivePendingUserInput();
-      return;
-    }
     const sendCtx = composerRef.current?.getSendContext();
-    if (!sendCtx?.providerAvailable) {
+    if (!sendCtx) {
       notifyDirectAnnotationAttached();
       return;
     }
@@ -4760,7 +4770,72 @@ function ChatViewContent(props: ChatViewProps) {
         composerPreviewAnnotations.length +
         composerReviewComments.length,
     });
-    if (!directAnnotation && showPlanFollowUpPrompt && activeProposedPlan) {
+    const standaloneSlashCommand =
+      composerImages.length === 0 &&
+      sendableComposerTerminalContexts.length === 0 &&
+      composerElementContexts.length === 0 &&
+      composerPreviewAnnotations.length === 0 &&
+      composerReviewComments.length === 0
+        ? parseStandaloneComposerSlashCommand(trimmed)
+        : null;
+    const submissionAction = resolveComposerSubmissionAction({
+      text: trimmed,
+      attachmentCount: composerImages.length,
+      contextCount:
+        sendableComposerTerminalContexts.length +
+        composerElementContexts.length +
+        composerPreviewAnnotations.length +
+        composerReviewComments.length,
+      planFollowUpAvailable:
+        !directAnnotation && showPlanFollowUpPrompt && activeProposedPlan !== null,
+    });
+    if (activePendingProgress) {
+      if (submissionAction === "fork") {
+        setThreadError(
+          activeThread.id,
+          "Resolve the pending approval or question before forking this thread.",
+        );
+        return;
+      }
+      if (directAnnotation) {
+        notifyDirectAnnotationAttached();
+        return;
+      }
+      onAdvanceActivePendingUserInput();
+      return;
+    }
+    if (submissionAction === "fork") {
+      if (!activeThreadRef) {
+        setThreadError(activeThread.id, "Send the first message before forking this draft thread.");
+        return;
+      }
+      setIsForking(true);
+      setThreadError(activeThread.id, null);
+      await executeWebForkSubmission({
+        fork: async () => {
+          const result = await forkThread(activeThreadRef);
+          if (result._tag === "Success") return { ok: true };
+          const error = squashAtomCommandFailure(result);
+          return {
+            ok: false,
+            message: isAtomCommandInterrupted(result)
+              ? "Thread fork was interrupted."
+              : error instanceof Error
+                ? error.message
+                : "Failed to fork this thread.",
+          };
+        },
+        clearCommand: () => {
+          promptRef.current = "";
+          clearComposerDraftContent(composerDraftTarget);
+          composerRef.current?.resetCursorState();
+        },
+        reportError: (message) => setThreadError(activeThread.id, message),
+      });
+      setIsForking(false);
+      return;
+    }
+    if (submissionAction === "plan-follow-up" && activeProposedPlan) {
       const followUp = resolvePlanFollowUpSubmission({
         draftText: trimmed,
         planMarkdown: activeProposedPlan.planMarkdown,
@@ -4774,19 +4849,15 @@ function ChatViewContent(props: ChatViewProps) {
       });
       return;
     }
-    const standaloneSlashCommand =
-      composerImages.length === 0 &&
-      sendableComposerTerminalContexts.length === 0 &&
-      composerElementContexts.length === 0 &&
-      composerPreviewAnnotations.length === 0 &&
-      composerReviewComments.length === 0
-        ? parseStandaloneComposerSlashCommand(trimmed)
-        : null;
-    if (standaloneSlashCommand) {
+    if (standaloneSlashCommand === "plan" || standaloneSlashCommand === "default") {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
       clearComposerDraftContent(composerDraftTarget);
       composerRef.current?.resetCursorState();
+      return;
+    }
+    if (!sendCtx.providerAvailable) {
+      notifyDirectAnnotationAttached();
       return;
     }
     if (!hasSendableContent) {
@@ -6106,7 +6177,8 @@ function ChatViewContent(props: ChatViewProps) {
                             projectSelectionRequired={isLocalDraftThread && activeProject === null}
                             phase={phase}
                             isConnecting={isConnecting}
-                            isSendBusy={isSendBusy}
+                            isSendBusy={isSendBusy || isForking}
+                            sendBusyLabel={isForking ? "Forking" : "Sending"}
                             sendDisabledReason={threadDetailLoading ? "Messages loading" : null}
                             isPreparingWorktree={isPreparingWorktree}
                             environmentUnavailable={activeEnvironmentUnavailableState}
@@ -6139,6 +6211,7 @@ function ChatViewContent(props: ChatViewProps) {
                             keybindings={keybindings}
                             terminalOpen={Boolean(terminalUiState.terminalOpen)}
                             gitCwd={gitCwd}
+                            forkEligibility={forkEligibility}
                             promptRef={promptRef}
                             composerImagesRef={composerImagesRef}
                             composerTerminalContextsRef={composerTerminalContextsRef}

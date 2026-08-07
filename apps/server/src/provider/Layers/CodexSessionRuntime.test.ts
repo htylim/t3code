@@ -16,6 +16,7 @@ import {
 import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
 import {
   buildTurnStartParams,
+  forkCodexThread,
   hasConfiguredMcpServer,
   isRecoverableThreadResumeError,
   openCodexThread,
@@ -466,6 +467,77 @@ describe("openCodexThread", () => {
 
       NodeAssert.ok(isCodexAppServerRequestError(error));
       NodeAssert.equal(error.errorMessage, "timed out waiting for server");
+    }),
+  );
+});
+
+describe("forkCodexThread", () => {
+  it.effect("Codex forks the current provider thread at its head", () =>
+    Effect.gen(function* () {
+      const calls: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (
+          method: "thread/fork",
+          payload: CodexRpc.ClientRequestParamsByMethod["thread/fork"],
+        ) => {
+          calls.push({ method, payload });
+          return Effect.succeed({
+            thread: { id: "provider-thread-forked" },
+          } as CodexRpc.ClientRequestResponsesByMethod["thread/fork"]);
+        },
+      };
+
+      yield* forkCodexThread({
+        client,
+        sourceThreadId: "provider-thread-source",
+        cwd: "/tmp/project",
+      });
+
+      NodeAssert.deepStrictEqual(calls, [
+        {
+          method: "thread/fork",
+          payload: {
+            threadId: "provider-thread-source",
+            cwd: "/tmp/project",
+          },
+        },
+      ]);
+      NodeAssert.equal("lastTurnId" in (calls[0]?.payload as object), false);
+    }),
+  );
+
+  it.effect("Codex returns the forked thread id as a resume cursor", () =>
+    Effect.gen(function* () {
+      const cursor = yield* forkCodexThread({
+        client: {
+          request: () =>
+            Effect.succeed({
+              thread: { id: "provider-thread-forked" },
+            } as CodexRpc.ClientRequestResponsesByMethod["thread/fork"]),
+        },
+        sourceThreadId: "provider-thread-source",
+        cwd: "/tmp/project",
+      });
+
+      NodeAssert.deepStrictEqual(cursor, { threadId: "provider-thread-forked" });
+    }),
+  );
+
+  it.effect("Codex propagates thread/fork protocol failures", () =>
+    Effect.gen(function* () {
+      const failure = new CodexErrors.CodexAppServerRequestError({
+        code: -32603,
+        errorMessage: "fork failed",
+      });
+      const error = yield* forkCodexThread({
+        client: {
+          request: () => Effect.fail(failure),
+        },
+        sourceThreadId: "provider-thread-source",
+        cwd: "/tmp/project",
+      }).pipe(Effect.flip);
+
+      NodeAssert.strictEqual(error, failure);
     }),
   );
 });

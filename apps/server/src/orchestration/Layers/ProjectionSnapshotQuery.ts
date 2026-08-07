@@ -58,6 +58,7 @@ import {
   type ProjectionFullThreadDiffContext,
   type ProjectionSnapshotCounts,
   type ProjectionThreadCheckpointContext,
+  type ProjectionThreadForkSnapshot,
   type ProjectionSnapshotQueryShape,
 } from "../Services/ProjectionSnapshotQuery.ts";
 
@@ -907,6 +908,18 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         WHERE thread_id = ${threadId}
           AND deleted_at IS NULL
           AND archived_at IS NULL
+        LIMIT 1
+      `,
+  });
+
+  const getAnyThreadIdById = SqlSchema.findOneOption({
+    Request: ThreadIdLookupInput,
+    Result: ProjectionThreadIdLookupRowSchema,
+    execute: ({ threadId }) =>
+      sql`
+        SELECT thread_id AS "threadId"
+        FROM projection_threads
+        WHERE thread_id = ${threadId}
         LIMIT 1
       `,
   });
@@ -2278,6 +2291,46 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         ),
       );
 
+  const getThreadForkSnapshot: ProjectionSnapshotQueryShape["getThreadForkSnapshot"] = (
+    sourceThreadId,
+    targetThreadId,
+  ) =>
+    sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const [sourceRow, targetRow, thread] = yield* Effect.all([
+            getActiveThreadRowById({ threadId: sourceThreadId }),
+            getAnyThreadIdById({ threadId: targetThreadId }),
+            getThreadDetailById(sourceThreadId),
+          ]);
+          if (Option.isNone(sourceRow) || Option.isNone(thread)) {
+            return Option.none<ProjectionThreadForkSnapshot>();
+          }
+          const projectRow = yield* getActiveProjectRowById({
+            projectId: sourceRow.value.projectId,
+          });
+          if (Option.isNone(projectRow)) {
+            return Option.none<ProjectionThreadForkSnapshot>();
+          }
+          return Option.some({
+            thread: thread.value,
+            workspaceRoot: projectRow.value.workspaceRoot,
+            targetExists: Option.isSome(targetRow),
+            hasPendingApprovals: sourceRow.value.pendingApprovalCount > 0,
+            hasPendingUserInput: sourceRow.value.pendingUserInputCount > 0,
+          });
+        }),
+      )
+      .pipe(
+        Effect.mapError((error) =>
+          isPersistenceError(error)
+            ? error
+            : toPersistenceSqlError("ProjectionSnapshotQuery.getThreadForkSnapshot:transaction")(
+                error,
+              ),
+        ),
+      );
+
   return {
     getCommandReadModel,
     getSnapshot,
@@ -2294,6 +2347,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getThreadShellById,
     getThreadDetailById,
     getThreadDetailSnapshot,
+    getThreadForkSnapshot,
   } satisfies ProjectionSnapshotQueryShape;
 });
 

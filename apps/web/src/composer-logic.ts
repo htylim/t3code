@@ -1,15 +1,14 @@
 import { splitPromptIntoComposerSegments } from "./composer-editor-mentions";
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
+import {
+  parseStandaloneComposerCommand,
+  parseStandaloneComposerSlashCommand,
+  type ComposerSlashCommand,
+} from "@t3tools/shared/composerCommands";
+import type { ComposerTrigger, ComposerTriggerKind } from "@t3tools/shared/composerTrigger";
 
-export type ComposerTriggerKind = "path" | "slash-command" | "skill";
-export type ComposerSlashCommand = "model" | "plan" | "default";
-
-export interface ComposerTrigger {
-  kind: ComposerTriggerKind;
-  query: string;
-  rangeStart: number;
-  rangeEnd: number;
-}
+export type { ComposerSlashCommand, ComposerTrigger, ComposerTriggerKind };
+export { parseStandaloneComposerSlashCommand };
 
 export function shouldSubmitComposerOnEnter(input: {
   isMobileViewport: boolean;
@@ -262,16 +261,30 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
   };
 }
 
-export function parseStandaloneComposerSlashCommand(
-  text: string,
-): Exclude<ComposerSlashCommand, "model"> | null {
-  const match = /^\/(plan|default)\s*$/i.exec(text.trim());
-  if (!match) {
-    return null;
+export function resolveComposerSubmissionAction(input: {
+  readonly text: string;
+  readonly attachmentCount: number;
+  readonly contextCount: number;
+  readonly planFollowUpAvailable?: boolean;
+}): "fork" | "interaction-mode" | "plan-follow-up" | "message" {
+  const command = parseStandaloneComposerCommand(input);
+  if (command === "fork") return "fork";
+  if (input.planFollowUpAvailable === true) return "plan-follow-up";
+  return command === "plan" || command === "default" ? "interaction-mode" : "message";
+}
+
+export async function executeWebForkSubmission(input: {
+  readonly fork: () => Promise<{ readonly ok: true } | { readonly ok: false; message: string }>;
+  readonly clearCommand: () => void;
+  readonly reportError: (message: string) => void;
+}): Promise<boolean> {
+  const result = await input.fork();
+  if (!result.ok) {
+    input.reportError(result.message);
+    return false;
   }
-  const command = match[1]?.toLowerCase();
-  if (command === "plan") return "plan";
-  return "default";
+  input.clearCommand();
+  return true;
 }
 
 export function replaceTextRange(

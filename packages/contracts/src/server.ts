@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 import { ExecutionEnvironmentDescriptor, ServerSelfUpdateMethod } from "./environment.ts";
 import { ServerAuthDescriptor } from "./auth.ts";
 import {
@@ -158,7 +159,7 @@ export const ServerProviderUpdateState = Schema.Struct({
 });
 export type ServerProviderUpdateState = typeof ServerProviderUpdateState.Type;
 
-export const ServerProvider = Schema.Struct({
+const ServerProviderWire = Schema.Struct({
   // Routing key for the configured instance this snapshot represents. This
   // is the only stable identity consumers may use for provider routing.
   instanceId: ProviderInstanceId,
@@ -192,9 +193,24 @@ export const ServerProvider = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   skills: Schema.Array(ServerProviderSkill).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  supportsThreadFork: Schema.optionalKey(Schema.Boolean),
   versionAdvisory: Schema.optionalKey(ServerProviderVersionAdvisory),
   updateState: Schema.optionalKey(ServerProviderUpdateState),
 });
+
+export const ServerProvider = ServerProviderWire.pipe(
+  Schema.decodeTo(
+    ServerProviderWire,
+    SchemaTransformation.transformOrFail({
+      decode: (provider) =>
+        Effect.succeed({
+          ...provider,
+          supportsThreadFork: provider.supportsThreadFork ?? false,
+        } as typeof ServerProviderWire.Encoded),
+      encode: (provider) => Effect.succeed(provider as typeof ServerProviderWire.Type),
+    }),
+  ),
+);
 export type ServerProvider = typeof ServerProvider.Type;
 
 // Provider status kinds grow over time (ServerProviderState,

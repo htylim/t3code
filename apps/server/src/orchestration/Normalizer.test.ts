@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   CommandId,
   type ClientOrchestrationCommand,
+  type ClientOrchestrationOperation,
   MessageId,
   ProjectId,
   ProviderInstanceId,
@@ -14,6 +15,21 @@ const clientCreatedAt = "2031-01-01T00:00:00.000Z";
 const serverReceivedAt = "2026-07-18T00:00:00.000Z";
 
 describe("canonicalizeClientCommandTimestamps", () => {
+  it("normalizes thread.fork without admitting it to the engine command union", () => {
+    const operation: ClientOrchestrationOperation = {
+      type: "thread.fork",
+      commandId: CommandId.make("command-fork"),
+      sourceThreadId: ThreadId.make("thread-source"),
+      threadId: ThreadId.make("thread-target"),
+      createdAt: clientCreatedAt,
+    };
+
+    expect(canonicalizeClientCommandTimestamps(operation, serverReceivedAt)).toEqual({
+      ...operation,
+      createdAt: serverReceivedAt,
+    });
+  });
+
   it("replaces a client command timestamp with the server receipt timestamp", () => {
     const command: ClientOrchestrationCommand = {
       type: "project.create",

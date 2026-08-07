@@ -103,6 +103,11 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
       }),
   );
 
+  public readonly forkThreadImpl = vi.fn(
+    (_cwd: string): Promise<{ readonly threadId: string }> =>
+      Promise.resolve({ threadId: "provider-thread-forked" }),
+  );
+
   public readonly respondToRequestImpl = vi.fn(
     (_requestId: ApprovalRequestId, _decision: ProviderApprovalDecision): Promise<void> =>
       Promise.resolve(undefined),
@@ -139,6 +144,10 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
 
   rollbackThread(numTurns: number) {
     return Effect.promise(() => this.rollbackThreadImpl(numTurns));
+  }
+
+  forkThread(cwd: string) {
+    return Effect.promise(() => this.forkThreadImpl(cwd));
   }
 
   respondToRequest(requestId: ApprovalRequestId, decision: ProviderApprovalDecision) {
@@ -239,6 +248,33 @@ const validationLayer = it.layer(
 );
 
 validationLayer("CodexAdapterLive validation", (it) => {
+  it.effect("Codex returns the forked thread id as a resume cursor", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CodexAdapter;
+      const sourceThreadId = asThreadId("thread-fork-source");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId: sourceThreadId,
+        runtimeMode: "full-access",
+      });
+
+      const result = yield* adapter.forkSession({
+        sourceThreadId,
+        targetThreadId: asThreadId("thread-fork-target"),
+        cwd: "/tmp/project",
+      });
+
+      NodeAssert.deepStrictEqual(result, {
+        resumeCursor: { threadId: "provider-thread-forked" },
+      });
+      NodeAssert.deepStrictEqual(validationRuntimeFactory.lastRuntime?.forkThreadImpl.mock.calls, [
+        ["/tmp/project"],
+      ]);
+      yield* adapter.stopSession(sourceThreadId);
+      validationRuntimeFactory.factory.mockClear();
+    }),
+  );
+
   it.effect("returns validation error for non-codex provider on startSession", () =>
     Effect.gen(function* () {
       const adapter = yield* CodexAdapter;

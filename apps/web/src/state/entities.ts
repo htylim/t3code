@@ -18,6 +18,7 @@ import type {
   ServerConfig,
 } from "@t3tools/contracts";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { resolveThreadForkEligibility } from "@t3tools/shared/composerCommands";
 import { Atom } from "effect/unstable/reactivity";
 import { useMemo } from "react";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -248,6 +249,17 @@ export function readEnvironmentSupportsPinning(environmentId: EnvironmentId): bo
     appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
       .threadPinning === true
   );
+}
+
+export function readThreadForkEligibility(ref: ScopedThreadRef, queuedTurnCount: number) {
+  const config = appAtomRegistry.get(environmentServerConfigsAtom).get(ref.environmentId);
+  return resolveThreadForkEligibility({
+    routeKind: "server",
+    thread: readThreadShell(ref),
+    environmentSupportsThreadFork: config?.environment.capabilities.threadFork === true,
+    providers: config?.providers ?? [],
+    queuedTurnCount,
+  });
 }
 
 export function readThreadDetail(ref: ScopedThreadRef): EnvironmentThread | null {

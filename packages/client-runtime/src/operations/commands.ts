@@ -2,6 +2,8 @@ import {
   CommandId,
   ORCHESTRATION_WS_METHODS,
   type ClientOrchestrationCommand,
+  type ClientOrchestrationOperation,
+  ThreadId,
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -50,6 +52,35 @@ export type RespondToThreadApprovalInput = CommandInput<"thread.approval.respond
 export type RespondToThreadUserInputInput = CommandInput<"thread.user-input.respond">;
 export type RevertThreadCheckpointInput = CommandInput<"thread.checkpoint.revert">;
 export type StopThreadSessionInput = CommandInput<"thread.session.stop">;
+export type ForkThreadInput = {
+  readonly sourceThreadId: ThreadId;
+  readonly threadId?: ThreadId;
+  readonly commandId?: CommandId;
+  readonly createdAt?: string;
+};
+
+export type ThreadForkAttempt = {
+  readonly sourceThreadId: ThreadId;
+  readonly threadId: ThreadId;
+  readonly commandId: CommandId;
+  readonly createdAt: string;
+};
+
+export function retainThreadForkAttempt(input: {
+  readonly retained: ThreadForkAttempt | undefined;
+  readonly sourceThreadId: ThreadId;
+  readonly createThreadId: () => ThreadId;
+  readonly createCommandId: () => CommandId;
+  readonly now: () => string;
+}): ThreadForkAttempt {
+  if (input.retained?.sourceThreadId === input.sourceThreadId) return input.retained;
+  return {
+    sourceThreadId: input.sourceThreadId,
+    threadId: input.createThreadId(),
+    commandId: input.createCommandId(),
+    createdAt: input.now(),
+  };
+}
 
 type DispatchTag = typeof ORCHESTRATION_WS_METHODS.dispatchCommand;
 type CommandEffect = Effect.Effect<
@@ -81,9 +112,26 @@ function timestampedCommandMetadata(input: {
   });
 }
 
-function dispatch(command: ClientOrchestrationCommand) {
+function dispatch(command: ClientOrchestrationOperation) {
   return request(ORCHESTRATION_WS_METHODS.dispatchCommand, command);
 }
+
+export const forkThread = Effect.fn("EnvironmentCommands.forkThread")(function* (
+  input: ForkThreadInput,
+) {
+  const crypto = yield* Crypto.Crypto;
+  const threadId =
+    input.threadId ?? (yield* crypto.randomUUIDv4.pipe(Effect.orDie, Effect.map(ThreadId.make)));
+  const metadata = yield* timestampedCommandMetadata(input);
+  const result = yield* dispatch({
+    type: "thread.fork",
+    sourceThreadId: input.sourceThreadId,
+    threadId,
+    commandId: metadata.commandId,
+    createdAt: metadata.createdAt,
+  });
+  return { ...result, threadId };
+});
 
 export const createProject: (input: CreateProjectInput) => CommandEffect = Effect.fn(
   "EnvironmentCommands.createProject",

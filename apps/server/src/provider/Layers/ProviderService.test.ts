@@ -38,6 +38,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import {
   ProviderAdapterRequestError,
   ProviderAdapterSessionNotFoundError,
+  ProviderOperationUnsupportedError,
   ProviderUnsupportedError,
   ProviderValidationError,
   type ProviderAdapterError,
@@ -70,6 +71,7 @@ const claudeAgentInstanceId = ProviderInstanceId.make("claudeAgent");
 const CODEX_DRIVER = ProviderDriverKind.make("codex");
 const CLAUDE_AGENT_DRIVER = ProviderDriverKind.make("claudeAgent");
 const CURSOR_DRIVER = ProviderDriverKind.make("cursor");
+const GROK_DRIVER = ProviderDriverKind.make("grok");
 
 type LegacyProviderRuntimeEvent = {
   readonly type: string;
@@ -192,6 +194,28 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
       Effect.succeed({ threadId, turns: [] }),
   );
 
+  const forkSession = vi.fn(
+    (input: {
+      readonly sourceThreadId: ThreadId;
+      readonly targetThreadId: ThreadId;
+      readonly cwd: string;
+    }): Effect.Effect<{ readonly resumeCursor: unknown }, ProviderAdapterError> => {
+      if (!sessions.has(input.sourceThreadId)) {
+        return Effect.fail(
+          new ProviderAdapterSessionNotFoundError({
+            provider,
+            threadId: input.sourceThreadId,
+          }),
+        );
+      }
+      return Effect.succeed({
+        resumeCursor: {
+          opaque: `fork-${String(input.sourceThreadId)}-${String(input.targetThreadId)}`,
+        },
+      });
+    },
+  );
+
   const stopAll = vi.fn(
     (): Effect.Effect<void, ProviderAdapterError> =>
       Effect.sync(() => {
@@ -203,6 +227,8 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     provider,
     capabilities: {
       sessionModelSwitch: "in-session",
+      sessionFork:
+        provider === CODEX_DRIVER || provider === CLAUDE_AGENT_DRIVER ? "native" : "unsupported",
     },
     startSession,
     sendTurn,
@@ -214,6 +240,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     hasSession,
     readThread,
     rollbackThread,
+    forkSession,
     stopAll,
     get streamEvents() {
       return Stream.fromPubSub(runtimeEventPubSub);
@@ -249,6 +276,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     hasSession,
     readThread,
     rollbackThread,
+    forkSession,
     stopAll,
   };
 }
@@ -271,10 +299,12 @@ function makeProviderServiceLayer() {
   const codex = makeFakeCodexAdapter();
   const claude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
   const cursor = makeFakeCodexAdapter(CURSOR_DRIVER);
+  const grok = makeFakeCodexAdapter(GROK_DRIVER);
   const registry = makeAdapterRegistryMock({
     [ProviderDriverKind.make("codex")]: codex.adapter,
     [ProviderDriverKind.make("claudeAgent")]: claude.adapter,
     [ProviderDriverKind.make("cursor")]: cursor.adapter,
+    [ProviderDriverKind.make("grok")]: grok.adapter,
   });
 
   const providerAdapterLayer = Layer.succeed(
@@ -311,6 +341,7 @@ function makeProviderServiceLayer() {
     codex,
     claude,
     cursor,
+    grok,
     layer,
   };
 }
@@ -841,6 +872,162 @@ it.effect(
 );
 
 routing.layer("ProviderServiceLive routing", (it) => {
+  it.effect("ProviderService routes fork through the source provider instance", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      routing.codex.forkSession.mockClear();
+      routing.claude.forkSession.mockClear();
+      const sourceThreadId = asThreadId("thread-fork-route-source");
+      const targetThreadId = asThreadId("thread-fork-route-target");
+      yield* provider.startSession(sourceThreadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId: sourceThreadId,
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+
+      const target = yield* provider.forkSession({
+        sourceThreadId,
+        targetThreadId,
+        cwd: "/tmp/project",
+      });
+
+      assert.equal(target.provider, CODEX_DRIVER);
+      assert.equal(target.providerInstanceId, codexInstanceId);
+      assert.deepEqual(routing.codex.forkSession.mock.calls, [
+        [{ sourceThreadId, targetThreadId, cwd: "/tmp/project" }],
+      ]);
+      assert.equal(routing.claude.forkSession.mock.calls.length, 0);
+      yield* provider.stopSession({ threadId: targetThreadId });
+      yield* provider.stopSession({ threadId: sourceThreadId });
+    }),
+  );
+
+  it.effect("ProviderService recovers a stopped source session before forking", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const sourceThreadId = asThreadId("thread-fork-recover-source");
+      const targetThreadId = asThreadId("thread-fork-recover-target");
+      yield* provider.startSession(sourceThreadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId: sourceThreadId,
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+      yield* provider.stopSession({ threadId: sourceThreadId });
+      routing.codex.startSession.mockClear();
+      routing.codex.forkSession.mockClear();
+
+      yield* provider.forkSession({
+        sourceThreadId,
+        targetThreadId,
+        cwd: "/tmp/project",
+      });
+
+      assert.equal(routing.codex.startSession.mock.calls.length, 1);
+      assert.equal(routing.codex.forkSession.mock.calls.length, 1);
+      yield* provider.stopSession({ threadId: targetThreadId });
+      yield* provider.stopSession({ threadId: sourceThreadId });
+    }),
+  );
+
+  it.effect("ProviderService persists target binding before reporting success", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const sourceThreadId = asThreadId("thread-fork-persist-source");
+      const targetThreadId = asThreadId("thread-fork-persist-target");
+      yield* provider.startSession(sourceThreadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId: sourceThreadId,
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+
+      const target = yield* provider.forkSession({
+        sourceThreadId,
+        targetThreadId,
+        cwd: "/tmp/project",
+      });
+      const sourceBinding = Option.getOrUndefined(yield* directory.getBinding(sourceThreadId));
+      const binding = Option.getOrUndefined(yield* directory.getBinding(targetThreadId));
+
+      assert.equal(target.status, "ready");
+      assert.equal(binding?.providerInstanceId, codexInstanceId);
+      assert.deepEqual(binding?.resumeCursor, target.resumeCursor);
+      assert.notDeepEqual(binding?.resumeCursor, sourceBinding?.resumeCursor);
+      yield* provider.stopSession({ threadId: targetThreadId });
+      yield* provider.stopSession({ threadId: sourceThreadId });
+    }),
+  );
+
+  it.effect("ProviderService reuses an existing target binding instead of forking twice", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const sourceThreadId = asThreadId("thread-fork-idempotent-source");
+      const targetThreadId = asThreadId("thread-fork-idempotent-target");
+      yield* provider.startSession(sourceThreadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId: sourceThreadId,
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+      routing.codex.forkSession.mockClear();
+
+      const first = yield* provider.forkSession({
+        sourceThreadId,
+        targetThreadId,
+        cwd: "/tmp/project",
+      });
+      const second = yield* provider.forkSession({
+        sourceThreadId,
+        targetThreadId,
+        cwd: "/tmp/project",
+      });
+
+      assert.equal(routing.codex.forkSession.mock.calls.length, 1);
+      assert.deepEqual(second.resumeCursor, first.resumeCursor);
+      yield* provider.stopSession({ threadId: targetThreadId });
+      yield* provider.stopSession({ threadId: sourceThreadId });
+    }),
+  );
+
+  it.effect("ProviderService rejects unsupported Cursor and Grok forks", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      for (const [driver, fake] of [
+        [CURSOR_DRIVER, routing.cursor],
+        [GROK_DRIVER, routing.grok],
+      ] as const) {
+        const sourceThreadId = asThreadId(`thread-fork-${driver}-source`);
+        yield* provider.startSession(sourceThreadId, {
+          provider: driver,
+          providerInstanceId: ProviderInstanceId.make(driver),
+          threadId: sourceThreadId,
+          cwd: "/tmp/project",
+          runtimeMode: "full-access",
+        });
+
+        const error = yield* provider
+          .forkSession({
+            sourceThreadId,
+            targetThreadId: asThreadId(`thread-fork-${driver}-target`),
+            cwd: "/tmp/project",
+          })
+          .pipe(Effect.flip);
+
+        assert.instanceOf(error, ProviderOperationUnsupportedError);
+        assert.equal(error.operation, "session/fork");
+        assert.equal(fake.forkSession.mock.calls.length, 0);
+        yield* provider.stopSession({ threadId: sourceThreadId });
+      }
+    }),
+  );
+
   it.effect("routes provider operations and rollback conversation", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;

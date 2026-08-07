@@ -158,6 +158,12 @@ const DEFAULT_BINDINGS = compile([
   },
 ]);
 
+describe("fork keybinding", () => {
+  it("fork does not register a keybinding action", () => {
+    assert.isFalse(DEFAULT_BINDINGS.some((binding) => String(binding.command).includes("fork")));
+  });
+});
+
 describe("isTerminalToggleShortcut", () => {
   it("matches Cmd+J on macOS", () => {
     assert.isTrue(

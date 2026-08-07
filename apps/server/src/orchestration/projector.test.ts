@@ -856,6 +856,148 @@ describe("orchestration projector", () => {
     ).toEqual([{ id: "assistant-keep", role: "assistant", turnId: "turn-1" }]);
   });
 
+  it("projects the copy as an ordinary ready active thread without changing the source", async () => {
+    const createdAt = "2026-08-06T12:00:00.000Z";
+    const messageAt = "2026-07-01T12:00:00.000Z";
+    const sourceCreated = await Effect.runPromise(
+      projectEvent(
+        createEmptyReadModel(createdAt),
+        makeEvent({
+          sequence: 1,
+          type: "thread.created",
+          aggregateKind: "thread",
+          aggregateId: "thread-source",
+          occurredAt: createdAt,
+          commandId: "cmd-source-create",
+          payload: {
+            threadId: "thread-source",
+            projectId: "project-1",
+            title: "Source title",
+            modelSelection: { provider: "codex", model: "gpt-5.4" },
+            runtimeMode: "approval-required",
+            interactionMode: "plan",
+            branch: "feature/fork",
+            worktreePath: "/tmp/project-worktree",
+            createdAt,
+            updatedAt: createdAt,
+          },
+        }),
+      ),
+    );
+    const sourceBeforeCopy = structuredClone(sourceCreated.threads[0]);
+    const targetEvents = [
+      makeEvent({
+        sequence: 2,
+        type: "thread.created",
+        aggregateKind: "thread",
+        aggregateId: "thread-target",
+        occurredAt: createdAt,
+        commandId: "cmd-copy",
+        payload: {
+          threadId: "thread-target",
+          projectId: "project-1",
+          title: "Source title (fork)",
+          modelSelection: { provider: "codex", model: "gpt-5.4" },
+          runtimeMode: "approval-required",
+          interactionMode: "plan",
+          branch: "feature/fork",
+          worktreePath: "/tmp/project-worktree",
+          createdAt,
+          updatedAt: createdAt,
+        },
+      }),
+      makeEvent({
+        sequence: 3,
+        type: "thread.unsettled",
+        aggregateKind: "thread",
+        aggregateId: "thread-target",
+        occurredAt: createdAt,
+        commandId: "cmd-copy",
+        payload: { threadId: "thread-target", reason: "user", updatedAt: createdAt },
+      }),
+      makeEvent({
+        sequence: 4,
+        type: "thread.message-sent",
+        aggregateKind: "thread",
+        aggregateId: "thread-target",
+        occurredAt: messageAt,
+        commandId: "cmd-copy",
+        payload: {
+          threadId: "thread-target",
+          messageId: "message-target",
+          role: "user",
+          text: "copied message",
+          turnId: null,
+          streaming: false,
+          createdAt: messageAt,
+          updatedAt: messageAt,
+        },
+      }),
+      makeEvent({
+        sequence: 5,
+        type: "thread.activity-appended",
+        aggregateKind: "thread",
+        aggregateId: "thread-target",
+        occurredAt: messageAt,
+        commandId: "cmd-copy",
+        payload: {
+          threadId: "thread-target",
+          activity: {
+            id: "activity-target",
+            tone: "tool",
+            kind: "tool.completed",
+            summary: "Copied activity",
+            payload: {},
+            turnId: null,
+            createdAt: messageAt,
+          },
+        },
+      }),
+      makeEvent({
+        sequence: 6,
+        type: "thread.session-set",
+        aggregateKind: "thread",
+        aggregateId: "thread-target",
+        occurredAt: createdAt,
+        commandId: "cmd-copy",
+        payload: {
+          threadId: "thread-target",
+          session: {
+            threadId: "thread-target",
+            status: "ready",
+            providerName: "codex",
+            runtimeMode: "approval-required",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: createdAt,
+          },
+        },
+      }),
+    ];
+    const projected = await targetEvents.reduce(
+      (statePromise, event) =>
+        statePromise.then((state) => Effect.runPromise(projectEvent(state, event))),
+      Promise.resolve(sourceCreated),
+    );
+
+    expect(projected.threads[0]).toEqual(sourceBeforeCopy);
+    expect(projected.threads[1]).toMatchObject({
+      id: "thread-target",
+      projectId: "project-1",
+      title: "Source title (fork)",
+      branch: "feature/fork",
+      worktreePath: "/tmp/project-worktree",
+      latestTurn: null,
+      settledOverride: "active",
+      settledAt: null,
+      session: { status: "ready", threadId: "thread-target" },
+      messages: [{ id: "message-target", createdAt: messageAt }],
+      activities: [{ id: "activity-target" }],
+      checkpoints: [],
+      proposedPlans: [],
+    });
+  });
+
   it("caps message and checkpoint retention for long-lived threads", async () => {
     const createdAt = "2026-03-01T10:00:00.000Z";
     const model = createEmptyReadModel(createdAt);

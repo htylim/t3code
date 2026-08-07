@@ -22,7 +22,7 @@ import {
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, it, vi } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -161,6 +161,12 @@ function makeHarness(config?: {
   readonly baseDir?: string;
   readonly claudeConfig?: Partial<ClaudeSettings>;
   readonly instanceId?: ProviderInstanceId;
+  readonly forkSession?: (
+    sessionId: string,
+    options?: { readonly dir?: string },
+  ) => Promise<{
+    readonly sessionId: string;
+  }>;
 }) {
   const query = new FakeClaudeQuery();
   let createInput:
@@ -176,6 +182,8 @@ function makeHarness(config?: {
       createInput = input;
       return query;
     },
+    forkSession:
+      config?.forkSession ?? (async () => ({ sessionId: "2d545642-823d-4f18-8872-8cb4ae82be0f" })),
     ...(config?.nativeEventLogger
       ? {
           nativeEventLogger: config.nativeEventLogger,
@@ -273,6 +281,171 @@ const THREAD_ID = ThreadId.make("thread-claude-1");
 const RESUME_THREAD_ID = ThreadId.make("thread-claude-resume");
 
 describe("ClaudeAdapterLive", () => {
+  it.effect("Claude forks the durable resume session in the requested directory", () => {
+    const nativeFork = vi.fn(async () => ({
+      sessionId: "2d545642-823d-4f18-8872-8cb4ae82be0f",
+    }));
+    const harness = makeHarness({ forkSession: nativeFork });
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const sourceSessionId = "550e8400-e29b-41d4-a716-446655440000";
+      yield* adapter.startSession({
+        threadId: RESUME_THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        resumeCursor: {
+          threadId: RESUME_THREAD_ID,
+          resume: sourceSessionId,
+          turnCount: 3,
+        },
+        runtimeMode: "full-access",
+      });
+
+      yield* adapter.forkSession({
+        sourceThreadId: RESUME_THREAD_ID,
+        targetThreadId: ThreadId.make("thread-claude-fork-target"),
+        cwd: "/tmp/claude-fork",
+      });
+
+      assert.deepEqual(nativeFork.mock.calls, [[sourceSessionId, { dir: "/tmp/claude-fork" }]]);
+    }).pipe(Effect.provide(harness.layer));
+  });
+
+  it.effect("Claude returns a target cursor without carrying resumeSessionAt", () => {
+    const targetSessionId = "2d545642-823d-4f18-8872-8cb4ae82be0f";
+    const targetThreadId = ThreadId.make("thread-claude-fork-target-cursor");
+    const harness = makeHarness({
+      forkSession: async () => ({ sessionId: targetSessionId }),
+    });
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: RESUME_THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        resumeCursor: {
+          threadId: RESUME_THREAD_ID,
+          resume: "550e8400-e29b-41d4-a716-446655440000",
+          resumeSessionAt: "assistant-99",
+          turnCount: 3,
+        },
+        runtimeMode: "full-access",
+      });
+
+      const result = yield* adapter.forkSession({
+        sourceThreadId: RESUME_THREAD_ID,
+        targetThreadId,
+        cwd: "/tmp/claude-fork",
+      });
+
+      assert.deepEqual(result, {
+        resumeCursor: {
+          threadId: targetThreadId,
+          resume: targetSessionId,
+          turnCount: 3,
+        },
+      });
+      assert.equal("resumeSessionAt" in (result.resumeCursor as object), false);
+    }).pipe(Effect.provide(harness.layer));
+  });
+
+  it.effect(
+    "Claude preserves durable turnCount when the recovered in-memory transcript is empty",
+    () => {
+      const harness = makeHarness();
+      return Effect.gen(function* () {
+        const adapter = yield* ClaudeAdapter;
+        yield* adapter.startSession({
+          threadId: RESUME_THREAD_ID,
+          provider: ProviderDriverKind.make("claudeAgent"),
+          resumeCursor: {
+            threadId: RESUME_THREAD_ID,
+            resume: "550e8400-e29b-41d4-a716-446655440000",
+            turnCount: 7,
+          },
+          runtimeMode: "full-access",
+        });
+
+        const result = yield* adapter.forkSession({
+          sourceThreadId: RESUME_THREAD_ID,
+          targetThreadId: ThreadId.make("thread-claude-fork-turn-count"),
+          cwd: "/tmp/claude-fork",
+        });
+
+        assert.equal((result.resumeCursor as { turnCount?: number }).turnCount, 7);
+      }).pipe(Effect.provide(harness.layer));
+    },
+  );
+
+  it.effect("Claude rejects a source with no valid durable native session id", () => {
+    const nativeFork = vi.fn(async () => ({
+      sessionId: "2d545642-823d-4f18-8872-8cb4ae82be0f",
+    }));
+    const harness = makeHarness({ forkSession: nativeFork });
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+      const threadStarted = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.type === "thread.started"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      harness.query.emit({
+        type: "system",
+        subtype: "init",
+        session_id: "not-a-valid-uuid",
+        uuid: "invalid-session-init",
+      } as unknown as SDKMessage);
+      yield* Fiber.join(threadStarted);
+
+      const error = yield* adapter
+        .forkSession({
+          sourceThreadId: THREAD_ID,
+          targetThreadId: ThreadId.make("thread-claude-invalid-source-target"),
+          cwd: "/tmp/claude-fork",
+        })
+        .pipe(Effect.flip);
+
+      assert.equal(error._tag, "ProviderAdapterValidationError");
+      assert.equal(nativeFork.mock.calls.length, 0);
+    }).pipe(Effect.provide(harness.layer));
+  });
+
+  it.effect("Claude maps SDK fork rejection to session/fork request error", () => {
+    const cause = new Error("SDK fork failed");
+    const harness = makeHarness({
+      forkSession: async () => Promise.reject(cause),
+    });
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: RESUME_THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        resumeCursor: {
+          resume: "550e8400-e29b-41d4-a716-446655440000",
+          turnCount: 1,
+        },
+        runtimeMode: "full-access",
+      });
+
+      const error = yield* adapter
+        .forkSession({
+          sourceThreadId: RESUME_THREAD_ID,
+          targetThreadId: ThreadId.make("thread-claude-rejected-fork-target"),
+          cwd: "/tmp/claude-fork",
+        })
+        .pipe(Effect.flip);
+
+      assert.equal(error._tag, "ProviderAdapterRequestError");
+      if (error._tag === "ProviderAdapterRequestError") {
+        assert.equal(error.method, "session/fork");
+        assert.strictEqual(error.cause, cause);
+      }
+    }).pipe(Effect.provide(harness.layer));
+  });
+
   it.effect("returns validation error for non-claude provider on startSession", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {

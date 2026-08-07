@@ -116,6 +116,19 @@ export class ProviderUnsupportedError extends Schema.TaggedErrorClass<ProviderUn
   }
 }
 
+/** ProviderOperationUnsupportedError - The provider exists but cannot perform this operation. */
+export class ProviderOperationUnsupportedError extends Schema.TaggedErrorClass<ProviderOperationUnsupportedError>()(
+  "ProviderOperationUnsupportedError",
+  {
+    provider: Schema.String,
+    operation: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `Provider '${this.provider}' does not support ${this.operation}`;
+  }
+}
+
 /**
  * ProviderInstanceNotFoundError - Lookup against the instance registry failed.
  *
@@ -196,6 +209,7 @@ export type ProviderAdapterError =
 
 export type ProviderServiceError =
   | ProviderValidationError
+  | ProviderOperationUnsupportedError
   | ProviderUnsupportedError
   | ProviderInstanceNotFoundError
   | ProviderSessionNotFoundError

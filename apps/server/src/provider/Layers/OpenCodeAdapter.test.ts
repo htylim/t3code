@@ -74,6 +74,7 @@ const runtimeMock = {
     sessionDirectoryById: new Map<string, string>(),
     sessionUpdateCalls: [] as Array<{ sessionID: string; permission: unknown }>,
     forkCalls: [] as Array<{ sessionID: string; directory?: string }>,
+    forkWithoutPayload: false,
   },
   reset() {
     this.state.startCalls.length = 0;
@@ -94,6 +95,7 @@ const runtimeMock = {
     this.state.sessionDirectoryById.clear();
     this.state.sessionUpdateCalls.length = 0;
     this.state.forkCalls.length = 0;
+    this.state.forkWithoutPayload = false;
   },
 };
 
@@ -171,6 +173,9 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
           runtimeMock.state.forkCalls.push({ sessionID, ...(directory ? { directory } : {}) });
           if (directory) {
             runtimeMock.state.sessionDirectoryById.set(forkedId, directory);
+          }
+          if (runtimeMock.state.forkWithoutPayload) {
+            return { data: undefined };
           }
           return { data: { id: forkedId, ...(directory ? { directory } : {}) } };
         },
@@ -281,6 +286,84 @@ const advanceTestClock = (ms: number) =>
   TestClock.adjust(`${ms} millis`).pipe(Effect.andThen(Effect.yieldNow));
 
 it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
+  it.effect("OpenCode forks the current session in the requested directory", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const sourceThreadId = asThreadId("thread-opencode-fork-source");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId: sourceThreadId,
+        cwd: "/tmp/source",
+        runtimeMode: "full-access",
+      });
+
+      yield* adapter.forkSession({
+        sourceThreadId,
+        targetThreadId: asThreadId("thread-opencode-fork-target"),
+        cwd: "/tmp/target",
+      });
+
+      NodeAssert.deepStrictEqual(runtimeMock.state.forkCalls, [
+        {
+          sessionID: "http://127.0.0.1:9999/session",
+          directory: "/tmp/target",
+        },
+      ]);
+      yield* adapter.stopSession(sourceThreadId);
+    }),
+  );
+
+  it.effect("OpenCode returns the forked session id as a versioned resume cursor", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const sourceThreadId = asThreadId("thread-opencode-cursor-source");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId: sourceThreadId,
+        runtimeMode: "full-access",
+      });
+
+      const result = yield* adapter.forkSession({
+        sourceThreadId,
+        targetThreadId: asThreadId("thread-opencode-cursor-target"),
+        cwd: "/tmp/project",
+      });
+
+      NodeAssert.deepStrictEqual(result, {
+        resumeCursor: {
+          schemaVersion: 1,
+          sessionId: "http://127.0.0.1:9999/session_fork",
+        },
+      });
+      yield* adapter.stopSession(sourceThreadId);
+    }),
+  );
+
+  it.effect("OpenCode rejects a fork response with no session payload", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const sourceThreadId = asThreadId("thread-opencode-empty-fork-source");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId: sourceThreadId,
+        runtimeMode: "full-access",
+      });
+      runtimeMock.state.forkWithoutPayload = true;
+
+      const error = yield* adapter
+        .forkSession({
+          sourceThreadId,
+          targetThreadId: asThreadId("thread-opencode-empty-fork-target"),
+          cwd: "/tmp/project",
+        })
+        .pipe(Effect.flip);
+
+      NodeAssert.equal(error._tag, "ProviderAdapterRequestError");
+      NodeAssert.equal(error.method, "session.fork");
+      yield* adapter.stopSession(sourceThreadId);
+    }),
+  );
+
   it.effect("reuses a configured OpenCode server URL instead of spawning a local server", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;

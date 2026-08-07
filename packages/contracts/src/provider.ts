@@ -64,6 +64,18 @@ export const ProviderSessionStartInput = Schema.Struct({
 });
 export type ProviderSessionStartInput = typeof ProviderSessionStartInput.Type;
 
+export const ProviderSessionForkInput = Schema.Struct({
+  sourceThreadId: ThreadId,
+  targetThreadId: ThreadId,
+  cwd: TrimmedNonEmptyString,
+});
+export type ProviderSessionForkInput = typeof ProviderSessionForkInput.Type;
+
+export const ProviderSessionForkResult = Schema.Struct({
+  resumeCursor: Schema.Unknown,
+});
+export type ProviderSessionForkResult = typeof ProviderSessionForkResult.Type;
+
 export const ProviderSendTurnInput = Schema.Struct({
   threadId: ThreadId,
   input: Schema.optional(

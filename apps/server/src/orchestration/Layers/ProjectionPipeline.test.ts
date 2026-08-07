@@ -2776,4 +2776,157 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
       ]);
     }),
   );
+
+  it.effect("materializes an ordinary active copied target without changing source rows", () =>
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngineService;
+      const sql = yield* SqlClient.SqlClient;
+      const createdAt = "2026-08-06T12:00:00.000Z";
+      const historicalAt = "2026-07-01T12:00:00.000Z";
+      const projectId = ProjectId.make("project-copy-live");
+      const sourceThreadId = ThreadId.make("thread-copy-source");
+      const targetThreadId = ThreadId.make("thread-copy-target");
+      const modelSelection = {
+        instanceId: ProviderInstanceId.make("codex"),
+        model: "gpt-5.4",
+      } as const;
+
+      yield* engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.make("cmd-copy-live-project"),
+        projectId,
+        title: "Copy project",
+        workspaceRoot: "/tmp/project-copy-live",
+        defaultModelSelection: modelSelection,
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-copy-live-source"),
+        threadId: sourceThreadId,
+        projectId,
+        title: "Source",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: "feature/copy",
+        worktreePath: "/tmp/project-copy-live-worktree",
+        createdAt,
+      });
+
+      const sourceBefore = yield* sql<{
+        readonly title: string;
+        readonly settledOverride: string | null;
+        readonly worktreePath: string | null;
+      }>`
+        SELECT
+          title,
+          settled_override AS "settledOverride",
+          worktree_path AS "worktreePath"
+        FROM projection_threads
+        WHERE thread_id = ${sourceThreadId}
+      `;
+
+      yield* engine.dispatch({
+        type: "thread.copy.create",
+        commandId: CommandId.make("cmd-copy-live-target"),
+        threadId: targetThreadId,
+        projectId,
+        title: "Source (fork)",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: "feature/copy",
+        worktreePath: "/tmp/project-copy-live-worktree",
+        messages: [
+          {
+            id: MessageId.make("message-copy-live"),
+            role: "user",
+            text: "old copied history",
+            createdAt: historicalAt,
+            updatedAt: historicalAt,
+          },
+        ],
+        activities: [
+          {
+            id: EventId.make("activity-copy-live"),
+            tone: "info",
+            kind: "tool.completed",
+            summary: "Copied activity",
+            payload: {},
+            createdAt: historicalAt,
+          },
+        ],
+        session: {
+          threadId: targetThreadId,
+          status: "ready",
+          providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: createdAt,
+        },
+        createdAt,
+      });
+
+      const targetRows = yield* sql<{
+        readonly title: string;
+        readonly settledOverride: string | null;
+        readonly latestTurnId: string | null;
+        readonly worktreePath: string | null;
+        readonly latestUserMessageAt: string | null;
+      }>`
+        SELECT
+          title,
+          settled_override AS "settledOverride",
+          latest_turn_id AS "latestTurnId",
+          worktree_path AS "worktreePath",
+          latest_user_message_at AS "latestUserMessageAt"
+        FROM projection_threads
+        WHERE thread_id = ${targetThreadId}
+      `;
+      assert.deepEqual(targetRows, [
+        {
+          title: "Source (fork)",
+          settledOverride: "active",
+          latestTurnId: null,
+          worktreePath: "/tmp/project-copy-live-worktree",
+          latestUserMessageAt: historicalAt,
+        },
+      ]);
+      assert.deepEqual(
+        yield* sql`
+          SELECT
+            title,
+            settled_override AS "settledOverride",
+            worktree_path AS "worktreePath"
+          FROM projection_threads
+          WHERE thread_id = ${sourceThreadId}
+        `,
+        sourceBefore,
+      );
+
+      yield* engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-copy-live-first-turn"),
+        threadId: targetThreadId,
+        message: {
+          messageId: MessageId.make("message-copy-live-next"),
+          role: "user",
+          text: "continue independently",
+          attachments: [],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdAt,
+      });
+      const targetAfterTurn = yield* sql<{ readonly settledOverride: string | null }>`
+        SELECT settled_override AS "settledOverride"
+        FROM projection_threads
+        WHERE thread_id = ${targetThreadId}
+      `;
+      assert.deepEqual(targetAfterTurn, [{ settledOverride: null }]);
+    }),
+  );
 });

@@ -4,6 +4,10 @@ import {
   scopeThreadRef,
   scopedThreadKey,
 } from "@t3tools/client-runtime/environment";
+import {
+  retainThreadForkAttempt,
+  type ThreadForkAttempt,
+} from "@t3tools/client-runtime/operations";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { canSettle, canSnooze, threadWokeAt } from "@t3tools/client-runtime/state/thread-settled";
 import { EnvironmentId, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
@@ -14,6 +18,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef } from "react";
 
 import { getFallbackThreadIdAfterDelete } from "../components/Sidebar.logic";
+import { waitForStartedServerThread } from "../components/ChatView.logic";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { terminalEnvironment } from "../state/terminal";
 import { threadEnvironment } from "../state/threads";
@@ -28,6 +33,7 @@ import {
   readEnvironmentThreadRefs,
   readProject,
   readThreadShell,
+  readThreadForkEligibility,
 } from "../state/entities";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useUiStateStore } from "../uiStateStore";
@@ -36,6 +42,7 @@ import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { useClientSettings } from "./useSettings";
 import { useAtomCommand } from "../state/use-atom-command";
+import { newCommandId, newThreadId } from "../lib/utils";
 
 export class ThreadArchiveBlockedError extends Schema.TaggedErrorClass<ThreadArchiveBlockedError>()(
   "ThreadArchiveBlockedError",
@@ -109,6 +116,77 @@ export class ThreadPinningUnsupportedError extends Schema.TaggedErrorClass<Threa
   }
 }
 
+export class ThreadForkUnsupportedError extends Schema.TaggedErrorClass<ThreadForkUnsupportedError>()(
+  "ThreadForkUnsupportedError",
+  { environmentId: EnvironmentId, threadId: ThreadId },
+) {
+  override get message(): string {
+    return "This thread's provider or environment does not support thread forking.";
+  }
+}
+
+export class ThreadForkBlockedError extends Schema.TaggedErrorClass<ThreadForkBlockedError>()(
+  "ThreadForkBlockedError",
+  { environmentId: EnvironmentId, threadId: ThreadId },
+) {
+  override get message(): string {
+    return "Wait for the current thread work to finish before forking it.";
+  }
+}
+
+export function useForkThreadAction() {
+  const forkThreadMutation = useAtomCommand(threadEnvironment.fork, { reportFailure: false });
+  const forkAttemptBySourceRef = useRef(new Map<string, ThreadForkAttempt>());
+  const router = useRouter();
+
+  return useCallback(
+    async (target: ScopedThreadRef, queuedTurnCount = 0) => {
+      const eligibility = readThreadForkEligibility(target, queuedTurnCount);
+      if (!eligibility.eligible) {
+        const error =
+          eligibility.reason === "work-in-flight" || eligibility.reason === "pending-request"
+            ? new ThreadForkBlockedError({
+                environmentId: target.environmentId,
+                threadId: target.threadId,
+              })
+            : new ThreadForkUnsupportedError({
+                environmentId: target.environmentId,
+                threadId: target.threadId,
+              });
+        return AsyncResult.failure(Cause.fail(error));
+      }
+
+      const sourceKey = scopedThreadKey(target);
+      const attempt = retainThreadForkAttempt({
+        retained: forkAttemptBySourceRef.current.get(sourceKey),
+        sourceThreadId: target.threadId,
+        createThreadId: newThreadId,
+        createCommandId: newCommandId,
+        now: () => new Date().toISOString(),
+      });
+      forkAttemptBySourceRef.current.set(sourceKey, attempt);
+      const result = await forkThreadMutation({
+        environmentId: target.environmentId,
+        input: attempt,
+      });
+      if (result._tag === "Failure") return result;
+
+      const targetRef = scopeThreadRef(target.environmentId, attempt.threadId);
+      await waitForStartedServerThread(targetRef, 5_000);
+      const navigationResult = await settlePromise(() =>
+        router.navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(targetRef),
+        }),
+      );
+      if (navigationResult._tag === "Failure") return navigationResult;
+      forkAttemptBySourceRef.current.delete(sourceKey);
+      return AsyncResult.success(attempt.threadId);
+    },
+    [forkThreadMutation, router],
+  );
+}
+
 export function useThreadActions() {
   const closeTerminal = useAtomCommand(terminalEnvironment.close);
   const archiveThreadMutation = useAtomCommand(threadEnvironment.archive, {
@@ -160,6 +238,7 @@ export function useThreadActions() {
   // the projects list) and would otherwise cascade new references into every
   // sidebar row via archiveThread → attemptArchiveThread.
   const handleNewThreadRef = useRef(handleNewThread);
+  const forkThread = useForkThreadAction();
   handleNewThreadRef.current = handleNewThread;
 
   const resolveThreadTarget = useCallback((target: ScopedThreadRef) => {
@@ -641,6 +720,7 @@ export function useThreadActions() {
       unsnoozeThread,
       pinThread,
       unpinThread,
+      forkThread,
     }),
     [
       archiveThread,
@@ -651,6 +731,7 @@ export function useThreadActions() {
       snoozeThread,
       unarchiveThread,
       unpinThread,
+      forkThread,
       unsettleThread,
       unsnoozeThread,
     ],

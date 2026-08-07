@@ -141,6 +141,7 @@ export interface CodexSessionRuntimeShape {
   readonly rollbackThread: (
     numTurns: number,
   ) => Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
+  readonly forkThread: (cwd: string) => Effect.Effect<CodexResumeCursor, CodexSessionRuntimeError>;
   readonly respondToRequest: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -453,6 +454,28 @@ interface CodexThreadOpenClient {
     payload: CodexRpc.ClientRequestParamsByMethod[M],
   ) => Effect.Effect<CodexRpc.ClientRequestResponsesByMethod[M], CodexErrors.CodexAppServerError>;
 }
+
+interface CodexThreadForkClient {
+  readonly request: (
+    method: "thread/fork",
+    payload: CodexRpc.ClientRequestParamsByMethod["thread/fork"],
+  ) => Effect.Effect<
+    CodexRpc.ClientRequestResponsesByMethod["thread/fork"],
+    CodexErrors.CodexAppServerError
+  >;
+}
+
+export const forkCodexThread = (input: {
+  readonly client: CodexThreadForkClient;
+  readonly sourceThreadId: string;
+  readonly cwd: string;
+}): Effect.Effect<CodexResumeCursor, CodexErrors.CodexAppServerError> =>
+  input.client
+    .request("thread/fork", {
+      threadId: input.sourceThreadId,
+      cwd: input.cwd,
+    })
+    .pipe(Effect.map((response) => ({ threadId: response.thread.id })));
 
 export const openCodexThread = (input: {
   readonly client: CodexThreadOpenClient;
@@ -1849,6 +1872,15 @@ export const makeCodexSessionRuntime = (
             activeTurnId: undefined,
           });
           return parseThreadSnapshot(response);
+        }),
+      forkThread: (cwd) =>
+        Effect.gen(function* () {
+          const providerThreadId = yield* readProviderThreadId;
+          return yield* forkCodexThread({
+            client,
+            sourceThreadId: providerThreadId,
+            cwd,
+          });
         }),
       respondToRequest: (requestId, decision) =>
         Effect.gen(function* () {

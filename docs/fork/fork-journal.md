@@ -55,3 +55,22 @@ upstream.
 - Verification: Passed targeted lint and the web type check. In an isolated web environment,
   right-clicked a real Sidebar v2 thread, selected **Copy Thread ID**, observed the success toast,
   and confirmed the clipboard value matched that thread's ID in the isolated database.
+
+## 2026-08-06 — Add native thread forking
+
+- Upstream baseline: `4f5834ba7`
+- Change: Added a composer-only `/fork` operation for Codex, Claude Agent, and OpenCode. A fork
+  copies the completed visible timeline into an ordinary target thread, creates an independent
+  native provider session and checkpoint baseline, and deliberately keeps the source workspace.
+  Cursor and Grok remain unsupported. No fork-specific event, projection field, or durable source
+  relationship was added.
+- Reason: Let users branch a provider conversation at its current head without duplicating or
+  isolating the files they are already working on.
+- Scope: Shared contracts and client runtime; provider adapters and durable bindings; server
+  orchestration, attachments, and checkpointing; web and mobile composers; user and maintainer
+  documentation. Desktop inherits the web behavior.
+- Verification: Passed the focused Phase 1–4 contract, provider, orchestration, web, and mobile test
+  selectors and targeted type, lint, and formatting checks. Phase 5 documentation links and
+  formatting were checked explicitly. In an isolated web environment, Codex, Claude Agent, and
+  OpenCode each created a native fork with copied history, navigated to the target, and accepted a
+  follow-up prompt; the Codex source also accepted a later prompt independently.

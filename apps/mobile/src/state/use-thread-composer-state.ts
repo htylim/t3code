@@ -1,5 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
-import { useCallback, useEffect, useMemo } from "react";
+import { StackActions, useNavigation } from "@react-navigation/native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert } from "react-native";
 
 import {
   CommandId,
@@ -8,10 +10,19 @@ import {
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
-  type ThreadId,
+  ThreadId,
 } from "@t3tools/contracts";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
+import {
+  retainThreadForkAttempt,
+  type ThreadForkAttempt,
+} from "@t3tools/client-runtime/operations";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { deriveActiveWorkStartedAt } from "@t3tools/shared/orchestrationTiming";
+import {
+  parseStandaloneComposerCommand,
+  resolveThreadForkEligibility,
+} from "@t3tools/shared/composerCommands";
 
 import { makeQueuedMessageMetadata } from "../lib/commandMetadata";
 import {
@@ -41,6 +52,10 @@ import { useSelectedThreadDetail } from "../state/use-thread-detail";
 import { useThreadSelection } from "../state/use-thread-selection";
 import { enqueueThreadOutboxMessage } from "./thread-outbox";
 import { useThreadOutboxMessages } from "./use-thread-outbox";
+import { useAtomCommand } from "./use-atom-command";
+import { threadEnvironment } from "./threads";
+import { uuidv4 } from "../lib/uuid";
+import { executeMobileThreadFork } from "./threadFork";
 
 export function appendReviewCommentToDraft(input: {
   readonly environmentId: EnvironmentId;
@@ -74,10 +89,14 @@ export function useThreadDraftForThread(input: {
 }
 
 export function useThreadComposerState() {
-  const { selectedThread: selectedThreadShell } = useThreadSelection();
+  const { selectedThread: selectedThreadShell, selectedEnvironmentRuntime } = useThreadSelection();
   const selectedThreadDetail = useSelectedThreadDetail();
   const composerDrafts = useAtomValue(composerDraftsAtom);
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
+  const forkThread = useAtomCommand(threadEnvironment.fork, { reportFailure: false });
+  const navigation = useNavigation();
+  const forkAttemptRef = useRef<ThreadForkAttempt | undefined>(undefined);
+  const [isForking, setIsForking] = useState(false);
 
   useEffect(() => {
     ensureComposerDraftsLoaded();
@@ -147,6 +166,65 @@ export function useThreadComposerState() {
       return null;
     }
 
+    if (
+      parseStandaloneComposerCommand({
+        text,
+        attachmentCount: attachments.length,
+        contextCount: 0,
+      }) === "fork"
+    ) {
+      const config = selectedEnvironmentRuntime?.serverConfig ?? null;
+      const forkEligibility = resolveThreadForkEligibility({
+        routeKind: "server",
+        thread: selectedThreadShell,
+        environmentSupportsThreadFork: config?.environment.capabilities.threadFork === true,
+        providers: config?.providers ?? [],
+        queuedTurnCount: selectedThreadQueuedMessages.length,
+      });
+      const forkAttempt = retainThreadForkAttempt({
+        retained: forkAttemptRef.current,
+        sourceThreadId: selectedThreadShell.id,
+        createThreadId: () => ThreadId.make(uuidv4()),
+        createCommandId: () => CommandId.make(uuidv4()),
+        now: () => new Date().toISOString(),
+      });
+      forkAttemptRef.current = forkAttempt;
+      setIsForking(true);
+      const forkResult = await executeMobileThreadFork({
+        text,
+        attachmentCount: attachments.length,
+        contextCount: 0,
+        eligibility: forkEligibility,
+        targetThreadId: forkAttempt.threadId,
+        dispatchFork: async (threadId) => {
+          const result = await forkThread({
+            environmentId: selectedThreadShell.environmentId,
+            input: { ...forkAttempt, threadId },
+          });
+          if (result._tag === "Success") return { ok: true };
+          const error = squashAtomCommandFailure(result);
+          return {
+            ok: false,
+            message: error instanceof Error ? error.message : "Failed to fork this thread.",
+          };
+        },
+        enqueue: async () => null,
+        clearDraft: () => clearComposerDraftContent(threadKey),
+        replaceRoute: (threadId) => {
+          navigation.dispatch(
+            StackActions.replace("Thread", {
+              environmentId: String(selectedThreadShell.environmentId),
+              threadId: String(threadId),
+            }),
+          );
+        },
+        showError: (message) => Alert.alert("Can't fork thread", message),
+      });
+      setIsForking(false);
+      if (forkResult.handled && forkResult.succeeded) forkAttemptRef.current = undefined;
+      return null;
+    }
+
     const metadata = makeQueuedMessageMetadata();
     const messageId = MessageId.make(metadata.messageId);
     // Enqueue publishes the queued atom synchronously (the durable write
@@ -179,7 +257,14 @@ export function useThreadComposerState() {
       );
     });
     return messageId;
-  }, [selectedThreadDetail, selectedThreadShell]);
+  }, [
+    forkThread,
+    navigation,
+    selectedEnvironmentRuntime?.serverConfig,
+    selectedThreadDetail,
+    selectedThreadQueuedMessages.length,
+    selectedThreadShell,
+  ]);
 
   const onChangeDraftMessage = useCallback(
     (value: string) => {
@@ -309,6 +394,7 @@ export function useThreadComposerState() {
     runtimeMode,
     interactionMode,
     activeThreadBusy,
+    isForking,
     onChangeDraftMessage,
     onPickDraftImages,
     onPasteIntoDraft,

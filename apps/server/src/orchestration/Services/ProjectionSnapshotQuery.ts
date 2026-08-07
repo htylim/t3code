@@ -53,6 +53,14 @@ export interface ProjectionFullThreadDiffContext {
   readonly toCheckpointRef: CheckpointRef | null;
 }
 
+export interface ProjectionThreadForkSnapshot {
+  readonly thread: OrchestrationThread;
+  readonly workspaceRoot: string;
+  readonly targetExists: boolean;
+  readonly hasPendingApprovals: boolean;
+  readonly hasPendingUserInput: boolean;
+}
+
 /**
  * ProjectionSnapshotQueryShape - Service API for read-model snapshots.
  */
@@ -178,6 +186,12 @@ export interface ProjectionSnapshotQueryShape {
   readonly getThreadDetailSnapshot: (
     threadId: ThreadId,
   ) => Effect.Effect<Option.Option<OrchestrationThreadDetailSnapshot>, ProjectionRepositoryError>;
+
+  /** Read all authoritative source state needed by one fork in a single transaction. */
+  readonly getThreadForkSnapshot?: (
+    sourceThreadId: ThreadId,
+    targetThreadId: ThreadId,
+  ) => Effect.Effect<Option.Option<ProjectionThreadForkSnapshot>, ProjectionRepositoryError>;
 }
 
 /**

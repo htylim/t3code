@@ -4468,6 +4468,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           models: [],
           slashCommands: [],
           skills: [],
+          supportsThreadFork: false,
         },
       ] as const;
       const changeEvent = {
@@ -4556,6 +4557,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           models: [],
           slashCommands: [],
           skills: [],
+          supportsThreadFork: false,
         },
       ] as const;
 

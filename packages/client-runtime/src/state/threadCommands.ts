@@ -6,6 +6,7 @@ import {
   type ArchiveThreadInput,
   type CreateThreadInput,
   type DeleteThreadInput,
+  type ForkThreadInput,
   type InterruptThreadTurnInput,
   type RespondToThreadApprovalInput,
   type RespondToThreadUserInputInput,
@@ -25,6 +26,7 @@ import {
   archiveThread,
   createThread,
   deleteThread,
+  forkThread,
   interruptThreadTurn,
   respondToThreadApproval,
   respondToThreadUserInput,
@@ -48,6 +50,7 @@ export type {
   ArchiveThreadInput,
   CreateThreadInput,
   DeleteThreadInput,
+  ForkThreadInput,
   InterruptThreadTurnInput,
   RespondToThreadApprovalInput,
   RespondToThreadUserInputInput,
@@ -66,6 +69,16 @@ export type {
   UpdateThreadMetadataInput,
 } from "../operations/commands.ts";
 
+export function threadForkConcurrencyKey({
+  environmentId,
+  input,
+}: {
+  readonly environmentId: string;
+  readonly input: Pick<ForkThreadInput, "sourceThreadId" | "threadId">;
+}): string {
+  return JSON.stringify([environmentId, input.sourceThreadId]);
+}
+
 export function createThreadEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | Crypto.Crypto | R, E>,
 ) {
@@ -81,6 +94,15 @@ export function createThreadEnvironmentAtoms<R, E>(
       execute: (input: CreateThreadInput) => createThread(input),
       scheduler,
       concurrency,
+    }),
+    fork: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:fork",
+      execute: (input: ForkThreadInput) => forkThread(input),
+      scheduler,
+      concurrency: {
+        mode: "serial",
+        key: threadForkConcurrencyKey,
+      },
     }),
     delete: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:delete",

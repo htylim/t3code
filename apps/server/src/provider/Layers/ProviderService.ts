@@ -17,6 +17,7 @@ import {
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
   ProviderSendTurnInput,
+  ProviderSessionForkInput,
   ProviderSessionStartInput,
   ProviderStopSessionInput,
   type ProviderInstanceId,
@@ -45,7 +46,11 @@ import {
   providerTurnMetricAttributes,
   withMetrics,
 } from "../../observability/Metrics.ts";
-import { type ProviderAdapterError, ProviderValidationError } from "../Errors.ts";
+import {
+  type ProviderAdapterError,
+  ProviderOperationUnsupportedError,
+  ProviderValidationError,
+} from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
@@ -642,6 +647,98 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
   );
 
+  const forkSession: ProviderServiceMethod<"forkSession"> = Effect.fn("forkSession")(
+    function* (rawInput) {
+      const input = yield* decodeInputOrValidationError({
+        operation: "ProviderService.forkSession",
+        schema: ProviderSessionForkInput,
+        payload: rawInput,
+      });
+      if (input.sourceThreadId === input.targetThreadId) {
+        return yield* toValidationError(
+          "ProviderService.forkSession",
+          "Source and target thread ids must be different.",
+        );
+      }
+
+      const sourceBinding = Option.getOrUndefined(
+        yield* directory.getBinding(input.sourceThreadId),
+      );
+      if (!sourceBinding) {
+        return yield* toValidationError(
+          "ProviderService.forkSession",
+          `Cannot fork thread '${input.sourceThreadId}' because no persisted provider binding exists.`,
+        );
+      }
+      const sourceInstanceId = yield* requireBindingInstanceId(
+        "ProviderService.forkSession",
+        sourceBinding,
+      );
+      const source = yield* recoverSessionForThread({
+        binding: sourceBinding,
+        operation: "ProviderService.forkSession",
+      });
+      if (source.adapter.capabilities.sessionFork !== "native") {
+        return yield* new ProviderOperationUnsupportedError({
+          provider: source.adapter.provider,
+          operation: "session/fork",
+        });
+      }
+
+      const existingTargetBinding = Option.getOrUndefined(
+        yield* directory.getBinding(input.targetThreadId),
+      );
+      if (existingTargetBinding) {
+        const targetInstanceId = yield* requireBindingInstanceId(
+          "ProviderService.forkSession",
+          existingTargetBinding,
+        );
+        if (
+          targetInstanceId !== sourceInstanceId ||
+          existingTargetBinding.provider !== sourceBinding.provider
+        ) {
+          return yield* toValidationError(
+            "ProviderService.forkSession",
+            `Target thread '${input.targetThreadId}' is already bound to a different provider instance.`,
+          );
+        }
+        const recoveredTarget = yield* recoverSessionForThread({
+          binding: existingTargetBinding,
+          operation: "ProviderService.forkSession",
+        });
+        return {
+          ...recoveredTarget.session,
+          providerInstanceId: targetInstanceId,
+        };
+      }
+
+      const forked = yield* source.adapter.forkSession({
+        sourceThreadId: input.sourceThreadId,
+        targetThreadId: input.targetThreadId,
+        cwd: input.cwd,
+      });
+      const createdAt = yield* nowIso;
+      const targetSession: ProviderSession = {
+        provider: source.adapter.provider,
+        providerInstanceId: sourceInstanceId,
+        status: "ready",
+        runtimeMode: source.session.runtimeMode,
+        cwd: input.cwd,
+        ...(source.session.model ? { model: source.session.model } : {}),
+        threadId: input.targetThreadId,
+        resumeCursor: forked.resumeCursor,
+        createdAt,
+        updatedAt: createdAt,
+      };
+      yield* upsertSessionBinding(targetSession, input.targetThreadId, {
+        modelSelection: readPersistedModelSelection(sourceBinding.runtimePayload),
+        lastRuntimeEvent: "provider.forkSession",
+        lastRuntimeEventAt: createdAt,
+      });
+      return targetSession;
+    },
+  );
+
   const sendTurn: ProviderServiceMethod<"sendTurn"> = Effect.fn("sendTurn")(function* (rawInput) {
     const parsed = yield* decodeInputOrValidationError({
       operation: "ProviderService.sendTurn",
@@ -1076,6 +1173,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 
   return {
     startSession,
+    forkSession,
     sendTurn,
     interruptTurn,
     respondToRequest,

@@ -34,6 +34,14 @@ A Git worktree used as an isolated workspace for a thread. If a thread has a `wo
 
 The main durable unit of conversation and workspace history. In [the orchestration contracts][1], a thread holds messages, activities, checkpoints, and session-related state. See [projector.ts][4].
 
+#### Fork
+
+A new ordinary thread created from a supported provider's current conversation head. Its visible
+completed transcript is copied to target-owned records, and its native provider session and
+checkpoint baseline are new. The source and target share the same workspace files, but T3 Code
+stores no durable fork marker or source relationship. See the [thread-forking user guide][25] and
+[provider architecture][16].
+
 #### Turn
 
 A single user-to-assistant work cycle inside a thread. It starts with user input and ends when the session leaves `running` status, which [projector.ts][4] treats as the authoritative completion signal (`settledTurnStateForSessionStatus`). Checkpoint and diff work may settle afterward without changing when the turn ended. See [the contracts][1] and [ProviderRuntimeIngestion.ts][5].
@@ -179,3 +187,4 @@ The file patch and changed-file summary for one turn. It is usually computed in 
 [22]: ../../apps/server/src/checkpointing/Utils.ts
 [23]: ../../apps/server/src/checkpointing/Diffs.ts
 [24]: ./overview.md
+[25]: ../user/thread-forking.md

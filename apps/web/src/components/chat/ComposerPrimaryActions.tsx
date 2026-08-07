@@ -22,6 +22,7 @@ interface ComposerPrimaryActionsProps {
   showPlanFollowUpPrompt: boolean;
   promptHasText: boolean;
   isSendBusy: boolean;
+  sendBusyLabel?: string;
   sendDisabledReason: string | null;
   isConnecting: boolean;
   isEnvironmentUnavailable: boolean;
@@ -62,6 +63,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   showPlanFollowUpPrompt,
   promptHasText,
   isSendBusy,
+  sendBusyLabel = "Sending",
   sendDisabledReason,
   isConnecting,
   isEnvironmentUnavailable,
@@ -229,7 +231,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
               : isPreparingWorktree
                 ? "Preparing worktree"
                 : isSendBusy
-                  ? "Sending"
+                  ? sendBusyLabel
                   : "Send message"
       }
     >

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { serializeComposerFileLink, serializeComposerMentionPath } from "./composerTrigger.ts";
+import {
+  parseStandaloneComposerSlashCommand,
+  serializeComposerFileLink,
+  serializeComposerMentionPath,
+} from "./composerTrigger.ts";
 
 describe("serializeComposerMentionPath", () => {
   it("keeps simple mention paths unquoted", () => {
@@ -39,5 +43,15 @@ describe("serializeComposerFileLink", () => {
     expect(serializeComposerFileLink("@scope/package.json")).toBe(
       "[package.json](@scope/package.json)",
     );
+  });
+});
+
+describe("standalone composer commands", () => {
+  it("parses standalone /fork case-insensitively with surrounding whitespace", () => {
+    expect(parseStandaloneComposerSlashCommand("  /FoRk  ")).toBe("fork");
+  });
+
+  it("does not intercept /fork with arguments", () => {
+    expect(parseStandaloneComposerSlashCommand("/fork keep explaining")).toBeNull();
   });
 });
