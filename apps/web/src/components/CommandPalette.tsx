@@ -81,6 +81,7 @@ import {
   resolveProjectPathForDispatch,
 } from "../lib/projectPaths";
 import { onOpenCommandPalette } from "../commandPaletteBus";
+import { requestThreadRename } from "../threadRenameBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
@@ -1389,6 +1390,21 @@ function OpenCommandPaletteDialog(props: {
       icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
       addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
       groups: [{ value: "projects", label: "Projects", items: projectThreadItems }],
+    });
+  }
+
+  if (activeThread) {
+    actionItems.push({
+      kind: "action",
+      value: "action:rename-thread",
+      searchTerms: ["rename thread", "edit title"],
+      title: "Rename thread",
+      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "thread.rename",
+      run: async () => {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+        requestThreadRename(scopeThreadRef(activeThread.environmentId, activeThread.id));
+      },
     });
   }
 

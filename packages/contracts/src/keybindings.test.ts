@@ -95,6 +95,12 @@ it.effect("parses keybinding rules", () =>
       command: "thread.previous",
     });
     assert.strictEqual(parsedThreadPrevious.command, "thread.previous");
+
+    const parsedThreadRename = yield* decode(KeybindingRule, {
+      key: "f2",
+      command: "thread.rename",
+    });
+    assert.strictEqual(parsedThreadRename.command, "thread.rename");
   }),
 );
 

@@ -169,6 +169,7 @@ import {
 } from "./ui/sidebar";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { openCommandPalette } from "../commandPaletteBus";
+import { subscribeThreadRename } from "../threadRenameBus";
 import {
   archiveSelectedThreadEntries,
   buildMultiSelectThreadContextMenuItems,
@@ -1976,6 +1977,18 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     setRenamingTitle(title);
     renamingCommittedRef.current = false;
   }, []);
+
+  useEffect(
+    () =>
+      subscribeThreadRename((threadRef) => {
+        const threadKey = scopedThreadKey(threadRef);
+        const thread = sidebarThreadByKeyRef.current.get(threadKey);
+        if (!thread || renamingThreadKey === threadKey) return;
+        expandThreadListForProject(project.projectKey);
+        startThreadRename(threadKey, thread.title);
+      }),
+    [expandThreadListForProject, project.projectKey, renamingThreadKey, startThreadRename],
+  );
 
   const commitRename = useCallback(
     async (threadRef: ScopedThreadRef, newTitle: string, originalTitle: string) => {

@@ -74,3 +74,18 @@ upstream.
   formatting were checked explicitly. In an isolated web environment, Codex, Claude Agent, and
   OpenCode each created a native fork with copied history, navigated to the target, and accepted a
   follow-up prompt; the Codex source also accepted a later prompt independently.
+
+## 2026-08-07 — Add Rename Thread keybinding
+
+- Upstream baseline: `a0a7ff840`
+- Change: Added the `thread.rename` command with an `F2` default, command-palette entry, and support
+  for starting the existing inline rename flow from either web sidebar.
+- Reason: Make thread renaming available without opening the thread context menu.
+- Scope: Shared keybinding contracts and defaults, web and desktop shortcut handling, both sidebar
+  implementations, command palette, and user documentation. Mobile and provider behavior are
+  unchanged.
+- Verification: Passed 100 focused contract, server backfill, shortcut, Settings, command-palette,
+  and rename-dispatch tests; targeted contract, shared, and web type checks; targeted lint and
+  formatting checks. In an isolated web environment, confirmed Settings lists **Thread: Rename**
+  with `F2`, used `F2` from both sidebar versions, renamed a real thread, and started the same inline
+  flow from the command palette.

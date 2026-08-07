@@ -136,6 +136,11 @@ const DEFAULT_BINDINGS = compile([
   { shortcut: modShortcut("o", { shiftKey: true }), command: "chat.new" },
   { shortcut: modShortcut("n", { shiftKey: true }), command: "chat.newLocal" },
   { shortcut: modShortcut("o"), command: "editor.openFavorite" },
+  {
+    shortcut: { ...modShortcut("f2"), modKey: false },
+    command: "thread.rename",
+    whenAst: whenNot(whenIdentifier("terminalFocus")),
+  },
   { shortcut: modShortcut("[", { shiftKey: true }), command: "thread.previous" },
   { shortcut: modShortcut("]", { shiftKey: true }), command: "thread.next" },
   { shortcut: modShortcut("1"), command: "thread.jump.1" },
@@ -367,6 +372,7 @@ describe("shortcutLabelForCommand", () => {
       shortcutLabelForCommand(DEFAULT_BINDINGS, "thread.previous", "Linux"),
       "Ctrl+Shift+[",
     );
+    assert.strictEqual(shortcutLabelForCommand(DEFAULT_BINDINGS, "thread.rename", "Linux"), "F2");
     assert.strictEqual(
       shortcutLabelForCommand(DEFAULT_BINDINGS, "modelPicker.jump.3", {
         platform: "MacIntel",
@@ -482,6 +488,20 @@ describe("model picker navigation helpers", () => {
 });
 
 describe("chat/editor shortcuts", () => {
+  it("matches thread.rename outside terminal focus", () => {
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "F2" }), DEFAULT_BINDINGS, {
+        context: { terminalFocus: false },
+      }),
+      "thread.rename",
+    );
+    assert.isNull(
+      resolveShortcutCommand(event({ key: "F2" }), DEFAULT_BINDINGS, {
+        context: { terminalFocus: true },
+      }),
+    );
+  });
+
   it("matches chat.new shortcut", () => {
     assert.isTrue(
       isChatNewShortcut(event({ key: "o", metaKey: true, shiftKey: true }), DEFAULT_BINDINGS, {

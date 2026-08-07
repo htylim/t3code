@@ -88,6 +88,7 @@ import { useThreadSelectionStore } from "../threadSelectionStore";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { openCommandPalette } from "../commandPaletteBus";
+import { subscribeThreadRename } from "../threadRenameBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
@@ -2007,6 +2008,19 @@ export default function SidebarV2() {
     setRenamingThreadKey(scopedThreadKey(threadRef));
     setRenamingTitle(title);
   }, []);
+
+  useEffect(
+    () =>
+      subscribeThreadRename((threadRef) => {
+        const threadKey = scopedThreadKey(threadRef);
+        const thread = threadByKeyRef.current.get(threadKey);
+        if (!thread || renamingThreadKey === threadKey) return;
+        clearThreadSearch();
+        startThreadRename(threadRef, thread.title);
+      }),
+    [clearThreadSearch, renamingThreadKey, startThreadRename],
+  );
+
   const cancelThreadRename = useCallback(() => setRenamingThreadKey(null), []);
   const commitThreadRename = useCallback(
     (threadRef: ScopedThreadRef, title: string, originalTitle: string) => {
