@@ -60,6 +60,11 @@ describe("reduceCommandPaletteUiState", () => {
       mode: "command",
       openIntent: { kind: "new-thread-in" },
     });
+    expect(reduceCommandPaletteUiState(filesOpen, { _tag: "OpenProjectFilter" })).toEqual({
+      open: true,
+      mode: "command",
+      openIntent: { kind: "project-filter" },
+    });
   });
 
   it("resets to command mode for dialog-driven opens and closes", () => {

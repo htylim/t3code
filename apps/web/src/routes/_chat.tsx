@@ -1,4 +1,4 @@
-import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { Outlet, createFileRoute, redirect, useLocation } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useMemo } from "react";
 
@@ -16,6 +16,10 @@ import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { resolveShortcutCommand } from "../keybindings";
 import { requestThreadRename } from "../threadRenameBus";
+import {
+  handleSidebarProjectFilterShortcut,
+  isSidebarProjectFilterAvailable,
+} from "../sidebarProjectFilter.logic";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
 import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
@@ -33,6 +37,7 @@ function ChatRouteGlobalShortcuts() {
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const pathname = useLocation({ select: (location) => location.pathname });
   const projectGroupCount = useMemo(
     () =>
       buildSidebarProjectSnapshots({
@@ -67,6 +72,21 @@ function ChatRouteGlobalShortcuts() {
           previewOpen,
         },
       });
+
+      if (
+        handleSidebarProjectFilterShortcut({
+          command,
+          available: isSidebarProjectFilterAvailable({
+            sidebarV2Enabled,
+            pathname,
+            projectGroupCount,
+          }),
+          event,
+          open: () => openCommandPalette({ open: "project-filter" }),
+        })
+      ) {
+        return;
+      }
 
       if (isCommandPaletteOpen()) {
         return;
@@ -173,6 +193,7 @@ function ChatRouteGlobalShortcuts() {
     keybindings,
     defaultProjectRef,
     previewOpen,
+    pathname,
     projectGroupCount,
     routeThreadRef,
     selectedThreadKeysSize,

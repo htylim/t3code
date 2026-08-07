@@ -122,6 +122,7 @@ describe("KeybindingsSettings.logic", () => {
 
   it("formats static and project script command labels", () => {
     expect(commandLabel("commandPalette.toggle")).toBe("Command Palette: Toggle");
+    expect(commandLabel("sidebar.projectFilter")).toBe("Sidebar: Project Filter");
     expect(commandLabel("thread.rename")).toBe("Thread: Rename");
     expect(commandLabel("script.setup-db.run")).toBe("Run Script: Setup Db");
   });
@@ -151,7 +152,12 @@ describe("KeybindingsSettings.logic", () => {
     ] satisfies ResolvedKeybindingsConfig);
 
     expect(options).toEqual(
-      expect.arrayContaining(["chat.new", "thread.rename", "script.setup-db.run"]),
+      expect.arrayContaining([
+        "chat.new",
+        "sidebar.projectFilter",
+        "thread.rename",
+        "script.setup-db.run",
+      ]),
     );
   });
 

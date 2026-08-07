@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 
 import {
+  STATIC_KEYBINDING_COMMANDS,
   KeybindingsConfig,
   KeybindingRule,
   ResolvedKeybindingRule,
@@ -101,6 +102,13 @@ it.effect("parses keybinding rules", () =>
       command: "thread.rename",
     });
     assert.strictEqual(parsedThreadRename.command, "thread.rename");
+
+    const parsedProjectFilter = yield* decode(KeybindingRule, {
+      key: "mod+shift+p",
+      command: "sidebar.projectFilter",
+    });
+    assert.strictEqual(parsedProjectFilter.command, "sidebar.projectFilter");
+    assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("sidebar.projectFilter"));
   }),
 );
 

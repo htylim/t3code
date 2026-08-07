@@ -88,6 +88,8 @@ import { useThreadSelectionStore } from "../threadSelectionStore";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { openCommandPalette } from "../commandPaletteBus";
+import { subscribeSidebarProjectFilterScope } from "../sidebarProjectFilterBus";
+import { resolveSidebarProjectFilterLabel } from "../sidebarProjectFilter.logic";
 import { subscribeThreadRename } from "../threadRenameBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
@@ -1488,6 +1490,7 @@ export default function SidebarV2() {
   // Project scope: one menu above the list. Scoping filters the list without
   // making the header width depend on the number or length of project names.
   const [projectScopeKey, setProjectScopeKey] = useState<string | null>(null);
+  useEffect(() => subscribeSidebarProjectFilterScope(setProjectScopeKey), []);
   const scopedProjectGroup = useMemo(
     () =>
       projectScopeKey === null
@@ -2893,7 +2896,7 @@ export default function SidebarV2() {
                       <FolderIcon className="size-4 shrink-0" />
                     )}
                     <span className="min-w-0 flex-1 truncate">
-                      {scopedProjectGroup?.displayName ?? "All projects"}
+                      {resolveSidebarProjectFilterLabel(projectGroups, projectScopeKey)}
                     </span>
                     <ChevronDownIcon className="-mr-px size-4 shrink-0" />
                   </MenuTrigger>

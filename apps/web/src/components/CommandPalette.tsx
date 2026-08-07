@@ -25,7 +25,7 @@ import {
   type SourceControlRepositoryInfo,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
 } from "@t3tools/contracts";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
@@ -56,7 +56,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import { useClientSettings } from "../hooks/useSettings";
+import { useClientSettings, useSidebarV2Enabled } from "../hooks/useSettings";
 import { readLocalApi } from "../localApi";
 import { desktopLocalBackendId } from "../connection/desktopLocal";
 import { filesystemEnvironment } from "../state/filesystem";
@@ -81,6 +81,11 @@ import {
   resolveProjectPathForDispatch,
 } from "../lib/projectPaths";
 import { onOpenCommandPalette } from "../commandPaletteBus";
+import { requestSidebarProjectFilterScope } from "../sidebarProjectFilterBus";
+import {
+  buildSidebarProjectFilterActionItems,
+  isSidebarProjectFilterAvailable,
+} from "../sidebarProjectFilter.logic";
 import { requestThreadRename } from "../threadRenameBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
@@ -385,6 +390,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   );
   const openAddProject = useCallback(() => dispatch({ _tag: "OpenAddProject" }), []);
   const openNewThreadIn = useCallback(() => dispatch({ _tag: "OpenNewThreadIn" }), []);
+  const openProjectFilter = useCallback(() => dispatch({ _tag: "OpenProjectFilter" }), []);
   const clearOpenIntent = useCallback(() => dispatch({ _tag: "ClearOpenIntent" }), []);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const composerHandleRef = useRef<ChatComposerHandle | null>(null);
@@ -446,13 +452,15 @@ export function CommandPalette({ children }: { children: ReactNode }) {
       onOpenCommandPalette((detail) => {
         if (detail.open === "new-thread-in") {
           openNewThreadIn();
+        } else if (detail.open === "project-filter") {
+          openProjectFilter();
         } else if (detail.open === "add-project") {
           openAddProject();
         } else {
           setOpen(true);
         }
       }),
-    [openAddProject, openNewThreadIn, setOpen],
+    [openAddProject, openNewThreadIn, openProjectFilter, setOpen],
   );
 
   return (
@@ -546,6 +554,8 @@ function OpenCommandPaletteDialog(props: {
   const isActionsOnly = deferredQuery.startsWith(">");
   const [highlightedItemValue, setHighlightedItemValue] = useState<string | null>(null);
   const clientSettings = useClientSettings();
+  const sidebarV2Enabled = useSidebarV2Enabled();
+  const pathname = useLocation({ select: (location) => location.pathname });
   const createProject = useAtomCommand(projectEnvironment.create, {
     reportFailure: false,
   });
@@ -656,6 +666,21 @@ function OpenCommandPaletteDialog(props: {
         clientSettings.sidebarProjectSortOrder,
       ),
     [clientSettings.sidebarProjectSortOrder, threads, unsortedProjectGroups],
+  );
+  const projectFilterAvailable = isSidebarProjectFilterAvailable({
+    sidebarV2Enabled,
+    pathname,
+    projectGroupCount: projectGroups.length,
+  });
+  const projectFilterItems = useMemo(
+    () =>
+      buildSidebarProjectFilterActionItems({
+        groups: projectGroups,
+        allProjectsIcon: <FolderIcon className={ITEM_ICON_CLASS} />,
+        projectIcon: projectFavicon,
+        requestScope: requestSidebarProjectFilterScope,
+      }),
+    [projectGroups],
   );
   const contextualProjectRef = useMemo(
     () =>
@@ -1352,6 +1377,31 @@ function OpenCommandPaletteDialog(props: {
     pushPaletteView,
   ]);
 
+  useLayoutEffect(() => {
+    if (openIntent?.kind !== "project-filter") {
+      return;
+    }
+    clearOpenIntent();
+    if (!projectFilterAvailable) {
+      return;
+    }
+    browseNavigation.invalidate();
+    setAddProjectCloneFlow(null);
+    setViewStack([]);
+    setQuery("");
+    pushPaletteView({
+      addonIcon: <FolderIcon className={ADDON_ICON_CLASS} />,
+      groups: [{ value: "project-filter", label: "Projects", items: projectFilterItems }],
+    });
+  }, [
+    browseNavigation,
+    clearOpenIntent,
+    openIntent,
+    projectFilterAvailable,
+    projectFilterItems,
+    pushPaletteView,
+  ]);
+
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
   if (projects.length > 0) {
@@ -1391,6 +1441,19 @@ function OpenCommandPaletteDialog(props: {
       addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
       groups: [{ value: "projects", label: "Projects", items: projectThreadItems }],
     });
+
+    if (projectFilterAvailable) {
+      actionItems.push({
+        kind: "submenu",
+        value: "action:project-filter",
+        searchTerms: ["filter sidebar by project", "project scope", "sidebar"],
+        title: "Filter sidebar by project...",
+        icon: <FolderIcon className={ITEM_ICON_CLASS} />,
+        addonIcon: <FolderIcon className={ADDON_ICON_CLASS} />,
+        groups: [{ value: "project-filter", label: "Projects", items: projectFilterItems }],
+        shortcutCommand: "sidebar.projectFilter",
+      });
+    }
   }
 
   if (activeThread) {
