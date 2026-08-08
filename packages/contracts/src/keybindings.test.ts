@@ -103,12 +103,12 @@ it.effect("parses keybinding rules", () =>
     });
     assert.strictEqual(parsedThreadRename.command, "thread.rename");
 
-    const parsedProjectFilter = yield* decode(KeybindingRule, {
+    const parsedProjectSwitch = yield* decode(KeybindingRule, {
       key: "mod+shift+p",
-      command: "sidebar.projectFilter",
+      command: "project.switch",
     });
-    assert.strictEqual(parsedProjectFilter.command, "sidebar.projectFilter");
-    assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("sidebar.projectFilter"));
+    assert.strictEqual(parsedProjectSwitch.command, "project.switch");
+    assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("project.switch"));
   }),
 );
 

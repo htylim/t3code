@@ -42,12 +42,13 @@ Commands are IDs like `terminal.toggle`, `commandPalette.toggle`, `preview.refre
 Repeating either shortcut closes that search, and switching shortcuts replaces the open search.
 `thread.rename` starts renaming the active thread and defaults to `f2` outside the terminal.
 
-`sidebar.projectFilter` opens a searchable project filter for Sidebar v2. It has no default
-shortcut; add one with the **+** button in **Settings** → **Keybindings**, or run **Filter sidebar
-by project...** from the command palette. The picker searches logical project names plus every
-grouped project's name and workspace path. Choosing a scope filters the sidebar without navigating
-or changing the active thread, and **All projects** clears the filter. The command is unavailable
-while the legacy sidebar or Settings navigation is mounted.
+`project.switch` opens a searchable project picker for Sidebar v2. It has no default shortcut; add
+one with the **+** button in **Settings** → **Keybindings**, or run **Switch project...** from the
+command palette. The picker searches logical project names plus every grouped project's name and
+workspace path. Choosing a project opens its new-chat draft and filters the sidebar to that logical
+project. The sidebar's project menu still filters independently and includes **All projects** to
+clear the filter. The switch command is unavailable with fewer than two logical projects, while the
+legacy sidebar is mounted, or from Settings navigation.
 
 The command palette searches active thread titles, projects, branches, user messages, and final
 agent responses across connected environments. Message matches show one labeled excerpt while

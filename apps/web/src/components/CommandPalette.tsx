@@ -81,11 +81,8 @@ import {
   resolveProjectPathForDispatch,
 } from "../lib/projectPaths";
 import { onOpenCommandPalette } from "../commandPaletteBus";
+import { isProjectSwitchAvailable, switchProject } from "../projectSwitch.logic";
 import { requestSidebarProjectFilterScope } from "../sidebarProjectFilterBus";
-import {
-  buildSidebarProjectFilterActionItems,
-  isSidebarProjectFilterAvailable,
-} from "../sidebarProjectFilter.logic";
 import { requestThreadRename } from "../threadRenameBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
@@ -390,7 +387,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   );
   const openAddProject = useCallback(() => dispatch({ _tag: "OpenAddProject" }), []);
   const openNewThreadIn = useCallback(() => dispatch({ _tag: "OpenNewThreadIn" }), []);
-  const openProjectFilter = useCallback(() => dispatch({ _tag: "OpenProjectFilter" }), []);
+  const openProjectSwitch = useCallback(() => dispatch({ _tag: "OpenProjectSwitch" }), []);
   const clearOpenIntent = useCallback(() => dispatch({ _tag: "ClearOpenIntent" }), []);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const composerHandleRef = useRef<ChatComposerHandle | null>(null);
@@ -452,15 +449,15 @@ export function CommandPalette({ children }: { children: ReactNode }) {
       onOpenCommandPalette((detail) => {
         if (detail.open === "new-thread-in") {
           openNewThreadIn();
-        } else if (detail.open === "project-filter") {
-          openProjectFilter();
+        } else if (detail.open === "project-switch") {
+          openProjectSwitch();
         } else if (detail.open === "add-project") {
           openAddProject();
         } else {
           setOpen(true);
         }
       }),
-    [openAddProject, openNewThreadIn, openProjectFilter, setOpen],
+    [openAddProject, openNewThreadIn, openProjectSwitch, setOpen],
   );
 
   return (
@@ -667,21 +664,11 @@ function OpenCommandPaletteDialog(props: {
       ),
     [clientSettings.sidebarProjectSortOrder, threads, unsortedProjectGroups],
   );
-  const projectFilterAvailable = isSidebarProjectFilterAvailable({
+  const projectSwitchAvailable = isProjectSwitchAvailable({
     sidebarV2Enabled,
     pathname,
     projectGroupCount: projectGroups.length,
   });
-  const projectFilterItems = useMemo(
-    () =>
-      buildSidebarProjectFilterActionItems({
-        groups: projectGroups,
-        allProjectsIcon: <FolderIcon className={ITEM_ICON_CLASS} />,
-        projectIcon: projectFavicon,
-        requestScope: requestSidebarProjectFilterScope,
-      }),
-    [projectGroups],
-  );
   const contextualProjectRef = useMemo(
     () =>
       resolveThreadActionProjectRef({
@@ -967,6 +954,25 @@ function OpenCommandPaletteDialog(props: {
     [openProjectFromSearch, pickerProjects, projectGroupByTargetKey],
   );
 
+  const startNewThreadInProject = useCallback(
+    async (project: Project) => {
+      const group = projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
+      const contextualRefBelongsToGroup =
+        contextualProjectRef !== null &&
+        group?.memberProjectRefs.some(
+          (projectRef) =>
+            projectRef.environmentId === contextualProjectRef.environmentId &&
+            projectRef.projectId === contextualProjectRef.projectId,
+        );
+      await handleNewThread(
+        contextualRefBelongsToGroup
+          ? contextualProjectRef
+          : scopeProjectRef(project.environmentId, project.id),
+      );
+    },
+    [contextualProjectRef, handleNewThread, projectGroupByTargetKey],
+  );
+
   const projectThreadItems = useMemo(
     () =>
       enumerateCommandPaletteItems(
@@ -980,24 +986,37 @@ function OpenCommandPaletteDialog(props: {
             );
           },
           icon: projectFavicon,
+          runProject: startNewThreadInProject,
+        }),
+      ),
+    [pickerProjects, projectGroupByTargetKey, startNewThreadInProject],
+  );
+
+  const projectSwitchItems = useMemo(
+    () =>
+      enumerateCommandPaletteItems(
+        buildProjectActionItems({
+          projects: pickerProjects,
+          valuePrefix: "project-switch",
+          searchTerms: (project) => {
+            const group = projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
+            return (
+              group?.memberProjects.flatMap((member) => [member.title, member.workspaceRoot]) ?? []
+            );
+          },
+          icon: projectFavicon,
           runProject: async (project) => {
             const group = projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
-            const contextualRefBelongsToGroup =
-              contextualProjectRef !== null &&
-              group?.memberProjectRefs.some(
-                (projectRef) =>
-                  projectRef.environmentId === contextualProjectRef.environmentId &&
-                  projectRef.projectId === contextualProjectRef.projectId,
-              );
-            await handleNewThread(
-              contextualRefBelongsToGroup
-                ? contextualProjectRef
-                : scopeProjectRef(project.environmentId, project.id),
-            );
+            if (!group) return;
+            await switchProject({
+              projectScopeKey: group.projectKey,
+              startNewThread: () => startNewThreadInProject(project),
+              requestProjectScope: requestSidebarProjectFilterScope,
+            });
           },
         }),
       ),
-    [contextualProjectRef, handleNewThread, pickerProjects, projectGroupByTargetKey],
+    [pickerProjects, projectGroupByTargetKey, startNewThreadInProject],
   );
 
   const allThreadItems = useMemo(
@@ -1378,11 +1397,11 @@ function OpenCommandPaletteDialog(props: {
   ]);
 
   useLayoutEffect(() => {
-    if (openIntent?.kind !== "project-filter") {
+    if (openIntent?.kind !== "project-switch") {
       return;
     }
     clearOpenIntent();
-    if (!projectFilterAvailable) {
+    if (!projectSwitchAvailable || projectSwitchItems.length === 0) {
       return;
     }
     browseNavigation.invalidate();
@@ -1391,14 +1410,14 @@ function OpenCommandPaletteDialog(props: {
     setQuery("");
     pushPaletteView({
       addonIcon: <FolderIcon className={ADDON_ICON_CLASS} />,
-      groups: [{ value: "project-filter", label: "Projects", items: projectFilterItems }],
+      groups: [{ value: "project-switch", label: "Projects", items: projectSwitchItems }],
     });
   }, [
     browseNavigation,
     clearOpenIntent,
     openIntent,
-    projectFilterAvailable,
-    projectFilterItems,
+    projectSwitchAvailable,
+    projectSwitchItems,
     pushPaletteView,
   ]);
 
@@ -1442,16 +1461,16 @@ function OpenCommandPaletteDialog(props: {
       groups: [{ value: "projects", label: "Projects", items: projectThreadItems }],
     });
 
-    if (projectFilterAvailable) {
+    if (projectSwitchAvailable) {
       actionItems.push({
         kind: "submenu",
-        value: "action:project-filter",
-        searchTerms: ["filter sidebar by project", "project scope", "sidebar"],
-        title: "Filter sidebar by project...",
+        value: "action:project-switch",
+        searchTerms: ["switch project", "new thread", "new chat", "sidebar"],
+        title: "Switch project...",
         icon: <FolderIcon className={ITEM_ICON_CLASS} />,
         addonIcon: <FolderIcon className={ADDON_ICON_CLASS} />,
-        groups: [{ value: "project-filter", label: "Projects", items: projectFilterItems }],
-        shortcutCommand: "sidebar.projectFilter",
+        groups: [{ value: "project-switch", label: "Projects", items: projectSwitchItems }],
+        shortcutCommand: "project.switch",
       });
     }
   }

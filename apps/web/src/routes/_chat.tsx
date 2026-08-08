@@ -16,10 +16,7 @@ import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { resolveShortcutCommand } from "../keybindings";
 import { requestThreadRename } from "../threadRenameBus";
-import {
-  handleSidebarProjectFilterShortcut,
-  isSidebarProjectFilterAvailable,
-} from "../sidebarProjectFilter.logic";
+import { handleProjectSwitchShortcut, isProjectSwitchAvailable } from "../projectSwitch.logic";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
 import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
@@ -74,15 +71,15 @@ function ChatRouteGlobalShortcuts() {
       });
 
       if (
-        handleSidebarProjectFilterShortcut({
+        handleProjectSwitchShortcut({
           command,
-          available: isSidebarProjectFilterAvailable({
+          available: isProjectSwitchAvailable({
             sidebarV2Enabled,
             pathname,
             projectGroupCount,
           }),
           event,
-          open: () => openCommandPalette({ open: "project-filter" }),
+          open: () => openCommandPalette({ open: "project-switch" }),
         })
       ) {
         return;

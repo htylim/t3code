@@ -11,26 +11,26 @@ import {
   type CommandPaletteUiState,
 } from "./components/CommandPalette.logic";
 import { resolveShortcutCommand } from "./keybindings";
-import {
-  buildSidebarProjectFilterActionItems,
-  handleSidebarProjectFilterShortcut,
-  resolveSidebarProjectFilterLabel,
-} from "./sidebarProjectFilter.logic";
+import { handleProjectSwitchShortcut, switchProject } from "./projectSwitch.logic";
+import { resolveSidebarProjectFilterLabel } from "./sidebarProjectFilter.logic";
 import {
   requestSidebarProjectFilterScope,
   subscribeSidebarProjectFilterScope,
 } from "./sidebarProjectFilterBus";
-import { buildSidebarProjectSnapshots } from "./sidebarProjectGrouping";
+import {
+  buildSidebarProjectPickerEntries,
+  buildSidebarProjectSnapshots,
+} from "./sidebarProjectGrouping";
 import type { Project } from "./types";
 
 const environmentId = EnvironmentId.make("environment-local");
 
-function makeProject(): Project {
+function makeProject(id: string, title: string, workspaceRoot: string): Project {
   return {
-    id: ProjectId.make("project-1"),
+    id: ProjectId.make(id),
     environmentId,
-    title: "T3 Code",
-    workspaceRoot: "/workspace/t3code",
+    title,
+    workspaceRoot,
     repositoryIdentity: null,
     defaultModelSelection: {
       instanceId: ProviderInstanceId.make("codex"),
@@ -42,10 +42,13 @@ function makeProject(): Project {
   };
 }
 
-describe("sidebar project filter integration", () => {
-  it("runs the configured shortcut through the picker into the mounted scope subscriber", async () => {
+describe("project switch integration", () => {
+  it("runs the configured shortcut through project selection into a new chat and sidebar scope", async () => {
     const groups = buildSidebarProjectSnapshots({
-      projects: [makeProject()],
+      projects: [
+        makeProject("project-1", "T3 Code", "/workspace/t3code"),
+        makeProject("project-2", "Effect", "/workspace/effect"),
+      ],
       settings: {
         sidebarProjectGroupingMode: "repository",
         sidebarProjectGroupingOverrides: {},
@@ -55,7 +58,7 @@ describe("sidebar project filter integration", () => {
     });
     const keybindings = [
       {
-        command: "sidebar.projectFilter",
+        command: "project.switch",
         shortcut: {
           key: "p",
           modKey: true,
@@ -90,13 +93,13 @@ describe("sidebar project filter integration", () => {
       openIntent: null,
     };
 
-    const handled = handleSidebarProjectFilterShortcut({
+    const handled = handleProjectSwitchShortcut({
       command,
       available: true,
       event: keyEvent,
       open: () => {
         paletteState = reduceCommandPaletteUiState(paletteState, {
-          _tag: "OpenProjectFilter",
+          _tag: "OpenProjectSwitch",
         });
       },
     });
@@ -105,34 +108,38 @@ describe("sidebar project filter integration", () => {
     expect(paletteState).toEqual({
       open: true,
       mode: "command",
-      openIntent: { kind: "project-filter" },
+      openIntent: { kind: "project-switch" },
     });
 
+    const entries = buildSidebarProjectPickerEntries({
+      groups,
+      preferredProjectRef: null,
+    });
+    const selected = entries[1]!;
     let scopeKey: string | null = null;
     const selectedThreadKeys = new Set(["thread-1"]);
-    const navigate = vi.fn();
+    const startNewThread = vi.fn(async () => undefined);
     const unsubscribe = subscribeSidebarProjectFilterScope((nextScopeKey) => {
       scopeKey = nextScopeKey;
       selectedThreadKeys.clear();
     });
-    const items = buildSidebarProjectFilterActionItems({
-      groups,
-      allProjectsIcon: null,
-      projectIcon: () => null,
-      requestScope: requestSidebarProjectFilterScope,
+
+    await switchProject({
+      projectScopeKey: selected.group.projectKey,
+      startNewThread,
+      requestProjectScope: requestSidebarProjectFilterScope,
     });
 
-    await items[1]?.run();
-    expect(scopeKey).toBe(groups[0]?.projectKey);
-    expect(resolveSidebarProjectFilterLabel(groups, scopeKey)).toBe("T3 Code");
+    expect(startNewThread).toHaveBeenCalledOnce();
+    expect(scopeKey).toBe(selected.group.projectKey);
+    expect(resolveSidebarProjectFilterLabel(groups, scopeKey)).toBe(selected.group.displayName);
     expect(selectedThreadKeys.size).toBe(0);
-    expect(navigate).not.toHaveBeenCalled();
 
     paletteState = reduceCommandPaletteUiState(paletteState, { _tag: "SetOpen", open: false });
-    expect(scopeKey).toBe(groups[0]?.projectKey);
+    expect(scopeKey).toBe(selected.group.projectKey);
 
     unsubscribe();
     requestSidebarProjectFilterScope(null);
-    expect(scopeKey).toBe(groups[0]?.projectKey);
+    expect(scopeKey).toBe(selected.group.projectKey);
   });
 });

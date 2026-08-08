@@ -24,7 +24,7 @@ export const ADDON_ICON_CLASS = "size-4";
 export type SearchOverlayMode = "command" | "files" | "content";
 
 export interface CommandPaletteOpenIntent {
-  readonly kind: "add-project" | "new-thread-in" | "project-filter";
+  readonly kind: "add-project" | "new-thread-in" | "project-switch";
 }
 
 export interface CommandPaletteUiState {
@@ -38,7 +38,7 @@ export type CommandPaletteUiAction =
   | { readonly _tag: "ToggleMode"; readonly mode: SearchOverlayMode }
   | { readonly _tag: "OpenAddProject" }
   | { readonly _tag: "OpenNewThreadIn" }
-  | { readonly _tag: "OpenProjectFilter" }
+  | { readonly _tag: "OpenProjectSwitch" }
   | { readonly _tag: "ClearOpenIntent" };
 
 export function reduceCommandPaletteUiState(
@@ -60,8 +60,8 @@ export function reduceCommandPaletteUiState(
       return { open: true, mode: "command", openIntent: { kind: "add-project" } };
     case "OpenNewThreadIn":
       return { open: true, mode: "command", openIntent: { kind: "new-thread-in" } };
-    case "OpenProjectFilter":
-      return { open: true, mode: "command", openIntent: { kind: "project-filter" } };
+    case "OpenProjectSwitch":
+      return { open: true, mode: "command", openIntent: { kind: "project-switch" } };
     case "ClearOpenIntent":
       return state.openIntent ? { ...state, openIntent: null } : state;
   }

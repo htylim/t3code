@@ -60,10 +60,10 @@ describe("reduceCommandPaletteUiState", () => {
       mode: "command",
       openIntent: { kind: "new-thread-in" },
     });
-    expect(reduceCommandPaletteUiState(filesOpen, { _tag: "OpenProjectFilter" })).toEqual({
+    expect(reduceCommandPaletteUiState(filesOpen, { _tag: "OpenProjectSwitch" })).toEqual({
       open: true,
       mode: "command",
-      openIntent: { kind: "project-filter" },
+      openIntent: { kind: "project-switch" },
     });
   });
 

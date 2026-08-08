@@ -90,19 +90,21 @@ upstream.
   with `F2`, used `F2` from both sidebar versions, renamed a real thread, and started the same inline
   flow from the command palette.
 
-## 2026-08-07 — Add Sidebar v2 project-filter keybinding
+## 2026-08-08 — Add Sidebar v2 project switching
 
 - Upstream baseline: `4f5834ba7`
-- Change: Added the unbound `sidebar.projectFilter` command to Settings and the command palette. A
-  configured shortcut opens a searchable logical-project picker that updates Sidebar v2's existing
-  in-memory filter without navigating.
-- Reason: Make the existing mouse-only project filter practical for keyboard-driven workflows while
-  preserving the sidebar's current grouping and scope behavior.
+- Change: Added the unbound `project.switch` command to Settings and the command palette. A
+  configured shortcut opens a searchable logical-project picker; choosing a project opens its
+  new-chat draft and scopes Sidebar v2 to that project. The sidebar dropdown remains a pure filter.
+- Reason: Make moving between projects a single keyboard-driven action instead of leaving the
+  active chat outside the newly selected sidebar scope.
 - Scope: Shared keybinding contracts, web and desktop shortcut handling, Settings command discovery,
-  command palette, Sidebar v2's local scope state, focused tests, and user documentation. Mobile,
-  legacy sidebar behavior, server orchestration, providers, and persistence are unchanged.
-- Verification: Passed 86 focused contract, shortcut, Settings, command-palette, availability,
-  scope-bus, and integration tests plus targeted contracts and web type checks. In an isolated web
-  environment, assigned `⇧⌘P` through Settings and confirmed both palette entry points, name and
-  path search, keyboard selection, Escape, reset to **All projects**, overlay replacement, the
-  Settings-route guard, repeat-key suppression, scope-label updates, and unchanged active navigation.
+  command palette, Sidebar v2's existing in-memory scope state, focused tests, and user
+  documentation. Mobile, legacy sidebar behavior, server orchestration, providers, and persistence
+  are unchanged.
+- Verification: Passed 88 focused contract, shortcut, Settings, command-palette, availability,
+  switch-composition, scope-bus, and integration tests; targeted contracts and web type checks;
+  targeted lint, formatting, and diff checks. In an isolated web environment with two projects,
+  assigned the shortcut in Settings, confirmed picker filtering and Escape, and switched in both
+  directions. Each selection opened a fresh draft for the chosen project and updated Sidebar v2's
+  scope label; the standalone **All projects** filter still changed only the sidebar scope.

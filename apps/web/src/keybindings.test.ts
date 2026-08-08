@@ -168,8 +168,8 @@ describe("fork keybinding", () => {
     assert.isFalse(DEFAULT_BINDINGS.some((binding) => String(binding.command).includes("fork")));
   });
 
-  it("leaves sidebar.projectFilter unbound by default", () => {
-    assert.isFalse(DEFAULT_BINDINGS.some((binding) => binding.command === "sidebar.projectFilter"));
+  it("leaves project.switch unbound by default", () => {
+    assert.isFalse(DEFAULT_BINDINGS.some((binding) => binding.command === "project.switch"));
   });
 });
 
@@ -492,11 +492,11 @@ describe("model picker navigation helpers", () => {
 });
 
 describe("chat/editor shortcuts", () => {
-  it("resolves a custom sidebar.projectFilter binding and its when expression", () => {
+  it("resolves a custom project.switch binding and its when expression", () => {
     const bindings = compile([
       {
         shortcut: modShortcut("p", { shiftKey: true }),
-        command: "sidebar.projectFilter",
+        command: "project.switch",
         whenAst: whenNot(whenIdentifier("terminalFocus")),
       },
     ]);
@@ -506,7 +506,7 @@ describe("chat/editor shortcuts", () => {
         platform: "MacIntel",
         context: { terminalFocus: false },
       }),
-      "sidebar.projectFilter",
+      "project.switch",
     );
     assert.isNull(
       resolveShortcutCommand(event({ key: "p", metaKey: true, shiftKey: true }), bindings, {
