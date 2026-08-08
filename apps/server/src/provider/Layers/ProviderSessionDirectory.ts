@@ -133,7 +133,7 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
         adapterKey:
           binding.adapterKey ??
           (providerChanged ? binding.provider : (existingRuntime?.adapterKey ?? binding.provider)),
-        runtimeMode: binding.runtimeMode ?? existingRuntime?.runtimeMode ?? "full-access",
+        runtimeMode: binding.runtimeMode ?? existingRuntime?.runtimeMode ?? "auto",
         status: binding.status ?? existingRuntime?.status ?? "running",
         lastSeenAt: now,
         resumeCursor:

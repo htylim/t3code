@@ -123,3 +123,18 @@ upstream.
   diff checks. In an isolated web environment with two projects, confirmed **All projects** opened
   the project picker, then filtered to one project while viewing the other and confirmed the button
   created a fresh draft directly in the filtered project.
+
+## 2026-08-08 — Default permission mode to Auto
+
+- Upstream baseline: `c911fcb78`
+- Change: New threads and missing runtime-mode recovery state default to **Auto** instead of **Full
+  access**. Unknown Codex runtime modes also fall back to Auto rather than failing open. Existing
+  threads and explicit Full-access selections are unchanged.
+- Reason: Never grant unrestricted command and filesystem access merely because no permission mode
+  was selected or persisted.
+- Scope: Shared orchestration contracts, web and mobile defaults, server bootstrap and recovery
+  fallbacks, Codex safety mapping, permission-mode documentation, and focused tests. Historical
+  persistence migrations remain unchanged.
+- Verification: Passed 147 focused contract, server provider, Codex runtime, and web draft-store
+  tests; targeted contracts, server, and web type checks; targeted lint, formatting, and diff
+  checks.

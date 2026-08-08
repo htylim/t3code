@@ -274,7 +274,8 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
       createdAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.modelSelection, undefined);
-    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
+    assert.strictEqual(DEFAULT_RUNTIME_MODE, "auto");
+    assert.strictEqual(parsed.runtimeMode, "auto");
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
   }),
 );

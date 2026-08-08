@@ -71,6 +71,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         assert.equal(runtime.value.threadId, nextThreadId);
         assert.equal(runtime.value.status, "running");
         assert.equal(runtime.value.providerName, "codex");
+        assert.equal(runtime.value.runtimeMode, "auto");
       }
 
       const threadIds = yield* directory.listThreadIds();
