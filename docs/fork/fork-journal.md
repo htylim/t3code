@@ -108,3 +108,18 @@ upstream.
   assigned the shortcut in Settings, confirmed picker filtering and Escape, and switched in both
   directions. Each selection opened a fresh draft for the chosen project and updated Sidebar v2's
   scope label; the standalone **All projects** filter still changed only the sidebar scope.
+
+## 2026-08-08 — Make Sidebar v2 new chat follow its project filter
+
+- Upstream baseline: `4f5834ba7`
+- Change: Moved Sidebar v2's new-chat action beside the project filter and made it scope-aware.
+  **All projects** opens the project picker through `chat.new`; a specific filter creates directly
+  in that logical project through `chat.newLocal`.
+- Reason: Keep the most common sidebar action beside the control that determines its target and
+  make the selected filter truthful.
+- Scope: Sidebar v2, focused filter-action tests, and user keybinding documentation. Desktop
+  inherits the web behavior; the legacy sidebar and mobile are unchanged.
+- Verification: Passed all 1,846 web unit tests, the web type check, targeted lint, formatting, and
+  diff checks. In an isolated web environment with two projects, confirmed **All projects** opened
+  the project picker, then filtered to one project while viewing the other and confirmed the button
+  created a fresh draft directly in the filtered project.

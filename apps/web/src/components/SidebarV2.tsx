@@ -29,11 +29,11 @@ import {
   GitBranchIcon,
   EllipsisIcon,
   MessageSquareIcon,
+  MessageSquarePlusIcon,
   PinIcon,
   PlusIcon,
   SearchIcon,
   ServerIcon,
-  SquarePenIcon,
   TerminalIcon,
   Trash2Icon,
   Undo2Icon,
@@ -89,9 +89,12 @@ import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { openCommandPalette } from "../commandPaletteBus";
 import { subscribeSidebarProjectFilterScope } from "../sidebarProjectFilterBus";
-import { resolveSidebarProjectFilterLabel } from "../sidebarProjectFilter.logic";
+import {
+  resolveSidebarNewChatAction,
+  resolveSidebarProjectFilterLabel,
+} from "../sidebarProjectFilter.logic";
 import { subscribeThreadRename } from "../threadRenameBus";
-import { startNewThreadFromContext } from "../lib/chatThreadActions";
+import { resolveThreadActionProjectRef } from "../lib/chatThreadActions";
 import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -2768,31 +2771,30 @@ export default function SidebarV2() {
     autoAnimate(node, { duration: 150, easing: "ease-out" });
   }, []);
 
-  // New thread defaults to the project you're in (active thread's project,
-  // falling back to the top project) — same resolution the command palette
-  // uses. The command palette already offers a "New thread in..." submenu
-  // for multi-project setups.
-  const handleNewThreadClick = useCallback(() => {
-    // One project: nothing to pick, create immediately.
-    if (projectGroups.length <= 1) {
-      if (isMobile) setOpenMobile(false);
-      void startNewThreadFromContext({
-        activeDraftThread: newThreadContext.activeDraftThread,
-        activeThread: newThreadContext.activeThread ?? undefined,
-        defaultProjectRef: newThreadContext.defaultProjectRef,
-        handleNewThread: newThreadContext.handleNewThread,
-      });
+  const newChatAction = useMemo(
+    () =>
+      resolveSidebarNewChatAction(
+        scopedProjectGroup,
+        resolveThreadActionProjectRef({
+          activeDraftThread: newThreadContext.activeDraftThread,
+          activeThread: newThreadContext.activeThread ?? undefined,
+          defaultProjectRef: newThreadContext.defaultProjectRef,
+          handleNewThread: newThreadContext.handleNewThread,
+        }),
+      ),
+    [newThreadContext, scopedProjectGroup],
+  );
+  const handleNewChatClick = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    if (newChatAction.command === "chat.new") {
+      openCommandPalette({ open: "new-thread-in" });
       return;
     }
-    if (isMobile) setOpenMobile(false);
-    openCommandPalette({ open: "new-thread-in" });
-  }, [isMobile, newThreadContext, projectGroups.length, setOpenMobile]);
-
-  // Same resolution as v1: prefer the local-thread binding, fall back to
-  // chat.new, no platform gating — web users have working shortcuts too.
-  const newThreadShortcutLabel =
-    shortcutLabelForCommand(keybindings, "chat.newLocal") ??
-    shortcutLabelForCommand(keybindings, "chat.new");
+    if (newChatAction.projectRef) {
+      void newThreadContext.handleNewThread(newChatAction.projectRef);
+    }
+  }, [isMobile, newChatAction, newThreadContext.handleNewThread, setOpenMobile]);
+  const newChatShortcutLabel = shortcutLabelForCommand(keybindings, newChatAction.command);
   return (
     <>
       <SidebarChromeHeader isElectron={isElectron} />
@@ -2846,33 +2848,6 @@ export default function SidebarV2() {
                     <XIcon className="size-3" />
                   </Button>
                 ) : null}
-              </div>
-              <div className="shrink-0">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <SidebarMenuButton
-                        size="icon"
-                        type="button"
-                        className="relative focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-                        onClick={handleNewThreadClick}
-                        disabled={projects.length === 0}
-                        aria-label="New thread"
-                      />
-                    }
-                  >
-                    <SquarePenIcon />
-                    <span
-                      className="pointer-events-none absolute left-1/2 top-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
-                      aria-hidden="true"
-                    />
-                  </TooltipTrigger>
-                  <TooltipPopup side="right">
-                    {newThreadShortcutLabel
-                      ? `New thread (${newThreadShortcutLabel})`
-                      : "New thread"}
-                  </TooltipPopup>
-                </Tooltip>
               </div>
             </div>
             {projectGroups.length > 0 ? (
@@ -2948,6 +2923,33 @@ export default function SidebarV2() {
                     </MenuRadioGroup>
                   </MenuPopup>
                 </Menu>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <SidebarMenuButton
+                        size="icon"
+                        className="relative shrink-0 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+                        onClick={handleNewChatClick}
+                        disabled={
+                          projects.length === 0 ||
+                          (newChatAction.projectRef === null &&
+                            newChatAction.command === "chat.newLocal")
+                        }
+                        type="button"
+                        aria-label="New chat"
+                      />
+                    }
+                  >
+                    <MessageSquarePlusIcon />
+                    <span
+                      className="pointer-events-none absolute left-1/2 top-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
+                      aria-hidden="true"
+                    />
+                  </TooltipTrigger>
+                  <TooltipPopup side="right">
+                    {newChatShortcutLabel ? `New chat (${newChatShortcutLabel})` : "New chat"}
+                  </TooltipPopup>
+                </Tooltip>
                 <Tooltip>
                   <TooltipTrigger
                     render={

@@ -50,6 +50,10 @@ project. The sidebar's project menu still filters independently and includes **A
 clear the filter. The switch command is unavailable with fewer than two logical projects, while the
 legacy sidebar is mounted, or from Settings navigation.
 
+Sidebar v2's new-chat button follows that filter. Under **All projects**, it runs `chat.new` and
+opens the project picker. Under a specific project, it runs `chat.newLocal` for that project without
+opening the picker.
+
 The command palette searches active thread titles, projects, branches, user messages, and final
 agent responses across connected environments. Message matches show one labeled excerpt while
 keeping the thread's project, branch, and machine context visible. Message search begins after two
