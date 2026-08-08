@@ -154,3 +154,19 @@ upstream.
   desktop menu and window tests; affected contracts, shared, server, web, and desktop type checks;
   targeted lint, formatting, and diff checks. In the desktop development app, confirmed that
   `Cmd+W` closes right-panel tabs and the panel without closing the window.
+
+## 2026-08-08 — Add thread forking to sidebar menus
+
+- Upstream baseline: `4f5834ba7`
+- Change: Added **Fork this thread** to both web sidebar thread context menus when the existing
+  thread-fork eligibility rules allow it. The action reuses the existing fork operation and opens
+  the new thread on success.
+- Reason: Make thread forking available directly from the thread being acted on instead of requiring
+  users to open it and submit `/fork` in the composer.
+- Scope: Legacy and Sidebar v2 context menus, user documentation, and desktop through its shared web
+  UI. Server orchestration, providers, contracts, persistence, and mobile are unchanged.
+- Verification: Passed 65 focused shared, client-runtime, and web fork tests, the web type check,
+  targeted lint and formatting checks, and the final diff check. In an isolated web environment,
+  right-clicked a completed Claude Agent thread in both Sidebar v2 and the legacy sidebar. Each
+  menu created a new native fork, copied the visible conversation, and navigated to a distinct
+  target thread.

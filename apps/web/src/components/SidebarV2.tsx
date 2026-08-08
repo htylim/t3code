@@ -99,7 +99,7 @@ import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
-import { useProjects, useThreadShells } from "../state/entities";
+import { readThreadForkEligibility, useProjects, useThreadShells } from "../state/entities";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
@@ -1275,6 +1275,7 @@ export default function SidebarV2() {
     pinThread,
     unpinThread,
     deleteThread,
+    forkThread,
   } = useThreadActions();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
@@ -2473,6 +2474,7 @@ export default function SidebarV2() {
           thread.worktreePath ??
           projectCwdByKey.get(`${thread.environmentId}:${thread.projectId}`) ??
           null;
+        const forkEligibility = readThreadForkEligibility(threadRef, 0);
         // Un-settle works on every settled row: for explicit settles it
         // clears the override, for auto-settled rows it pins the thread
         // active until real activity clears the pin. Environments without
@@ -2504,6 +2506,7 @@ export default function SidebarV2() {
                     },
                   ]
                 : []),
+              ...(forkEligibility.eligible ? [{ id: "fork", label: "Fork this thread" }] : []),
               ...(supportsPinning
                 ? [
                     isPinned
@@ -2581,6 +2584,20 @@ export default function SidebarV2() {
                 stackedThreadToast({
                   type: "error",
                   title: "Could not create thread",
+                  description: error instanceof Error ? error.message : "An error occurred.",
+                }),
+              );
+            }
+            return;
+          }
+          case "fork": {
+            const result = await forkThread(threadRef);
+            if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+              const error = squashAtomCommandFailure(result);
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to fork thread",
                   description: error instanceof Error ? error.message : "An error occurred.",
                 }),
               );
@@ -2690,6 +2707,7 @@ export default function SidebarV2() {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      forkThread,
       handleMultiSelectContextMenu,
       markThreadUnread,
       projectCwdByKey,

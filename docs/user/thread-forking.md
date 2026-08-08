@@ -1,8 +1,9 @@
 # Forking a thread
 
-Use `/fork` when you want to explore another direction without changing the current conversation.
-Type `/fork` by itself in the composer and send it. T3 Code creates a new thread named after the
-source with `(fork)` appended, then opens it.
+Fork a thread when you want to explore another direction without changing the current conversation.
+Right-click an eligible thread in the sidebar and choose **Fork this thread**, or type `/fork` by
+itself in that thread's composer and send it. T3 Code creates a new thread named after the source
+with `(fork)` appended, then opens it.
 
 The new thread starts from the provider's current conversation state. It includes the completed
 messages and visible activity from the source, but it does not copy historical checkpoint diffs,
@@ -16,8 +17,8 @@ Thread forking is available for:
 - Claude Agent
 - OpenCode
 
-Cursor and Grok do not currently support it. The `/fork` suggestion appears only when both the
-connected server and the provider bound to the thread support forking.
+Cursor and Grok do not currently support it. The sidebar action and `/fork` suggestion appear only
+when both the connected server and the provider bound to the thread support forking.
 
 ## When a thread can be forked
 
