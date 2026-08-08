@@ -19,7 +19,11 @@ import { requestThreadRename } from "../threadRenameBus";
 import { handleProjectSwitchShortcut, isProjectSwitchAvailable } from "../projectSwitch.logic";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
-import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
+import {
+  selectActiveRightPanel,
+  selectThreadRightPanelState,
+  useRightPanelStore,
+} from "../rightPanelStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { primaryServerKeybindingsAtom } from "~/state/server";
@@ -58,6 +62,9 @@ function ChatRouteGlobalShortcuts() {
       ? selectActiveRightPanel(state.byThreadKey, routeThreadRef) === "preview"
       : false,
   );
+  const rightPanelOpen = useRightPanelStore((state) =>
+    routeThreadRef ? selectThreadRightPanelState(state.byThreadKey, routeThreadRef).isOpen : false,
+  );
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
@@ -67,6 +74,7 @@ function ChatRouteGlobalShortcuts() {
           terminalOpen,
           previewFocus: isPreviewFocused(),
           previewOpen,
+          rightPanelOpen,
         },
       });
 
@@ -190,6 +198,7 @@ function ChatRouteGlobalShortcuts() {
     keybindings,
     defaultProjectRef,
     previewOpen,
+    rightPanelOpen,
     pathname,
     projectGroupCount,
     routeThreadRef,

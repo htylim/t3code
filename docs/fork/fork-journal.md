@@ -138,3 +138,19 @@ upstream.
 - Verification: Passed 147 focused contract, server provider, Codex runtime, and web draft-store
   tests; targeted contracts, server, and web type checks; targeted lint, formatting, and diff
   checks.
+
+## 2026-08-08 — Make Cmd+W close right-panel tabs
+
+- Upstream baseline: `4f5834ba7`
+- Change: Added `rightPanel.close`, defaulted `Cmd/Ctrl+W` to it while the right panel is open, and
+  routed it through the existing surface cleanup. On macOS, **Close Window** remains available from
+  the File menu and window controls but no longer owns the `Cmd+W` accelerator.
+- Reason: Close the active right-panel tab before the panel itself and never leave the desktop app
+  running without a visible window because of an accidental `Cmd+W` press.
+- Scope: Shared keybinding contracts and defaults, web shortcut context and right-panel handling,
+  the macOS desktop application menu, focused tests, and user keybinding documentation. Server
+  orchestration, providers, database persistence, and mobile are unchanged.
+- Verification: Passed 116 focused contract, server keybinding, web shortcut and Settings, and
+  desktop menu and window tests; affected contracts, shared, server, web, and desktop type checks;
+  targeted lint, formatting, and diff checks. In the desktop development app, confirmed that
+  `Cmd+W` closes right-panel tabs and the panel without closing the window.

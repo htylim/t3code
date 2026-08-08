@@ -202,6 +202,12 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.equal(defaultsByCommand.get("projectSearch.toggle"), "mod+shift+f");
       assert.equal(defaultsByCommand.get("sidebar.toggle"), "mod+b");
       assert.equal(defaultsByCommand.get("rightPanel.toggle"), "mod+alt+b");
+      assert.equal(defaultsByCommand.get("rightPanel.close"), "mod+w");
+      assert.equal(
+        Keybindings.DEFAULT_KEYBINDINGS.find((binding) => binding.command === "rightPanel.close")
+          ?.when,
+        "rightPanelOpen",
+      );
       assert.equal(defaultsByCommand.get("terminal.splitVertical"), "mod+shift+d");
       assert.equal(defaultsByCommand.get("modelPicker.jump.1"), "mod+1");
       assert.equal(defaultsByCommand.get("modelPicker.jump.9"), "mod+9");
@@ -301,6 +307,34 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         }
         assert.isTrue(byCommand.has("script.run-tests.run"));
       }).pipe(Effect.provide(makeKeybindingsLayer())),
+  );
+
+  it.effect("backfills right-panel close beside the existing terminal close shortcut", () =>
+    Effect.gen(function* () {
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      yield* writeKeybindingsConfig(keybindingsConfigPath, [
+        { key: "mod+w", command: "terminal.close", when: "terminalFocus" },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const keybindings = yield* Keybindings.Keybindings;
+        yield* keybindings.syncDefaultKeybindingsOnStartup;
+      });
+
+      const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
+      assert.deepEqual(
+        persisted.find((entry) => entry.command === "rightPanel.close"),
+        { key: "mod+w", command: "rightPanel.close", when: "rightPanelOpen" },
+      );
+      assert.isTrue(
+        persisted.some(
+          (entry) =>
+            entry.command === "terminal.close" &&
+            entry.key === "mod+w" &&
+            entry.when === "terminalFocus",
+        ),
+      );
+    }).pipe(Effect.provide(makeKeybindingsLayer())),
   );
 
   it.effect("skips conflicting default keybindings on startup and logs a detailed warning", () => {

@@ -41,6 +41,9 @@ Commands are IDs like `terminal.toggle`, `commandPalette.toggle`, `preview.refre
 `projectSearch.toggle` searches inside the active project's files and defaults to `mod+shift+f`.
 Repeating either shortcut closes that search, and switching shortcuts replaces the open search.
 `thread.rename` starts renaming the active thread and defaults to `f2` outside the terminal.
+`rightPanel.close` closes the active right-panel tab, or closes an empty right panel, and defaults
+to `mod+w` while the right panel is open. In the macOS desktop app, `Cmd+W` does not fall through
+to closing the window; use **File** → **Close Window** or the window controls instead.
 
 `project.switch` opens a searchable project picker for Sidebar v2. It has no default shortcut; add
 one with the **+** button in **Settings** → **Keybindings**, or run **Switch project...** from the
@@ -72,9 +75,9 @@ project, `chat.new` opens a project chooser first.
 ## `when` Conditions
 
 A `when` expression is evaluated against context keys describing the current UI state. The keys
-the app supplies today are `terminalFocus`, `terminalOpen`, `previewFocus`, `previewOpen`, and
-`modelPickerOpen`. The set is open and grows over time, so treat that as the current list rather
-than a fixed one. Any key the running app does not supply evaluates to `false`.
+the app supplies today are `terminalFocus`, `terminalOpen`, `previewFocus`, `previewOpen`,
+`rightPanelOpen`, and `modelPickerOpen`. The set is open and grows over time, so treat that as the
+current list rather than a fixed one. Any key the running app does not supply evaluates to `false`.
 
 Operators: `!` (not), `&&` (and), `||` (or), and parentheses.
 

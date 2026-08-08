@@ -109,6 +109,11 @@ const DEFAULT_BINDINGS = compile([
     whenAst: whenIdentifier("terminalFocus"),
   },
   {
+    shortcut: modShortcut("w"),
+    command: "rightPanel.close",
+    whenAst: whenIdentifier("rightPanelOpen"),
+  },
+  {
     shortcut: modShortcut("d"),
     command: "diff.toggle",
     whenAst: whenNot(whenIdentifier("terminalFocus")),
@@ -227,6 +232,23 @@ describe("split/new/close terminal shortcuts", () => {
         platform: "Linux",
         context: { terminalFocus: false },
       }),
+    );
+  });
+
+  it("gives an open right panel priority over terminal close for Mod+W", () => {
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "w", metaKey: true }), DEFAULT_BINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: true, rightPanelOpen: true },
+      }),
+      "rightPanel.close",
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "w", metaKey: true }), DEFAULT_BINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: false, rightPanelOpen: true },
+      }),
+      "rightPanel.close",
     );
   });
 

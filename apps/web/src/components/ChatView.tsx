@@ -2529,9 +2529,10 @@ function ChatViewContent(props: ChatViewProps) {
       context: {
         terminalFocus: true,
         terminalOpen: Boolean(terminalUiState.terminalOpen),
+        rightPanelOpen,
       },
     }),
-    [terminalUiState.terminalOpen],
+    [rightPanelOpen, terminalUiState.terminalOpen],
   );
   const splitTerminalShortcutLabel = useMemo(
     () => shortcutLabelForCommand(keybindings, "terminal.split", terminalShortcutLabelOptions),
@@ -4497,6 +4498,7 @@ function ChatViewContent(props: ChatViewProps) {
         terminalFocus: terminalFocusOwner !== null,
         terminalOpen: Boolean(terminalUiState.terminalOpen),
         modelPickerOpen: composerRef.current?.isModelPickerOpen() ?? false,
+        rightPanelOpen,
       };
 
       if (
@@ -4527,6 +4529,17 @@ function ChatViewContent(props: ChatViewProps) {
         event.preventDefault();
         event.stopPropagation();
         toggleRightPanel();
+        return;
+      }
+
+      if (command === "rightPanel.close") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (activeRightPanelSurface) {
+          closeRightPanelSurface(activeRightPanelSurface);
+        } else {
+          closePreviewPanel();
+        }
         return;
       }
 
@@ -4617,6 +4630,8 @@ function ChatViewContent(props: ChatViewProps) {
     activeThreadId,
     closeTerminal,
     closePanelTerminal,
+    closePreviewPanel,
+    closeRightPanelSurface,
     createNewTerminal,
     setTerminalOpen,
     runProjectScript,
@@ -4624,6 +4639,7 @@ function ChatViewContent(props: ChatViewProps) {
     splitPanelTerminal,
     keybindings,
     onToggleDiff,
+    rightPanelOpen,
     toggleRightPanel,
     toggleTerminalVisibility,
     composerRef,

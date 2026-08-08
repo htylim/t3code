@@ -438,7 +438,7 @@ describe("DesktopWindow", () => {
     }),
   );
 
-  it.effect("blocks only repeated Cmd+W input before it reaches the native window menu", () =>
+  it.effect("blocks repeated Cmd+W input before it can close another resource", () =>
     Effect.gen(function* () {
       const fakeWindow = makeFakeBrowserWindow();
       const createCount = yield* Ref.make(0);

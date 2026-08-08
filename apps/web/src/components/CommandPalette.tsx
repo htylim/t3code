@@ -86,7 +86,11 @@ import { requestSidebarProjectFilterScope } from "../sidebarProjectFilterBus";
 import { requestThreadRename } from "../threadRenameBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
-import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
+import {
+  selectActiveRightPanel,
+  selectThreadRightPanelState,
+  useRightPanelStore,
+} from "../rightPanelStore";
 import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
 import { cn, isMacPlatform, isWindowsPlatform, newProjectId } from "../lib/utils";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
@@ -406,6 +410,9 @@ export function CommandPalette({ children }: { children: ReactNode }) {
       ? selectActiveRightPanel(state.byThreadKey, routeThreadRef) === "preview"
       : false,
   );
+  const rightPanelOpen = useRightPanelStore((state) =>
+    routeThreadRef ? selectThreadRightPanelState(state.byThreadKey, routeThreadRef).isOpen : false,
+  );
 
   useEffect(() => {
     if (!state.open || state.mode === "command") return;
@@ -430,6 +437,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
           terminalOpen,
           previewFocus: isPreviewFocused(),
           previewOpen,
+          rightPanelOpen,
         },
       });
       const mode = overlayModeForCommand(command);
@@ -442,7 +450,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [keybindings, previewOpen, terminalOpen, toggleMode]);
+  }, [keybindings, previewOpen, rightPanelOpen, terminalOpen, toggleMode]);
 
   useEffect(
     () =>
