@@ -82,16 +82,20 @@ cargo --version
 ```
 
 Use a SemVer prerelease ending in `-fork` or `-fork.<identifier>` to select the downstream desktop
-identity:
+identity. Before compiling a release, set the releasable package manifests to that exact version in
+a disposable worktree as described below:
 
 ```bash
 fork_version=0.0.31-fork.1
+node scripts/update-release-package-versions.ts "$fork_version"
 APP_VERSION="$fork_version" vp run dist:desktop:dmg --build-version "$fork_version"
 ```
 
-Set `APP_VERSION` as well as `--build-version`. The build flag controls Electron and artifact
-metadata, while `APP_VERSION` gives the bundled web client the same exact version for Settings and
-version-skew checks.
+All three version inputs are required. The package manifests are compiled into the server,
+`APP_VERSION` is compiled into the web client, and `--build-version` controls Electron and artifact
+metadata. Setting only the latter two produces an internally inconsistent app whose client reports
+the fork version while its server reports the base package version. Do not modify a source branch
+just to align these build inputs; use the disposable release worktree below.
 
 The artifact is written to `release/` and installs as `T3 Code (Fork)` with the bundle identifier
 `com.htylim.t3code.fork`. Fork builds deliberately keep using `~/.t3/userdata`, so they see the same
@@ -120,16 +124,23 @@ version commit to `main`.
 
 ### 1. Choose and record the release source
 
-Release from `fork`, not `main`. Review the worktree and commit everything intended to ship. An
-unrelated untracked file can remain, but do not release tracked changes that are not committed.
+Release from the branch the developer explicitly names. Use `fork` only when no other source branch
+was requested, and never merge, fast-forward, reset, or otherwise move `fork` to prepare a release
+from another branch. Never release from `main`. Review the selected worktree and commit everything
+intended to ship. An unrelated untracked file can remain, but do not release tracked changes that
+are not committed.
 
 ```bash
-git switch fork
+release_source_branch="$(git branch --show-current)"
 git status --short
-git rev-parse HEAD
+release_commit="$(git rev-parse HEAD)"
+fork_commit_before="$(git rev-parse fork)"
 git tag --list 'fork-v*' --sort=-version:refname | head
 git ls-remote --tags origin 'fork-v*'
 ```
+
+If the developer named a branch, confirm `release_source_branch` is that exact branch before doing
+anything else. Keep `fork_commit_before` and verify at the end that `fork` still points to it.
 
 The fork suffix is not stored or incremented by the project. Check the previous release and choose
 the next value manually, for example `0.0.31-fork.2` to `0.0.31-fork.3`. Capture the release commit
@@ -149,10 +160,42 @@ these with repo-wide checks unless specifically requested.
 
 ### 3. Build an explicit architecture and exact version
 
+Compile in a disposable detached worktree so release-only package versions never dirty or move the
+source branch. The detached worktree still embeds `release_commit`, while the temporary manifest
+updates make the server, client, Electron metadata, and artifact names agree:
+
 ```bash
 fork_version=0.0.31-fork.3
+release_root="$PWD"
+release_stage="$(mktemp -d "${TMPDIR%/}/t3code-fork-release.XXXXXX")"
+git worktree add --detach "$release_stage" "$release_commit"
+
+cd "$release_stage"
+vp i --frozen-lockfile
+node scripts/update-release-package-versions.ts "$fork_version"
 APP_VERSION="$fork_version" vp run dist:desktop:dmg:arm64 --build-version "$fork_version"
+
+test "$(node apps/server/dist/bin.mjs --version)" = "t3 v${fork_version}"
+rg --fixed-strings -l "$fork_version" apps/server/dist/client/assets
+
+mkdir -p "$release_root/release"
+cp "release/T3-Code-${fork_version}-arm64.dmg" "$release_root/release/"
+cp "release/T3-Code-${fork_version}-arm64.zip" "$release_root/release/"
+
+cd "$release_root"
+git -C "$release_stage" restore -- \
+  apps/server/package.json \
+  apps/desktop/package.json \
+  apps/web/package.json \
+  packages/contracts/package.json
+git worktree remove "$release_stage"
 ```
+
+Both version checks are mandatory. The first exercises the compiled server's actual `--version`
+output; the second confirms the built client contains the exact same version. A matching DMG name
+or `Info.plist` alone is not proof that the bundled server and client agree.
+`git status --short` in the release worktree must show only the four package manifests updated by
+`update-release-package-versions.ts`; the frozen install must not rewrite `pnpm-lock.yaml`.
 
 Start without `--verbose`; its electron-builder output is large enough to hide the useful final
 error. Use it only when diagnosing a focused failure. The packaging stage installs locked
@@ -237,7 +280,9 @@ unzip -Z1 "$zip" \
 
 The main `Info.plist` must report the exact fork version and bundle identifier
 `com.htylim.t3code.fork`. The embedded commit must equal the release commit captured before the
-build. Local artifacts are unsigned; that is expected until fork signing is configured explicitly.
+build. Recheck `git rev-parse fork` against `fork_commit_before`; a release from another branch must
+not move `fork`. Local artifacts are unsigned; that is expected until fork signing is configured
+explicitly.
 
 ### 6. Tag safely, then stop before publishing
 
@@ -249,13 +294,15 @@ git tag -a "fork-v${fork_version}" -m "T3 Code fork ${fork_version}"
 git show --no-patch "fork-v${fork_version}"
 ```
 
-Creating the local tag does not publish anything. Before pushing the branch or tag, or creating a
-GitHub Release, get explicit approval. After approval, push `fork`, push only the fork tag, and
-create a GitHub Release containing the verified DMG and ZIP. Do not publish npm packages, deploy
-hosted channels, update `main`, or attach upstream auto-update metadata.
+Creating the local tag does not publish anything. Never replace a remote tag. An explicitly approved
+replacement of an unpublished local tag may be done only after the replacement artifacts pass every
+verification above. Before pushing a branch or tag, or creating a GitHub Release, get explicit
+approval. After approval, push only the fork tag and create a GitHub Release containing the verified
+DMG and ZIP. Push the selected source branch only when the developer explicitly asks for that too.
+Do not push or update `fork` for a release sourced from another branch. Do not publish npm packages,
+deploy hosted channels, update `main`, or attach upstream auto-update metadata.
 
 ```bash
-git push origin fork
 git push origin "fork-v${fork_version}"
 gh release create "fork-v${fork_version}" "$dmg" "$zip" \
   --repo htylim/t3code \

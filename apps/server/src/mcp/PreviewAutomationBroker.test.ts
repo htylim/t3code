@@ -30,6 +30,8 @@ const scope = {
   providerSessionId: "provider-session-1",
   providerInstanceId: ProviderInstanceId.make("codex"),
   capabilities: new Set(["preview"] as const),
+  maxRuntimeMode: "auto" as const,
+  controlledThreadIds: new Set<ThreadId>(),
   issuedAt: 1,
 };
 

@@ -1,4 +1,4 @@
-import { ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { ProviderInstanceId, type RuntimeMode, ThreadId } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -14,6 +14,7 @@ import * as McpProviderSession from "./McpProviderSession.ts";
 export interface McpCredentialRequest {
   readonly threadId: ThreadId;
   readonly providerInstanceId: ProviderInstanceId;
+  readonly runtimeMode: RuntimeMode;
 }
 
 export interface McpIssuedCredential {
@@ -31,6 +32,10 @@ export interface McpSessionRegistryShape {
    * credential even when it goes a long time without touching an MCP tool.
    */
   readonly touch: (threadId: ThreadId) => Effect.Effect<void>;
+  readonly grantControlledThread: (
+    providerSessionId: string,
+    threadId: ThreadId,
+  ) => Effect.Effect<boolean>;
   readonly revokeProviderSession: (providerSessionId: string) => Effect.Effect<void>;
   readonly revokeThread: (threadId: ThreadId) => Effect.Effect<void>;
   readonly revokeAll: Effect.Effect<void>;
@@ -62,13 +67,13 @@ export interface McpSessionRegistryOptions {
  *
  * Liveness is refreshed both by MCP traffic and by `touch` on every provider
  * turn, so a session that is still doing work never expires no matter how long
- * it goes between browser tool calls. This window therefore only bounds
+ * it goes between MCP tool calls. This window therefore only bounds
  * credentials whose session died without a clean stop — the normal paths
  * (`stopSession`, `stopAll`) revoke eagerly and do not wait for it.
  *
  * The bound matters because `/mcp` is mounted outside the environment auth
  * stack and is reachable on whatever host the server binds to, so this token is
- * the only thing guarding the preview toolkit on a remote-reachable server.
+ * the only thing guarding the MCP toolkits on a remote-reachable server.
  */
 const DEFAULT_LIVENESS_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
@@ -128,7 +133,9 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         threadId: ThreadId.make(request.threadId),
         providerSessionId,
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
-        capabilities: new Set(["preview"]),
+        capabilities: new Set(["preview", "thread-control"]),
+        maxRuntimeMode: request.runtimeMode,
+        controlledThreadIds: new Set(),
         issuedAt,
       };
       yield* SynchronizedRef.update(state, ({ records }) => {
@@ -190,6 +197,26 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
     issue,
     resolve,
     touch,
+    grantControlledThread: Effect.fn("McpSessionRegistry.grantControlledThread")(
+      function* (providerSessionId, threadId) {
+        return yield* SynchronizedRef.modify(state, ({ records }) => {
+          let granted = false;
+          const next = new Map(records);
+          for (const [tokenHash, record] of records) {
+            if (record.scope.providerSessionId !== providerSessionId) continue;
+            granted = true;
+            next.set(tokenHash, {
+              ...record,
+              scope: {
+                ...record.scope,
+                controlledThreadIds: new Set([...record.scope.controlledThreadIds, threadId]),
+              },
+            });
+          }
+          return [granted, { records: next }] as const;
+        });
+      },
+    ),
     revokeProviderSession: Effect.fn("McpSessionRegistry.revokeProviderSession")(
       function* (providerSessionId) {
         yield* revokeWhere((record) => record.scope.providerSessionId === providerSessionId);

@@ -308,6 +308,20 @@ describe("T3 browser developer instructions", () => {
   });
 });
 
+describe("T3 thread-control developer instructions", () => {
+  it("routes T3 thread requests to the MCP tools in both collaboration modes", () => {
+    for (const instructions of [
+      CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
+      CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
+    ]) {
+      NodeAssert.match(instructions, /T3 Code thread control/);
+      NodeAssert.match(instructions, /thread_start/);
+      NodeAssert.match(instructions, /threads_wait/);
+      NodeAssert.match(instructions, /not provider-native subagents/);
+    }
+  });
+});
+
 describe("hasConfiguredMcpServer", () => {
   it("detects inline Codex MCP configuration arguments", () => {
     NodeAssert.equal(hasConfiguredMcpServer(undefined), false);

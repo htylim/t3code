@@ -170,3 +170,73 @@ upstream.
   right-clicked a completed Claude Agent thread in both Sidebar v2 and the legacy sidebar. Each
   menu created a new native fork, copied the visible conversation, and navigated to a distinct
   target thread.
+
+## 2026-08-09 — Add agent thread control through MCP
+
+- Upstream baseline: `4f5834ba7`
+- Change: Added eleven provider-scoped MCP tools for local context and model discovery, lightweight
+  thread listing/status/waits, bounded persisted reads, thread creation and follow-ups,
+  interruption, reversible updates, and explicit approval or user-input responses. Existing
+  workspaces and Git worktrees are accepted only after read-only identity validation.
+- Reason: Let an agent coordinate ordinary T3 threads in its own environment without adding a
+  workflow engine, durable lineage, transcript polling, or worktree management.
+- Scope: Server MCP implementation, tests, and the existing MCP capability, credential, and toolkit
+  registration points. Codex, Claude Agent, Cursor, Grok, and OpenCode use the same existing
+  orchestration commands; contracts, persistence, projections, provider adapters, WebSocket paths,
+  and web, desktop, and mobile clients are unchanged.
+- Verification: Passed 83 focused MCP thread-control, toolkit, output, status, provider-validation,
+  HTTP, authentication, and credential tests, including a local projection integration case and
+  identical start-command routing for all five providers. Also passed the targeted server type
+  check, lint and formatting checks for every changed file, and `git diff --check`.
+- Maintenance note: MCP's `apps/server/src/mcp/toolkits/threadControl/status.ts` intentionally
+  mirrors queued-turn and effective-snooze lifecycle rules found in
+  `packages/client-runtime/src/state/threadSettled.ts` and
+  `apps/server/src/orchestration/decider.ts`. This duplication keeps fork-only MCP code isolated
+  from upstream-owned lifecycle modules. When either upstream implementation changes, review and
+  update the MCP status rules and their focused tests to keep all three consistent.
+
+## 2026-08-09 — Isolate fork release builds from source branches
+
+- Upstream baseline: `4f5834ba7`
+- Change: Fork releases now build from the explicitly selected source commit in a disposable
+  detached worktree. The release procedure aligns package, client, and Electron versions, verifies
+  the compiled server and client versions independently, and forbids moving `fork` when another
+  source branch was requested.
+- Reason: Setting only the web and Electron build versions produced an artifact whose
+  `0.0.31-fork.4` client connected to a bundled server reporting `0.0.31`. Preparing that release
+  also moved the local `fork` branch even though a feature branch was the requested source.
+- Scope: Fork desktop release policy and manual build instructions only. Runtime code and the
+  upstream release workflow are unchanged.
+- Verification: Reviewed the documented version sources against the server, web, packaging, and
+  upstream release scripts; checked the Markdown diff and command sequence explicitly.
+
+## 2026-08-09 — Bound MCP thread-control authority
+
+- Upstream baseline: `4f5834ba7`
+- Change: Provider-scoped MCP credentials now carry their provider session's runtime-mode ceiling
+  and an in-memory set of child threads they created. Child creation is limited to the calling
+  project and exact workspace; later mutations require a credential-owned child; start, send, and
+  runtime-mode updates cannot exceed the ceiling. Removed agent-side approval and structured
+  user-input responses from the v1 toolkit, leaving ten thread-control tools.
+- Reason: A supervised agent could previously grant itself Full access through another thread,
+  mutate any known thread, or accept the approval intended to constrain it.
+- Scope: MCP invocation authority, credential issuance and child grants, thread-control mutation
+  validation and schemas, provider-session credential setup, focused tests, and the MCP product
+  specification. Persistence, orchestration contracts, provider adapters, and clients are
+  unchanged.
+- Verification: Passed all 115 MCP tests and 33 focused ProviderService tests, the targeted server
+  type check, targeted lint and formatting checks, and `git diff --check`.
+
+## 2026-08-09 — Make MCP thread waits transition-aware
+
+- Upstream baseline: `4f5834ba7`
+- Change: Cursor-based `threads_wait` renewals now replay at most 1,000 existing orchestration
+  events, immediately reduce them to watched-thread signals, silently catch up past unrelated
+  activity, and match only threads with a relevant transition after the supplied cursor. Ahead or
+  excessively stale cursors still resynchronize from current lightweight status.
+- Reason: A global cursor previously made unrelated multi-agent activity interrupt waits, while an
+  already-completed thread matched immediately on every renewal of the same group.
+- Scope: MCP thread-control implementation, schemas, focused tests, and this fork specification.
+  Orchestration, persistence, shared contracts, provider adapters, and clients are unchanged.
+- Verification: Passed all 118 focused MCP tests, the targeted server type check, targeted lint
+  and formatting checks, and `git diff --check`.

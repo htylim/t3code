@@ -39,6 +39,7 @@ it.effect("stores only a token hash, resolves the bearer token, and revokes by t
     const issued = yield* registry.issue({
       threadId,
       providerInstanceId: ProviderInstanceId.make("codex"),
+      runtimeMode: "approval-required",
     });
     expect(issued.config.endpoint).toBe("http://127.0.0.1:43123/mcp");
     const token = issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
@@ -46,6 +47,9 @@ it.effect("stores only a token hash, resolves the bearer token, and revokes by t
 
     const resolved = yield* registry.resolve(token);
     expect(resolved?.threadId).toBe(threadId);
+    expect(resolved?.capabilities).toEqual(new Set(["preview", "thread-control"]));
+    expect(resolved?.maxRuntimeMode).toBe("approval-required");
+    expect(resolved?.controlledThreadIds).toEqual(new Set());
 
     yield* registry.revokeThread(threadId);
     expect(yield* registry.resolve(token)).toBeUndefined();
@@ -68,6 +72,7 @@ it.effect("builds MCP endpoints from the bound server host", () =>
       const issued = yield* registry.issue({
         threadId: ThreadId.make(`thread-${hostname}`),
         providerInstanceId: ProviderInstanceId.make("codex"),
+        runtimeMode: "auto",
       });
       expect(issued.config.endpoint).toBe(expectedEndpoint);
     }
@@ -81,6 +86,7 @@ it.effect("expires credentials once their session stops showing signs of life", 
     const issued = yield* registry.issue({
       threadId: ThreadId.make("thread-2"),
       providerInstanceId: ProviderInstanceId.make("claude"),
+      runtimeMode: "auto",
     });
     const token = issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
     timestamp += 101;
@@ -96,6 +102,7 @@ it.effect("keeps a credential alive across turns that never touch an MCP tool", 
     const issued = yield* registry.issue({
       threadId,
       providerInstanceId: ProviderInstanceId.make("claude"),
+      runtimeMode: "full-access",
     });
     const token = issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
 
@@ -106,7 +113,9 @@ it.effect("keeps a credential alive across turns that never touch an MCP tool", 
       yield* registry.touch(threadId);
     }
 
-    expect((yield* registry.resolve(token))?.threadId).toBe(threadId);
+    const resolved = yield* registry.resolve(token);
+    expect(resolved?.threadId).toBe(threadId);
+    expect(resolved?.maxRuntimeMode).toBe("full-access");
   }),
 );
 
@@ -117,6 +126,7 @@ it.effect("does not keep credentials of other threads alive", () =>
     const issued = yield* registry.issue({
       threadId: ThreadId.make("thread-4"),
       providerInstanceId: ProviderInstanceId.make("codex"),
+      runtimeMode: "auto",
     });
     const token = issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
 
@@ -125,5 +135,36 @@ it.effect("does not keep credentials of other threads alive", () =>
     timestamp += 2;
 
     expect(yield* registry.resolve(token)).toBeUndefined();
+  }),
+);
+
+it.effect("grants child control only to the issuing provider session", () =>
+  Effect.gen(function* () {
+    const registry = yield* makeRegistry(() => 1_000);
+    const first = yield* registry.issue({
+      threadId: ThreadId.make("thread-parent-1"),
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      runtimeMode: "auto",
+    });
+    const second = yield* registry.issue({
+      threadId: ThreadId.make("thread-parent-2"),
+      providerInstanceId: ProviderInstanceId.make("claude"),
+      runtimeMode: "auto",
+    });
+    const firstToken = first.config.authorizationHeader.replace(/^Bearer\s+/, "");
+    const secondToken = second.config.authorizationHeader.replace(/^Bearer\s+/, "");
+    const firstScope = yield* registry.resolve(firstToken);
+    const childId = ThreadId.make("thread-child");
+
+    expect(yield* registry.grantControlledThread(firstScope!.providerSessionId, childId)).toBe(
+      true,
+    );
+    expect((yield* registry.resolve(firstToken))?.controlledThreadIds).toEqual(new Set([childId]));
+    expect((yield* registry.resolve(secondToken))?.controlledThreadIds).toEqual(new Set());
+    expect(yield* registry.grantControlledThread("missing-provider-session", childId)).toBe(false);
+
+    yield* registry.revokeProviderSession(firstScope!.providerSessionId);
+    expect(yield* registry.resolve(firstToken)).toBeUndefined();
+    expect((yield* registry.resolve(secondToken))?.threadId).toBe(ThreadId.make("thread-parent-2"));
   }),
 );
