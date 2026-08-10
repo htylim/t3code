@@ -95,6 +95,7 @@ export function resolveThreadForkEligibility(
 
 export function buildBuiltInComposerCommands(input: {
   readonly forkEligibility: ThreadForkEligibility;
+  readonly planModeUiEnabled?: boolean;
 }): ReadonlyArray<BuiltInComposerCommand> {
   const commands: BuiltInComposerCommand[] = [
     {
@@ -103,19 +104,23 @@ export function buildBuiltInComposerCommands(input: {
       label: "/model",
       description: "Switch response model for this thread",
     },
-    {
-      id: "plan",
-      command: "plan",
-      label: "/plan",
-      description: "Switch this thread into plan mode",
-    },
-    {
-      id: "default",
-      command: "default",
-      label: "/default",
-      description: "Switch this thread back to normal build mode",
-    },
   ];
+  if (input.planModeUiEnabled !== false) {
+    commands.push(
+      {
+        id: "plan",
+        command: "plan",
+        label: "/plan",
+        description: "Switch this thread into plan mode",
+      },
+      {
+        id: "default",
+        command: "default",
+        label: "/default",
+        description: "Switch this thread back to normal build mode",
+      },
+    );
+  }
   if (input.forkEligibility.eligible) {
     commands.push({
       id: "fork",

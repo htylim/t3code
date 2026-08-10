@@ -45,17 +45,22 @@ Repeating either shortcut closes that search, and switching shortcuts replaces t
 to `mod+w` while the right panel is open. In the macOS desktop app, `Cmd+W` does not fall through
 to closing the window; use **File** → **Close Window** or the window controls instead.
 
-`project.switch` opens a searchable project picker for Sidebar v2. It has no default shortcut; add
-one with the **+** button in **Settings** → **Keybindings**, or run **Switch project...** from the
-command palette. The picker searches logical project names plus every grouped project's name and
-workspace path. Choosing a project opens its new-chat draft and filters the sidebar to that logical
-project. The sidebar's project menu still filters independently and includes **All projects** to
-clear the filter. The switch command is unavailable with fewer than two logical projects, while the
-legacy sidebar is mounted, or from Settings navigation.
+`project.switch` opens a searchable project picker for the default sidebar. It has no default
+shortcut; add one with the **+** button in **Settings** → **Keybindings**, or run **Switch
+project...** from the command palette. Choosing a project opens its new-chat draft and filters the
+sidebar to that logical project. The command is unavailable with fewer than two logical projects,
+while the legacy sidebar is mounted, or from Settings navigation.
 
-Sidebar v2's new-chat button follows that filter. Under **All projects**, it runs `chat.new` and
-opens the project picker. Under a specific project, it runs `chat.newLocal` for that project without
-opening the picker.
+The default sidebar's new-chat button follows that filter. Under **All projects**, it runs
+`chat.new` and opens the project picker. Under a specific project, it runs `chat.newLocal` for that
+project without opening the picker.
+
+`themeEditor.toggle` opens or closes the floating theme editor and defaults to
+`mod+alt+shift+t`. Select a color label to spotlight the elements that use it; select the label
+again to clear the spotlight. The swatch and hex field keep that color selected while you edit it.
+Use **Inspect** to pick an element in the app and reveal its color token. Inspect disarms after one
+successful pick; its hover glow and badge preview the element and token that click will select.
+**Cancel** or `Escape` exits Inspect and clears its selection and spotlight.
 
 The command palette searches active thread titles, projects, branches, user messages, and final
 agent responses across connected environments. Message matches show one labeled excerpt while

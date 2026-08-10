@@ -7,31 +7,31 @@ import {
 } from "./projectSwitch.logic";
 
 describe("project switch availability", () => {
-  it("requires a mounted Sidebar v2 and at least two logical projects", () => {
+  it("requires the default sidebar and at least two logical projects", () => {
     expect(
       isProjectSwitchAvailable({
-        sidebarV2Enabled: true,
+        legacySidebarEnabled: false,
         pathname: "/env/thread",
         projectGroupCount: 2,
       }),
     ).toBe(true);
     expect(
       isProjectSwitchAvailable({
-        sidebarV2Enabled: true,
+        legacySidebarEnabled: false,
         pathname: "/env/thread",
         projectGroupCount: 1,
       }),
     ).toBe(false);
     expect(
       isProjectSwitchAvailable({
-        sidebarV2Enabled: false,
+        legacySidebarEnabled: true,
         pathname: "/env/thread",
         projectGroupCount: 2,
       }),
     ).toBe(false);
     expect(
       isProjectSwitchAvailable({
-        sidebarV2Enabled: true,
+        legacySidebarEnabled: false,
         pathname: "/settings/keybindings",
         projectGroupCount: 2,
       }),

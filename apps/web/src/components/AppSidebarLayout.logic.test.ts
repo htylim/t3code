@@ -1,17 +1,22 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { shouldMountSidebarV2 } from "./AppSidebarLayout.logic";
+import { shouldMountDefaultSidebar } from "./AppSidebarLayout.logic";
 
-describe("shouldMountSidebarV2", () => {
-  it("mounts only when enabled outside Settings", () => {
-    expect(shouldMountSidebarV2({ sidebarV2Enabled: true, pathname: "/" })).toBe(true);
-    expect(shouldMountSidebarV2({ sidebarV2Enabled: true, pathname: "/environment/thread" })).toBe(
-      true,
-    );
-    expect(shouldMountSidebarV2({ sidebarV2Enabled: false, pathname: "/" })).toBe(false);
-    expect(shouldMountSidebarV2({ sidebarV2Enabled: true, pathname: "/settings" })).toBe(false);
+describe("shouldMountDefaultSidebar", () => {
+  it("mounts outside Settings unless the legacy sidebar is enabled", () => {
+    expect(shouldMountDefaultSidebar({ legacySidebarEnabled: false, pathname: "/" })).toBe(true);
     expect(
-      shouldMountSidebarV2({ sidebarV2Enabled: true, pathname: "/settings/keybindings" }),
+      shouldMountDefaultSidebar({ legacySidebarEnabled: false, pathname: "/environment/thread" }),
+    ).toBe(true);
+    expect(shouldMountDefaultSidebar({ legacySidebarEnabled: true, pathname: "/" })).toBe(false);
+    expect(shouldMountDefaultSidebar({ legacySidebarEnabled: false, pathname: "/settings" })).toBe(
+      false,
+    );
+    expect(
+      shouldMountDefaultSidebar({
+        legacySidebarEnabled: false,
+        pathname: "/settings/keybindings",
+      }),
     ).toBe(false);
   });
 });

@@ -1,13 +1,13 @@
 import type { KeybindingCommand } from "@t3tools/contracts";
 
-import { shouldMountSidebarV2 } from "./components/AppSidebarLayout.logic";
+import { shouldMountDefaultSidebar } from "./components/AppSidebarLayout.logic";
 
 export function isProjectSwitchAvailable(input: {
-  readonly sidebarV2Enabled: boolean;
+  readonly legacySidebarEnabled: boolean;
   readonly pathname: string;
   readonly projectGroupCount: number;
 }): boolean {
-  return input.projectGroupCount > 1 && shouldMountSidebarV2(input);
+  return input.projectGroupCount > 1 && shouldMountDefaultSidebar(input);
 }
 
 export function handleProjectSwitchShortcut(input: {
