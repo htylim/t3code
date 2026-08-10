@@ -174,6 +174,12 @@ const makeThreadForkService = Effect.gen(function* () {
                 message: "Wait for the queued source turn to start before forking it.",
               });
             }
+            if (snapshot.backgroundLiveness != null) {
+              return yield* new ThreadForkError({
+                message:
+                  "Wait for the source thread's background work to finish before forking it.",
+              });
+            }
             if (
               snapshot.hasPendingApprovals ||
               snapshot.hasPendingUserInput ||

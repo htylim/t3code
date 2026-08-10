@@ -23,8 +23,9 @@ when both the connected server and the provider bound to the thread support fork
 ## When a thread can be forked
 
 The source must be a saved, unarchived thread with a resumable provider session. It must not have a
-turn starting, running, or queued, and it cannot be waiting for an approval or an answer to a
-question. Finish or resolve that work first, then try again.
+turn starting, running, or queued, or a background agent still working or being monitored. It also
+cannot be waiting for an approval or an answer to a question. Finish or resolve that work first,
+then try again.
 
 `/fork` only acts as a command when it is the entire composer text, apart from surrounding spaces,
 and there are no attachments or other composer context. Text such as `/fork try another approach`
@@ -42,6 +43,10 @@ conversation, not for isolating filesystem changes.
 The provider session itself is separate, so either conversation can receive later prompts without
 changing the other's transcript. The target gets its own checkpoint baseline at the fork point;
 earlier checkpoint history and turn diffs remain only on the source.
+
+After a Codex fork, T3 releases the provider process that created it so neither conversation keeps
+an exclusive writer for the other. The next prompt in either thread resumes its saved conversation
+automatically; no context is lost.
 
 The target starts in the active thread list even if the copied messages are old. After its first new
 turn, it follows the normal automatic settlement behavior.

@@ -240,3 +240,26 @@ upstream.
   Orchestration, persistence, shared contracts, provider adapters, and clients are unchanged.
 - Verification: Passed all 118 focused MCP tests, the targeted server type check, targeted lint
   and formatting checks, and `git diff --check`.
+
+## 2026-08-10 — Release Codex writers after native forks
+
+- Upstream baseline: `90feb48c0`
+- Change: A successful Codex native fork now closes the source app-server before the target can be
+  resumed in its own T3 session. Fork eligibility also rejects sources with working or monitored
+  background agents. Failed native forks leave the source process active. Other providers are
+  unchanged.
+- Reason: Codex loads the forked native thread into the source app-server and keeps its exclusive
+  writer. Starting the target's separate app-server then failed with `already has an active writer`.
+  Separate processes are required because each T3 thread has its own MCP credential and
+  thread-control scope.
+- Scope: Codex adapter lifecycle, fork eligibility and authoritative snapshot checks, focused
+  regression tests, user guidance, and the fork-only writer-release specification. Provider
+  contracts, orchestration events, persistence, and non-Codex adapters are unchanged.
+- Verification: Passed 128 focused Codex runtime, adapter, provider-service, eligibility, fork
+  service, and snapshot tests; server and shared type checks; targeted lint for every changed
+  TypeScript file except `ThreadForkService.test.ts`; formatting for every changed file; and
+  `git diff --check`. That test file retains two pre-existing manual Effect runtime lint violations
+  outside the changed lines. In an isolated web environment, a Codex source completed, `/fork`
+  created a distinct target that accepted a follow-up, and the source then accepted another
+  follow-up without an active-writer error. See
+  `docs/fork/specs/005-codex-fork-writer-release.md` for the design.

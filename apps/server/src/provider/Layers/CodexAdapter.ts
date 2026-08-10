@@ -1890,16 +1890,24 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     );
   };
 
-  const forkSession: CodexAdapterShape["forkSession"] = (input) =>
-    requireSession(input.sourceThreadId).pipe(
-      Effect.flatMap((session) => session.runtime.forkThread(input.cwd)),
-      Effect.mapError((cause) =>
-        cause._tag === "ProviderAdapterSessionNotFoundError"
-          ? cause
-          : mapCodexRuntimeError(input.sourceThreadId, "thread/fork", cause),
-      ),
-      Effect.map((resumeCursor) => ({ resumeCursor })),
-    );
+  const forkSession: CodexAdapterShape["forkSession"] = Effect.fn("CodexAdapter.forkSession")(
+    function* (input) {
+      const session = yield* requireSession(input.sourceThreadId);
+      const resumeCursor = yield* session.runtime
+        .forkThread(input.cwd)
+        .pipe(
+          Effect.mapError((cause) =>
+            mapCodexRuntimeError(input.sourceThreadId, "thread/fork", cause),
+          ),
+        );
+
+      // Codex app-server keeps an exclusive writer for every thread it loads,
+      // including the new thread returned by thread/fork. Release that process
+      // so the source and target can each resume in their own T3 session.
+      yield* stopSessionInternal(session);
+      return { resumeCursor };
+    },
+  );
 
   const respondToRequest: CodexAdapterShape["respondToRequest"] = (threadId, requestId, decision) =>
     requireSession(threadId).pipe(

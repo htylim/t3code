@@ -1898,6 +1898,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       assert.equal(snapshot.value.workspaceRoot, "/tmp/fork-project");
       assert.equal(snapshot.value.targetExists, true);
       assert.equal(snapshot.value.hasPendingApprovals, true);
+      assert.equal(snapshot.value.backgroundLiveness, null);
       assert.equal(snapshot.value.thread.messages[0]?.text, "copy me");
     }),
   );

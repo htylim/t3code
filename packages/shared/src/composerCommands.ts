@@ -83,6 +83,7 @@ export function resolveThreadForkEligibility(
     input.thread.session?.status === "starting" ||
     input.thread.session?.status === "running" ||
     input.thread.latestTurn?.state === "running" ||
+    input.thread.backgroundLiveness != null ||
     input.queuedTurnCount > 0
   ) {
     return blocked("work-in-flight");

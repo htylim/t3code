@@ -2704,6 +2704,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             targetExists: Option.isSome(targetRow),
             hasPendingApprovals: sourceRow.value.pendingApprovalCount > 0,
             hasPendingUserInput: sourceRow.value.pendingUserInputCount > 0,
+            backgroundLiveness:
+              threadBackgroundLiveness.getThreadBackgroundLiveness(sourceThreadId),
           });
         }),
       )

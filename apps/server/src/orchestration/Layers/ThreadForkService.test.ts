@@ -103,6 +103,7 @@ function makeHarness(input?: {
   readonly acceptedSequence?: number;
   readonly providerFailure?: boolean;
   readonly gitRepository?: boolean;
+  readonly backgroundLiveness?: "working" | "monitoring" | null;
 }) {
   const dispatched: OrchestrationCommand[] = [];
   const capturedCheckpoints: Array<{ readonly cwd: string; readonly checkpointRef: string }> = [];
@@ -140,6 +141,7 @@ function makeHarness(input?: {
           targetExists: input?.targetExists ?? false,
           hasPendingApprovals: false,
           hasPendingUserInput: false,
+          backgroundLiveness: input?.backgroundLiveness ?? null,
         }),
       ),
   } as unknown as ProjectionSnapshotQuery["Service"];
@@ -273,6 +275,13 @@ it("fork operation rejects starting running and queued-turn sources", async () =
     }),
   });
   await expect(harness.run()).rejects.toThrow("finish before forking");
+  expect(harness.forkSession).not.toHaveBeenCalled();
+  expect(harness.dispatched).toHaveLength(0);
+});
+
+it("fork operation rejects sources with background work", async () => {
+  const harness = makeHarness({ backgroundLiveness: "monitoring" });
+  await expect(harness.run()).rejects.toThrow("background work to finish before forking");
   expect(harness.forkSession).not.toHaveBeenCalled();
   expect(harness.dispatched).toHaveLength(0);
 });

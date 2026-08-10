@@ -41,6 +41,7 @@ import type { CodexAdapterShape } from "../Services/CodexAdapter.ts";
 import { ProviderSessionDirectory } from "../Services/ProviderSessionDirectory.ts";
 import {
   type CodexSessionRuntimeOptions,
+  type CodexSessionRuntimeError,
   type CodexSessionRuntimeSendTurnInput,
   type CodexSessionRuntimeShape,
   type CodexThreadSnapshot,
@@ -146,7 +147,7 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
     return Effect.promise(() => this.rollbackThreadImpl(numTurns));
   }
 
-  forkThread(cwd: string) {
+  forkThread(cwd: string): Effect.Effect<{ readonly threadId: string }, CodexSessionRuntimeError> {
     return Effect.promise(() => this.forkThreadImpl(cwd));
   }
 
@@ -248,7 +249,7 @@ const validationLayer = it.layer(
 );
 
 validationLayer("CodexAdapterLive validation", (it) => {
-  it.effect("Codex returns the forked thread id as a resume cursor", () =>
+  it.effect("Codex returns the fork cursor and releases the source app-server", () =>
     Effect.gen(function* () {
       const adapter = yield* CodexAdapter;
       const sourceThreadId = asThreadId("thread-fork-source");
@@ -270,6 +271,43 @@ validationLayer("CodexAdapterLive validation", (it) => {
       NodeAssert.deepStrictEqual(validationRuntimeFactory.lastRuntime?.forkThreadImpl.mock.calls, [
         ["/tmp/project"],
       ]);
+      NodeAssert.equal(validationRuntimeFactory.lastRuntime?.closeImpl.mock.calls.length, 1);
+      NodeAssert.equal(yield* adapter.hasSession(sourceThreadId), false);
+      validationRuntimeFactory.factory.mockClear();
+    }),
+  );
+
+  it.effect("Codex keeps the source app-server when the native fork fails", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CodexAdapter;
+      const sourceThreadId = asThreadId("thread-fork-failure-source");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId: sourceThreadId,
+        runtimeMode: "full-access",
+      });
+      const runtime = validationRuntimeFactory.lastRuntime;
+      if (!runtime) {
+        return yield* Effect.die(new Error("expected source runtime"));
+      }
+      runtime.forkThread = () =>
+        Effect.fail(
+          new CodexErrors.CodexAppServerRequestError({
+            code: -32603,
+            errorMessage: "native fork failed",
+          }),
+        );
+
+      yield* adapter
+        .forkSession({
+          sourceThreadId,
+          targetThreadId: asThreadId("thread-fork-failure-target"),
+          cwd: "/tmp/project",
+        })
+        .pipe(Effect.flip);
+
+      NodeAssert.equal(runtime.closeImpl.mock.calls.length, 0);
+      NodeAssert.equal(yield* adapter.hasSession(sourceThreadId), true);
       yield* adapter.stopSession(sourceThreadId);
       validationRuntimeFactory.factory.mockClear();
     }),

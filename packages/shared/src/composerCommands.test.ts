@@ -104,7 +104,7 @@ describe("composer commands", () => {
     ).toMatchObject({ reason: "archived" });
   });
 
-  it("omits /fork while a turn is starting running or queued", () => {
+  it("omits /fork while a turn or background agent is working", () => {
     expect(
       eligibility({ thread: thread({ session: { ...thread().session!, status: "starting" } }) }),
     ).toMatchObject({ reason: "work-in-flight" });
@@ -123,6 +123,12 @@ describe("composer commands", () => {
       }),
     ).toMatchObject({ reason: "work-in-flight" });
     expect(eligibility({ queuedTurnCount: 1 })).toMatchObject({ reason: "work-in-flight" });
+    expect(eligibility({ thread: thread({ backgroundLiveness: "working" }) })).toMatchObject({
+      reason: "work-in-flight",
+    });
+    expect(eligibility({ thread: thread({ backgroundLiveness: "monitoring" }) })).toMatchObject({
+      reason: "work-in-flight",
+    });
   });
 
   it("omits /fork while approval or user input is pending", () => {

@@ -60,6 +60,7 @@ export interface ProjectionThreadForkSnapshot {
   readonly targetExists: boolean;
   readonly hasPendingApprovals: boolean;
   readonly hasPendingUserInput: boolean;
+  readonly backgroundLiveness: OrchestrationThreadShell["backgroundLiveness"];
 }
 
 /**
