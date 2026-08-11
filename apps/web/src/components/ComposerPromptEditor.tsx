@@ -78,6 +78,10 @@ import {
 } from "./composerInlineChip";
 import { FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
 import { ComposerPendingTerminalContextChip } from "./chat/ComposerPendingTerminalContexts";
+import {
+  $createComposerThreadReferenceNode,
+  ComposerThreadReferenceNode,
+} from "./ComposerThreadReferenceNode";
 import { formatProviderSkillDisplayName } from "~/providerSkillPresentation";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { registerComposerInlineTokenPaste } from "./composerInlineTokenPaste";
@@ -427,12 +431,14 @@ function $createComposerTerminalContextNode(
 type ComposerInlineTokenNode =
   | ComposerMentionNode
   | ComposerSkillNode
+  | ComposerThreadReferenceNode
   | ComposerTerminalContextNode;
 
 function isComposerInlineTokenNode(candidate: unknown): candidate is ComposerInlineTokenNode {
   return (
     candidate instanceof ComposerMentionNode ||
     candidate instanceof ComposerSkillNode ||
+    candidate instanceof ComposerThreadReferenceNode ||
     candidate instanceof ComposerTerminalContextNode
   );
 }
@@ -842,6 +848,10 @@ function $setComposerEditorPrompt(
           metadata?.description ?? null,
         ),
       );
+      continue;
+    }
+    if (segment.type === "thread") {
+      paragraph.append($createComposerThreadReferenceNode(segment.threadRef, segment.label));
       continue;
     }
     if (segment.type === "terminal-context") {
@@ -1808,7 +1818,12 @@ export function ComposerPromptEditor({
     () => ({
       namespace: "t3tools-composer-editor",
       editable: true,
-      nodes: [ComposerMentionNode, ComposerSkillNode, ComposerTerminalContextNode],
+      nodes: [
+        ComposerMentionNode,
+        ComposerSkillNode,
+        ComposerThreadReferenceNode,
+        ComposerTerminalContextNode,
+      ],
       editorState: () => {
         $setComposerEditorPrompt(
           initialValueRef.current,

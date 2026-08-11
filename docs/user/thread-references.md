@@ -20,5 +20,14 @@ rewrite old messages.
 A reference does not automatically copy or load the other conversation. Ask the agent to inspect
 the reference when you want it to read the target through T3's thread tools.
 
+## Ask about selected text in a new thread
+
+On web or desktop, select text inside one chat message and right-click it. Choose **Ask in new
+thread** to open a new draft in the same project. The draft contains the selected text as a Markdown
+quote and a reference to the source thread. It is not sent automatically, so you can add your
+question before submitting it.
+
+Selections that cross message boundaries keep the normal system context menu instead.
+
 Thread references are available in the web and desktop composers. The native iOS and Android
 composers do not offer the `%` picker in this version.

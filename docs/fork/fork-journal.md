@@ -299,3 +299,53 @@ upstream.
   after verifying `%` selection and provider recognition. Do not resolve conflicts by adding
   attachments, orchestration schemas, database fields, native mobile tokens, provider prompt
   rewriting, automatic reads, or external desktop protocol handling.
+
+## 2026-08-11 — Render thread references as composer chips
+
+- Upstream baseline: `9821bca1c`
+- Change: Canonical `[title](t3code://threads/<environment>/<thread>)` references now render as
+  atomic, non-navigating chips in the web composer. Their Lexical node still serializes to the exact
+  canonical Markdown, so drafts, clipboard text, submissions, and provider prompts keep the same
+  representation. Sent-message thread chips remain navigable.
+- Reason: `%` selection previously exposed its Markdown implementation in the draft even though
+  `@` files and `$` skills render as compact composer chips.
+- Scope: The fork-owned thread-reference parser and composer node; narrow integration seams in the
+  web prompt segmenter, collapsed/expanded cursor mapping, and Lexical node registration. Desktop
+  inherits the web UI. Mobile, shared token parsing, contracts, persistence, server orchestration,
+  providers, and sent-message rendering are unchanged.
+- Verification: Passed 104 focused thread-reference, composer-segmentation, cursor-mapping, and
+  Lexical-node tests; the web type check; targeted lint and formatting; and `git diff --check`. In
+  an isolated web environment with realistic thread shells, selected a `%` result and confirmed it
+  rendered as one non-editable, non-navigating chip, accepted trailing text, and survived a draft
+  reload without exposing the stored Markdown.
+- Upstream conflict map: `ComposerThreadReferenceNode.tsx` is fork-owned and contains the chip UI
+  and Markdown serialization. In `composer-editor-mentions.ts`, preserve the `thread` segment and
+  merge `collectThreadReferenceMarkdownTokens` results with existing inline tokens, sorting an
+  enclosing thread reference before token-like text in its title. In `composer-logic.ts`, treat
+  `thread` like `mention` for one-unit collapsed cursor mapping. In `ComposerPromptEditor.tsx`,
+  preserve only the node import, inline-token predicate entry, segment-to-node creation, and Lexical
+  node registration. `threadReference.ts` remains the single URI and Markdown validation source.
+  If upstream replaces the composer or ships equivalent thread tokens, port these invariants to its
+  native token model instead of preserving the current Lexical plumbing.
+
+## 2026-08-11 — Start a new thread from selected chat text
+
+- Upstream baseline: `9821bca1c`
+- Change: Web and desktop users can select rendered text within one chat message, right-click, and
+  choose **Ask in new thread**. The new same-project draft is prefilled with a Markdown quote and a
+  canonical reference to the source thread but is not sent automatically.
+- Reason: Make focused follow-up conversations easy without copying whole transcripts, creating
+  selection-specific persistence, or losing the durable source-thread identity.
+- Scope: A fork-owned selection surface, prompt builder, and focused tests; one narrow wrapper seam
+  in `ChatView.tsx`; thread-reference user guidance. Mobile, contracts, persistence, server
+  orchestration, providers, and desktop IPC are unchanged.
+- Verification: Passed 32 focused selected-text and thread-reference tests, the web type check,
+  targeted lint and formatting, and `git diff --check`. In an isolated web environment, selected
+  an assistant response, opened the context action, and confirmed it created a distinct unsent
+  draft with one source-thread chip and both selected lines preserved as Markdown quotes.
+- Upstream conflict map: `selectedTextThreadAction.ts` and
+  `AskInNewThreadSelectionSurface.tsx` own the feature. In `ChatView.tsx`, preserve only the wrapper
+  around the existing messages area and its active thread/project/new-thread inputs. If upstream
+  ships an equivalent selection action, remove the wrapper and fork-owned files rather than
+  merging both implementations. Do not add attachment schemas, message offsets, or server state to
+  retain this behavior.

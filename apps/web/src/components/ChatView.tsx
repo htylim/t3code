@@ -244,6 +244,7 @@ import {
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
+import { AskInNewThreadSelectionSurface } from "./chat/AskInNewThreadSelectionSurface";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
@@ -6173,7 +6174,14 @@ function ChatViewContent(props: ChatViewProps) {
               />
             </div>
             {/* Messages Wrapper */}
-            <div className="relative flex min-h-0 flex-1 flex-col">
+            <AskInNewThreadSelectionSurface
+              className="relative flex min-h-0 flex-1 flex-col"
+              enabled={isServerThread}
+              projectRef={activeProjectRef}
+              sourceThreadRef={routeThreadRef}
+              sourceThreadTitle={activeThread.title}
+              createThread={handleNewThread}
+            >
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
                 agentPanelModel={agentPanelModel}
@@ -6233,7 +6241,7 @@ function ChatViewContent(props: ChatViewProps) {
                   </button>
                 </div>
               )}
-            </div>
+            </AskInNewThreadSelectionSurface>
 
             {/* Input bar — centered hero while a draft has no messages, docked at the bottom otherwise */}
             <div

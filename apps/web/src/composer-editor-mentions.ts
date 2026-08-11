@@ -6,6 +6,9 @@ import {
   collectComposerInlineTokens,
   type ComposerInlineToken,
 } from "@t3tools/shared/composerInlineTokens";
+import type { ScopedThreadRef } from "@t3tools/contracts";
+
+import { collectThreadReferenceMarkdownTokens } from "./threadReference";
 
 export type ComposerPromptSegment =
   | {
@@ -20,6 +23,12 @@ export type ComposerPromptSegment =
   | {
       type: "skill";
       name: string;
+    }
+  | {
+      type: "thread";
+      threadRef: ScopedThreadRef;
+      label: string;
+      source: string;
     }
   | {
       type: "terminal-context";
@@ -130,7 +139,13 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
     return segments;
   }
 
-  const tokenMatches = collectComposerInlineTokens(text);
+  const tokenMatches = [
+    ...collectComposerInlineTokens(text),
+    ...collectThreadReferenceMarkdownTokens(text).map((token) => ({
+      ...token,
+      type: "thread" as const,
+    })),
+  ].sort((left, right) => left.start - right.start || right.end - left.end);
   let cursor = 0;
   for (const match of tokenMatches) {
     if (match.start < cursor) {
@@ -147,8 +162,15 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
         path: match.value,
         source: match.source,
       });
-    } else {
+    } else if (match.type === "skill") {
       segments.push({ type: "skill", name: match.value });
+    } else {
+      segments.push({
+        type: "thread",
+        threadRef: match.threadRef,
+        label: match.label,
+        source: match.source,
+      });
     }
 
     cursor = match.end;

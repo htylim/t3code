@@ -197,11 +197,13 @@ describe("replaceTextRange", () => {
     });
   });
 
-  it("keeps a thread reference expanded as raw composer text", () => {
+  it("maps a thread reference between its chip and Markdown lengths", () => {
     const text = "[Referenced](t3code://threads/local/thread-1) ";
 
-    expect(collapseExpandedComposerCursor(text, text.length)).toBe(text.length);
-    expect(expandCollapsedComposerCursor(text, text.length)).toBe(text.length);
+    expect(collapseExpandedComposerCursor(text, text.length)).toBe(2);
+    expect(collapseExpandedComposerCursor(text, text.length - 2)).toBe(1);
+    expect(expandCollapsedComposerCursor(text, 1)).toBe(text.length - 1);
+    expect(expandCollapsedComposerCursor(text, 2)).toBe(text.length);
   });
 });
 

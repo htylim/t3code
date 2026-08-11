@@ -30,6 +30,7 @@ const isInlineTokenSegment = (
     | { type: "text"; text: string }
     | { type: "mention" }
     | { type: "skill" }
+    | { type: "thread" }
     | { type: "terminal-context" },
 ): boolean => segment.type !== "text";
 
@@ -67,7 +68,7 @@ export function expandCollapsedComposerCursor(text: string, cursorInput: number)
   let expandedCursor = 0;
 
   for (const segment of segments) {
-    if (segment.type === "mention") {
+    if (segment.type === "mention" || segment.type === "thread") {
       const expandedLength = segment.source.length;
       if (remaining <= 1) {
         return expandedCursor + (remaining === 0 ? 0 : expandedLength);
@@ -110,6 +111,7 @@ function collapsedSegmentLength(
     | { type: "text"; text: string }
     | { type: "mention" }
     | { type: "skill" }
+    | { type: "thread" }
     | { type: "terminal-context" },
 ): number {
   if (segment.type === "text") {
@@ -123,6 +125,7 @@ function clampCollapsedComposerCursorForSegments(
     | { type: "text"; text: string }
     | { type: "mention" }
     | { type: "skill" }
+    | { type: "thread" }
     | { type: "terminal-context" }
   >,
   cursorInput: number,
@@ -155,7 +158,7 @@ export function collapseExpandedComposerCursor(text: string, cursorInput: number
   let collapsedCursor = 0;
 
   for (const segment of segments) {
-    if (segment.type === "mention") {
+    if (segment.type === "mention" || segment.type === "thread") {
       const expandedLength = segment.source.length;
       if (remaining === 0) {
         return collapsedCursor;

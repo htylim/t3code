@@ -20,6 +20,20 @@ export interface ThreadReferenceItem {
   readonly description: string;
 }
 
+export interface ThreadReferenceMarkdownToken {
+  readonly threadRef: ScopedThreadRef;
+  readonly label: string;
+  readonly source: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+const MAX_THREAD_REFERENCE_LABEL_LENGTH = 512;
+const THREAD_REFERENCE_MARKDOWN_REGEX = new RegExp(
+  `\\[((?:\\\\.|[^\\]\\\\]){0,${MAX_THREAD_REFERENCE_LABEL_LENGTH}})\\]\\((t3code:\\/\\/threads\\/[^)\\s]+)\\)`,
+  "g",
+);
+
 function escapeMarkdownLabel(label: string): string {
   return label.replaceAll("\\", "\\\\").replaceAll("[", "\\[").replaceAll("]", "\\]");
 }
@@ -79,6 +93,30 @@ export function parseThreadReferenceUri(destination: string): ScopedThreadRef | 
     threadId: threadId as ThreadId,
   };
   return serializeThreadReferenceUri(threadRef) === destination ? threadRef : null;
+}
+
+export function collectThreadReferenceMarkdownTokens(text: string): ThreadReferenceMarkdownToken[] {
+  const tokens: ThreadReferenceMarkdownToken[] = [];
+
+  for (const match of text.matchAll(THREAD_REFERENCE_MARKDOWN_REGEX)) {
+    const source = match[0];
+    const label = (match[1] ?? "").replace(/\\(.)/g, "$1");
+    const destination = match[2] ?? "";
+    const threadRef = parseThreadReferenceUri(destination);
+    if (!threadRef || serializeThreadReferenceMarkdown(label, threadRef) !== source) {
+      continue;
+    }
+    const start = match.index ?? 0;
+    tokens.push({
+      threadRef,
+      label,
+      source,
+      start,
+      end: start + source.length,
+    });
+  }
+
+  return tokens;
 }
 
 function compareAscending(left: string, right: string): number {

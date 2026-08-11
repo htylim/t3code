@@ -7,6 +7,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildThreadReferenceItems,
+  collectThreadReferenceMarkdownTokens,
   parseThreadReferenceUri,
   serializeThreadReferenceMarkdown,
   serializeThreadReferenceUri,
@@ -95,6 +96,38 @@ describe("thread reference URI", () => {
     "t3code://threads/local/%20",
   ])("rejects non-canonical destination %s", (destination) => {
     expect(parseThreadReferenceUri(destination)).toBeNull();
+  });
+});
+
+describe("thread reference Markdown", () => {
+  it("collects canonical references with escaped labels and exact source offsets", () => {
+    const source = serializeThreadReferenceMarkdown("Fix [copy] \\ now", {
+      environmentId,
+      threadId: ThreadId.make("thread/with spaces"),
+    });
+    const prompt = `Compare ${source} next`;
+
+    expect(collectThreadReferenceMarkdownTokens(prompt)).toEqual([
+      {
+        threadRef: {
+          environmentId,
+          threadId: ThreadId.make("thread/with spaces"),
+        },
+        label: "Fix [copy] \\ now",
+        source,
+        start: "Compare ".length,
+        end: "Compare ".length + source.length,
+      },
+    ]);
+  });
+
+  it.each([
+    "[Web](https://example.com)",
+    "[Extra](t3code://threads/local/thread-1/extra)",
+    "[Query](t3code://threads/local/thread-1?view=full)",
+    "[Noncanonical \\* label](t3code://threads/local/thread-1)",
+  ])("leaves non-canonical reference %s as text", (source) => {
+    expect(collectThreadReferenceMarkdownTokens(source)).toEqual([]);
   });
 });
 

@@ -71,6 +71,41 @@ describe("splitPromptIntoComposerSegments", () => {
     ).toEqual([{ type: "text", text: "Read [the docs](https://example.com/docs) first" }]);
   });
 
+  it("splits canonical thread references into thread segments", () => {
+    const source = "[Release notes](t3code://threads/local/thread-1)";
+
+    expect(splitPromptIntoComposerSegments(`Compare ${source} next`)).toEqual([
+      { type: "text", text: "Compare " },
+      {
+        type: "thread",
+        threadRef: { environmentId: "local", threadId: "thread-1" },
+        label: "Release notes",
+        source,
+      },
+      { type: "text", text: " next" },
+    ]);
+  });
+
+  it("keeps token-like thread titles inside one thread segment", () => {
+    const source = "[Use $cmux now](t3code://threads/local/thread-1)";
+
+    expect(splitPromptIntoComposerSegments(`${source} next`)).toEqual([
+      {
+        type: "thread",
+        threadRef: { environmentId: "local", threadId: "thread-1" },
+        label: "Use $cmux now",
+        source,
+      },
+      { type: "text", text: " next" },
+    ]);
+  });
+
+  it("leaves malformed thread references as text", () => {
+    const prompt = "Compare [Release](t3code://threads/local/thread-1?view=full) next";
+
+    expect(splitPromptIntoComposerSegments(prompt)).toEqual([{ type: "text", text: prompt }]);
+  });
+
   it.each(["@expo/ui", "@jane/foo.js", "@scope/pkg/sub/path"])(
     "does not turn scoped package reference %s into file mention segments",
     (reference) => {
