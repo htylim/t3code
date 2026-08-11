@@ -40,6 +40,7 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { renderSkillInlineMarkdownChildren } from "./chat/SkillInlineText";
 import { CHAT_FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
+import { ThreadReferenceLink } from "./chat/ThreadReferenceLink";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import {
   resolveExternalWebLinkHost,
@@ -92,6 +93,7 @@ import {
   openUrlInPreview,
   BrowserPreviewUnavailableError,
 } from "../browser/openFileInPreview";
+import { parseThreadReferenceUri, serializeThreadReferenceMarkdown } from "../threadReference";
 
 interface ChatMarkdownProps {
   text: string;
@@ -139,18 +141,19 @@ function findTaskListMarkerOffset(markdown: string, listItemStart: number): numb
   if (!match?.[1]) return null;
   return listItemStart + firstLine.indexOf(match[1]);
 }
-const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
+export const CHAT_MARKDOWN_SANITIZE_SCHEMA: Parameters<typeof rehypeSanitize>[0] = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
     "*": (defaultSchema.attributes?.["*"] ?? []).filter((attribute) => attribute !== "title"),
+    a: [...(defaultSchema.attributes?.a ?? []), "dataThreadReferenceHref"],
     code: [...(defaultSchema.attributes?.code ?? []), "dataCodeMeta", "dataInlineCode"],
   },
   protocols: {
     ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href ?? []), "file"],
+    href: [...(defaultSchema.protocols?.href ?? []), "file", "t3code"],
   },
-} satisfies Parameters<typeof rehypeSanitize>[0];
+};
 
 const CHAT_MARKDOWN_REMARK_PLUGINS = [
   remarkGfm,
@@ -169,6 +172,7 @@ const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS = [
 
 const CHAT_MARKDOWN_REHYPE_PLUGINS = [
   rehypeRaw,
+  rehypeTagThreadReferenceLinks,
   [rehypeSanitize, CHAT_MARKDOWN_SANITIZE_SCHEMA],
 ] satisfies NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
 
@@ -218,6 +222,13 @@ type MarkdownAstNode = {
   children?: MarkdownAstNode[];
 };
 
+export type MarkdownHastNode = {
+  type?: string;
+  tagName?: string;
+  properties?: Record<string, unknown>;
+  children?: MarkdownHastNode[];
+};
+
 function remarkPreserveCodeMeta() {
   return (tree: MarkdownAstNode) => {
     const visit = (node: MarkdownAstNode) => {
@@ -228,6 +239,34 @@ function remarkPreserveCodeMeta() {
             ...node.data?.hProperties,
             dataCodeMeta: node.meta.trim(),
           },
+        };
+      }
+      node.children?.forEach(visit);
+    };
+
+    visit(tree);
+  };
+}
+
+export function rehypeTagThreadReferenceLinks(): (tree: MarkdownHastNode) => void {
+  return (tree: MarkdownHastNode) => {
+    const visit = (node: MarkdownHastNode) => {
+      const href = node.properties?.href;
+      if (node.type === "element" && node.tagName === "a" && node.properties) {
+        const properties = { ...node.properties };
+        Reflect.deleteProperty(properties, "dataThreadReferenceHref");
+        Reflect.deleteProperty(properties, "data-thread-reference-href");
+        node.properties = properties;
+      }
+      if (
+        node.type === "element" &&
+        node.tagName === "a" &&
+        typeof href === "string" &&
+        /^t3code:/i.test(href)
+      ) {
+        node.properties = {
+          ...node.properties,
+          dataThreadReferenceHref: href,
         };
       }
       node.children?.forEach(visit);
@@ -842,6 +881,30 @@ function normalizeMarkdownLinkHrefKey(href: string): string {
   return rewriteMarkdownFileUriHref(normalizedHref) ?? normalizedHref;
 }
 
+export type ChatMarkdownThreadReference =
+  | { readonly kind: "thread"; readonly threadRef: ScopedThreadRef; readonly href: string }
+  | { readonly kind: "invalid" };
+
+export function resolveChatMarkdownThreadReference(
+  href: string | undefined,
+  sourceHref: unknown,
+): ChatMarkdownThreadReference | null {
+  const candidate =
+    typeof sourceHref === "string"
+      ? normalizeMarkdownLinkHrefKey(sourceHref)
+      : href
+        ? normalizeMarkdownLinkHrefKey(href)
+        : "";
+  if (!/^t3code:/i.test(candidate)) return null;
+  const threadRef = parseThreadReferenceUri(candidate);
+  return threadRef ? { kind: "thread", threadRef, href: candidate } : { kind: "invalid" };
+}
+
+export function chatMarkdownUrlTransform(href: string): string {
+  if (parseThreadReferenceUri(href)) return href;
+  return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
+}
+
 const MARKDOWN_LINK_FAVICON_CLASS_NAME = "block size-full shrink-0 select-none";
 
 /** Hosts whose favicon request already failed this session — skip straight to the globe. */
@@ -1310,9 +1373,6 @@ function ChatMarkdown({
     ];
     return buildFileLinkParentSuffixByPath(filePaths);
   }, [inlineCodeFileLinkMetaByText, markdownFileLinkMetaByHref]);
-  const markdownUrlTransform = useCallback((href: string) => {
-    return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
-  }, []);
   // Re-emit highlighted content as markdown so copying out of the rendered
   // view keeps links, emphasis, lists, and code fences intact.
   const handleCopy = useCallback((event: ReactClipboardEvent<HTMLDivElement>) => {
@@ -1456,6 +1516,24 @@ function ChatMarkdown({
         );
       },
       a({ node, href, children, ...props }) {
+        const threadReference = resolveChatMarkdownThreadReference(
+          href,
+          node?.properties?.dataThreadReferenceHref ?? node?.properties?.href,
+        );
+        if (threadReference?.kind === "thread") {
+          const label = nodeToPlainText(children);
+          return (
+            <ThreadReferenceLink
+              threadRef={threadReference.threadRef}
+              label={label}
+              copyMarkdown={serializeThreadReferenceMarkdown(label, threadReference.threadRef)}
+              {...(props.className ? { className: props.className } : {})}
+            />
+          );
+        }
+        if (threadReference?.kind === "invalid") {
+          return <>{children}</>;
+        }
         const normalizedHref = href ? normalizeMarkdownLinkHrefKey(href) : "";
         const fileLinkMeta = normalizedHref ? markdownFileLinkMetaByHref.get(normalizedHref) : null;
         if (!fileLinkMeta) {
@@ -1616,7 +1694,7 @@ function ChatMarkdown({
         }
         rehypePlugins={CHAT_MARKDOWN_REHYPE_PLUGINS}
         components={markdownComponents}
-        urlTransform={markdownUrlTransform}
+        urlTransform={chatMarkdownUrlTransform}
       >
         {text}
       </ReactMarkdown>

@@ -99,6 +99,8 @@ import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { ComposerControl, ComposerControlIcon, ComposerSelectControl } from "./ComposerControl";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { searchSlashCommandItems } from "./composerSlashCommandSearch";
+import { readProject, readThreadShells } from "../../state/entities";
+import { buildThreadReferenceItems, serializeThreadReferenceMarkdown } from "../../threadReference";
 import {
   getComposerPromptInjectionState,
   getComposerProviderState,
@@ -1036,9 +1038,38 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     cwd: isPathTrigger ? gitCwd : null,
     query: isPathTrigger ? pathTriggerQuery : null,
   });
+  const threadReferenceItems = useMemo(() => {
+    if (composerTrigger?.kind !== "thread") return [];
+    const threads = readThreadShells().filter((thread) => thread.environmentId === environmentId);
+    const projects = [
+      ...new Map(
+        threads.flatMap((thread) => {
+          const project = readProject({
+            environmentId,
+            projectId: thread.projectId,
+          });
+          return project ? [[project.id, project] as const] : [];
+        }),
+      ).values(),
+    ];
+    return buildThreadReferenceItems({
+      environmentId,
+      currentThreadId: routeKind === "server" ? routeThreadRef.threadId : null,
+      query: composerTrigger.query,
+      threads,
+      projects,
+    });
+  }, [composerTrigger, environmentId, routeKind, routeThreadRef.threadId]);
 
   const composerMenuItems = useMemo<ComposerCommandItem[]>(() => {
     if (!composerTrigger) return [];
+    if (composerTrigger.kind === "thread") {
+      return threadReferenceItems.map((item) => ({
+        ...item,
+        id: `thread:${item.threadRef.environmentId}:${item.threadRef.threadId}`,
+        type: "thread" as const,
+      }));
+    }
     if (composerTrigger.kind === "path") {
       return workspaceEntries.entries.map((entry) => ({
         id: `path:${entry.kind}:${entry.path}`,
@@ -1097,6 +1128,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     planModeUiEnabled,
     selectedProvider,
     selectedProviderStatus,
+    threadReferenceItems,
     workspaceEntries.entries,
   ]);
 
@@ -1166,6 +1198,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerMenuEmptyState = useMemo(() => {
     if (composerTriggerKind === "skill") {
       return "No skills found. Try / to browse provider commands.";
+    }
+    if (composerTriggerKind === "thread") {
+      return "No matching threads.";
     }
     return composerTriggerKind === "path"
       ? "No matching files or folders."
@@ -1655,6 +1690,25 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       if (!trigger) return;
       if (item.type === "path") {
         const replacement = `${serializeComposerFileLink(item.path)} `;
+        const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+          snapshot.value,
+          trigger.rangeEnd,
+          replacement,
+        );
+        const applied = applyPromptReplacement(
+          trigger.rangeStart,
+          replacementRangeEnd,
+          replacement,
+          { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
+        );
+        if (applied) {
+          setComposerHighlightedItemId(null);
+        }
+        return;
+      }
+      if (item.type === "thread") {
+        if (trigger.kind !== "thread") return;
+        const replacement = `${serializeThreadReferenceMarkdown(item.label, item.threadRef)} `;
         const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
           snapshot.value,
           trigger.rangeEnd,

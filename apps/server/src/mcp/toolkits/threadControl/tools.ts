@@ -27,6 +27,9 @@ import {
 
 const dependencies = [McpInvocationContext.McpInvocationContext, ThreadControlService];
 
+const threadReferenceGuidance =
+  " A t3code://threads/<environmentId>/<threadId> link references a T3 thread. URL-decode both path segments, confirm the decoded environment with thread_context, then pass only the decoded <threadId> to this tool. If the environment differs, report that the reference belongs to another environment instead of reading a coincidentally equal local thread ID.";
+
 const readTool = <T extends Tool.Any>(tool: T): T =>
   tool
     .annotate(Tool.Readonly, true)
@@ -77,7 +80,8 @@ export const ThreadsListTool = readTool(
 export const ThreadStatusTool = readTool(
   Tool.make("thread_status", {
     description:
-      "Read one thread's lightweight execution, blocker, background-liveness, model, workspace, and lifecycle state without loading its transcript.",
+      "Read one thread's lightweight execution, blocker, background-liveness, model, workspace, and lifecycle state without loading its transcript." +
+      threadReferenceGuidance,
     parameters: ThreadStatusInput,
     success: ThreadStatusResult,
     failure: ThreadControlFailure,
@@ -99,7 +103,8 @@ export const ThreadsWaitTool = readTool(
 export const ThreadReadTool = readTool(
   Tool.make("thread_read", {
     description:
-      "Read a bounded persisted final response, visible conversation, or transcript from one active thread after monitoring reports a useful state transition.",
+      "Read a bounded persisted final response, visible conversation, or transcript from one active thread after monitoring reports a useful state transition." +
+      threadReferenceGuidance,
     parameters: ThreadReadInput,
     success: ThreadReadResult,
     failure: ThreadControlFailure,

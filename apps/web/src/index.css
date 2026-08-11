@@ -1707,8 +1707,8 @@ label:has(> select#reasoning-effort) select {
   text-decoration: none;
 }
 
-.chat-markdown a:not(.chat-markdown-file-link):hover,
-.chat-markdown a:not(.chat-markdown-file-link):focus-visible {
+.chat-markdown a:not(.chat-markdown-file-link):not(.chat-markdown-thread-reference):hover,
+.chat-markdown a:not(.chat-markdown-file-link):not(.chat-markdown-thread-reference):focus-visible {
   background-image: radial-gradient(circle, currentcolor 0.75px, transparent 1px);
   background-position: left bottom;
   background-repeat: repeat-x;
@@ -1782,6 +1782,16 @@ label:has(> select#reasoning-effort) select {
 }
 
 .chat-markdown a.chat-markdown-file-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 70%, transparent);
+}
+
+.chat-markdown a.chat-markdown-thread-reference {
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.chat-markdown a.chat-markdown-thread-reference:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 70%, transparent);
 }

@@ -5,9 +5,17 @@ import {
   parseStandaloneComposerSlashCommand,
   type ComposerSlashCommand,
 } from "@t3tools/shared/composerCommands";
-import type { ComposerTrigger, ComposerTriggerKind } from "@t3tools/shared/composerTrigger";
+import type {
+  ComposerTrigger as SharedComposerTrigger,
+  ComposerTriggerKind as SharedComposerTriggerKind,
+} from "@t3tools/shared/composerTrigger";
 
-export type { ComposerSlashCommand, ComposerTrigger, ComposerTriggerKind };
+export type ComposerTriggerKind = SharedComposerTriggerKind | "thread";
+export interface ComposerTrigger extends Omit<SharedComposerTrigger, "kind"> {
+  kind: ComposerTriggerKind;
+}
+
+export type { ComposerSlashCommand };
 export { parseStandaloneComposerSlashCommand };
 
 export function shouldSubmitComposerOnEnter(input: {
@@ -244,6 +252,14 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
   if (token.startsWith("$")) {
     return {
       kind: "skill",
+      query: token.slice(1),
+      rangeStart: tokenStart,
+      rangeEnd: cursor,
+    };
+  }
+  if (token.startsWith("%")) {
+    return {
+      kind: "thread",
       query: token.slice(1),
       rangeStart: tokenStart,
       rangeEnd: cursor,

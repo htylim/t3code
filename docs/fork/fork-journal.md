@@ -263,3 +263,39 @@ upstream.
   created a distinct target that accepted a follow-up, and the source then accepted another
   follow-up without an active-writer error. See
   `docs/fork/specs/005-codex-fork-writer-release.md` for the design.
+
+## 2026-08-11 — Add thread reference picker
+
+- Upstream baseline: `9821bca1c`
+- Change: Added a web and desktop `%` composer picker backed by already-loaded thread shells. It
+  inserts canonical `t3code://threads/<environment>/<thread>` Markdown, renders sent references as
+  same-origin thread chips, and teaches the provider-neutral `thread_status` and `thread_read` MCP
+  metadata how to validate and read them on demand.
+- Reason: Make it easy to point an agent or another user at an existing T3 conversation without
+  adding transcript injection, message attachments, or new persisted state.
+- Scope: Fork-owned URI parsing, picker ranking, chip presentation, and focused tests; narrow web
+  composer, command-menu, Markdown sanitizer/renderer, and CSS seams; thread-control MCP tool
+  descriptions; user documentation. Desktop inherits web behavior. Native mobile, contracts,
+  persistence, provider adapters, server queries, and desktop deep-link lifecycle are unchanged.
+- Verification: Passed 90 focused URI, picker, composer trigger/replacement, rendered-link,
+  Markdown safety, and MCP metadata tests; web and server type checks; targeted lint and formatting;
+  and `git diff --check`. In an isolated web environment, confirmed bare and filtered `%` results,
+  current-thread and archive exclusion, draft-route inclusion, keyboard selection into raw Markdown,
+  inert malformed links, same-origin chip navigation and copy metadata, the missing-target fallback,
+  and an embedded `100%` expression that did not open the picker.
+- Upstream conflict map: In `composer-logic.ts`, reapply only the web-local `thread` trigger kind
+  and `%` token branch at the current trigger source of truth. In `ChatComposer.tsx`, preserve
+  upstream state and reconnect shell snapshots, thread items, and selection replacement at the
+  current menu seams. In `ComposerCommandMenu.tsx`, port the `thread` item, icon, and **Threads**
+  group to any replacement menu instead of restoring old JSX.
+- Upstream conflict map: In `ChatMarkdown.tsx`, preserve upstream sanitizer, file-link, and external
+  link behavior, then reapply the canonical `t3code:` allow-list, the sanitized original-href marker
+  used to make malformed raw or Markdown links inert, and the early internal-chip branch. Keep the
+  rendered DOM link on the same-origin route. The adjacent `index.css` change only excludes thread
+  chips from ordinary link decoration and adds their focus treatment.
+- Upstream conflict map: `apps/server/src/mcp/toolkits/threadControl/` and the new
+  `threadReference.ts` and `ThreadReferenceLink.tsx` modules are fork-owned. If upstream ships an
+  equivalent feature, prefer its URI/parser/navigation model and remove redundant fork machinery
+  after verifying `%` selection and provider recognition. Do not resolve conflicts by adding
+  attachments, orchestration schemas, database fields, native mobile tokens, provider prompt
+  rewriting, automatic reads, or external desktop protocol handling.

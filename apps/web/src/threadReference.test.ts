@@ -1,0 +1,172 @@
+import type {
+  EnvironmentProject,
+  EnvironmentThreadShell,
+} from "@t3tools/client-runtime/state/models";
+import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { describe, expect, it } from "vite-plus/test";
+
+import {
+  buildThreadReferenceItems,
+  parseThreadReferenceUri,
+  serializeThreadReferenceMarkdown,
+  serializeThreadReferenceUri,
+  THREAD_REFERENCE_RESULT_LIMIT,
+} from "./threadReference";
+
+const environmentId = EnvironmentId.make("local/environment");
+const otherEnvironmentId = EnvironmentId.make("remote");
+const projectId = ProjectId.make("project-1");
+
+function project(
+  id = projectId,
+  title = "T3 Code",
+  environment = environmentId,
+): EnvironmentProject {
+  return {
+    environmentId: environment,
+    id,
+    title,
+    workspaceRoot: "/workspace/t3code",
+    repositoryIdentity: null,
+    defaultModelSelection: null,
+    scripts: [],
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+  };
+}
+
+function thread(id: string, options: Partial<EnvironmentThreadShell> = {}): EnvironmentThreadShell {
+  return {
+    environmentId,
+    id: ThreadId.make(id),
+    projectId,
+    title: `Thread ${id}`,
+    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5" },
+    runtimeMode: "auto",
+    interactionMode: "default",
+    branch: null,
+    worktreePath: null,
+    latestTurn: null,
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+    archivedAt: null,
+    settledOverride: null,
+    settledAt: null,
+    session: null,
+    latestUserMessageAt: null,
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    hasActionableProposedPlan: false,
+    ...options,
+  };
+}
+
+describe("thread reference URI", () => {
+  it("serializes escaped Markdown and round-trips encoded scoped IDs", () => {
+    const threadRef = {
+      environmentId,
+      threadId: ThreadId.make("thread/with spaces"),
+    };
+    const uri = "t3code://threads/local%2Fenvironment/thread%2Fwith%20spaces";
+
+    expect(serializeThreadReferenceUri(threadRef)).toBe(uri);
+    expect(parseThreadReferenceUri(uri)).toEqual(threadRef);
+    expect(serializeThreadReferenceMarkdown("Fix [copy] \\ now", threadRef)).toBe(
+      `[Fix \\[copy\\] \\\\ now](${uri})`,
+    );
+  });
+
+  it.each([
+    "https://threads/local/thread-1",
+    "t3code://other/local/thread-1",
+    "t3code://user@threads/local/thread-1",
+    "t3code://threads:99/local/thread-1",
+    "t3code://threads/local/thread-1/extra",
+    "t3code://threads//thread-1",
+    "t3code://threads/local/",
+    "t3code://threads/local/thread-1?view=full",
+    "t3code://threads/local/thread-1#turn",
+    "t3code://threads/local/%ZZ",
+    "t3code://threads/%65nv/thread-1",
+    "t3code://threads/local/%74hread-1",
+    "t3code://threads/local/..",
+    "t3code://threads/local/%2E%2E",
+    "t3code://threads/%20/thread-1",
+    "t3code://threads/local/%20",
+  ])("rejects non-canonical destination %s", (destination) => {
+    expect(parseThreadReferenceUri(destination)).toBeNull();
+  });
+});
+
+describe("buildThreadReferenceItems", () => {
+  it("scopes, excludes archived/current threads, sorts, and snapshots labels", () => {
+    const currentThreadId = ThreadId.make("current");
+    const items = buildThreadReferenceItems({
+      environmentId,
+      currentThreadId,
+      query: "",
+      projects: [project(), project(ProjectId.make("other-project"), "Other", otherEnvironmentId)],
+      threads: [
+        thread("older", { title: "Older", updatedAt: "2026-08-01T10:00:00.000Z" }),
+        thread("b", {
+          title: "Beta",
+          branch: "feature/picker",
+          updatedAt: "2026-08-02T10:00:00.000Z",
+        }),
+        thread("a", { title: "Alpha", updatedAt: "2026-08-02T10:00:00.000Z" }),
+        thread("archived", { archivedAt: "2026-08-03T00:00:00.000Z" }),
+        thread("current"),
+        thread("remote", { environmentId: otherEnvironmentId }),
+      ],
+    });
+
+    expect(items.map((item) => item.label)).toEqual(["Alpha", "Beta", "Older"]);
+    expect(items[1]?.description).toBe("T3 Code #feature/picker");
+    expect(serializeThreadReferenceMarkdown(items[0]!.label, items[0]!.threadRef)).toContain(
+      "[Alpha]",
+    );
+  });
+
+  it.each([
+    ["release", "Release checklist"],
+    ["needle-id", "By id"],
+    ["docs project", "By project"],
+    ["feature/needle", "By branch"],
+  ])("searches %s across the fixed metadata", (query, expectedTitle) => {
+    const docsProjectId = ProjectId.make("docs-project-id");
+    const items = buildThreadReferenceItems({
+      environmentId,
+      currentThreadId: null,
+      query,
+      projects: [project(), project(docsProjectId, "Docs Project")],
+      threads: [
+        thread("title", { title: "Release checklist" }),
+        thread("needle-id", { title: "By id" }),
+        thread("project", { title: "By project", projectId: docsProjectId }),
+        thread("branch", { title: "By branch", branch: "feature/needle" }),
+      ],
+    });
+
+    expect(items.map((item) => item.label)).toEqual([expectedTitle]);
+  });
+
+  it("caps results and falls back to the project ID when its shell is absent", () => {
+    const threads = Array.from({ length: THREAD_REFERENCE_RESULT_LIMIT + 5 }, (_, index) =>
+      thread(`thread-${String(index).padStart(2, "0")}`, {
+        projectId: ProjectId.make("missing-project"),
+        updatedAt: `2026-08-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+      }),
+    );
+    const items = buildThreadReferenceItems({
+      environmentId,
+      currentThreadId: null,
+      query: "",
+      projects: [],
+      threads,
+    });
+
+    expect(items).toHaveLength(THREAD_REFERENCE_RESULT_LIMIT);
+    expect(items[0]?.description).toBe("missing-project");
+    expect(items[0]?.threadRef.threadId).toBe("thread-24");
+  });
+});

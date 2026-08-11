@@ -129,6 +129,17 @@ it("declares the complete thread-control surface with the specified annotations"
   expect(Context.get(update.annotations, Tool.OpenWorld)).toBe(false);
 });
 
+it("teaches status and read tools to validate canonical thread references", () => {
+  for (const name of ["thread_status", "thread_read"] as const) {
+    const description = ThreadControlToolkit.tools[name].description ?? "";
+    expect(description).toContain("t3code://threads/<environmentId>/<threadId>");
+    expect(description).toContain("URL-decode both path segments");
+    expect(description).toContain("confirm the decoded environment with thread_context");
+    expect(description).toContain("pass only the decoded <threadId>");
+    expect(description).toContain("belongs to another environment");
+  }
+});
+
 it.effect("publishes every stable public error code", () =>
   decodeErrorCodes([
     "capability_denied",

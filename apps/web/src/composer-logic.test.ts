@@ -108,6 +108,26 @@ describe("detectComposerTrigger", () => {
     });
   });
 
+  it("detects bare and queried thread triggers at token boundaries", () => {
+    expect(detectComposerTrigger("Compare %", "Compare %".length)).toEqual({
+      kind: "thread",
+      query: "",
+      rangeStart: "Compare ".length,
+      rangeEnd: "Compare %".length,
+    });
+    expect(detectComposerTrigger("Compare %release", "Compare %release".length)).toEqual({
+      kind: "thread",
+      query: "release",
+      rangeStart: "Compare ".length,
+      rangeEnd: "Compare %release".length,
+    });
+  });
+
+  it("does not treat a percentage embedded in another token as a thread trigger", () => {
+    expect(detectComposerTrigger("Use 100%", "Use 100%".length)).toBeNull();
+    expect(detectComposerTrigger("value%other", "value%other".length)).toBeNull();
+  });
+
   it("detects @path trigger in the middle of existing text", () => {
     // User typed @ between "inspect " and "in this sentence"
     const text = "Please inspect @in this sentence";
@@ -156,6 +176,32 @@ describe("replaceTextRange", () => {
       text: "hello ",
       cursor: 6,
     });
+  });
+
+  it("replaces an active thread query with raw Markdown and one trailing space", () => {
+    const text = "Compare %release with this";
+    const trigger = detectComposerTrigger(text, "Compare %release".length);
+    expect(trigger?.kind).toBe("thread");
+    const rangeEnd = text[trigger!.rangeEnd] === " " ? trigger!.rangeEnd + 1 : trigger!.rangeEnd;
+
+    expect(
+      replaceTextRange(
+        text,
+        trigger!.rangeStart,
+        rangeEnd,
+        "[Release notes](t3code://threads/local/thread-1) ",
+      ),
+    ).toEqual({
+      text: "Compare [Release notes](t3code://threads/local/thread-1) with this",
+      cursor: "Compare [Release notes](t3code://threads/local/thread-1) ".length,
+    });
+  });
+
+  it("keeps a thread reference expanded as raw composer text", () => {
+    const text = "[Referenced](t3code://threads/local/thread-1) ";
+
+    expect(collapseExpandedComposerCursor(text, text.length)).toBe(text.length);
+    expect(expandCollapsedComposerCursor(text, text.length)).toBe(text.length);
   });
 });
 
