@@ -1,6 +1,7 @@
 import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
-import { Bot, FileDiff, Files, Globe2, Plus, TerminalSquare, X } from "lucide-react";
+import { Bot, FileDiff, Files, Globe2, MessageSquare, Plus, TerminalSquare, X } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
@@ -21,6 +22,7 @@ import { ScrollArea } from "~/components/ui/scroll-area";
 import { faviconUrlForOrigin } from "~/lib/favicon";
 import { useTheme } from "~/hooks/useTheme";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
+import { useThreadShell } from "~/state/entities";
 
 import { PreviewPanelShell, type PreviewPanelMode } from "./preview/PreviewPanelShell";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
@@ -40,6 +42,7 @@ interface RightPanelTabsProps {
   onCloseSurfacesToRight: (surface: RightPanelSurface) => void;
   onCloseAllSurfaces: () => void;
   onCopyFilePath: (relativePath: string) => void;
+  onAddChat: () => void;
   onAddBrowser: () => void;
   onAddTerminal: () => void;
   onAddDiff: () => void;
@@ -90,6 +93,7 @@ function SurfaceMenuItem(props: {
 }
 
 function RightPanelEmptyState(props: {
+  onAddChat: () => void;
   onAddBrowser: () => void;
   onAddTerminal: () => void;
   onAddDiff: () => void;
@@ -101,6 +105,15 @@ function RightPanelEmptyState(props: {
   liveAgentCount: number;
 }) {
   const actions = [
+    {
+      label: "Chat",
+      description: "Start a new side chat.",
+      icon: MessageSquare,
+      available: true,
+      disabledReason: null,
+      onClick: props.onAddChat,
+      badgeCount: 0,
+    },
     {
       label: "Browser",
       description: "Open a local app or URL.",
@@ -220,6 +233,8 @@ function surfaceTitle(
   terminalLabelsById: ReadonlyMap<string, string>,
 ): string {
   switch (surface.kind) {
+    case "chat":
+      return "Chat";
     case "diff":
       return "Diff";
     case "files":
@@ -244,6 +259,40 @@ function surfaceTitle(
       }
     }
   }
+}
+
+function SurfaceTitleButton(props: {
+  surface: RightPanelSurface;
+  sessions: Readonly<Record<string, PreviewSessionSnapshot>>;
+  terminalLabelsById: ReadonlyMap<string, string>;
+  onActivate: (surface: RightPanelSurface) => void;
+}) {
+  const chatRef =
+    props.surface.kind === "chat"
+      ? scopeThreadRef(props.surface.environmentId, props.surface.threadId)
+      : null;
+  const chatThread = useThreadShell(chatRef);
+  const title =
+    props.surface.kind === "chat"
+      ? (chatThread?.title ?? "Chat")
+      : surfaceTitle(props.surface, props.sessions, props.terminalLabelsById);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            className="cursor-pointer flex min-w-0 items-center"
+            onClick={() => props.onActivate(props.surface)}
+          >
+            <span className="truncate">{title}</span>
+          </button>
+        }
+      />
+      <TooltipPopup>{title}</TooltipPopup>
+    </Tooltip>
+  );
 }
 
 function PreviewFavicon({ url }: { url: string | null }) {
@@ -272,6 +321,8 @@ function SurfaceIcon({
   theme: "light" | "dark";
 }) {
   switch (surface.kind) {
+    case "chat":
+      return <MessageSquare className="size-3 shrink-0" />;
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       const url = !snapshot || snapshot.navStatus._tag === "Idle" ? null : snapshot.navStatus.url;
@@ -440,20 +491,12 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     </span>
                     <X className="hidden size-3 group-hover/tab:block group-focus-visible/close:block" />
                   </button>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          type="button"
-                          className="cursor-pointer flex min-w-0 items-center"
-                          onClick={() => props.onActivate(surface)}
-                        >
-                          <span className="truncate">{title}</span>
-                        </button>
-                      }
-                    />
-                    <TooltipPopup>{title}</TooltipPopup>
-                  </Tooltip>
+                  <SurfaceTitleButton
+                    surface={surface}
+                    sessions={props.previewSessions}
+                    terminalLabelsById={props.terminalLabelsById}
+                    onActivate={props.onActivate}
+                  />
                 </div>
               );
             })}
@@ -466,6 +509,10 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                   <Plus className="size-3.5" />
                 </MenuTrigger>
                 <MenuPopup align="start" side="bottom" sideOffset={6} className="min-w-44">
+                  <SurfaceMenuItem available onClick={props.onAddChat}>
+                    <MessageSquare />
+                    Chat
+                  </SurfaceMenuItem>
                   <SurfaceMenuItem
                     available={props.browserAvailable}
                     disabledReason={SURFACE_DISABLED_REASONS.browser}
@@ -508,6 +555,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       <div className="flex min-h-0 flex-1 flex-col" data-right-panel-surface-content>
         {props.activeSurfaceId === null ? (
           <RightPanelEmptyState
+            onAddChat={props.onAddChat}
             onAddBrowser={props.onAddBrowser}
             onAddTerminal={props.onAddTerminal}
             onAddDiff={props.onAddDiff}

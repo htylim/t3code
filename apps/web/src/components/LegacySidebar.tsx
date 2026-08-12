@@ -107,6 +107,8 @@ import { isModelPickerOpen } from "../modelPickerVisibility";
 import { useShortcutModifierState } from "../shortcutModifierState";
 import { ensureLocalApi, readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
+import { useRightPanelStore } from "../rightPanelStore";
+import { confirmSideChatReplacement } from "../sideChatReplacement";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
 
@@ -119,6 +121,7 @@ import { useEnvironment, useEnvironments, usePrimaryEnvironmentId } from "../sta
 import {
   buildThreadRouteParams,
   resolveActiveThreadRouteRef,
+  resolveRightPanelOwnerRef,
   resolveThreadRouteTarget,
 } from "../threadRoutes";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -1055,6 +1058,7 @@ interface SidebarProjectItemProps {
   project: SidebarProjectSnapshot;
   isThreadListExpanded: boolean;
   activeRouteThreadKey: string | null;
+  ownerThreadKey: string | null;
   newThreadShortcutLabel: string | null;
   handleNewThread: ReturnType<typeof useNewThreadHandler>;
   archiveThread: ReturnType<typeof useThreadActions>["archiveThread"];
@@ -1076,6 +1080,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     project,
     isThreadListExpanded,
     activeRouteThreadKey,
+    ownerThreadKey,
     newThreadShortcutLabel,
     handleNewThread,
     archiveThread,
@@ -1091,6 +1096,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     isManualProjectSorting,
     dragHandleProps,
   } = props;
+  const ownerThreadRef = ownerThreadKey ? parseScopedThreadKey(ownerThreadKey) : null;
   const threadSortOrder = useClientSettings<SidebarThreadSortOrder>(
     (settings) => settings.sidebarThreadSortOrder,
   );
@@ -2133,6 +2139,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             ? [{ id: "new-thread-on-branch", label: `New thread on ${thread.branch}` }]
             : []),
           ...(forkEligibility.eligible ? [{ id: "fork", label: "Fork this thread" }] : []),
+          ...(ownerThreadRef && scopedThreadKey(ownerThreadRef) !== threadKey
+            ? [{ id: "open-in-chat-surface", label: "Open in side surface" }]
+            : []),
           { id: "rename", label: "Rename thread" },
           { id: "mark-unread", label: "Mark unread" },
           { id: "copy-path", label: "Copy Path" },
@@ -2177,6 +2186,19 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               description: error instanceof Error ? error.message : "An error occurred.",
             }),
           );
+        }
+        return;
+      }
+
+      if (clicked === "open-in-chat-surface") {
+        if (ownerThreadRef) {
+          const confirmed = await confirmSideChatReplacement({
+            owner: ownerThreadRef,
+            nextTarget: threadRef,
+            confirm: (message) => api.dialogs.confirm(message),
+          });
+          if (!confirmed) return;
+          useRightPanelStore.getState().openChat(ownerThreadRef, threadRef);
         }
         return;
       }
@@ -2243,6 +2265,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       markThreadUnread,
       memberProjectByScopedKey,
       project.workspaceRoot,
+      ownerThreadRef,
       startThreadRename,
     ],
   );
@@ -2788,6 +2811,7 @@ interface SidebarProjectsContentProps {
   expandedThreadListsByProject: ReadonlySet<string>;
   activeRouteProjectKey: string | null;
   routeThreadKey: string | null;
+  rightPanelOwnerKey: string | null;
   newThreadShortcutLabel: string | null;
   commandPaletteShortcutLabel: string | null;
   threadJumpLabelByKey: ReadonlyMap<string, string>;
@@ -2830,6 +2854,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     expandedThreadListsByProject,
     activeRouteProjectKey,
     routeThreadKey,
+    rightPanelOwnerKey,
     newThreadShortcutLabel,
     commandPaletteShortcutLabel,
     threadJumpLabelByKey,
@@ -2970,6 +2995,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                         activeRouteThreadKey={
                           activeRouteProjectKey === project.projectKey ? routeThreadKey : null
                         }
+                        ownerThreadKey={rightPanelOwnerKey}
                         newThreadShortcutLabel={newThreadShortcutLabel}
                         handleNewThread={handleNewThread}
                         archiveThread={archiveThread}
@@ -3003,6 +3029,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                 activeRouteThreadKey={
                   activeRouteProjectKey === project.projectKey ? routeThreadKey : null
                 }
+                ownerThreadKey={rightPanelOwnerKey}
                 newThreadShortcutLabel={newThreadShortcutLabel}
                 handleNewThread={handleNewThread}
                 archiveThread={archiveThread}
@@ -3057,6 +3084,11 @@ export default function LegacySidebar() {
     [routeDraftThread, routeTarget],
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
+  const rightPanelOwnerRef = useMemo(
+    () => resolveRightPanelOwnerRef(routeTarget, routeDraftThread),
+    [routeDraftThread, routeTarget],
+  );
+  const rightPanelOwnerKey = rightPanelOwnerRef ? scopedThreadKey(rightPanelOwnerRef) : null;
   const routeTerminalOpen = useTerminalUiStateStore((state) =>
     routeThreadRef
       ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
@@ -3690,6 +3722,7 @@ export default function LegacySidebar() {
         expandedThreadListsByProject={expandedThreadListsByProject}
         activeRouteProjectKey={activeRouteProjectKey}
         routeThreadKey={routeThreadKey}
+        rightPanelOwnerKey={rightPanelOwnerKey}
         newThreadShortcutLabel={newThreadShortcutLabel}
         commandPaletteShortcutLabel={commandPaletteShortcutLabel}
         threadJumpLabelByKey={visibleThreadJumpLabelByKey}

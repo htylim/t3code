@@ -45,6 +45,12 @@ Repeating either shortcut closes that search, and switching shortcuts replaces t
 to `mod+w` while the right panel is open. In the macOS desktop app, `Cmd+W` does not fall through
 to closing the window; use **File** → **Close Window** or the window controls instead.
 
+`chat.newSide` creates a blank chat in the current main chat's right panel. It copies the current
+project, model options, permission mode, interaction mode, branch, and worktree, and defaults to
+`mod+t` (`Cmd+T` on macOS). Creating another side chat replaces the visible Chat surface without
+deleting or stopping the previous thread. Desktop receives `mod+t`; browsers normally reserve it
+for opening a browser tab, so web users should assign another shortcut.
+
 `project.switch` opens a searchable project picker for the default sidebar. It has no default
 shortcut; add one with the **+** button in **Settings** → **Keybindings**, or run **Switch
 project...** from the command palette. Choosing a project opens its new-chat draft and filters the

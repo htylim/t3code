@@ -19,6 +19,7 @@ interface AskInNewThreadSelectionSurfaceProps {
   readonly sourceThreadRef: ScopedThreadRef;
   readonly sourceThreadTitle: string;
   readonly createThread: (projectRef: ScopedProjectRef) => Promise<void>;
+  readonly createSideThread: (prompt: string) => Promise<void>;
 }
 
 export function AskInNewThreadSelectionSurface({
@@ -29,6 +30,7 @@ export function AskInNewThreadSelectionSurface({
   sourceThreadRef,
   sourceThreadTitle,
   createThread,
+  createSideThread,
 }: AskInNewThreadSelectionSurfaceProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -55,11 +57,16 @@ export function AskInNewThreadSelectionSurface({
 
       void (async () => {
         try {
-          const shouldCreate = await showSelectedTextThreadContextMenu({
+          const action = await showSelectedTextThreadContextMenu({
             position,
             showContextMenu: (items, menuPosition) => api.contextMenu.show(items, menuPosition),
           });
-          if (!shouldCreate) return;
+          if (action === null) return;
+
+          if (action === "ask-in-side-chat") {
+            await createSideThread(prompt);
+            return;
+          }
 
           const store = useComposerDraftStore.getState();
           await createSelectedTextThreadDraft({
@@ -80,7 +87,7 @@ export function AskInNewThreadSelectionSurface({
         }
       })();
     },
-    [createThread, enabled, projectRef, sourceThreadRef, sourceThreadTitle],
+    [createSideThread, createThread, enabled, projectRef, sourceThreadRef, sourceThreadTitle],
   );
 
   return (

@@ -144,6 +144,11 @@ const DEFAULT_BINDINGS = compile([
   },
   { shortcut: modShortcut("o", { shiftKey: true }), command: "chat.new" },
   { shortcut: modShortcut("n", { shiftKey: true }), command: "chat.newLocal" },
+  {
+    shortcut: modShortcut("t"),
+    command: "chat.newSide",
+    whenAst: whenNot(whenIdentifier("terminalFocus")),
+  },
   { shortcut: modShortcut("o"), command: "editor.openFavorite" },
   {
     shortcut: { ...modShortcut("f2"), modKey: false },
@@ -369,6 +374,7 @@ describe("shortcutLabelForCommand", () => {
       "⌘B",
     );
     assert.strictEqual(shortcutLabelForCommand(DEFAULT_BINDINGS, "chat.new", "MacIntel"), "⇧⌘O");
+    assert.strictEqual(shortcutLabelForCommand(DEFAULT_BINDINGS, "chat.newSide", "MacIntel"), "⌘T");
     assert.strictEqual(shortcutLabelForCommand(DEFAULT_BINDINGS, "diff.toggle", "Linux"), "Ctrl+D");
     assert.strictEqual(
       shortcutLabelForCommand(DEFAULT_BINDINGS, "rightPanel.toggle", "MacIntel"),
@@ -578,6 +584,22 @@ describe("chat/editor shortcuts", () => {
     assert.isTrue(
       isChatNewLocalShortcut(event({ key: "n", ctrlKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
         platform: "Linux",
+      }),
+    );
+  });
+
+  it("matches chat.newSide outside terminal focus", () => {
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "t", metaKey: true }), DEFAULT_BINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: false },
+      }),
+      "chat.newSide",
+    );
+    assert.isNull(
+      resolveShortcutCommand(event({ key: "t", metaKey: true }), DEFAULT_BINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: true },
       }),
     );
   });

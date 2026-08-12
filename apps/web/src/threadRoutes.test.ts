@@ -7,6 +7,7 @@ import {
   buildDraftThreadRouteParams,
   buildThreadRouteParams,
   resolveActiveThreadRouteRef,
+  resolveRightPanelOwnerRef,
   resolveThreadRouteRenderState,
   resolveThreadRouteRef,
   resolveThreadRouteTarget,
@@ -92,6 +93,21 @@ describe("threadRoutes", () => {
         promotedTo: null,
       }),
     ).toBeNull();
+  });
+
+  it("uses a draft's reserved thread ref as its right-panel owner", () => {
+    const target = resolveThreadRouteTarget({ draftId: "draft-1" });
+
+    expect(
+      resolveRightPanelOwnerRef(target, {
+        environmentId: "env-1" as never,
+        threadId: ThreadId.make("draft-thread"),
+        promotedTo: null,
+      }),
+    ).toEqual({
+      environmentId: "env-1",
+      threadId: "draft-thread",
+    });
   });
 
   it("keeps shell-only server threads in the loading state", () => {

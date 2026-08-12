@@ -5,6 +5,7 @@ import { buildThreadActionMenuItems, type ThreadActionMenuState } from "./thread
 const baseState: ThreadActionMenuState = {
   branch: null,
   canFork: false,
+  canOpenInChatSurface: false,
   isPinned: false,
   isSettled: false,
   isSnoozed: false,
@@ -42,6 +43,15 @@ describe("buildThreadActionMenuItems", () => {
     expect(withBranch).toContain("copy-branch");
     expect(ids(baseState)).not.toContain("new-thread-on-branch");
     expect(ids(baseState)).not.toContain("copy-branch");
+  });
+
+  it("includes the compact Chat entry only for an eligible sidebar target", () => {
+    expect(ids(baseState)).not.toContain("open-in-chat-surface");
+    expect(
+      buildThreadActionMenuItems({ ...baseState, canOpenInChatSurface: true }).find(
+        (item) => item.id === "open-in-chat-surface",
+      ),
+    ).toMatchObject({ label: "Open in side surface" });
   });
 
   it("flips lifecycle labels with thread state", () => {

@@ -204,6 +204,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.equal(defaultsByCommand.get("sidebar.toggle"), "mod+b");
       assert.equal(defaultsByCommand.get("rightPanel.toggle"), "mod+alt+b");
       assert.equal(defaultsByCommand.get("rightPanel.close"), "mod+w");
+      assert.equal(defaultsByCommand.get("chat.newSide"), "mod+t");
       assert.equal(
         Keybindings.DEFAULT_KEYBINDINGS.find((binding) => binding.command === "rightPanel.close")
           ?.when,

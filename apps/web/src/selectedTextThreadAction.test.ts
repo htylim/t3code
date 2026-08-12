@@ -27,7 +27,7 @@ describe("Ask in new thread prompt", () => {
 });
 
 describe("selected-text context menu", () => {
-  it("returns true only when Ask in new thread is chosen", async () => {
+  it("returns the selected thread action", async () => {
     const showContextMenu = vi.fn().mockResolvedValue("ask-in-new-thread");
 
     await expect(
@@ -35,11 +35,19 @@ describe("selected-text context menu", () => {
         position: { x: 12, y: 24 },
         showContextMenu,
       }),
-    ).resolves.toBe(true);
+    ).resolves.toBe("ask-in-new-thread");
     expect(showContextMenu).toHaveBeenCalledWith(SELECTED_TEXT_THREAD_CONTEXT_MENU_ITEMS, {
       x: 12,
       y: 24,
     });
+
+    showContextMenu.mockResolvedValueOnce("ask-in-side-chat");
+    await expect(
+      showSelectedTextThreadContextMenu({
+        position: { x: 3, y: 4 },
+        showContextMenu,
+      }),
+    ).resolves.toBe("ask-in-side-chat");
 
     showContextMenu.mockResolvedValueOnce(null);
     await expect(
@@ -47,7 +55,14 @@ describe("selected-text context menu", () => {
         position: { x: 1, y: 2 },
         showContextMenu,
       }),
-    ).resolves.toBe(false);
+    ).resolves.toBeNull();
+  });
+
+  it("offers both main-thread and side-chat actions", () => {
+    expect(SELECTED_TEXT_THREAD_CONTEXT_MENU_ITEMS).toEqual([
+      { id: "ask-in-new-thread", label: "Ask in new thread" },
+      { id: "ask-in-side-chat", label: "Ask in side chat" },
+    ]);
   });
 });
 

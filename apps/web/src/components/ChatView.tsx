@@ -133,6 +133,7 @@ import {
   type RightPanelSurface,
   useRightPanelStore,
 } from "../rightPanelStore";
+import { confirmSideChatReplacement } from "../sideChatReplacement";
 import {
   isPreviewSupportedInRuntime,
   setActivePreviewTab,
@@ -338,6 +339,11 @@ import {
   serverUpdateGuidance,
 } from "../versionSkew";
 import { useAssetUrls } from "../assets/assetUrls";
+import { CompactChatSurface } from "./compact-chat/CompactChatSurface";
+import {
+  buildSideChatCreateCommand,
+  compactChatAllowsMainShortcut,
+} from "./compact-chat/CompactChatSurface.logic";
 
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
@@ -451,6 +457,7 @@ const TYPE_TO_FOCUS_FLOATING_LAYER_SELECTOR = [
   '[data-slot="combobox-popup"]',
   '[data-slot="autocomplete-popup"]',
 ].join(",");
+const COMPACT_CHAT_SURFACE_SELECTOR = "[data-compact-chat-surface]";
 
 type EnvironmentUnavailableState = {
   readonly environmentId: EnvironmentId;
@@ -1375,6 +1382,7 @@ function ChatViewContent(props: ChatViewProps) {
   const attachmentPreviewHandoffByMessageIdRef = useRef<Record<string, string[]>>({});
   const attachmentPreviewPromotionInFlightByMessageIdRef = useRef<Record<string, true>>({});
   const sendInFlightRef = useRef(false);
+  const sideChatCreateInFlightRef = useRef(false);
   const terminalUiOpenByThreadRef = useRef<Record<string, boolean>>({});
 
   useLayoutEffect(() => {
@@ -4592,9 +4600,79 @@ function ChatViewContent(props: ChatViewProps) {
     terminalUiOpenByThreadRef.current[activeThreadKey] = current;
   }, [activeThreadKey, focusComposer, terminalUiState.terminalOpen]);
 
+  const openNewSideChat = useCallback(
+    async (prompt?: string) => {
+      if (!activeThreadRef || !activeThread || sideChatCreateInFlightRef.current) {
+        return;
+      }
+
+      sideChatCreateInFlightRef.current = true;
+      const confirmed = await confirmSideChatReplacement({
+        owner: activeThreadRef,
+        confirm: (message) => readLocalApi()?.dialogs.confirm(message) ?? Promise.resolve(false),
+      });
+      if (!confirmed) {
+        sideChatCreateInFlightRef.current = false;
+        return;
+      }
+
+      const target = scopeThreadRef(activeThread.environmentId, newThreadId());
+      const modelSelection =
+        composerRef.current?.getSendContext()?.selectedModelSelection ??
+        activeThread.modelSelection;
+      const result = await createThread(
+        buildSideChatCreateCommand({
+          target,
+          sourceThread: {
+            projectId: activeThread.projectId,
+            modelSelection,
+            runtimeMode,
+            interactionMode,
+            branch: activeThread.branch,
+            worktreePath: activeThread.worktreePath,
+          },
+          createdAt: new Date().toISOString(),
+        }),
+      );
+      sideChatCreateInFlightRef.current = false;
+
+      if (result._tag === "Failure") {
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not create side chat",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+        return;
+      }
+
+      if (prompt !== undefined) {
+        setComposerDraftPrompt(target, prompt);
+      }
+      useRightPanelStore.getState().openChat(activeThreadRef, target);
+    },
+    [
+      activeThread,
+      activeThreadRef,
+      composerRef,
+      createThread,
+      interactionMode,
+      runtimeMode,
+      setComposerDraftPrompt,
+    ],
+  );
+  const addChatSurface = useCallback(() => {
+    void openNewSideChat();
+  }, [openNewSideChat]);
+
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
-      if (preventRepeatedTerminalCloseShortcut(event, keybindings)) {
+      const compactChatOrigin = eventPathContainsSelector(event, COMPACT_CHAT_SURFACE_SELECTOR);
+      if (!compactChatOrigin && preventRepeatedTerminalCloseShortcut(event, keybindings)) {
         event.stopPropagation();
         return;
       }
@@ -4613,6 +4691,7 @@ function ChatViewContent(props: ChatViewProps) {
       };
 
       if (
+        !compactChatOrigin &&
         !shortcutContext.terminalFocus &&
         !shortcutContext.modelPickerOpen &&
         shouldTypeToFocusComposer(event)
@@ -4628,6 +4707,14 @@ function ChatViewContent(props: ChatViewProps) {
         context: shortcutContext,
       });
       if (!command) return;
+      if (compactChatOrigin && !compactChatAllowsMainShortcut(command)) return;
+
+      if (command === "chat.newSide") {
+        event.preventDefault();
+        event.stopPropagation();
+        void openNewSideChat();
+        return;
+      }
 
       if (command === "terminal.toggle") {
         event.preventDefault();
@@ -4750,6 +4837,7 @@ function ChatViewContent(props: ChatViewProps) {
     splitPanelTerminal,
     keybindings,
     onToggleDiff,
+    openNewSideChat,
     rightPanelOpen,
     toggleRightPanel,
     toggleTerminalVisibility,
@@ -6033,7 +6121,15 @@ function ChatViewContent(props: ChatViewProps) {
     </div>
   );
   const rightPanelContent = activeThreadRef ? (
-    activeRightPanelSurface?.kind === "preview" ? (
+    activeRightPanelSurface?.kind === "chat" ? (
+      <CompactChatSurface
+        key={activeRightPanelSurface.id}
+        target={scopeThreadRef(
+          activeRightPanelSurface.environmentId,
+          activeRightPanelSurface.threadId,
+        )}
+      />
+    ) : activeRightPanelSurface?.kind === "preview" ? (
       <Suspense fallback={null}>
         <PreviewPanel
           mode="embedded"
@@ -6181,6 +6277,7 @@ function ChatViewContent(props: ChatViewProps) {
               sourceThreadRef={routeThreadRef}
               sourceThreadTitle={activeThread.title}
               createThread={handleNewThread}
+              createSideThread={openNewSideChat}
             >
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
@@ -6518,6 +6615,7 @@ function ChatViewContent(props: ChatViewProps) {
           onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
           onCloseAllSurfaces={closeAllRightPanelSurfaces}
           onCopyFilePath={copyRightPanelFilePath}
+          onAddChat={addChatSurface}
           onAddBrowser={createBrowserSurface}
           onAddTerminal={addTerminalSurface}
           onAddDiff={addDiffSurface}
@@ -6547,6 +6645,7 @@ function ChatViewContent(props: ChatViewProps) {
             onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
             onCloseAllSurfaces={closeAllRightPanelSurfaces}
             onCopyFilePath={copyRightPanelFilePath}
+            onAddChat={addChatSurface}
             onAddBrowser={createBrowserSurface}
             onAddTerminal={addTerminalSurface}
             onAddDiff={addDiffSurface}

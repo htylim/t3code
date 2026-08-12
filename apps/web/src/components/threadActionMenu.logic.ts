@@ -9,6 +9,7 @@ import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled"
 export type ThreadActionMenuId =
   | "new-thread-on-branch"
   | "fork-thread"
+  | "open-in-chat-surface"
   | "pin"
   | "unpin"
   | "settle"
@@ -27,6 +28,7 @@ export type ThreadActionMenuId =
 export interface ThreadActionMenuState {
   readonly branch: string | null;
   readonly canFork: boolean;
+  readonly canOpenInChatSurface?: boolean;
   readonly isPinned: boolean;
   readonly isSettled: boolean;
   readonly isSnoozed: boolean;
@@ -42,9 +44,8 @@ export interface ThreadActionMenuState {
 }
 
 /**
- * Single source for the per-thread action menu: the sidebar row's right-click
- * menu and the chat header menu both render exactly this list, so labels,
- * ordering, and capability gating cannot drift between the two surfaces.
+ * Shared source for per-thread actions. Callers may opt into surface-specific
+ * entries, such as opening another sidebar thread in the compact Chat panel.
  */
 export function buildThreadActionMenuItems(
   state: ThreadActionMenuState,
@@ -59,6 +60,9 @@ export function buildThreadActionMenuItems(
         ]
       : []),
     ...(state.canFork ? [{ id: "fork-thread" as const, label: "Fork this thread" }] : []),
+    ...(state.canOpenInChatSurface
+      ? [{ id: "open-in-chat-surface" as const, label: "Open in side surface" }]
+      : []),
     ...(state.supports.pinning
       ? [
           state.isPinned

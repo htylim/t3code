@@ -118,6 +118,7 @@ import { useAtomCommand } from "../state/use-atom-command";
 import {
   buildThreadRouteParams,
   resolveActiveThreadRouteRef,
+  resolveRightPanelOwnerRef,
   resolveThreadRouteTarget,
 } from "../threadRoutes";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../timestampFormat";
@@ -178,6 +179,8 @@ import {
   type ComposerThreadDraftState,
   type DraftSessionState,
 } from "../composerDraftStore";
+import { useRightPanelStore } from "../rightPanelStore";
+import { confirmSideChatReplacement } from "../sideChatReplacement";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -1690,6 +1693,10 @@ export default function Sidebar() {
     () => resolveActiveThreadRouteRef(routeTarget, routeDraftThread),
     [routeDraftThread, routeTarget],
   );
+  const rightPanelOwnerRef = useMemo(
+    () => resolveRightPanelOwnerRef(routeTarget, routeDraftThread),
+    [routeDraftThread, routeTarget],
+  );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
   const routeTargetRef = useRef(routeTarget);
   routeTargetRef.current = routeTarget;
@@ -2943,6 +2950,8 @@ export default function Sidebar() {
             buildThreadActionMenuItems({
               branch: thread.branch ?? null,
               canFork: readThreadForkEligibility(threadRef, 0).eligible,
+              canOpenInChatSurface:
+                rightPanelOwnerRef !== null && scopedThreadKey(rightPanelOwnerRef) !== threadKey,
               isPinned,
               isSettled,
               isSnoozed,
@@ -3005,6 +3014,17 @@ export default function Sidebar() {
             }
             return;
           }
+          case "open-in-chat-surface":
+            if (rightPanelOwnerRef) {
+              const confirmed = await confirmSideChatReplacement({
+                owner: rightPanelOwnerRef,
+                nextTarget: threadRef,
+                confirm: (message) => api.dialogs.confirm(message),
+              });
+              if (!confirmed) return;
+              useRightPanelStore.getState().openChat(rightPanelOwnerRef, threadRef);
+            }
+            return;
           case "settle":
             attemptSettle(threadRef);
             return;
@@ -3113,6 +3133,7 @@ export default function Sidebar() {
       handleMultiSelectContextMenu,
       markThreadUnread,
       projectCwdByKey,
+      rightPanelOwnerRef,
       serverConfigs,
       startThreadRename,
       updateThreadMetadata,

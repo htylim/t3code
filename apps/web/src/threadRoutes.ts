@@ -101,3 +101,20 @@ export function resolveActiveThreadRouteRef(
   }
   return draftThread.promotedTo;
 }
+
+/**
+ * Right-panel state may belong to a local draft because its reserved thread
+ * ref remains stable when the first message promotes it to a server thread.
+ */
+export function resolveRightPanelOwnerRef(
+  target: ThreadRouteTarget | null,
+  draftThread: DraftThreadRouteState | null,
+): ScopedThreadRef | null {
+  if (target?.kind === "server") {
+    return target.threadRef;
+  }
+  if (target?.kind !== "draft" || draftThread === null) {
+    return null;
+  }
+  return scopeThreadRef(draftThread.environmentId, draftThread.threadId);
+}

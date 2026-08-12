@@ -1,228 +1,307 @@
-# Independent Chat Surface Product Plan
+# Compact Chat Right-Panel Surface Plan
 
 ## Status
 
-Product plan captured on 2026-08-07. The intended experience, requirements, constraints, and scope
-are recorded here. Implementation design is intentionally deferred until the code work begins.
+Implementation plan agreed on 2026-08-11 for the downstream fork. This replaces the earlier plan
+for a fully independent second instance of the primary chat.
+
+The feature is intentionally smaller so it can remain isolated from upstream's frequently changing
+primary chat implementation and keep future upstream merges manageable.
 
 ## Intent
 
-Allow a user to keep another thread open as a Chat surface in the right panel while continuing to
-use the main chat normally. The secondary chat is a real, independent working conversation rather
-than a transcript preview or a limited companion view.
+Allow a user to open an existing thread as a compact, working Chat surface in the right panel while
+remaining on the current main thread.
 
-The main and secondary chats should feel like two instances of the same chat experience. They may
-show different threads, run work concurrently, hold different unsent drafts, and receive input
-without affecting one another.
+The compact Chat surface is not a second copy of the full application chat. It provides the small
+set of thread-local interactions needed to monitor and continue another thread without navigating
+away from the main chat.
 
-T3 should ultimately support multiple Chat surfaces. A first release may expose only one secondary
-Chat surface, provided the product direction does not treat the singleton limit as permanent.
+## Right-Panel Lifetime
+
+The Chat surface follows the existing right-panel lifetime model. It belongs to the main thread
+from which it was opened, just like that thread's File, Diff, Browser, Terminal, or Agents surfaces.
+
+For example:
+
+1. Main thread A opens thread B in a Chat surface.
+2. The surface is stored in A's existing right-panel state.
+3. Navigating the main view from A to C hides A's entire right panel, including B's Chat surface.
+4. Returning to A restores the surface and its selected tab.
+5. Thread B may continue running while its surface is hidden. Hiding or unmounting the view does not
+   interrupt or otherwise modify B.
+
+The Chat surface does not survive as a globally pinned panel when the main route changes. No new
+application-level panel lifetime or navigation root will be introduced.
 
 ## Desired User Experience
 
-1. A user opens a thread's context menu in the sidebar.
-2. The menu contains **Open in Chat Surface**.
-3. Choosing it opens that thread as a Chat surface in the right panel without navigating the main
-   chat away from its current thread.
-4. The secondary chat shows the same conversation and composer experience expected from the main
-   chat for operations that stay within that thread.
-5. The user can move focus between the main and secondary chats and operate either one directly.
-6. Both threads may have work running at the same time. Updates, approvals, questions, errors, and
-   completion state appear in the chat they belong to.
-7. Navigating the main chat to another thread does not retarget, reset, or close the secondary
-   chat.
-8. Closing the Chat surface closes only that view. It does not stop, delete, settle, or otherwise
-   modify the displayed thread.
-9. Reopening the same thread returns to its existing Chat surface rather than creating an
-   accidental duplicate.
+1. A user opens an existing thread's context menu in the sidebar.
+2. The menu contains **Open in side surface** when the target is eligible.
+3. Choosing it opens the target thread in the current main thread's right panel without navigating
+   the main chat.
+4. The surface shows the target thread's timeline, current work state, and a compact composer.
+5. The user can send plain-text messages, interrupt work, and answer pending approvals or questions
+   from the surface.
+6. Main and side threads may run concurrently. Each view displays updates belonging to its own
+   thread.
+7. Navigating away from the owning main thread hides the surface under the ordinary right-panel
+   lifetime rules. Returning restores it.
+8. Closing the surface closes only the view. It does not stop, delete, settle, or otherwise modify
+   the target thread.
+9. Reopening the same target for the same owning thread activates the existing surface rather than
+   creating a duplicate.
 
-## Product Requirements
+## Surface Identity
 
-### Independent Thread State
+A Chat surface descriptor contains the target environment and thread IDs. Its identity is derived
+from that scoped thread reference, for example `chat:<environment-id>:<thread-id>`.
 
-Each chat must independently preserve and display the state belonging to its own thread, including:
+The surrounding right-panel state remains keyed by the owning main thread through the existing
+`byThreadKey` model. The owner and target therefore have separate meanings:
 
-- Conversation timeline and live progress.
-- Timeline position and local presentation state where users reasonably expect it to survive.
-- Composer text, attachments, and other unsent context.
-- Selected provider, model, effort, runtime mode, and interaction mode.
-- Optimistic messages, send state, and thread-specific errors.
-- Pending approvals and user-input questions.
-- Proposed plans and other thread-local follow-up state.
+- **Owner:** the routed main thread whose right-panel tab set contains the surface.
+- **Target:** the thread displayed and controlled inside the Chat surface.
 
-Activity in one chat must never be attributed to, rendered in, or submitted to the other chat.
+Opening the current main thread as its own Chat surface is unavailable. Showing the same thread in
+both columns would add confusion without providing useful independence.
 
-### Supported Thread-Local Actions
+The first release supports one Chat surface in an owning thread's right panel. Opening a different
+target asks for confirmation before replacing the existing Chat surface. Reopening the current
+target activates it without confirmation. The compact composer draft is thread-scoped, so replacing
+or hiding the surface must not discard unsent text.
 
-The secondary chat must support actions whose target remains the thread displayed in that chat,
-including:
+## First-Release Capabilities
 
-- Sending messages and queued follow-ups.
-- Interrupting the thread's current work.
-- Responding to approvals and user-input requests.
-- Editing and submitting composer attachments and context.
-- Changing model, effort, runtime, and interaction choices when the thread normally permits it.
-- Using provider commands, slash commands, skills, and other composer features that operate on the
-  displayed thread.
-- Refining or continuing plans within the same thread.
-- Reverting or restoring thread checkpoints when the main chat would allow the same operation.
+The compact Chat surface supports:
 
-Feature availability should continue to follow the thread, provider, environment, and project
-capabilities that already govern the main chat. Opening a thread in a Chat surface must not grant
-capabilities that the thread does not otherwise have.
+- Creating a blank side thread from a saved or local-draft main chat through the configurable
+  `chat.newSide` command or the right panel's **Chat** surface action.
+- Creating a prefilled side thread from selected main-chat text through **Ask in side chat**.
+- Snapshotting the main chat's environment, project, model options, runtime/permission mode,
+  interaction mode, branch, and worktree into that new side thread.
+- Loading and displaying the target thread's conversation timeline.
+- Receiving live progress, messages, errors, completion state, approvals, and user-input requests.
+- A persisted, thread-scoped plain-text draft.
+- Sending a plain-text message when the target thread can accept it.
+- Interrupting the target thread's current work.
+- Responding to pending approvals.
+- Responding to pending user-input questions.
+- Clear loading, disconnected, unavailable, and deleted-thread states.
+- A recognizable title that follows ordinary target-thread title changes.
 
-### Actions That Leave the Thread
+All mutations must use the existing client-runtime thread commands and orchestration contracts with
+the target's explicit scoped thread reference. The compact surface must not implement a second
+sending, interruption, approval, or user-input protocol.
 
-The secondary chat is not a second application navigation root. Actions whose result is another
-thread are available only from the main chat in the first release. This includes:
+## Explicit First-Release Limitations
 
-- Creating a new thread.
-- Forking the current thread.
-- Implementing a plan in a new thread.
-- Pull-request or project flows that create a thread or navigate to another thread.
-- Any future action whose primary result is replacing the current thread with a different one.
+The compact Chat surface does not support:
 
-These actions should be absent or clearly unavailable in the secondary chat. They must never fall
-back to navigating or replacing the main chat.
+- Forking the target thread.
+- Implementing a plan in another thread.
+- Pull-request or project actions that create or navigate to another thread.
+- Checkpoint revert or restore.
+- Composer attachments, images, terminal context, element context, preview annotations, or review
+  comments.
+- File, skill, command, or thread-reference pickers.
+- App-owned slash-command behavior.
+- Changing provider, model, effort, runtime mode, or interaction mode.
+- Queued follow-up messages while the target cannot accept a new message.
+- Opening Files, Diff, Browser, Terminal, Agents, or another Chat surface from inside the compact
+  Chat surface.
+- A nested sidebar, project navigation, branch toolbar, or other application navigation controls.
+- Full primary-chat keyboard-command parity.
 
-### Focus and Command Targeting
+Plans and other rich thread output may appear in the timeline as ordinary rendered thread content,
+but the compact surface does not add their specialized follow-up controls in the first release.
 
-The user must always be able to tell which chat will receive an action. Direct interaction with a
-chat makes that chat the target for chat-local keyboard commands and composer operations.
+Unavailable features must be absent or clearly disabled. They must never fall back to operating on
+the owning main thread.
 
-When the secondary chat has focus, a thread-local command must act on the secondary thread. When
-the main chat has focus, it must act on the main thread. Workspace-wide commands may retain their
-existing application-wide behavior, but they must not infer a thread target incorrectly from the
-main route when the command is meant for the focused chat.
+## Compact Implementation
 
-No shortcut, command-palette action, composer action, or automatic focus behavior may silently
-send input to the wrong chat.
+The feature will use a fork-owned compact implementation rather than refactoring the primary
+`ChatView` and `ChatComposer` into a reusable application framework.
 
-### Other Right-Panel Surfaces
+The implementation should:
 
-When an action originating from a secondary chat opens another thread-related surface, that
-surface must use the secondary thread's context. For example, Diff, Files, Browser, Terminal, Plan,
-or Agents opened from secondary thread B must not show or operate on main thread A merely because A
-is the routed thread.
+- Add a small `CompactChatSurface`-style component that always receives its target thread
+  explicitly.
+- Reuse existing thread projections, commands, stores, and stable leaf presentation components
+  where useful.
+- Use the existing thread-scoped composer draft state as the single source of truth where its APIs
+  support the compact editor without importing the full primary composer.
+- Keep surface-specific presentation state inside fork-owned modules.
+- Avoid reading the target from router parameters.
+- Avoid navigation calls from the compact surface.
+- Avoid copying `ChatView`, `ChatComposer`, or their large controller logic wholesale.
 
-Opening another surface may temporarily replace the visible Chat surface within the right panel,
-as ordinary surface tab selection does today. The Chat surface must remain available so the user
-can return to the same secondary conversation.
+Some small visual or interaction components may resemble or reuse pieces of the main chat, but the
+compact surface is intentionally a separate, limited product surface. It does not promise automatic
+feature parity with every future upstream addition to the primary chat.
 
-If a particular related surface cannot be safely targeted to the secondary thread in the first
-release, its entry point must be unavailable from the secondary chat rather than operating on the
-wrong thread.
+## Shortcut and Focus Rules
 
-### Surface Identity and Lifetime
+The main `ChatView` currently installs a capture-phase global keyboard handler. Without a guard,
+configured shortcuts pressed while interacting with the compact Chat surface could operate on the
+owning main thread.
 
-- A Chat surface is identified by the environment and thread it displays.
-- The surface title should make the displayed thread recognizable and should follow ordinary title
-  changes.
-- The main chat and a Chat surface may display threads from different projects or environments.
-- Opening the thread already displayed in the main chat as a secondary Chat surface should be
-  prevented; showing the same thread twice provides no useful independence.
-- Navigating or refreshing the main chat should not change the secondary Chat surface's target.
-- If the secondary thread becomes unavailable, deleted, or disconnected, the surface should show a
-  clear state and offer a safe way to close it. It must not silently display another thread.
+The compact surface will mark its root element so the existing global handler can recognize the
+event origin.
 
-## Reuse Requirement
+When a keyboard event originates inside the compact Chat surface:
 
-The main and secondary chats must share one chat experience. The secondary chat must not be built
-as a copied or permanently reduced implementation that will drift as the main chat evolves.
+- Ordinary typing and editing remain local to its editor.
+- Its local submit behavior targets only the compact surface's target thread.
+- Right-panel commands that operate on the containing panel, such as closing the active surface,
+  may continue to work.
+- `chat.newSide` may create and replace the side target owned by the current main chat.
+- Application-wide commands may retain their existing application-wide behavior where that is
+  unambiguous.
+- Main-thread terminal commands, Diff toggle, model-picker toggle, project-script shortcuts, and
+  other thread- or workspace-targeted commands are ignored.
 
-Work may first be required to make the existing main chat reusable in more than one place. That
-foundational work is part of this feature, and preserving the existing main-chat behavior during
-the transition is a requirement.
+The compact surface does not register a competing global shortcut handler. It owns only local editor
+and control interactions. No key pressed from inside it may silently send input to or mutate the
+owning main thread.
 
-The primary and secondary roles may intentionally expose different navigation capabilities, but
-thread-local behavior should come from the same product surface and remain consistent between
-them.
+## Related Right-Panel Surfaces
 
-## Fixed Product Decisions
+The first release exposes no entry points from the compact Chat surface to Files, Diff, Browser,
+Terminal, Agents, or other thread-related surfaces.
 
-| Area                    | Decision                                                                            |
-| ----------------------- | ----------------------------------------------------------------------------------- |
-| Entry point             | **Open in Chat Surface** in the individual thread context menu                      |
-| Main behavior           | Opening a Chat surface does not navigate or replace the main chat                   |
-| Independence            | Main and secondary chats have separate thread, composer, focus, and live-work state |
-| Local actions           | Supported when they continue operating on the displayed thread                      |
-| Thread-changing actions | Main chat only in the first release                                                 |
-| Related surfaces        | Must use the originating chat's thread context or be unavailable                    |
-| Main navigation         | Does not retarget or close an existing Chat surface                                 |
-| Closing                 | Closes only the surface; it does not mutate the thread                              |
-| Reuse                   | Main and secondary chats share the same reusable chat experience                    |
-| First release           | One secondary Chat surface is acceptable                                            |
-| Product direction       | Multiple independent Chat surfaces are desired                                      |
-| Clients                 | Web and desktop first; mobile is separate future work                               |
+This is deliberate. Existing related surfaces contain assumptions about the routed main thread.
+Disabling those entry points avoids accidentally showing or mutating the owning thread's context and
+keeps the downstream patch narrow. Explicit target-aware related surfaces may be evaluated later as
+separate features.
 
-## First-Release Scope
+## Target Availability
 
-The first release is complete when one independent secondary Chat surface can be opened from a
-thread menu and used for the full set of supported thread-local interactions while the main chat
-continues to operate normally.
+If the target thread is deleted, becomes unavailable, or its environment disconnects, the Chat
+surface must remain bound to that exact target and show a clear state. It must never silently display
+the owning thread or another available thread.
 
-It is acceptable for the first release to replace the existing secondary Chat surface when the
-user chooses another thread. The user should not lose unsent thread-specific composer content as a
-result, and the product must not imply that multiple Chat surfaces are ruled out permanently.
+The user must always be able to close an unavailable Chat surface safely. Reconnection may restore
+the target in place when the existing client-runtime state does so normally.
 
-The first release should work in the web client and in desktop, which inherits the web experience.
-Narrow layouts may present the right panel as an overlay rather than showing two chats side by
-side, but thread independence and correct command targeting still apply.
+## Upstream Synchronization Strategy
 
-## Future Scope
+This feature is a downstream fork addition and should minimize edits to upstream-owned hotspots.
 
-After the independent single-surface experience is established, allow several Chat surfaces to be
-open as separate right-panel tabs. Each one should retain its own target and local presentation
-state, and selecting one should make it the active secondary chat without changing the main chat.
+Most behavior should live in new fork-owned modules. Existing files should receive only narrow
+integration seams for:
 
-The first-release product model must not make this extension require redefining what a Chat surface
-is or how independence works.
+- The `chat` right-panel surface descriptor and persistence handling.
+- Right-panel tab title, icon, activation, closing, and rendering.
+- **Open in side surface** in the web sidebar thread menus.
+- The configurable `chat.newSide` command, defaulting to `mod+t` outside terminal focus.
+- **Chat** in the right-panel surface controls and **Ask in side chat** for selected message text.
+- The global-keyboard-handler origin guard.
 
-## What We Are Not Doing
+The implementation should avoid:
 
-- Building a read-only transcript preview.
-- Building a secondary chat with a separate, drifting implementation.
-- Allowing secondary-chat actions to navigate or replace the main chat.
-- Showing the same thread simultaneously in the main and secondary chats.
-- Treating the secondary chat as a nested application with its own sidebar or project navigation.
-- Adding mobile support in the first release.
-- Requiring multiple simultaneous Chat surfaces in the first release.
-- Defining the implementation architecture, file changes, state model, migrations, or test layout
-  in this product plan.
+- A broad `ChatView` decomposition.
+- A replacement composer architecture.
+- New server orchestration or provider protocols.
+- New contracts when existing explicit thread commands are sufficient.
+- Route or application-layout changes for global panel persistence.
+- Duplicated copies of large upstream components.
 
-## Product-Level Delivery Plan
+The goal is not zero downstream maintenance. The goal is to keep conflicts visible, small, and near
+stable integration points while preventing semantic drift in thread mutations.
 
-### 1. Establish a Reusable Chat Experience
+## Fixed Decisions
 
-Make the existing chat experience usable as both a primary and secondary chat while preserving the
-current behavior of the main chat. Confirm that the two roles can intentionally differ only where
-the secondary role forbids navigation to another thread.
+| Area                | Decision                                                                |
+| ------------------- | ----------------------------------------------------------------------- |
+| Entry point         | Thread menu, right-panel Chat action, selected text, or `chat.newSide`  |
+| Panel lifetime      | Same owner-thread-scoped lifetime as existing right-panel surfaces      |
+| Main navigation     | Hides the owner's Chat surface; returning to the owner restores it      |
+| Target              | Explicit environment and thread IDs stored in the surface descriptor    |
+| Implementation      | Separate fork-owned compact UI, not a reusable full `ChatView` refactor |
+| First-release count | One Chat surface per owning thread; a different target replaces it      |
+| Composer            | Persisted plain-text draft and direct send only                         |
+| Thread controls     | Send, interrupt, approvals, and user-input responses                    |
+| Related surfaces    | Unavailable from the compact Chat surface                               |
+| Shortcuts           | Local editor controls plus safe panel/application commands only         |
+| Closing             | Closes only the view and never mutates the target thread                |
+| Clients             | Web and desktop first; mobile is out of scope                           |
 
-### 2. Deliver One Independent Chat Surface
+## Delivery Plan
 
-Add the thread-menu entry and one secondary Chat surface. Validate independent live work,
-composer state, approvals, focus, thread-local commands, main-thread navigation, surface closing,
-and unavailable-thread behavior.
+### 1. Add the Surface Model
 
-### 3. Extend to Multiple Chat Surfaces
+Add the Chat surface descriptor, owner-thread persistence behavior, deduplication, replacement, tab
+presentation, and unavailable-target handling to the existing right-panel model.
 
-Allow more than one secondary Chat surface after the single-surface experience is stable. Preserve
-the same independence rules rather than introducing a second model for multiple tabs.
+### 2. Build the Compact Thread View
 
-Implementation planning for each stage will be added separately after the product plan is reviewed.
+Create the fork-owned timeline and compact composer against explicit target-thread state. Add
+plain-text sending, interruption, approvals, user-input responses, status, errors, and persisted
+draft behavior using existing client-runtime commands.
+
+### 3. Add Entry Points and Shortcut Safety
+
+Add the eligible thread-menu action to both web sidebars. Mark the compact surface and filter
+main-chat global shortcuts by event origin while preserving safe right-panel and application-wide
+commands.
+
+### 4. Verify Isolation and Upstream Boundaries
+
+Use focused tests to prove that every compact-surface mutation targets the descriptor's target
+thread, never the owning routed thread. Verify ordinary right-panel lifetime behavior, hidden-thread
+continuation, draft restoration, target deletion, and closing semantics. Review the final diff to
+keep upstream-owned changes narrow.
 
 ## Acceptance Criteria
 
-- Main thread A and secondary thread B can both be visible and can run work concurrently.
-- Sending or interrupting from either chat affects only its displayed thread.
-- Draft text and attachments in one composer do not appear in the other.
-- Approval and user-input responses are submitted to the correct thread.
-- Thread-local shortcuts and commands follow the chat the user is interacting with.
-- Navigation-producing actions are unavailable in the secondary chat and cannot redirect the main
-  chat accidentally.
-- Navigating the main chat away from A leaves secondary thread B open and unchanged.
-- A related surface opened from B either uses B's context or is unavailable.
-- Closing the Chat surface leaves thread B and its running work untouched.
-- Deleting or losing access to B never causes the surface to display a different thread.
-- The main chat retains its existing behavior after becoming reusable.
-- Web and desktop present the same feature behavior, subject to their existing layout differences.
+- A saved or local-draft main chat can create a blank side thread through `chat.newSide` without
+  navigating, inheriting its current project, model options, runtime/permission mode, interaction
+  mode, branch, and worktree.
+- The right-panel **Chat** action creates the same blank side thread.
+- **Ask in side chat** creates that side thread with the selected-text prompt prefilled and unsent.
+- Main thread A can open existing thread B in a compact Chat surface without navigating away.
+- The surface is stored with A's other right-panel state.
+- Navigating from A to C hides B's Chat surface, and returning to A restores it.
+- B may continue running while the surface is hidden.
+- The surface displays B's timeline and live state, never A's.
+- Sending and interrupting from the surface affect only B.
+- Approval and user-input responses from the surface affect only B.
+- Unsent plain text survives tab changes, replacement, hiding, and reopening according to the
+  thread-scoped draft store.
+- Unsupported controls and related-surface entry points are absent or disabled.
+- Typing and local submit behavior in the surface cannot target A.
+- Allowed panel shortcuts operate on the panel; ignored thread-specific shortcuts do not operate on
+  A while focus is inside the compact surface.
+- Closing the surface leaves B and its running work untouched.
+- Deleting or losing access to B never causes the surface to display another thread.
+- Reopening B for owner A activates the existing surface rather than creating a duplicate.
+- Opening another target for owner A replaces the previous Chat surface without discarding that
+  target's persisted draft, but only after confirmation.
+- Web and desktop expose the same behavior through the shared web client.
+- The implementation adds no mobile behavior, provider protocol, server orchestration, or global
+  panel lifetime.
+
+## Future Possibilities
+
+Future work may independently consider:
+
+- Multiple Chat tabs per owning thread.
+- Attachments or richer composer controls.
+- Target-aware related surfaces opened from the compact chat.
+- Selected additional local shortcuts.
+- Rich plan and checkpoint interactions.
+
+These are additions to the compact surface, not commitments to turn it into a second full primary
+chat.
+
+## What We Are Not Doing
+
+- Building a globally pinned secondary chat that survives main-thread navigation.
+- Refactoring the entire primary chat into a reusable multi-instance framework.
+- Copying the full primary `ChatView` or `ChatComposer` implementation.
+- Promising feature parity with the primary chat.
+- Letting compact-surface actions fall back to the routed main thread.
+- Adding nested application navigation.
+- Adding mobile support in the first release.

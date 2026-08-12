@@ -162,6 +162,7 @@ describe("KeybindingsSettings.logic", () => {
     expect(options).toEqual(
       expect.arrayContaining([
         "chat.new",
+        "chat.newSide",
         "project.switch",
         "thread.rename",
         "script.setup-db.run",

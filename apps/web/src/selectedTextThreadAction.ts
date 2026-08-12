@@ -4,10 +4,11 @@ import type { DraftId } from "./composerDraftStore";
 import { chatMarkdownClipboardPayload } from "./markdown-clipboard";
 import { serializeThreadReferenceMarkdown } from "./threadReference";
 
-export type SelectedTextThreadAction = "ask-in-new-thread";
+export type SelectedTextThreadAction = "ask-in-new-thread" | "ask-in-side-chat";
 
 export const SELECTED_TEXT_THREAD_CONTEXT_MENU_ITEMS = [
   { id: "ask-in-new-thread", label: "Ask in new thread" },
+  { id: "ask-in-side-chat", label: "Ask in side chat" },
 ] as const satisfies readonly ContextMenuItem<SelectedTextThreadAction>[];
 
 function nodeElement(node: Node): Element | null {
@@ -73,11 +74,8 @@ export async function showSelectedTextThreadContextMenu(input: {
     items: readonly ContextMenuItem<SelectedTextThreadAction>[],
     position: { readonly x: number; readonly y: number },
   ) => Promise<SelectedTextThreadAction | null>;
-}): Promise<boolean> {
-  return (
-    (await input.showContextMenu(SELECTED_TEXT_THREAD_CONTEXT_MENU_ITEMS, input.position)) ===
-    "ask-in-new-thread"
-  );
+}): Promise<SelectedTextThreadAction | null> {
+  return input.showContextMenu(SELECTED_TEXT_THREAD_CONTEXT_MENU_ITEMS, input.position);
 }
 
 export async function createSelectedTextThreadDraft(input: {

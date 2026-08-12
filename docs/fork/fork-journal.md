@@ -349,3 +349,51 @@ upstream.
   ships an equivalent selection action, remove the wrapper and fork-owned files rather than
   merging both implementations. Do not add attachment schemas, message offsets, or server state to
   retain this behavior.
+
+## 2026-08-11 — Add compact Chat right-panel surface
+
+- Upstream baseline: `2e381a50ad`
+- Change: Web and desktop thread context menus can open one different existing thread in the
+  owning thread's right panel. The fork-owned compact surface shows the target's live timeline,
+  persists a plain-text target-scoped draft, and supports direct send, interrupt, approvals, and
+  user-input responses without navigating the main chat.
+- Reason: Let users monitor and continue a second thread while keeping the primary thread in view,
+  without cloning or refactoring upstream's full Chat surface.
+- Scope: Fork-owned compact Chat UI and target-command builders; narrow right-panel descriptor,
+  tab, sidebar-menu, render, and global-shortcut seams; user documentation. Desktop inherits the
+  shared web behavior. Mobile, contracts, server orchestration, providers, related right-panel
+  surfaces, and global panel lifetime are unchanged.
+- Verification: Passed 45 focused right-panel, menu, target-isolation, availability, and shortcut
+  tests; the web type check; targeted lint and formatting; and `git diff --check`. Browser testing
+  was not run because it was not requested.
+- Upstream conflict map: `components/compact-chat/` is fork-owned. In `rightPanelStore.ts`, preserve
+  only the `chat` descriptor, one-per-owner replacement, self-target guard, and migration
+  validation. In both sidebars, preserve only the eligible context-menu action. In `ChatView.tsx`,
+  preserve the explicit-target render branch and compact-origin shortcut filter. In
+  `RightPanelTabs.tsx`, preserve the Chat icon and target-title leaf subscription. If upstream
+  ships a target-aware secondary chat, prefer it and remove the fork surface rather than merging
+  full-chat behavior into this compact implementation.
+
+## 2026-08-12 — Add blank side-chat creation
+
+- Upstream baseline: `2e381a50ad`
+- Change: Renamed the thread-menu action to **Open in side surface** and added `chat.newSide`,
+  defaulting to `mod+t`, which creates a blank right-panel chat from either a saved main thread or
+  its local draft. The right-panel surface controls expose the same action, and selected main-chat
+  text can create a prefilled side chat through **Ask in side chat**. Replacing an existing side
+  target requires confirmation; reopening the same target does not.
+- Reason: Make a side chat useful before another thread exists and make the action reachable from
+  a configurable keyboard shortcut.
+- Scope: Shared keybinding contracts and defaults, draft-aware right-panel ownership in both web
+  sidebars, blank and selected-text thread creation from `ChatView`, right-panel surface controls,
+  focused tests, and user documentation. The new thread snapshots the main chat's project, model
+  options, runtime/permission mode, interaction mode, branch, and worktree. Server orchestration,
+  provider adapters, desktop-specific code, and mobile remain unchanged.
+- Verification: Passed 150 focused contract, server keybinding, web keybinding, routing, menu,
+  right-panel, and compact Chat tests for the initial implementation, then 43 focused selected-text,
+  right-panel, and compact Chat tests after adding the new entry points, plus 47 focused replacement,
+  selected-text, right-panel, and compact Chat tests after adding confirmation. Passed affected type
+  checks, targeted lint and formatting, and `git diff --check`. In an isolated web environment,
+  confirmed blank creation through the Chat card, Chat availability in the `+` menu, a selected-text
+  side chat with the source reference and Markdown quote prefilled but unsent, replacement Cancel and
+  Confirm behavior, and same-target reopening without a dialog.
