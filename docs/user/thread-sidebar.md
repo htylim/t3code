@@ -16,8 +16,9 @@ their pinned threads keep the default newest-first order below the ones you have
 
 On web and desktop, open a different thread's context menu and choose **Open in side surface**.
 The thread opens in the current chat's right panel without changing the main chat. You can follow
-its live timeline, send a plain-text message, stop its current work, and answer approvals or
-questions.
+its live timeline, send a message, stop its current work, and answer approvals or questions. The
+side-chat composer supports the same `%` thread references, `$` skills, and `@` file or folder
+references as the main composer.
 
 Press `mod+t` (`Cmd+T` on macOS, `Ctrl+T` elsewhere) to create a blank side chat from the current
 main chat. It inherits the main chat's environment, project, model and model options, permission
@@ -36,5 +37,6 @@ not stop or delete the thread.
 
 Each main thread can hold one Chat surface. Opening a different target replaces the previous Chat
 surface after you confirm the replacement, while each target's unsent text remains saved. Reopening
-the current target does not ask for confirmation. The compact composer does not include attachments,
-provider or model controls, plan actions, checkpoint restore, or links to other right-panel surfaces.
+the current target does not ask for confirmation. The compact composer does not include image
+attachments, provider or model controls, plan actions, checkpoint restore, or links to other
+right-panel surfaces.

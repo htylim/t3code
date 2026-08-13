@@ -30,5 +30,5 @@ your question before submitting it.
 
 Selections that cross message boundaries keep the normal system context menu instead.
 
-Thread references are available in the web and desktop composers. The native iOS and Android
-composers do not offer the `%` picker in this version.
+Thread references are available in the web and desktop main and side-chat composers. The native
+iOS and Android composers do not offer the `%` picker in this version.

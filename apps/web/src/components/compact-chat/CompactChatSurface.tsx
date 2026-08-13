@@ -28,12 +28,22 @@ import {
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type SyntheticEvent,
 } from "react";
 
 import { useAssetUrls } from "~/assets/assetUrls";
+import {
+  clampCollapsedComposerCursor,
+  collapseExpandedComposerCursor,
+  detectComposerTrigger,
+  expandCollapsedComposerCursor,
+  replaceTextRange,
+  type ComposerTrigger,
+} from "~/composer-logic";
 import { useComposerDraftStore, useComposerThreadDraft } from "~/composerDraftStore";
+import { useTheme } from "~/hooks/useTheme";
+import { useComposerPathSearch } from "~/lib/composerPathSearchState";
 import {
   buildPendingUserInputAnswers,
   setPendingUserInputCustomAnswer,
@@ -48,23 +58,35 @@ import {
   deriveWorkLogEntries,
 } from "~/session-logic";
 import { useEnvironment } from "~/state/environments";
-import { useProject, useThread } from "~/state/entities";
+import { readProject, readThreadShells, useProject, useThread } from "~/state/entities";
 import { threadEnvironment, useEnvironmentThread } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
 import type { ChatMessage } from "~/types";
 import { cn, newMessageId } from "~/lib/utils";
+import { basenameOfPath } from "~/pierre-icons";
+import { formatProviderSkillDisplayName } from "~/providerSkillPresentation";
+import { searchProviderSkills } from "~/providerSkillSearch";
+import { buildThreadReferenceItems } from "~/threadReference";
 import ChatMarkdown from "~/components/ChatMarkdown";
+import {
+  type ComposerPromptEditorHandle,
+  ComposerPromptEditor,
+} from "~/components/ComposerPromptEditor";
+import {
+  type ComposerCommandItem,
+  ComposerCommandMenu,
+} from "~/components/chat/ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "~/components/chat/ComposerPendingApprovalActions";
 import { ComposerPendingApprovalPanel } from "~/components/chat/ComposerPendingApprovalPanel";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Textarea } from "~/components/ui/textarea";
 
 import {
   buildCompactChatApprovalCommand,
   buildCompactChatInterruptCommand,
   buildCompactChatStartTurnCommand,
   buildCompactChatUserInputCommand,
+  compactChatComposerItemReplacement,
   compactChatCanSend,
 } from "./CompactChatSurface.logic";
 
@@ -84,7 +106,7 @@ function blockCompactTimelineInteraction(event: SyntheticEvent<HTMLElement>): vo
   event.stopPropagation();
 }
 
-function blockCompactTimelineKeyDown(event: KeyboardEvent<HTMLElement>): void {
+function blockCompactTimelineKeyDown(event: ReactKeyboardEvent<HTMLElement>): void {
   if (event.key === "Enter" || event.key === " ") {
     blockCompactTimelineInteraction(event);
   }
@@ -209,6 +231,7 @@ function CompactUserInput(props: {
 }
 
 export function CompactChatSurface({ target }: CompactChatSurfaceProps) {
+  const { resolvedTheme } = useTheme();
   const environment = useEnvironment(target.environmentId);
   const threadState = useEnvironmentThread(target.environmentId, target.threadId);
   const thread = useThread(target);
@@ -229,8 +252,17 @@ export function CompactChatSurface({ target }: CompactChatSurfaceProps) {
   const [interrupting, setInterrupting] = useState(false);
   const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [composerCursor, setComposerCursor] = useState(() =>
+    collapseExpandedComposerCursor(draft.prompt, draft.prompt.length),
+  );
+  const [composerTrigger, setComposerTrigger] = useState<ComposerTrigger | null>(() =>
+    detectComposerTrigger(draft.prompt, draft.prompt.length),
+  );
+  const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLiveRef = useRef(true);
+  const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
+  const composerSelectLockRef = useRef(false);
 
   const messages = thread?.messages ?? [];
   const activities = thread?.activities ?? [];
@@ -276,15 +308,17 @@ export function CompactChatSurface({ target }: CompactChatSurfaceProps) {
   const activeApproval = pendingApprovals[0] ?? null;
   const activeUserInput = pendingUserInputs[0] ?? null;
   const connected = environment?.connection.phase === "connected";
+  const selectedProviderStatus =
+    thread === null
+      ? undefined
+      : environment?.serverConfig?.providers.find(
+          (provider) =>
+            provider.instanceId ===
+            (thread.session?.providerInstanceId ?? thread.modelSelection.instanceId),
+        );
   const providerAvailable =
-    thread !== null &&
-    environment?.serverConfig?.providers.some(
-      (provider) =>
-        provider.instanceId ===
-          (thread.session?.providerInstanceId ?? thread.modelSelection.instanceId) &&
-        provider.enabled &&
-        provider.availability !== "unavailable",
-    ) === true;
+    selectedProviderStatus?.enabled === true &&
+    selectedProviderStatus.availability !== "unavailable";
   const running = thread?.session?.status === "running" || thread?.session?.status === "starting";
   const hasPendingRequest = activeApproval !== null || activeUserInput !== null;
   const canSend = compactChatCanSend({
@@ -298,6 +332,95 @@ export function CompactChatSurface({ target }: CompactChatSurfaceProps) {
   const threadStateError = Option.getOrNull(threadState.error);
   const hasOlderTurns = threadHasOlderTurns(threadState);
   const loadingOlder = threadState.page._tag === "Some" && threadState.page.value.loadingOlder;
+  const composerCwd = thread?.worktreePath ?? project?.workspaceRoot ?? null;
+  const pathTriggerQuery = composerTrigger?.kind === "path" ? composerTrigger.query : "";
+  const workspaceEntries = useComposerPathSearch({
+    environmentId: target.environmentId,
+    cwd: composerTrigger?.kind === "path" ? composerCwd : null,
+    query: composerTrigger?.kind === "path" ? pathTriggerQuery : null,
+  });
+  const threadReferenceItems = useMemo(() => {
+    if (composerTrigger?.kind !== "thread") return [];
+    const threads = readThreadShells().filter(
+      (candidate) => candidate.environmentId === target.environmentId,
+    );
+    const projects = [
+      ...new Map(
+        threads.flatMap((candidate) => {
+          const candidateProject = readProject({
+            environmentId: target.environmentId,
+            projectId: candidate.projectId,
+          });
+          return candidateProject ? [[candidateProject.id, candidateProject] as const] : [];
+        }),
+      ).values(),
+    ];
+    return buildThreadReferenceItems({
+      environmentId: target.environmentId,
+      currentThreadId: target.threadId,
+      query: composerTrigger.query,
+      threads,
+      projects,
+    });
+  }, [composerTrigger, target.environmentId, target.threadId]);
+  const composerMenuItems = useMemo<ComposerCommandItem[]>(() => {
+    if (composerTrigger?.kind === "thread") {
+      return threadReferenceItems.map((item) => ({
+        ...item,
+        id: `thread:${item.threadRef.environmentId}:${item.threadRef.threadId}`,
+        type: "thread" as const,
+      }));
+    }
+    if (composerTrigger?.kind === "path") {
+      return workspaceEntries.entries.map((entry) => ({
+        id: `path:${entry.kind}:${entry.path}`,
+        type: "path" as const,
+        path: entry.path,
+        pathKind: entry.kind,
+        label: basenameOfPath(entry.path),
+        description: entry.path.slice(0, Math.max(0, entry.path.lastIndexOf("/"))),
+      }));
+    }
+    if (composerTrigger?.kind === "skill" && selectedProviderStatus) {
+      return searchProviderSkills(selectedProviderStatus.skills ?? [], composerTrigger.query).map(
+        (skill) => ({
+          id: `skill:${selectedProviderStatus.driver}:${skill.name}`,
+          type: "skill" as const,
+          provider: selectedProviderStatus.driver,
+          skill,
+          label: formatProviderSkillDisplayName(skill),
+          description:
+            skill.shortDescription ??
+            skill.description ??
+            (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
+        }),
+      );
+    }
+    return [];
+  }, [composerTrigger, selectedProviderStatus, threadReferenceItems, workspaceEntries.entries]);
+  const activeComposerMenuItem =
+    composerMenuItems.find((item) => item.id === composerHighlightedItemId) ??
+    composerMenuItems[0] ??
+    null;
+  const composerMenuEmptyState =
+    composerTrigger?.kind === "skill"
+      ? "No skills found."
+      : composerTrigger?.kind === "thread"
+        ? "No matching threads."
+        : "No matching files or folders.";
+  const isComposerMenuLoading =
+    composerTrigger?.kind === "path" && pathTriggerQuery.length > 0 && workspaceEntries.isPending;
+
+  useEffect(() => {
+    setComposerCursor((current) => clampCollapsedComposerCursor(draft.prompt, current));
+  }, [draft.prompt]);
+
+  useEffect(() => {
+    const nextCursor = collapseExpandedComposerCursor(draft.prompt, draft.prompt.length);
+    setComposerCursor(nextCursor);
+    setComposerTrigger(detectComposerTrigger(draft.prompt, draft.prompt.length));
+    setComposerHighlightedItemId(null);
+  }, [target.environmentId, target.threadId]);
 
   useEffect(() => {
     if (!followLiveRef.current) return;
@@ -326,10 +449,102 @@ export function CompactChatSurface({ target }: CompactChatSurfaceProps) {
     if (failure) setError(failure);
     if (result._tag === "Success") {
       setPrompt(target, "");
+      setComposerCursor(0);
+      setComposerTrigger(null);
+      setComposerHighlightedItemId(null);
       followLiveRef.current = true;
     }
     setSending(false);
   }, [canSend, draft.prompt, setPrompt, startTurn, target, thread]);
+
+  const handleComposerChange = useCallback(
+    (
+      nextPrompt: string,
+      nextCursor: number,
+      expandedCursor: number,
+      cursorAdjacentToMention: boolean,
+    ) => {
+      setPrompt(target, nextPrompt);
+      setComposerCursor(nextCursor);
+      setComposerTrigger(
+        cursorAdjacentToMention ? null : detectComposerTrigger(nextPrompt, expandedCursor),
+      );
+      setComposerHighlightedItemId(null);
+    },
+    [setPrompt, target],
+  );
+
+  const handleComposerItemSelect = useCallback(
+    (item: ComposerCommandItem) => {
+      if (composerSelectLockRef.current) return;
+      const snapshot = composerEditorRef.current?.readSnapshot();
+      if (!snapshot) return;
+      const trigger = detectComposerTrigger(snapshot.value, snapshot.expandedCursor);
+      if (!trigger) return;
+      if (
+        (item.type === "path" && trigger.kind !== "path") ||
+        (item.type === "thread" && trigger.kind !== "thread") ||
+        (item.type === "skill" && trigger.kind !== "skill")
+      ) {
+        return;
+      }
+      const replacement = compactChatComposerItemReplacement(item);
+      if (replacement === null) return;
+
+      composerSelectLockRef.current = true;
+      window.requestAnimationFrame(() => {
+        composerSelectLockRef.current = false;
+      });
+      const rangeEnd =
+        replacement.endsWith(" ") && snapshot.value[trigger.rangeEnd] === " "
+          ? trigger.rangeEnd + 1
+          : trigger.rangeEnd;
+      const next = replaceTextRange(snapshot.value, trigger.rangeStart, rangeEnd, replacement);
+      const nextCursor = collapseExpandedComposerCursor(next.text, next.cursor);
+      const nextExpandedCursor = expandCollapsedComposerCursor(next.text, nextCursor);
+      setPrompt(target, next.text);
+      setComposerCursor(nextCursor);
+      setComposerTrigger(detectComposerTrigger(next.text, nextExpandedCursor));
+      setComposerHighlightedItemId(null);
+      window.requestAnimationFrame(() => composerEditorRef.current?.focusAt(nextCursor));
+    },
+    [setPrompt, target],
+  );
+
+  const handleComposerCommandKey = useCallback(
+    (key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab", event: KeyboardEvent) => {
+      if (composerTrigger) {
+        if ((key === "ArrowDown" || key === "ArrowUp") && composerMenuItems.length > 0) {
+          const activeIndex = activeComposerMenuItem
+            ? composerMenuItems.findIndex((item) => item.id === activeComposerMenuItem.id)
+            : key === "ArrowDown"
+              ? -1
+              : 0;
+          const offset = key === "ArrowDown" ? 1 : -1;
+          const nextIndex =
+            (activeIndex + offset + composerMenuItems.length) % composerMenuItems.length;
+          setComposerHighlightedItemId(composerMenuItems[nextIndex]?.id ?? null);
+          return true;
+        }
+        if ((key === "Enter" || key === "Tab") && activeComposerMenuItem) {
+          handleComposerItemSelect(activeComposerMenuItem);
+          return true;
+        }
+      }
+      if (key === "Enter" && !event.shiftKey) {
+        void handleSend();
+        return true;
+      }
+      return false;
+    },
+    [
+      activeComposerMenuItem,
+      composerMenuItems,
+      composerTrigger,
+      handleComposerItemSelect,
+      handleSend,
+    ],
+  );
 
   const handleInterrupt = useCallback(async () => {
     if (!thread || !connected || !running || interrupting) return;
@@ -640,20 +855,40 @@ export function CompactChatSurface({ target }: CompactChatSurfaceProps) {
         />
       ) : (
         <div className="border-t border-border/70 p-3">
-          <Textarea
-            size="sm"
-            value={draft.prompt}
-            disabled={sending || running}
-            placeholder={running ? "Wait for the current turn to finish" : "Message this thread"}
-            aria-label={`Message ${thread.title}`}
-            onChange={(event) => setPrompt(target, event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
-              event.preventDefault();
-              event.stopPropagation();
-              void handleSend();
-            }}
-          />
+          <div className="relative rounded-md border border-input bg-transparent px-2.5 py-2 shadow-xs focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+            {composerTrigger ? (
+              <div className="absolute inset-x-0 bottom-full z-50 mb-2">
+                <ComposerCommandMenu
+                  items={composerMenuItems}
+                  resolvedTheme={resolvedTheme}
+                  isLoading={isComposerMenuLoading}
+                  triggerKind={composerTrigger.kind}
+                  emptyStateText={composerMenuEmptyState}
+                  activeItemId={activeComposerMenuItem?.id ?? null}
+                  onHighlightedItemChange={setComposerHighlightedItemId}
+                  onSelect={handleComposerItemSelect}
+                />
+              </div>
+            ) : null}
+            <ComposerPromptEditor
+              editorRef={composerEditorRef}
+              value={draft.prompt}
+              cursor={composerCursor}
+              terminalContexts={[]}
+              skills={selectedProviderStatus?.skills ?? []}
+              disabled={sending || running}
+              placeholder={
+                running
+                  ? "Wait for the current turn to finish"
+                  : "Message this thread, @tag files/folders, $use skills, or %reference threads"
+              }
+              className="min-h-12 max-h-36 text-sm"
+              onRemoveTerminalContext={() => {}}
+              onChange={handleComposerChange}
+              onCommandKeyDown={handleComposerCommandKey}
+              onPaste={() => {}}
+            />
+          </div>
           <div className="mt-2 flex items-center justify-between gap-3">
             <p className="text-[11px] text-muted-foreground">
               Enter to send · Shift+Enter for newline

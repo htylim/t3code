@@ -381,7 +381,8 @@ upstream.
   defaulting to `mod+t`, which creates a blank right-panel chat from either a saved main thread or
   its local draft. The right-panel surface controls expose the same action, and selected main-chat
   text can create a prefilled side chat through **Ask in side chat**. Replacing an existing side
-  target requires confirmation; reopening the same target does not.
+  target requires confirmation; reopening the same target does not. The side-chat composer also
+  supports the main composer's `%` thread, `$` skill, and `@` file or folder reference pickers.
 - Reason: Make a side chat useful before another thread exists and make the action reachable from
   a configurable keyboard shortcut.
 - Scope: Shared keybinding contracts and defaults, draft-aware right-panel ownership in both web
@@ -393,7 +394,9 @@ upstream.
   right-panel, and compact Chat tests for the initial implementation, then 43 focused selected-text,
   right-panel, and compact Chat tests after adding the new entry points, plus 47 focused replacement,
   selected-text, right-panel, and compact Chat tests after adding confirmation. Passed affected type
-  checks, targeted lint and formatting, and `git diff --check`. In an isolated web environment,
-  confirmed blank creation through the Chat card, Chat availability in the `+` menu, a selected-text
-  side chat with the source reference and Markdown quote prefilled but unsent, replacement Cancel and
-  Confirm behavior, and same-target reopening without a dialog.
+  checks, targeted lint and formatting, and `git diff --check`. Picker parity additionally passed 115
+  focused composer, inline-token, path, skill, and thread-reference tests plus the web type check and
+  targeted lint. In an isolated web environment, confirmed blank creation through the Chat card,
+  Chat availability in the `+` menu, a selected-text side chat with the source reference and Markdown
+  quote prefilled but unsent, replacement Cancel and Confirm behavior, and same-target reopening
+  without a dialog. Browser verification was not rerun for picker parity because it was not requested.

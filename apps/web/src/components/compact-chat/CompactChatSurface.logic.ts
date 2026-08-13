@@ -12,6 +12,10 @@ import type {
   ScopedThreadRef,
   TurnId,
 } from "@t3tools/contracts";
+import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
+
+import type { ComposerCommandItem } from "~/components/chat/ComposerCommandMenu";
+import { serializeThreadReferenceMarkdown } from "~/threadReference";
 
 export interface CompactChatTargetThread {
   readonly title: string;
@@ -28,6 +32,19 @@ export interface SideChatSourceThread {
   readonly interactionMode: ProviderInteractionMode;
   readonly branch: string | null;
   readonly worktreePath: string | null;
+}
+
+export function compactChatComposerItemReplacement(item: ComposerCommandItem): string | null {
+  if (item.type === "path") {
+    return `${serializeComposerFileLink(item.path)} `;
+  }
+  if (item.type === "thread") {
+    return `${serializeThreadReferenceMarkdown(item.label, item.threadRef)} `;
+  }
+  if (item.type === "skill") {
+    return `$${item.skill.name} `;
+  }
+  return null;
 }
 
 export function buildSideChatCreateCommand(input: {

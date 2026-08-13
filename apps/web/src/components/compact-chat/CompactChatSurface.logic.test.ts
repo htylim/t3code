@@ -4,6 +4,7 @@ import {
   EnvironmentId,
   MessageId,
   ProjectId,
+  ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
   TurnId,
@@ -18,6 +19,7 @@ import {
   buildSideChatCreateCommand,
   compactChatAllowsMainShortcut,
   compactChatCanSend,
+  compactChatComposerItemReplacement,
   type CompactChatTargetThread,
 } from "./CompactChatSurface.logic";
 
@@ -44,6 +46,42 @@ const thread: CompactChatTargetThread = {
 };
 
 describe("compact Chat target isolation", () => {
+  it("serializes side-chat file, skill, and thread picker choices", () => {
+    expect(
+      compactChatComposerItemReplacement({
+        id: "path:file:src/index.ts",
+        type: "path",
+        path: "src/index.ts",
+        pathKind: "file",
+        label: "index.ts",
+        description: "src",
+      }),
+    ).toBe("[index.ts](src/index.ts) ");
+    expect(
+      compactChatComposerItemReplacement({
+        id: "skill:codex:review",
+        type: "skill",
+        provider: ProviderDriverKind.make("codex"),
+        skill: {
+          name: "review",
+          path: "/skills/review/SKILL.md",
+          enabled: true,
+        },
+        label: "Review",
+        description: "Review code",
+      }),
+    ).toBe("$review ");
+    expect(
+      compactChatComposerItemReplacement({
+        id: "thread:env-target:thread-owner",
+        type: "thread",
+        threadRef: owner,
+        label: "Owner thread",
+        description: "Project",
+      }),
+    ).toBe("[Owner thread](t3code://threads/env-owner/thread-owner) ");
+  });
+
   it("creates a blank side chat with the main chat's working settings", () => {
     const modelSelection = {
       instanceId: ProviderInstanceId.make("codex-work"),
