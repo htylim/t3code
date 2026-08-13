@@ -349,3 +349,15 @@ upstream.
   ships an equivalent selection action, remove the wrapper and fork-owned files rather than
   merging both implementations. Do not add attachment schemas, message offsets, or server state to
   retain this behavior.
+
+## 2026-08-13 — Adopt upstream Copy Thread ID
+
+- Upstream baseline: `9e201941a`
+- Change: Removed the fork-specific **Copy Thread ID** variant and adopted upstream's shared thread
+  action for the sidebar and chat header.
+- Reason: Upstream now provides the same behavior, so keeping a second fork implementation would
+  create needless drift.
+- Scope: Web and desktop thread action menus and fork maintenance history. Thread forking remains a
+  separate fork feature.
+- Verification: Passed 160 merge-focused tests, 118 focused web tests, and the contracts, web,
+  mobile, and server type checks. Formatted the resolved files and checked the final diff.

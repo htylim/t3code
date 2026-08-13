@@ -30,10 +30,8 @@ describe("buildThreadActionMenuItems", () => {
     ).toEqual(["rename", "mark-unread", "copy-path", "copy-thread-id", "delete"]);
   });
 
-  it("includes fork and copy-ID actions without replacing upstream actions", () => {
-    expect(ids({ ...baseState, canFork: true })).toEqual(
-      expect.arrayContaining(["fork-thread", "copy-thread-id"]),
-    );
+  it("includes the fork action without replacing upstream actions", () => {
+    expect(ids({ ...baseState, canFork: true })).toContain("fork-thread");
   });
 
   it("includes branch items only for threads with a branch", () => {

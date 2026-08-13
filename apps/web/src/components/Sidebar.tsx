@@ -1,5 +1,6 @@
 import { autoAnimate } from "@formkit/auto-animate";
 import { useAtomValue } from "@effect/atom-react";
+import * as Schema from "effect/Schema";
 import {
   DndContext,
   PointerSensor,
@@ -107,6 +108,7 @@ import { subscribeThreadRename } from "../threadRenameBus";
 import { resolveThreadActionProjectRef } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
+import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { readThreadForkEligibility, useProjects, useThreadShells } from "../state/entities";
@@ -129,6 +131,7 @@ import {
   formatWorkingDurationLabel,
   firstValidTimestampMs,
   hasUnseenCompletion,
+  isSidebarNestedLinkClick,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   planPinnedReorder,
@@ -183,6 +186,9 @@ import {
 // stays behind an explicit Show more.
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
+// Keep the v2 key so existing preferences survive the v2-to-default rename.
+const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:settled-expanded";
+const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar-v2:snoozed-expanded";
 
 function compactSidebarTimeLabel(label: string): string {
   if (label === "just now") return "now";
@@ -678,6 +684,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // the user visits the thread.
   wokeAt: string | null;
   isActive: boolean;
+  openPullRequestsInRightPanel: boolean;
   jumpLabel: string | null;
   currentEnvironmentId: string | null;
   environmentLabel: string | null;
@@ -719,6 +726,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     onUnsettle,
     onUnsnooze,
     onUnpin,
+    openPullRequestsInRightPanel,
     renamingTitle,
     thread,
     variant,
@@ -1005,10 +1013,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     if (!showSnoozeButton) setSnoozeMenuOpen(false);
   }, [showSnoozeButton]);
   const handlePrClick = useCallback(
-    (event: ReactMouseEvent<HTMLElement>) => {
-      if (pr?.url) openPrLink(event, pr.url);
+    (event: ReactMouseEvent<HTMLAnchorElement>) => {
+      if (!pr?.url) return;
+      const openedInRightPanel = openPrLink(
+        event,
+        pr.url,
+        openPullRequestsInRightPanel ? threadRef : undefined,
+      );
+      if (openedInRightPanel && openPullRequestsInRightPanel && !props.isActive) {
+        onThreadActivate(threadRef);
+      }
     },
-    [openPrLink, pr],
+    [onThreadActivate, openPrLink, openPullRequestsInRightPanel, pr, props.isActive, threadRef],
   );
 
   // All sidebar rows share one surface model. Live threads used to look
@@ -1074,10 +1090,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     </span>
   );
 
+  // A real link so cmd/ctrl+click and middle-click open the host in the
+  // browser. A plain click still opens T3's pull request view.
   const prBadge =
     prStatus && pr ? (
-      <button
-        type="button"
+      <a
+        href={pr.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onPointerDown={(event) => event.stopPropagation()}
         onClick={handlePrClick}
         className={cn(
           // Sidebar chrome follows the interface font; tabular digits keep the
@@ -1092,7 +1113,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         aria-label={prStatus.tooltip}
       >
         #{pr.number}
-      </button>
+      </a>
     ) : null;
   const terminalStatusIcon = terminalStatus ? (
     <span
@@ -1639,9 +1660,7 @@ export default function Sidebar() {
       );
     },
   });
-  const { copyToClipboard: copyThreadIdToClipboard } = useCopyToClipboard<{
-    threadId: ThreadId;
-  }>({
+  const { copyToClipboard: copyThreadIdToClipboard } = useCopyToClipboard<{ threadId: ThreadId }>({
     onCopy: ({ threadId }) => {
       toastManager.add({
         type: "success",
@@ -2063,8 +2082,15 @@ export default function Sidebar() {
     () => setSettledVisibleCount((count) => count + SETTLED_TAIL_PAGE_COUNT),
     [],
   );
-  const [settledShelfExpanded, setSettledShelfExpanded] = useState(true);
-  const toggleSettledShelf = useCallback(() => setSettledShelfExpanded((value) => !value), []);
+  const [settledShelfExpanded, setSettledShelfExpanded] = useLocalStorage(
+    SETTLED_SHELF_EXPANDED_KEY,
+    true,
+    Schema.Boolean,
+  );
+  const toggleSettledShelf = useCallback(
+    () => setSettledShelfExpanded((value) => !value),
+    [setSettledShelfExpanded],
+  );
   const renderedSettledThreads = useMemo(() => {
     if (settledShelfExpanded) return visibleSettledThreads;
     if (routeThreadKey === null) return [];
@@ -2078,8 +2104,15 @@ export default function Sidebar() {
   // The snoozed shelf is collapsed by default: out of the way, never gone.
   // Collapsed threads don't render (and so don't participate in jump
   // shortcuts or multi-select), matching the settled tail's paging model.
-  const [snoozedShelfExpanded, setSnoozedShelfExpanded] = useState(false);
-  const toggleSnoozedShelf = useCallback(() => setSnoozedShelfExpanded((value) => !value), []);
+  const [snoozedShelfExpanded, setSnoozedShelfExpanded] = useLocalStorage(
+    SNOOZED_SHELF_EXPANDED_KEY,
+    false,
+    Schema.Boolean,
+  );
+  const toggleSnoozedShelf = useCallback(
+    () => setSnoozedShelfExpanded((value) => !value),
+    [setSnoozedShelfExpanded],
+  );
   const visibleSnoozedThreads = useMemo(() => {
     if (snoozedShelfExpanded) return snoozedThreads;
     // The open thread must never vanish behind the collapsed shelf: a
@@ -2299,6 +2332,7 @@ export default function Sidebar() {
 
   const handleThreadClick = useCallback(
     (event: ReactMouseEvent, threadRef: ScopedThreadRef) => {
+      if (isSidebarNestedLinkClick(event.target)) return;
       const isMac = isMacPlatform(navigator.platform);
       const isModClick = isMac ? event.metaKey : event.ctrlKey;
       const threadKey = scopedThreadKey(threadRef);
@@ -3063,7 +3097,7 @@ export default function Sidebar() {
             }
             return;
           case "copy-thread-id":
-            copyThreadIdToClipboard(threadRef.threadId, { threadId: threadRef.threadId });
+            copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
           case "delete": {
             if (confirmThreadDelete) {
@@ -3527,6 +3561,7 @@ export default function Sidebar() {
                         // rows resolve to null on their own.
                         wokeAt={threadWokeAt(thread, { now: snoozeNow })}
                         isActive={routeThreadKey === threadKey}
+                        openPullRequestsInRightPanel={routeThreadRef !== null}
                         jumpLabel={showJumpHints ? (jumpLabelByKey.get(threadKey) ?? null) : null}
                         currentEnvironmentId={primaryEnvironmentId}
                         environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}

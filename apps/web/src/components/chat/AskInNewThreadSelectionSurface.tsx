@@ -18,7 +18,7 @@ interface AskInNewThreadSelectionSurfaceProps {
   readonly projectRef: ScopedProjectRef | null;
   readonly sourceThreadRef: ScopedThreadRef;
   readonly sourceThreadTitle: string;
-  readonly createThread: (projectRef: ScopedProjectRef) => Promise<void>;
+  readonly createThread: (projectRef: ScopedProjectRef) => Promise<unknown>;
 }
 
 export function AskInNewThreadSelectionSurface({
