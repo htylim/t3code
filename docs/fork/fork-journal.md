@@ -361,3 +361,18 @@ upstream.
   separate fork feature.
 - Verification: Passed 160 merge-focused tests, 118 focused web tests, and the contracts, web,
   mobile, and server type checks. Formatted the resolved files and checked the final diff.
+
+## 2026-08-14 — Restore thread reading positions
+
+- Upstream baseline: `9e201941a`
+- Change: Web and desktop remember a stable timeline row and its intra-row offset when the user
+  switches away from a thread, then restore that position when the user returns during the same app
+  session. Reaching the live edge or sending clears the bookmark.
+- Reason: Thread navigation previously reopened every conversation at the live edge and lost the
+  user's reading position.
+- Scope: A fork-owned in-memory bookmark module, narrow LegendList and chat lifecycle seams, focused
+  tests, and user documentation. Mobile, server contracts, providers, and database persistence are
+  unchanged.
+- Verification: Passed 21 focused bookmark and timeline tests, the web type check, targeted lint
+  and formatting, and `git diff --check`. In an isolated web environment, switched away after
+  positioning a message row at `-52.42px`, then returned to the same row at exactly `-52.42px`.

@@ -97,6 +97,10 @@ import {
 import { type LegendListRef } from "@legendapp/list/react";
 import { getAnchoredTurnMetrics, type TimelineScrollMode } from "./chat/timelineScrollAnchoring";
 import {
+  clearTimelineScrollBookmark,
+  hasTimelineScrollBookmark,
+} from "./chat/threadScrollBookmark";
+import {
   buildPendingUserInputAnswers,
   derivePendingUserInputProgress,
   setPendingUserInputCustomAnswer,
@@ -3990,19 +3994,22 @@ function ChatViewContent(props: ChatViewProps) {
   }, [activeThread?.id, timelineEntries, getActiveTimelineTurnMetrics]);
 
   useEffect(() => {
+    const restoresScrollPosition = hasTimelineScrollBookmark(routeThreadKey);
     setPullRequestDialogState(null);
-    isAtEndRef.current = true;
-    timelineScrollModeRef.current = "following-end";
-    liveFollowUserScrollGenerationRef.current = anchorUserScrollGenerationRef.current;
-    setTimelineLiveFollowEnabled(true);
+    isAtEndRef.current = !restoresScrollPosition;
+    timelineScrollModeRef.current = restoresScrollPosition ? "free-scrolling" : "following-end";
+    liveFollowUserScrollGenerationRef.current = restoresScrollPosition
+      ? null
+      : anchorUserScrollGenerationRef.current;
+    setTimelineLiveFollowEnabled(!restoresScrollPosition);
     pendingTimelineAnchorRef.current = null;
     positionedTimelineAnchorRef.current = null;
     settledTimelineAnchorRef.current = null;
     activeTimelineAnchorIndexRef.current = null;
     showScrollDebouncer.current.cancel();
-    setShowScrollToBottom(false);
+    setShowScrollToBottom(restoresScrollPosition);
     // activeThreadRef resets transitively with the active thread.
-  }, [activeThread?.id]);
+  }, [activeThread?.id, routeThreadKey]);
 
   useEffect(() => {
     setIsRevertingCheckpoint(false);
@@ -5193,6 +5200,7 @@ function ChatViewContent(props: ChatViewProps) {
     // Sending always returns to the live edge. The new row becomes the
     // anchored end-space target so it lands near the top while the response
     // streams into the reserved space below it.
+    clearTimelineScrollBookmark(routeThreadKey);
     isAtEndRef.current = true;
     timelineScrollModeRef.current = "anchoring-new-turn";
     liveFollowUserScrollGenerationRef.current = anchorUserScrollGenerationRef.current;
@@ -5638,6 +5646,7 @@ function ChatViewContent(props: ChatViewProps) {
       setThreadError(threadIdForSend, null);
 
       // Position this sent row once LegendList has measured the anchored tail.
+      clearTimelineScrollBookmark(routeThreadKey);
       isAtEndRef.current = true;
       timelineScrollModeRef.current = "anchoring-new-turn";
       liveFollowUserScrollGenerationRef.current = anchorUserScrollGenerationRef.current;

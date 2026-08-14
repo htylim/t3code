@@ -1,8 +1,9 @@
 import { CheckpointRef, EnvironmentId, MessageId, TurnId } from "@t3tools/contracts";
 import { createRef, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
+import { captureTimelineScrollBookmark, clearTimelineScrollBookmark } from "./threadScrollBookmark";
 
 vi.mock("@legendapp/list/react", async () => {
   const legendListTestId = "legend-list";
@@ -21,6 +22,8 @@ vi.mock("@legendapp/list/react", async () => {
     };
     contentInsetEndAdjustment?: number;
     className?: string;
+    initialScrollAtEnd?: boolean;
+    initialScrollIndex?: { index: number; viewOffset?: number; viewPosition?: number };
     maintainScrollAtEnd?:
       | boolean
       | {
@@ -52,6 +55,9 @@ vi.mock("@legendapp/list/react", async () => {
         data-anchor-on-ready={Boolean(props.anchoredEndSpace?.onReady)}
         data-content-inset-end={props.contentInsetEndAdjustment}
         data-class-name={props.className}
+        data-initial-scroll-at-end={props.initialScrollAtEnd}
+        data-initial-scroll-index={props.initialScrollIndex?.index}
+        data-initial-scroll-view-offset={props.initialScrollIndex?.viewOffset}
         data-maintain-scroll-at-end={props.maintainScrollAtEnd ? "enabled" : undefined}
         data-maintain-scroll-at-end-animated={
           typeof props.maintainScrollAtEnd === "object"
@@ -170,6 +176,10 @@ beforeAll(async () => {
   ({ MessagesTimeline } = await import("./MessagesTimeline"));
 }, 30_000);
 
+afterEach(() => {
+  clearTimelineScrollBookmark("environment-local:thread-1");
+});
+
 const ACTIVE_THREAD_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
 const MESSAGE_CREATED_AT = "2026-03-17T19:12:28.000Z";
 
@@ -226,6 +236,27 @@ function buildUserTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it("restores a saved row position instead of opening at the end", () => {
+    captureTimelineScrollBookmark("environment-local:thread-1", [{ id: "entry-1" }], {
+      start: 0,
+      scroll: 24,
+      positionAtIndex: () => 0,
+      sizeAtIndex: () => 100,
+    });
+
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[buildUserTimelineEntry("Saved position")]}
+      />,
+    );
+
+    expect(markup).toContain('data-initial-scroll-at-end="false"');
+    expect(markup).toContain('data-initial-scroll-index="0"');
+    expect(markup).toContain('data-initial-scroll-view-offset="-24"');
+    expect(markup).not.toContain('data-maintain-scroll-at-end="enabled"');
+  });
+
   it("uses the larger leading inset only when the top fade is enabled", () => {
     const timelineEntries = [buildUserTimelineEntry("Hello")];
 

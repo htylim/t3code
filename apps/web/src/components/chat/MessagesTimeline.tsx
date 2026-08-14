@@ -29,7 +29,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import { LegendList, type LegendListMetrics, type LegendListRef } from "@legendapp/list/react";
 import { FileDiff } from "@pierre/diffs/react";
 import {
   deriveTimelineEntries,
@@ -114,6 +114,11 @@ import {
 } from "./userMessageTerminalContexts";
 import { SkillInlineText } from "./SkillInlineText";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
+import {
+  captureTimelineScrollBookmark,
+  clearTimelineScrollBookmark,
+  resolveTimelineInitialScrollPosition,
+} from "./threadScrollBookmark";
 import {
   buildReviewCommentRenderablePatch,
   formatReviewCommentFence,
@@ -419,12 +424,20 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     ],
   );
   const rows = useStableRows(rawRows);
+  const initialScrollPosition = useMemo(
+    () => resolveTimelineInitialScrollPosition(routeThreadKey, rows),
+    [routeThreadKey, rows],
+  );
   const minimapItems = useMemo(() => deriveTimelineMinimapItems(rows), [rows]);
   const [timelineViewportElement, setTimelineViewportElement] = useState<HTMLDivElement | null>(
     null,
   );
   const [minimapHasPersistentGutter, setMinimapHasPersistentGutter] = useState(false);
   const [minimapHitStripWidth, setMinimapHitStripWidth] = useState(0);
+  const listHeaderSizeRef = useRef(0);
+  const handleListMetricsChange = useCallback((metrics: LegendListMetrics) => {
+    listHeaderSizeRef.current = metrics.headerSize;
+  }, []);
   const handleAnchorReady = useCallback(
     (info: { anchorIndex: number | undefined }) => {
       if (anchorMessageId !== null && info.anchorIndex !== undefined) {
@@ -445,6 +458,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     const isAtEnd = resolveTimelineIsAtEnd(state, contentInsetEndAdjustment);
     if (isAtEnd !== undefined) {
       onIsAtEndChange(isAtEnd);
+    }
+    if (isAtEnd) {
+      clearTimelineScrollBookmark(routeThreadKey);
+    } else if (isAtEnd === false) {
+      captureTimelineScrollBookmark(routeThreadKey, rows, state, listHeaderSizeRef.current);
     }
     if (!state || minimapItems.length === 0) {
       return;
@@ -468,7 +486,15 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
       strip.dataset.inView = inView ? "true" : "false";
     }
-  }, [contentInsetEndAdjustment, listRef, minimapItems, minimapStripMap, onIsAtEndChange]);
+  }, [
+    contentInsetEndAdjustment,
+    listRef,
+    minimapItems,
+    minimapStripMap,
+    onIsAtEndChange,
+    routeThreadKey,
+    rows,
+  ]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(handleScroll);
@@ -579,16 +605,21 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             getItemType={getItemType}
             renderItem={renderItem}
             estimatedItemSize={90}
-            initialScrollAtEnd
+            initialScrollAtEnd={initialScrollPosition === null}
+            {...(initialScrollPosition ? { initialScrollIndex: initialScrollPosition } : {})}
             {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
             contentInsetEndAdjustment={contentInsetEndAdjustment}
             maintainScrollAtEnd={
-              anchoredEndSpace || !liveFollowEnabled || disclosureToggleSettling
+              initialScrollPosition ||
+              anchoredEndSpace ||
+              !liveFollowEnabled ||
+              disclosureToggleSettling
                 ? false
                 : TIMELINE_MAINTAIN_SCROLL_AT_END
             }
             maintainVisibleContentPosition={maintainVisibleContentPosition}
             onScroll={handleScroll}
+            onMetricsChange={handleListMetricsChange}
             className={cn(
               "scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain px-3 [overflow-anchor:none] sm:px-5",
               topFadeEnabled && "chat-timeline-scroll-fade",

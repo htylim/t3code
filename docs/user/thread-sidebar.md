@@ -12,6 +12,13 @@ If reordering is unavailable for one environment, update the T3 Code server runn
 environment. Older servers can still pin and unpin threads, but do not understand synced ordering;
 their pinned threads keep the default newest-first order below the ones you have arranged.
 
+## Return to your reading position
+
+On web and desktop, switching away from a thread keeps your reading position for the rest of the
+app session. Returning restores the same timeline row and position within it, even if row heights
+changed while you were away. Reaching the live edge or sending a message clears the saved position.
+Reloading the app also clears it.
+
 ## Environment artwork
 
 Dev and Nightly environments can identify themselves with artwork at the top of the sidebar and in
