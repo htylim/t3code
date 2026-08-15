@@ -5,6 +5,10 @@
 Implementation plan agreed on 2026-08-11 for the downstream fork. This replaces the earlier plan
 for a fully independent second instance of the primary chat.
 
+The hand-built compact transcript and composer described below were superseded on 2026-08-15 by
+the shared-component approach recorded in the fork journal. The ownership, target isolation, entry
+points, and right-panel lifetime model in this document still apply.
+
 The feature is intentionally smaller so it can remain isolated from upstream's frequently changing
 primary chat implementation and keep future upstream merges manageable.
 
@@ -156,7 +160,8 @@ When a keyboard event originates inside the compact Chat surface:
 - Its local submit behavior targets only the compact surface's target thread.
 - Right-panel commands that operate on the containing panel, such as closing the active surface,
   may continue to work.
-- `chat.newSide` may create and replace the side target owned by the current main chat.
+- `chat.newSide` may create the side target owned by the current main chat, or close it when its
+  Chat surface is already visible.
 - Application-wide commands may retain their existing application-wide behavior where that is
   unambiguous.
 - Main-thread terminal commands, Diff toggle, model-picker toggle, project-script shortcuts, and

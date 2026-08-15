@@ -4,7 +4,6 @@ import {
   EnvironmentId,
   MessageId,
   ProjectId,
-  ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
   TurnId,
@@ -18,8 +17,7 @@ import {
   buildCompactChatUserInputCommand,
   buildSideChatCreateCommand,
   compactChatAllowsMainShortcut,
-  compactChatCanSend,
-  compactChatComposerItemReplacement,
+  resolveNewSideChatShortcutAction,
   type CompactChatTargetThread,
 } from "./CompactChatSurface.logic";
 
@@ -46,42 +44,6 @@ const thread: CompactChatTargetThread = {
 };
 
 describe("compact Chat target isolation", () => {
-  it("serializes side-chat file, skill, and thread picker choices", () => {
-    expect(
-      compactChatComposerItemReplacement({
-        id: "path:file:src/index.ts",
-        type: "path",
-        path: "src/index.ts",
-        pathKind: "file",
-        label: "index.ts",
-        description: "src",
-      }),
-    ).toBe("[index.ts](src/index.ts) ");
-    expect(
-      compactChatComposerItemReplacement({
-        id: "skill:codex:review",
-        type: "skill",
-        provider: ProviderDriverKind.make("codex"),
-        skill: {
-          name: "review",
-          path: "/skills/review/SKILL.md",
-          enabled: true,
-        },
-        label: "Review",
-        description: "Review code",
-      }),
-    ).toBe("$review ");
-    expect(
-      compactChatComposerItemReplacement({
-        id: "thread:env-target:thread-owner",
-        type: "thread",
-        threadRef: owner,
-        label: "Owner thread",
-        description: "Project",
-      }),
-    ).toBe("[Owner thread](t3code://threads/env-owner/thread-owner) ");
-  });
-
   it("creates a blank side chat with the main chat's working settings", () => {
     const modelSelection = {
       instanceId: ProviderInstanceId.make("codex-work"),
@@ -145,27 +107,45 @@ describe("compact Chat target isolation", () => {
     }
     expect(interrupt.input.turnId).toBe(TurnId.make("turn-target"));
   });
+
+  it("sends composer-selected attachments, model, and modes to the target", () => {
+    const modelSelection = {
+      instanceId: ProviderInstanceId.make("codex-work"),
+      model: "gpt-5.6",
+      options: [{ id: "reasoningEffort", value: "high" }],
+    };
+    const attachments = [
+      {
+        type: "image" as const,
+        name: "reference.png",
+        mimeType: "image/png",
+        sizeBytes: 42,
+        dataUrl: "data:image/png;base64,YQ==",
+      },
+    ];
+
+    const start = buildCompactChatStartTurnCommand({
+      target,
+      thread,
+      text: "Use this image",
+      attachments,
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "plan",
+      messageId: MessageId.make("message-with-image"),
+      createdAt: "2026-08-15T12:01:00.000Z",
+    });
+
+    expect(start.environmentId).toBe(target.environmentId);
+    expect(start.input.threadId).toBe(target.threadId);
+    expect(start.input.message.attachments).toEqual(attachments);
+    expect(start.input.modelSelection).toEqual(modelSelection);
+    expect(start.input.runtimeMode).toBe("full-access");
+    expect(start.input.interactionMode).toBe("plan");
+  });
 });
 
 describe("compact Chat availability", () => {
-  it("allows direct sends only while the target can accept a turn", () => {
-    const base = {
-      connected: true,
-      providerAvailable: true,
-      threadAvailable: true,
-      session: null,
-      hasPendingRequest: false,
-      sending: false,
-    };
-    expect(compactChatCanSend(base)).toBe(true);
-    expect(compactChatCanSend({ ...base, connected: false })).toBe(false);
-    expect(compactChatCanSend({ ...base, providerAvailable: false })).toBe(false);
-    expect(compactChatCanSend({ ...base, threadAvailable: false })).toBe(false);
-    expect(compactChatCanSend({ ...base, hasPendingRequest: true })).toBe(false);
-    expect(compactChatCanSend({ ...base, sending: true })).toBe(false);
-    expect(compactChatCanSend({ ...base, session: thread.session })).toBe(false);
-  });
-
   it("allows panel and new-side-chat shortcuts through the main Chat handler", () => {
     expect(compactChatAllowsMainShortcut("chat.newSide")).toBe(true);
     expect(compactChatAllowsMainShortcut("rightPanel.close")).toBe(true);
@@ -173,5 +153,17 @@ describe("compact Chat availability", () => {
     expect(compactChatAllowsMainShortcut("diff.toggle")).toBe(false);
     expect(compactChatAllowsMainShortcut("terminal.toggle")).toBe(false);
     expect(compactChatAllowsMainShortcut("modelPicker.toggle")).toBe(false);
+  });
+
+  it("closes only a visible active side chat", () => {
+    expect(
+      resolveNewSideChatShortcutAction({ rightPanelOpen: true, activeSurfaceKind: "chat" }),
+    ).toBe("close");
+    expect(
+      resolveNewSideChatShortcutAction({ rightPanelOpen: false, activeSurfaceKind: "chat" }),
+    ).toBe("open");
+    expect(
+      resolveNewSideChatShortcutAction({ rightPanelOpen: true, activeSurfaceKind: "files" }),
+    ).toBe("open");
   });
 });

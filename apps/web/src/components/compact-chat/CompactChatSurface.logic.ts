@@ -10,12 +10,11 @@ import type {
   ProviderUserInputAnswers,
   RuntimeMode,
   ScopedThreadRef,
+  UploadChatAttachment,
   TurnId,
 } from "@t3tools/contracts";
-import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 
-import type { ComposerCommandItem } from "~/components/chat/ComposerCommandMenu";
-import { serializeThreadReferenceMarkdown } from "~/threadReference";
+import type { RightPanelKind } from "~/rightPanelStore";
 
 export interface CompactChatTargetThread {
   readonly title: string;
@@ -32,19 +31,6 @@ export interface SideChatSourceThread {
   readonly interactionMode: ProviderInteractionMode;
   readonly branch: string | null;
   readonly worktreePath: string | null;
-}
-
-export function compactChatComposerItemReplacement(item: ComposerCommandItem): string | null {
-  if (item.type === "path") {
-    return `${serializeComposerFileLink(item.path)} `;
-  }
-  if (item.type === "thread") {
-    return `${serializeThreadReferenceMarkdown(item.label, item.threadRef)} `;
-  }
-  if (item.type === "skill") {
-    return `$${item.skill.name} `;
-  }
-  return null;
 }
 
 export function buildSideChatCreateCommand(input: {
@@ -68,29 +54,14 @@ export function buildSideChatCreateCommand(input: {
   };
 }
 
-export function compactChatCanSend(input: {
-  readonly connected: boolean;
-  readonly providerAvailable: boolean;
-  readonly threadAvailable: boolean;
-  readonly session: OrchestrationSession | null;
-  readonly hasPendingRequest: boolean;
-  readonly sending: boolean;
-}): boolean {
-  return (
-    input.connected &&
-    input.providerAvailable &&
-    input.threadAvailable &&
-    !input.sending &&
-    !input.hasPendingRequest &&
-    input.session?.status !== "starting" &&
-    input.session?.status !== "running"
-  );
-}
-
 export function buildCompactChatStartTurnCommand(input: {
   readonly target: ScopedThreadRef;
   readonly thread: CompactChatTargetThread;
   readonly text: string;
+  readonly attachments?: ReadonlyArray<UploadChatAttachment>;
+  readonly modelSelection?: ModelSelection;
+  readonly runtimeMode?: RuntimeMode;
+  readonly interactionMode?: ProviderInteractionMode;
   readonly messageId: MessageId;
   readonly createdAt: string;
 }) {
@@ -102,12 +73,12 @@ export function buildCompactChatStartTurnCommand(input: {
         messageId: input.messageId,
         role: "user" as const,
         text: input.text,
-        attachments: [],
+        attachments: input.attachments ?? [],
       },
-      modelSelection: input.thread.modelSelection,
+      modelSelection: input.modelSelection ?? input.thread.modelSelection,
       titleSeed: input.thread.title,
-      runtimeMode: input.thread.runtimeMode,
-      interactionMode: input.thread.interactionMode,
+      runtimeMode: input.runtimeMode ?? input.thread.runtimeMode,
+      interactionMode: input.interactionMode ?? input.thread.interactionMode,
       createdAt: input.createdAt,
     },
   };
@@ -162,4 +133,11 @@ export function compactChatAllowsMainShortcut(command: KeybindingCommand): boole
   return (
     command === "chat.newSide" || command === "rightPanel.close" || command === "rightPanel.toggle"
   );
+}
+
+export function resolveNewSideChatShortcutAction(input: {
+  readonly rightPanelOpen: boolean;
+  readonly activeSurfaceKind: RightPanelKind | null;
+}): "open" | "close" {
+  return input.rightPanelOpen && input.activeSurfaceKind === "chat" ? "close" : "open";
 }

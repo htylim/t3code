@@ -383,6 +383,7 @@ upstream.
   text can create a prefilled side chat through **Ask in side chat**. Replacing an existing side
   target requires confirmation; reopening the same target does not. The side-chat composer also
   supports the main composer's `%` thread, `$` skill, and `@` file or folder reference pickers.
+  Repeating `mod+t` while the Chat surface is visible closes it instead of creating a replacement.
 - Reason: Make a side chat useful before another thread exists and make the action reachable from
   a configurable keyboard shortcut.
 - Scope: Shared keybinding contracts and defaults, draft-aware right-panel ownership in both web
@@ -400,6 +401,8 @@ upstream.
   Chat availability in the `+` menu, a selected-text side chat with the source reference and Markdown
   quote prefilled but unsent, replacement Cancel and Confirm behavior, and same-target reopening
   without a dialog. Browser verification was not rerun for picker parity because it was not requested.
+  The shortcut-toggle follow-up passed 8 focused tests, the web type check, targeted lint and
+  formatting, and a full close-open-close cycle in the isolated dev app.
 
 ## 2026-08-13 — Adopt upstream Copy Thread ID
 
@@ -441,3 +444,25 @@ upstream.
   application data remain unchanged.
 - Verification: Passed all 53 focused desktop packaging and fork identity tests, the scripts,
   shared, and desktop type checks, targeted lint and formatting, and `git diff --check`.
+
+## 2026-08-15 — Match the side chat to the main chat
+
+- Upstream baseline: `a5e29edee`
+- Change: Replaced the side chat's hand-built transcript and composer with the same
+  `MessagesTimeline` and `ChatComposer` used by the main chat. The side adapter now supports shared
+  message, activity, image, picker, model, mode, approval, and user-input presentation while every
+  command remains bound to the side thread.
+- Reason: The copied compact UI had already drifted from the main chat in typography, spacing,
+  message rendering, composer styling, and controls.
+- Scope: Fork-owned compact Chat adapter and command builders, focused parity tests, side-chat user
+  guidance, and the superseded compact-surface specification. `ChatView`, server orchestration,
+  contracts, providers, mobile, and other right-panel surfaces are unchanged.
+- Verification: Passed 153 focused side-chat, timeline, composer, mention, footer, right-panel, and
+  replacement tests; the web type check; targeted lint and formatting; and `git diff --check`. In
+  an isolated dev stack, real `package.json` mentions sent successfully from both the main and side
+  composers without unloading the page. Their composer forms also measured at identical vertical
+  bounds after reserving the main chat's context-strip footprint below the side composer.
+- Upstream conflict map: `CompactChatSurface.tsx` remains the target-scoped adapter and imports the
+  two upstream chat components directly. Repair this adapter when their props change. Do not copy
+  their JSX or refactor `ChatView` into a shared controller. If upstream adds a target-aware side
+  chat, remove the fork adapter after verifying owner and target isolation.

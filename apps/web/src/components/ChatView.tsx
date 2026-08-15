@@ -365,6 +365,7 @@ import { CompactChatSurface } from "./compact-chat/CompactChatSurface";
 import {
   buildSideChatCreateCommand,
   compactChatAllowsMainShortcut,
+  resolveNewSideChatShortcutAction,
 } from "./compact-chat/CompactChatSurface.logic";
 
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
@@ -4834,7 +4835,17 @@ function ChatViewContent(props: ChatViewProps) {
       if (command === "chat.newSide") {
         event.preventDefault();
         event.stopPropagation();
-        void openNewSideChat();
+        if (
+          resolveNewSideChatShortcutAction({
+            rightPanelOpen,
+            activeSurfaceKind: activeRightPanelSurface?.kind ?? null,
+          }) === "close" &&
+          activeRightPanelSurface
+        ) {
+          closeRightPanelSurface(activeRightPanelSurface);
+        } else {
+          void openNewSideChat();
+        }
         return;
       }
 

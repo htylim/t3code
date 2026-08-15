@@ -47,9 +47,10 @@ to closing the window; use **File** → **Close Window** or the window controls 
 
 `chat.newSide` creates a blank chat in the current main chat's right panel. It copies the current
 project, model options, permission mode, interaction mode, branch, and worktree, and defaults to
-`mod+t` (`Cmd+T` on macOS). Creating another side chat replaces the visible Chat surface without
-deleting or stopping the previous thread. Desktop receives `mod+t`; browsers normally reserve it
-for opening a browser tab, so web users should assign another shortcut.
+`mod+t` (`Cmd+T` on macOS). Pressing the shortcut again while that Chat surface is visible closes
+it without deleting or stopping its thread. If another right-panel surface is active, the shortcut
+opens a new side chat instead. Desktop receives `mod+t`; browsers normally reserve it for opening a
+browser tab, so web users should assign another shortcut.
 
 `project.switch` opens a searchable project picker for the default sidebar. It has no default
 shortcut; add one with the **+** button in **Settings** → **Keybindings**, or run **Switch
