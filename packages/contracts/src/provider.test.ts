@@ -115,6 +115,16 @@ describe("ProviderSessionStartInput", () => {
 });
 
 describe("ProviderSendTurnInput", () => {
+  it("accepts typed side-chat context", () => {
+    const parsed = decodeProviderSendTurnInput({
+      threadId: "thread-side",
+      input: "What did we decide?",
+      sideChatContext: { mainThreadId: "thread-main" },
+    });
+
+    expect(parsed.sideChatContext).toEqual({ mainThreadId: "thread-main" });
+  });
+
   it("accepts codex modelSelection", () => {
     const parsed = decodeProviderSendTurnInput({
       threadId: "thread-1",

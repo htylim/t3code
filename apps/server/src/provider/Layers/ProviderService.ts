@@ -82,6 +82,13 @@ const ProviderRollbackConversationInput = Schema.Struct({
   numTurns: NonNegativeInt,
 });
 
+function formatSideChatContext(mainThreadId: ThreadId): string {
+  return `<side_chat_context>
+This is a side chat thread. Its owning main T3 thread ID is ${JSON.stringify(mainThreadId)}.
+The user may ask questions related to that thread. When its contents matter and \`thread_read\` is available, call it with this thread ID, usually using the "messages" view. Do not assume the main thread's contents without reading it.
+</side_chat_context>`;
+}
+
 function toValidationError(
   operation: string,
   issue: string,
@@ -782,6 +789,13 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       );
     }
 
+    const inputTextWithSideChatContext =
+      parsed.sideChatContext === undefined
+        ? parsed.input
+        : [formatSideChatContext(parsed.sideChatContext.mainThreadId), parsed.input]
+            .filter((part): part is string => typeof part === "string" && part.length > 0)
+            .join("\n\n");
+
     // Adapters inline attachment pixels into the model prompt, but the model's
     // tools cannot dereference pixels. Appending the on-disk path is what lets
     // a turn like "include this screenshot in the PR" copy the actual file.
@@ -800,17 +814,19 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     });
     const inputTextWithAttachmentPaths =
       attachmentPathLines.length === 0
-        ? parsed.input
-        : [parsed.input, attachmentPathLines.join("\n")]
+        ? inputTextWithSideChatContext
+        : [inputTextWithSideChatContext, attachmentPathLines.join("\n")]
             .filter((part): part is string => typeof part === "string" && part.length > 0)
             .join("\n\n");
 
     const input = {
-      ...parsed,
+      threadId: parsed.threadId,
       ...(inputTextWithAttachmentPaths !== undefined
         ? { input: inputTextWithAttachmentPaths }
         : {}),
       attachments,
+      ...(parsed.modelSelection !== undefined ? { modelSelection: parsed.modelSelection } : {}),
+      ...(parsed.interactionMode !== undefined ? { interactionMode: parsed.interactionMode } : {}),
     };
     yield* Effect.annotateCurrentSpan({
       "provider.operation": "send-turn",

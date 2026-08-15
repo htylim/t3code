@@ -20,6 +20,7 @@ import {
   ProviderSandboxMode,
   ProviderUserInputAnswers,
   RuntimeMode,
+  SideChatContext,
 } from "./orchestration.ts";
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
 
@@ -87,6 +88,7 @@ export const ProviderSendTurnInput = Schema.Struct({
   ),
   modelSelection: Schema.optional(ModelSelection),
   interactionMode: Schema.optional(ProviderInteractionMode),
+  sideChatContext: Schema.optional(SideChatContext),
 });
 export type ProviderSendTurnInput = typeof ProviderSendTurnInput.Type;
 

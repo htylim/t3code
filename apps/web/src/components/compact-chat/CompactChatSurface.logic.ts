@@ -55,6 +55,7 @@ export function buildSideChatCreateCommand(input: {
 }
 
 export function buildCompactChatStartTurnCommand(input: {
+  readonly owner: ScopedThreadRef;
   readonly target: ScopedThreadRef;
   readonly thread: CompactChatTargetThread;
   readonly text: string;
@@ -79,6 +80,9 @@ export function buildCompactChatStartTurnCommand(input: {
       titleSeed: input.thread.title,
       runtimeMode: input.runtimeMode ?? input.thread.runtimeMode,
       interactionMode: input.interactionMode ?? input.thread.interactionMode,
+      ...(input.owner.environmentId === input.target.environmentId
+        ? { sideChatContext: { mainThreadId: input.owner.threadId } }
+        : {}),
       createdAt: input.createdAt,
     },
   };

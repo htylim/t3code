@@ -822,6 +822,11 @@ const ThreadTurnStartBootstrap = Schema.Struct({
 
 export type ThreadTurnStartBootstrap = typeof ThreadTurnStartBootstrap.Type;
 
+export const SideChatContext = Schema.Struct({
+  mainThreadId: ThreadId,
+});
+export type SideChatContext = typeof SideChatContext.Type;
+
 export const ThreadTurnStartCommand = Schema.Struct({
   type: Schema.Literal("thread.turn.start"),
   commandId: CommandId,
@@ -840,6 +845,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
   ),
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  sideChatContext: Schema.optional(SideChatContext),
   createdAt: IsoDateTime,
 });
 
@@ -859,6 +865,7 @@ const ClientThreadTurnStartCommand = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  sideChatContext: Schema.optional(SideChatContext),
   createdAt: IsoDateTime,
 });
 
@@ -1334,6 +1341,7 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  sideChatContext: Schema.optional(SideChatContext),
   createdAt: IsoDateTime,
 });
 

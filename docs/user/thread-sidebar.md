@@ -37,6 +37,11 @@ The Chat surface belongs to the main thread where you opened it. Moving to anoth
 hides that right panel; returning restores it. Closing the surface only closes the view and does
 not stop or delete the thread.
 
+When you send from the side surface, T3 Code tells the agent which main thread owns the surface.
+The agent can use `thread_read` when it needs that conversation. This context is not added to the
+visible user message. T3 Code omits it when the main thread belongs to another environment.
+Otherwise, it tells the agent to use `thread_read` only when the provider exposes T3's thread tools.
+
 Each main thread can hold one Chat surface. Opening a different target replaces the previous Chat
 surface after you confirm the replacement, while each target's unsent text remains saved. Reopening
 the current target does not ask for confirmation. Forking, checkpoint restore, terminal capture,

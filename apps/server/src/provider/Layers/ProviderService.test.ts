@@ -15,6 +15,7 @@ import {
   EventId,
   ProviderDriverKind,
   ProviderInstanceId,
+  PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   ProviderSessionStartInput,
   ThreadId,
   TurnId,
@@ -1170,6 +1171,36 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       const imageOnlyInput = routing.codex.sendTurn.mock.calls[0]?.[0] as ProviderSendTurnInput;
       assert.equal(imageOnlyInput.input?.startsWith('[Attached image "screenshot.png"'), true);
+
+      yield* provider.stopSession({ threadId: session.threadId });
+    }),
+  );
+
+  it.effect("prepends side-chat context after validating the user prompt length", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const session = yield* provider.startSession(asThreadId("thread-side"), {
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        threadId: asThreadId("thread-side"),
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+      const userInput = "x".repeat(PROVIDER_SEND_TURN_MAX_INPUT_CHARS);
+
+      routing.codex.sendTurn.mockClear();
+      yield* provider.sendTurn({
+        threadId: session.threadId,
+        input: userInput,
+        sideChatContext: { mainThreadId: asThreadId("thread-main") },
+      });
+
+      const turnInput = routing.codex.sendTurn.mock.calls[0]?.[0] as ProviderSendTurnInput;
+      assert.include(turnInput.input ?? "", "<side_chat_context>");
+      assert.include(turnInput.input ?? "", 'main T3 thread ID is "thread-main"');
+      assert.equal(turnInput.input?.endsWith(userInput), true);
+      assert.isAbove(turnInput.input?.length ?? 0, PROVIDER_SEND_TURN_MAX_INPUT_CHARS);
+      assert.equal(turnInput.sideChatContext, undefined);
 
       yield* provider.stopSession({ threadId: session.threadId });
     }),

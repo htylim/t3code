@@ -6285,6 +6285,7 @@ function ChatViewContent(props: ChatViewProps) {
     activeRightPanelSurface?.kind === "chat" ? (
       <CompactChatSurface
         key={activeRightPanelSurface.id}
+        owner={activeThreadRef}
         target={scopeThreadRef(
           activeRightPanelSurface.environmentId,
           activeRightPanelSurface.threadId,

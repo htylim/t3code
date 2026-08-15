@@ -81,6 +81,7 @@ describe("compact Chat target isolation", () => {
 
   it("builds every mutation from the explicit target instead of the owner", () => {
     const start = buildCompactChatStartTurnCommand({
+      owner,
       target,
       thread,
       text: "Continue",
@@ -125,6 +126,7 @@ describe("compact Chat target isolation", () => {
     ];
 
     const start = buildCompactChatStartTurnCommand({
+      owner,
       target,
       thread,
       text: "Use this image",
@@ -142,6 +144,37 @@ describe("compact Chat target isolation", () => {
     expect(start.input.modelSelection).toEqual(modelSelection);
     expect(start.input.runtimeMode).toBe("full-access");
     expect(start.input.interactionMode).toBe("plan");
+  });
+
+  it("adds the owning main thread as provider-only context in the same environment", () => {
+    const sameEnvironmentOwner = scopeThreadRef(target.environmentId, ThreadId.make("thread-main"));
+
+    const start = buildCompactChatStartTurnCommand({
+      owner: sameEnvironmentOwner,
+      target,
+      thread,
+      text: "What did we decide?",
+      messageId: MessageId.make("message-with-side-context"),
+      createdAt: "2026-08-15T12:02:00.000Z",
+    });
+
+    expect(start.input.message.text).toBe("What did we decide?");
+    expect(start.input.sideChatContext).toEqual({
+      mainThreadId: sameEnvironmentOwner.threadId,
+    });
+  });
+
+  it("does not claim access to an owner in another environment", () => {
+    const start = buildCompactChatStartTurnCommand({
+      owner,
+      target,
+      thread,
+      text: "Continue",
+      messageId: MessageId.make("message-cross-environment"),
+      createdAt: "2026-08-15T12:03:00.000Z",
+    });
+
+    expect(start.input).not.toHaveProperty("sideChatContext");
   });
 });
 

@@ -82,6 +82,7 @@ import {
 } from "./CompactChatSurface.logic";
 
 interface CompactChatSurfaceProps {
+  owner: ScopedThreadRef;
   target: ScopedThreadRef;
 }
 
@@ -129,7 +130,7 @@ function CompactState(props: { icon: typeof MessageSquareIcon; title: string; de
   );
 }
 
-export function CompactChatSurface({ target }: CompactChatSurfaceProps) {
+export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   const { resolvedTheme } = useTheme();
   const environment = useEnvironment(target.environmentId);
   const threadState = useEnvironmentThread(target.environmentId, target.threadId);
@@ -482,6 +483,7 @@ export function CompactChatSurface({ target }: CompactChatSurfaceProps) {
       );
       const result = await startTurn(
         buildCompactChatStartTurnCommand({
+          owner,
           target,
           thread,
           text: outgoingText,
@@ -518,6 +520,7 @@ export function CompactChatSurface({ target }: CompactChatSurfaceProps) {
     clearComposerDraftContent,
     connected,
     interactionMode,
+    owner,
     running,
     runtimeMode,
     startTurn,

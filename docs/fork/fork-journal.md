@@ -466,3 +466,31 @@ upstream.
   two upstream chat components directly. Repair this adapter when their props change. Do not copy
   their JSX or refactor `ChatView` into a shared controller. If upstream adds a target-aware side
   chat, remove the fork adapter after verifying owner and target isolation.
+
+## 2026-08-15 — Give side chats their main-thread context
+
+- Upstream baseline: `a5e29edeec`
+- Change: Every web or desktop turn sent from a side surface carries typed, provider-only context
+  naming the owning main thread. The provider can use the existing `thread_read` MCP tool when the
+  user's request depends on that conversation, while the persisted user message remains unchanged.
+  Cross-environment side surfaces omit the context.
+- Reason: A side chat previously knew its target but the agent had no reliable way to discover the
+  main conversation it was opened beside.
+- Scope: One optional turn and provider-send field in shared contracts; narrow web side-adapter,
+  orchestration event, reactor, and provider-service seams; focused tests and user documentation.
+  Thread persistence, projections, right-panel state, provider adapters, native mobile, and database
+  migrations are unchanged.
+- Verification: Passed 151 focused contract, provider-service, reactor, and web side-chat tests;
+  contracts, server, and web type checks; targeted lint and formatting; and `git diff --check`. In
+  an isolated dev environment, seeded a unique fact in a main GPT-5.6-Terra thread, opened a blank
+  side chat with Cmd+T, and asked for the fact without supplying the main thread ID. The provider
+  called `thread_read` with the owning thread ID and returned the correct answer. The browser and
+  SQLite projection both confirmed that the visible and persisted side-chat message omitted the
+  provider-only context.
+- Upstream conflict map: `CompactChatSurface.logic.ts` owns the send metadata. In `ChatView.tsx`,
+  preserve only the owner prop passed to the side adapter. In orchestration contracts and the
+  decider, preserve the optional `sideChatContext` propagation without adding it to
+  `thread.message-sent`. In `ProviderCommandReactor.ts`, forward that metadata; in
+  `ProviderService.ts`, prepend the fixed context after validating the user's prompt length and
+  remove the metadata before calling adapters. If upstream ships native side-chat context, remove
+  these seams instead of retaining two mechanisms.

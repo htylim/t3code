@@ -4,6 +4,7 @@ import {
   EventId,
   type ModelSelection,
   type OrchestrationEvent,
+  type ProviderSendTurnInput,
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
@@ -727,6 +728,7 @@ const make = Effect.gen(function* () {
     readonly attachments?: ReadonlyArray<ChatAttachment>;
     readonly modelSelection?: ModelSelection;
     readonly interactionMode?: "default" | "plan";
+    readonly sideChatContext?: ProviderSendTurnInput["sideChatContext"];
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThread(input.threadId);
@@ -778,6 +780,7 @@ const make = Effect.gen(function* () {
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
+      ...(input.sideChatContext !== undefined ? { sideChatContext: input.sideChatContext } : {}),
     };
   });
 
@@ -1158,6 +1161,9 @@ const make = Effect.gen(function* () {
         ? { modelSelection: event.payload.modelSelection }
         : {}),
       interactionMode: event.payload.interactionMode,
+      ...(event.payload.sideChatContext !== undefined
+        ? { sideChatContext: event.payload.sideChatContext }
+        : {}),
       createdAt: event.payload.createdAt,
     }).pipe(
       Effect.map(Option.some),

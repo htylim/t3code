@@ -691,6 +691,25 @@ it.effect("accepts a title seed in thread.turn.start", () =>
   }),
 );
 
+it.effect("accepts side-chat context in thread.turn.start", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadTurnStartCommand({
+      type: "thread.turn.start",
+      commandId: "cmd-turn-side-chat",
+      threadId: "thread-side",
+      message: {
+        messageId: "msg-side-chat",
+        role: "user",
+        text: "What did we decide?",
+        attachments: [],
+      },
+      sideChatContext: { mainThreadId: "thread-main" },
+      createdAt: "2026-08-15T12:00:00.000Z",
+    });
+    assert.deepStrictEqual(parsed.sideChatContext, { mainThreadId: "thread-main" });
+  }),
+);
+
 it.effect("accepts a title regeneration intent in thread.meta.update", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeOrchestrationCommand({
@@ -806,6 +825,18 @@ it.effect("decodes thread.turn-start-requested title seed when present", () =>
       createdAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.titleSeed, "Investigate reconnect failures");
+  }),
+);
+
+it.effect("decodes thread.turn-start-requested side-chat context when present", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadTurnStartRequestedPayload({
+      threadId: "thread-side",
+      messageId: "msg-side-chat",
+      sideChatContext: { mainThreadId: "thread-main" },
+      createdAt: "2026-08-15T12:00:00.000Z",
+    });
+    assert.deepStrictEqual(parsed.sideChatContext, { mainThreadId: "thread-main" });
   }),
 );
 

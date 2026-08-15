@@ -554,6 +554,42 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
 
+  it("forwards side-chat context without changing the persisted user message", async () => {
+    const harness = await createHarness();
+    const now = "2026-08-15T12:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-side-chat"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-side-chat"),
+          role: "user",
+          text: "What did we decide?",
+          attachments: [],
+        },
+        sideChatContext: { mainThreadId: ThreadId.make("thread-main") },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      threadId: ThreadId.make("thread-1"),
+      input: "What did we decide?",
+      sideChatContext: { mainThreadId: ThreadId.make("thread-main") },
+    });
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.messages.find((message) => message.role === "user")?.text).toBe(
+      "What did we decide?",
+    );
+  });
+
   effectIt.effect("projects starting before a slow provider session finishes", () =>
     Effect.gen(function* () {
       const releaseStart = yield* Deferred.make<void>();
