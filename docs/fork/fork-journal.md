@@ -376,3 +376,17 @@ upstream.
 - Verification: Passed 21 focused bookmark and timeline tests, the web type check, targeted lint
   and formatting, and `git diff --check`. In an isolated web environment, switched away after
   positioning a message row at `-52.42px`, then returned to the same row at exactly `-52.42px`.
+
+## 2026-08-15 — Adopt upstream desktop asset staging
+
+- Upstream baseline: `a5e29edee`
+- Change: Fork desktop releases now use upstream's generated macOS icon and DMG background staging.
+  Removed the obsolete runbook fallback that copied the deleted
+  `apps/desktop/resources/icon.icns`. Fork product naming, bundle identity, exact-version checks,
+  and omission of the upstream update feed remain unchanged.
+- Reason: Upstream removed the checked-in desktop icon outputs in favor of generating them from the
+  current brand sources. Keeping the old shim would let a release silently package a stale icon.
+- Scope: Desktop packaging integration and the manual fork release runbook. Runtime behavior and
+  application data remain unchanged.
+- Verification: Passed all 53 focused desktop packaging and fork identity tests, the scripts,
+  shared, and desktop type checks, targeted lint and formatting, and `git diff --check`.

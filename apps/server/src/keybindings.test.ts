@@ -209,6 +209,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
           ?.when,
         "rightPanelOpen",
       );
+      assert.isFalse(defaultsByCommand.has("rightPanel.toggleMaximized"));
       assert.equal(defaultsByCommand.get("terminal.splitVertical"), "mod+shift+d");
       assert.equal(defaultsByCommand.get("modelPicker.jump.1"), "mod+1");
       assert.equal(defaultsByCommand.get("modelPicker.jump.9"), "mod+9");

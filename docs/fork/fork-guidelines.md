@@ -207,58 +207,13 @@ A yielded or truncated command is not success. Wait for the process exit code an
 `[desktop-artifact] Done. Artifacts:` message. Confirm the output files have new timestamps; an old
 file with the requested version in its name may be a stale artifact from an earlier attempt.
 
-### 4. Recover from the macOS `iconutil` failure
+The packaging script generates the macOS `.icns` from `assets/prod/black-macos-1024.png` and stages
+the current DMG background. It no longer reads checked-in icon files from
+`apps/desktop/resources`. Do not restore those deleted files or replace `iconutil` with a shim. If
+icon staging fails, fix the host toolchain and rerun the packaging command. A build that did not
+complete asset staging is not releasable.
 
-On macOS 26.6.1, `/usr/bin/iconutil` can reject a correctly sized generated icon set with
-`Invalid Iconset`. It can also fail to round-trip the repository's known-good `.icns`, so repeatedly
-running the full build does not help.
-
-If this happens:
-
-1. Confirm `apps/desktop/resources/icon.icns` is tracked and unchanged. It is the known-good
-   production icon and must correspond to the selected production PNG.
-2. Put a temporary executable named `iconutil` first in `PATH`. For `-c icns ... -o <path>`, have it
-   copy the checked-in `apps/desktop/resources/icon.icns` to `<path>`; pass any other invocation to
-   `/usr/bin/iconutil`. The temporary executable can use this implementation:
-
-   ```zsh
-   #!/bin/zsh
-
-   if [[ "$1" == "-c" && "$2" == "icns" ]]; then
-     output=""
-     for ((index = 1; index <= $#; index++)); do
-       if [[ "${argv[index]}" == "-o" ]]; then
-         output="${argv[index + 1]}"
-         break
-       fi
-     done
-
-     if [[ -n "$output" ]]; then
-       cp "${T3CODE_FORK_RELEASE_ROOT:?}/apps/desktop/resources/icon.icns" "$output"
-       exit $?
-     fi
-   fi
-
-   exec /usr/bin/iconutil "$@"
-   ```
-
-   Mark it executable before the retry.
-
-3. Reuse the successful web, server, and desktop compilation from the failed attempt:
-
-   ```bash
-   T3CODE_FORK_RELEASE_ROOT="$PWD" APP_VERSION="$fork_version" \
-     PATH="<temporary-shim-directory>:$PATH" \
-     vp run dist:desktop:dmg:arm64 --build-version "$fork_version" --skip-build
-   ```
-
-4. Remove the temporary shim and check `git status --short`. The workaround must not become part of
-   the release commit or leave source changes behind.
-
-Only use this fallback for the production fork icon already checked into the repository. Do not use
-an older `.icns` when the source icon changed; fix the icon generation path instead.
-
-### 5. Verify the artifacts before tagging
+### 4. Verify the artifacts before tagging
 
 For an Apple Silicon release, verify at least the DMG, ZIP, exact version, bundle identifier,
 embedded commit, and native resource monitor:
@@ -284,7 +239,7 @@ build. Recheck `git rev-parse fork` against `fork_commit_before`; a release from
 not move `fork`. Local artifacts are unsigned; that is expected until fork signing is configured
 explicitly.
 
-### 6. Tag safely, then stop before publishing
+### 5. Tag safely, then stop before publishing
 
 Create an annotated tag that starts with `fork-v`, not `v`. A `v*.*.*` tag triggers the upstream
 release workflow and must not be used for fork releases.

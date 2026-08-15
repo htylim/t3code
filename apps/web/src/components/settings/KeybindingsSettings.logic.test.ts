@@ -144,7 +144,7 @@ describe("KeybindingsSettings.logic", () => {
     expect(options).not.toContain("customModeActive");
   });
 
-  it("builds command options from defaults and resolved project bindings", () => {
+  it("builds command options from built-in commands and resolved project bindings", () => {
     const options = buildKeybindingCommandOptions([
       {
         command: "script.setup-db.run",
@@ -163,6 +163,7 @@ describe("KeybindingsSettings.logic", () => {
       expect.arrayContaining([
         "chat.new",
         "project.switch",
+        "rightPanel.toggleMaximized",
         "thread.rename",
         "script.setup-db.run",
       ]),
