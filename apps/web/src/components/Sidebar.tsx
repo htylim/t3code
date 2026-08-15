@@ -192,8 +192,8 @@ import {
   type ComposerThreadDraftState,
   type DraftSessionState,
 } from "../composerDraftStore";
-import { useRightPanelStore } from "../rightPanelStore";
-import { confirmSideChatReplacement } from "../sideChatReplacement";
+import { confirmSideChatReplacement, openSideChat } from "../sideChatReplacement";
+import { useDeleteTransientSideChat } from "./TransientSideChatCleanup";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -1689,6 +1689,7 @@ export default function Sidebar() {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
+  const deleteTransientSideChat = useDeleteTransientSideChat();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -3137,7 +3138,14 @@ export default function Sidebar() {
                 confirm: (message) => api.dialogs.confirm(message),
               });
               if (!confirmed) return;
-              useRightPanelStore.getState().openChat(rightPanelOwnerRef, threadRef);
+              const replacedTransient = openSideChat({
+                owner: rightPanelOwnerRef,
+                target: threadRef,
+                transient: false,
+              });
+              if (replacedTransient) {
+                void deleteTransientSideChat(replacedTransient);
+              }
             }
             return;
           case "settle":
@@ -3273,6 +3281,7 @@ export default function Sidebar() {
       copyBranchToClipboard,
       copyPathToClipboard,
       copyThreadIdToClipboard,
+      deleteTransientSideChat,
       deleteThread,
       forkThread,
       handleMultiSelectContextMenu,

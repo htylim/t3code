@@ -32,6 +32,7 @@ export type RightPanelSurface =
       kind: "chat";
       environmentId: ScopedThreadRef["environmentId"];
       threadId: ScopedThreadRef["threadId"];
+      transient?: true;
     }
   | { id: `browser:${string}`; kind: "preview"; resourceId: string }
   | { id: "browser:new"; kind: "preview"; resourceId: null }
@@ -76,7 +77,8 @@ const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
 // v10 keys pull-request surfaces by reference instead of a singleton tab.
 // v11 stops persisting the pull-request list's shared panel, so a restart opens the page fresh.
 // v12 adds the target-scoped compact Chat surface.
-const RIGHT_PANEL_STORAGE_VERSION = 12;
+// v13 keeps transient Chat surfaces out of persisted panel state.
+const RIGHT_PANEL_STORAGE_VERSION = 13;
 
 /**
  * The pull-request list's shared panel (see PULL_REQUESTS_PANEL_ID in the route) is session
@@ -96,7 +98,11 @@ interface RightPanelStoreState {
     ref: ScopedThreadRef,
     kind: Exclude<RightPanelKind, "chat" | "file" | "terminal" | "pull-request">,
   ) => void;
-  openChat: (owner: ScopedThreadRef, target: ScopedThreadRef) => void;
+  openChat: (
+    owner: ScopedThreadRef,
+    target: ScopedThreadRef,
+    options?: { transient?: boolean },
+  ) => void;
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
   openFile: (ref: ScopedThreadRef, relativePath: string, line?: number) => void;
   openPullRequest: (
@@ -173,11 +179,12 @@ const terminalSurface = (terminalId: string): RightPanelSurface => ({
   activeTerminalId: terminalId,
 });
 
-const chatSurface = (target: ScopedThreadRef): RightPanelSurface => ({
+const chatSurface = (target: ScopedThreadRef, transient: boolean): RightPanelSurface => ({
   id: `chat:${target.environmentId}:${target.threadId}`,
   kind: "chat",
   environmentId: target.environmentId,
   threadId: target.threadId,
+  ...(transient ? { transient: true as const } : {}),
 });
 
 export type PullRequestSurface = Extract<RightPanelSurface, { kind: "pull-request" }>;
@@ -285,6 +292,7 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                     if ((surface as { kind?: string }).kind === "plan") return [];
                     if (surface.kind === "chat") {
                       if (
+                        surface.transient === true ||
                         chatSurfaceSeen ||
                         typeof surface.environmentId !== "string" ||
                         typeof surface.threadId !== "string" ||
@@ -404,11 +412,11 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             return upsertSurface(current, singletonSurface(kind));
           }),
         })),
-      openChat: (owner, target) => {
+      openChat: (owner, target, options) => {
         if (scopedThreadKey(owner) === scopedThreadKey(target)) return;
         set((state) => ({
           byThreadKey: updateThread(state.byThreadKey, scopedThreadKey(owner), (current) => {
-            const surface = chatSurface(target);
+            const surface = chatSurface(target, options?.transient === true);
             const withoutChat = current.surfaces.filter((entry) => entry.kind !== "chat");
             return upsertSurface({ ...current, surfaces: withoutChat }, surface);
           }),
@@ -700,9 +708,29 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
       ),
       partialize: (state) => ({
         byThreadKey: Object.fromEntries(
-          Object.entries(state.byThreadKey).filter(
-            ([threadKey]) => !isPullRequestsPanelKey(threadKey),
-          ),
+          Object.entries(state.byThreadKey).flatMap(([threadKey, threadState]) => {
+            if (isPullRequestsPanelKey(threadKey)) return [];
+            const surfaces = threadState.surfaces.filter(
+              (surface) => surface.kind !== "chat" || surface.transient !== true,
+            );
+            if (surfaces.length === 0) return [];
+            const activeSurfaceId = surfaces.some(
+              (surface) => surface.id === threadState.activeSurfaceId,
+            )
+              ? threadState.activeSurfaceId
+              : (surfaces.at(-1)?.id ?? null);
+            return [
+              [
+                threadKey,
+                {
+                  ...threadState,
+                  isOpen: threadState.isOpen && activeSurfaceId !== null,
+                  activeSurfaceId,
+                  surfaces,
+                },
+              ],
+            ];
+          }),
         ),
       }),
       migrate: migratePersistedRightPanelState,

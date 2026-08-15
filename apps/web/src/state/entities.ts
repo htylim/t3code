@@ -26,6 +26,11 @@ import { environmentProjects } from "./projects";
 import { environmentServerConfigsAtom } from "./server";
 import { allEnvironmentShellsBootstrappedAtom } from "./shell";
 import { environmentThreadDetails, environmentThreadShells } from "./threads";
+import {
+  isTransientSideChat,
+  isTransientSideChatIn,
+  useTransientSideChatStore,
+} from "../transientSideChatStore";
 
 const EMPTY_PROJECT_REFS: ReadonlyArray<ScopedProjectRef> = Object.freeze([]);
 const EMPTY_THREAD_REFS: ReadonlyArray<ScopedThreadRef> = Object.freeze([]);
@@ -86,7 +91,12 @@ export function useProjectRefs(): ReadonlyArray<ScopedProjectRef> {
 }
 
 export function useThreadRefs(): ReadonlyArray<ScopedThreadRef> {
-  return useAtomValue(environmentThreadShells.threadRefsAtom);
+  const refs = useAtomValue(environmentThreadShells.threadRefsAtom);
+  const transientByThreadKey = useTransientSideChatStore((state) => state.byThreadKey);
+  return useMemo(
+    () => refs.filter((ref) => !isTransientSideChatIn(transientByThreadKey, ref)),
+    [refs, transientByThreadKey],
+  );
 }
 
 export function useEnvironmentProjectRefs(
@@ -102,10 +112,15 @@ export function useEnvironmentProjectRefs(
 export function useEnvironmentThreadRefs(
   environmentId: EnvironmentId | null,
 ): ReadonlyArray<ScopedThreadRef> {
-  return useAtomValue(
+  const refs = useAtomValue(
     environmentId === null
       ? EMPTY_THREAD_REFS_ATOM
       : environmentThreadShells.environmentThreadRefsAtom(environmentId),
+  );
+  const transientByThreadKey = useTransientSideChatStore((state) => state.byThreadKey);
+  return useMemo(
+    () => refs.filter((ref) => !isTransientSideChatIn(transientByThreadKey, ref)),
+    [refs, transientByThreadKey],
   );
 }
 
@@ -118,7 +133,19 @@ export function useServerConfigs(): ReadonlyMap<EnvironmentId, ServerConfig> {
 }
 
 export function useThreadShells(): ReadonlyArray<EnvironmentThreadShell> {
-  return useAtomValue(environmentThreadShells.threadShellsAtom);
+  const threads = useAtomValue(environmentThreadShells.threadShellsAtom);
+  const transientByThreadKey = useTransientSideChatStore((state) => state.byThreadKey);
+  return useMemo(
+    () =>
+      threads.filter(
+        (thread) =>
+          !isTransientSideChatIn(transientByThreadKey, {
+            environmentId: thread.environmentId,
+            threadId: thread.id,
+          }),
+      ),
+    [threads, transientByThreadKey],
+  );
 }
 
 export function useAllEnvironmentShellsBootstrapped(): boolean {
@@ -128,7 +155,19 @@ export function useAllEnvironmentShellsBootstrapped(): boolean {
 export function useThreadShellsForProjectRefs(
   refs: ReadonlyArray<ScopedProjectRef>,
 ): ReadonlyArray<EnvironmentThreadShell> {
-  return useAtomValue(environmentThreadShells.threadShellsForProjectRefsAtom(refs));
+  const threads = useAtomValue(environmentThreadShells.threadShellsForProjectRefsAtom(refs));
+  const transientByThreadKey = useTransientSideChatStore((state) => state.byThreadKey);
+  return useMemo(
+    () =>
+      threads.filter(
+        (thread) =>
+          !isTransientSideChatIn(transientByThreadKey, {
+            environmentId: thread.environmentId,
+            threadId: thread.id,
+          }),
+      ),
+    [threads, transientByThreadKey],
+  );
 }
 
 export function useProject(ref: ScopedProjectRef | null): EnvironmentProject | null {
@@ -287,21 +326,26 @@ export function readThreadDetail(ref: ScopedThreadRef): EnvironmentThread | null
 export function readEnvironmentThreadRefs(
   environmentId: EnvironmentId,
 ): ReadonlyArray<ScopedThreadRef> {
-  return appAtomRegistry.get(environmentThreadShells.environmentThreadRefsAtom(environmentId));
+  return appAtomRegistry
+    .get(environmentThreadShells.environmentThreadRefsAtom(environmentId))
+    .filter((ref) => !isTransientSideChat(ref));
 }
 
 export function readThreadRefs(): ReadonlyArray<ScopedThreadRef> {
-  return appAtomRegistry.get(environmentThreadShells.threadRefsAtom);
+  return appAtomRegistry
+    .get(environmentThreadShells.threadRefsAtom)
+    .filter((ref) => !isTransientSideChat(ref));
 }
 
 export function readThreadShells(): ReadonlyArray<EnvironmentThreadShell> {
-  return appAtomRegistry.get(environmentThreadShells.threadShellsAtom);
+  return appAtomRegistry
+    .get(environmentThreadShells.threadShellsAtom)
+    .filter(
+      (thread) =>
+        !isTransientSideChat({ environmentId: thread.environmentId, threadId: thread.id }),
+    );
 }
 
 export function findThreadRef(threadId: ThreadId): ScopedThreadRef | null {
-  return (
-    appAtomRegistry
-      .get(environmentThreadShells.threadRefsAtom)
-      .find((ref) => ref.threadId === threadId) ?? null
-  );
+  return readThreadRefs().find((ref) => ref.threadId === threadId) ?? null;
 }

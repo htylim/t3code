@@ -24,18 +24,25 @@ attachments, provider and model controls, permission and interaction modes, `%` 
 Press `mod+t` (`Cmd+T` on macOS, `Ctrl+T` elsewhere) to create a blank side chat from the current
 main chat. It inherits the main chat's environment, project, model and model options, permission
 mode, interaction mode, branch, and worktree at creation time. Those settings then belong to the
-new thread and do not stay linked to later changes in the main chat. Press the shortcut again while
-the side chat is visible to close it without deleting or stopping its thread. The shortcut is the
-`chat.newSide` command and can be changed in **Settings** → **Keybindings**. Desktop receives the
-default shortcut directly; web browsers normally reserve `Cmd/Ctrl+T`, so bind another shortcut
-when using the web client.
+new thread and do not stay linked to later changes in the main chat. T3 Code treats this new side
+chat as transient. It stays out of this client's thread lists and search results, and closing or
+replacing its side surface deletes the T3 thread. The provider may retain its own native transcript.
+The shortcut is the `chat.newSide` command and can be changed in **Settings** → **Keybindings**.
+Desktop receives the default shortcut directly; web browsers normally reserve `Cmd/Ctrl+T`, so bind
+another shortcut when using the web client.
 
 You can also choose **Chat** from the right panel's surface controls to create the same blank side
 chat.
 
 The Chat surface belongs to the main thread where you opened it. Moving to another main thread
-hides that right panel; returning restores it. Closing the surface only closes the view and does
-not stop or delete the thread.
+hides that right panel; returning restores it during the same app session. Threads opened through
+**Open in side surface** remain ordinary persistent threads, so closing only removes that view.
+Blank side chats and chats created through **Ask in side chat** are transient and are deleted when
+their surface closes.
+
+Transient side surfaces are not restored after T3 Code quits. Their IDs remain in browser storage
+until deletion succeeds. On the next launch, T3 Code deletes any transient thread left behind by a
+normal quit, crash, or forced termination after that thread's environment reconnects.
 
 When you send from the side surface, T3 Code tells the agent which main thread owns the surface.
 The agent can use `thread_read` when it needs that conversation. This context is not added to the
@@ -43,9 +50,9 @@ visible user message. T3 Code omits it when the main thread belongs to another e
 Otherwise, it tells the agent to use `thread_read` only when the provider exposes T3's thread tools.
 
 Each main thread can hold one Chat surface. Opening a different target replaces the previous Chat
-surface after you confirm the replacement, while each target's unsent text remains saved. Reopening
-the current target does not ask for confirmation. Forking, checkpoint restore, terminal capture,
-and links to other right-panel surfaces remain available only from the main chat.
+surface after you confirm the replacement. Replacing a transient side chat also deletes its T3
+thread. Reopening the current target does not ask for confirmation. Forking, checkpoint restore,
+terminal capture, and links to other right-panel surfaces remain available only from the main chat.
 
 ## Return to your reading position
 

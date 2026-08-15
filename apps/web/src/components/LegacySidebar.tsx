@@ -107,8 +107,8 @@ import { isModelPickerOpen } from "../modelPickerVisibility";
 import { useShortcutModifierState } from "../shortcutModifierState";
 import { ensureLocalApi, readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
-import { useRightPanelStore } from "../rightPanelStore";
-import { confirmSideChatReplacement } from "../sideChatReplacement";
+import { confirmSideChatReplacement, openSideChat } from "../sideChatReplacement";
+import { useDeleteTransientSideChat } from "./TransientSideChatCleanup";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
 
@@ -1123,6 +1123,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     dragHandleProps,
   } = props;
   const ownerThreadRef = ownerThreadKey ? parseScopedThreadKey(ownerThreadKey) : null;
+  const deleteTransientSideChat = useDeleteTransientSideChat();
   const threadSortOrder = useClientSettings<SidebarThreadSortOrder>(
     (settings) => settings.sidebarThreadSortOrder,
   );
@@ -2225,7 +2226,14 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             confirm: (message) => api.dialogs.confirm(message),
           });
           if (!confirmed) return;
-          useRightPanelStore.getState().openChat(ownerThreadRef, threadRef);
+          const replacedTransient = openSideChat({
+            owner: ownerThreadRef,
+            target: threadRef,
+            transient: false,
+          });
+          if (replacedTransient) {
+            void deleteTransientSideChat(replacedTransient);
+          }
         }
         return;
       }
@@ -2286,6 +2294,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       appSettingsConfirmThreadDelete,
       copyPathToClipboard,
       copyThreadIdToClipboard,
+      deleteTransientSideChat,
       deleteThread,
       forkThread,
       handleNewThread,

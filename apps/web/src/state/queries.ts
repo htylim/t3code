@@ -30,6 +30,7 @@ import { projectContentSearch, projectEnvironment } from "./projects";
 import { useEnvironmentQuery } from "./query";
 import { useEnvironmentThread } from "./threads";
 import { vcsEnvironment } from "./vcs";
+import { isTransientSideChatIn, useTransientSideChatStore } from "../transientSideChatStore";
 
 const PROJECT_PATH_SEARCH_DEBOUNCE_MS = 120;
 const COMPOSER_PATH_SEARCH_LIMIT = 80;
@@ -96,9 +97,18 @@ export function useThreadSearch(
   const result = useAtomValue(
     searchKey === null ? EMPTY_THREAD_SEARCH_ATOM : threadSearchResultsAtom(searchKey),
   );
+  const transientByThreadKey = useTransientSideChatStore((state) => state.byThreadKey);
   const isDebouncing = canSearch && normalizedQuery !== debouncedQuery;
   return {
-    matches: isDebouncing ? EMPTY_THREAD_SEARCH_MATCHES : result.matches,
+    matches: isDebouncing
+      ? EMPTY_THREAD_SEARCH_MATCHES
+      : result.matches.filter(
+          (match) =>
+            !isTransientSideChatIn(transientByThreadKey, {
+              environmentId: match.environmentId,
+              threadId: match.threadId,
+            }),
+        ),
     isPending: canSearch && (isDebouncing || result.isLoading),
   };
 }

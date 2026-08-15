@@ -494,3 +494,27 @@ upstream.
   `ProviderService.ts`, prepend the fixed context after validating the user's prompt length and
   remove the metadata before calling adapters. If upstream ships native side-chat context, remove
   these seams instead of retaining two mechanisms.
+
+## 2026-08-15 — Make newly created side chats transient
+
+- Upstream baseline: `6a2e4a683`
+- Change: Side chats created through `chat.newSide` or **Ask in side chat** now stay out of the
+  creating client's thread collections and search results. Closing or replacing their side surface
+  deletes the T3 thread. A LocalStorage cleanup queue deletes threads left behind by app quit or a
+  crash after their environment reconnects. Threads opened through **Open in side surface** remain
+  persistent.
+- Reason: Short-lived follow-up chats should not accumulate in T3's thread history, but adding a
+  server visibility field or provider-specific transient sessions would create broad upstream
+  conflicts and inconsistent provider behavior.
+- Scope: Fork-owned transient registry and launch cleanup; narrow right-panel descriptor,
+  creation, replacement, close, thread-collection, and search seams; focused tests and web user
+  documentation. Server contracts, database projections, provider adapters, desktop IPC, and
+  native mobile are unchanged.
+- Verification: Passed 80 focused transient-registry, right-panel, replacement, compact Chat, and
+  command-palette tests; the web type check; targeted lint and formatting; and `git diff --check`.
+- Upstream conflict map: `transientSideChatStore.ts` and `TransientSideChatCleanup.tsx` own the
+  LocalStorage queue and deletion retry. In `rightPanelStore.ts`, preserve only the optional
+  transient Chat marker and persistence filter. In `ChatView.tsx` and both sidebars, preserve the
+  open, replacement, and close cleanup calls. In `state/entities.ts` and `state/queries.ts`, keep the
+  local collection and content-search filters. If upstream adds a server-owned unlisted or
+  transient thread model, prefer it and remove this client registry instead of maintaining both.

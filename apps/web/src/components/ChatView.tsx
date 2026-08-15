@@ -139,7 +139,8 @@ import {
   updatePullRequestTabStatus,
   useRightPanelStore,
 } from "../rightPanelStore";
-import { confirmSideChatReplacement } from "../sideChatReplacement";
+import { confirmSideChatReplacement, openSideChat } from "../sideChatReplacement";
+import { useDeleteTransientSideChat } from "./TransientSideChatCleanup";
 import {
   isPreviewSupportedInRuntime,
   setActivePreviewTab,
@@ -1236,6 +1237,7 @@ function ChatViewContent(props: ChatViewProps) {
   const closeTerminalMutation = useAtomCommand(terminalEnvironment.close, "terminal close");
   const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });
   const deleteThread = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
+  const deleteTransientSideChat = useDeleteTransientSideChat();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -3515,6 +3517,12 @@ function ChatViewContent(props: ChatViewProps) {
             });
           }
         }
+        if (surface.kind === "chat" && surface.transient === true) {
+          void deleteTransientSideChat({
+            environmentId: surface.environmentId,
+            threadId: surface.threadId,
+          });
+        }
       }
     },
     [
@@ -3522,6 +3530,7 @@ function ChatViewContent(props: ChatViewProps) {
       activePreviewState.sessions,
       closePreview,
       closeTerminalMutation,
+      deleteTransientSideChat,
       storeCloseTerminal,
     ],
   );
@@ -4776,13 +4785,21 @@ function ChatViewContent(props: ChatViewProps) {
       if (prompt !== undefined) {
         setComposerDraftPrompt(target, prompt);
       }
-      useRightPanelStore.getState().openChat(activeThreadRef, target);
+      const replacedTransient = openSideChat({
+        owner: activeThreadRef,
+        target,
+        transient: true,
+      });
+      if (replacedTransient) {
+        void deleteTransientSideChat(replacedTransient);
+      }
     },
     [
       activeThread,
       activeThreadRef,
       composerRef,
       createThread,
+      deleteTransientSideChat,
       interactionMode,
       runtimeMode,
       setComposerDraftPrompt,

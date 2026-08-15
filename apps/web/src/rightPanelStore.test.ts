@@ -355,6 +355,41 @@ describe("rightPanelStore", () => {
     });
   });
 
+  it("marks newly created side chats as transient", () => {
+    useRightPanelStore.getState().openChat(refA, refB, { transient: true });
+
+    expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+      isOpen: true,
+      activeSurfaceId: "chat:env-1:thread-B",
+      surfaces: [
+        {
+          id: "chat:env-1:thread-B",
+          kind: "chat",
+          environmentId: refB.environmentId,
+          threadId: refB.threadId,
+          transient: true,
+        },
+      ],
+    });
+  });
+
+  it("omits transient Chat surfaces from persisted panel state", () => {
+    useRightPanelStore.getState().open(refA, "diff");
+    useRightPanelStore.getState().openChat(refA, refB, { transient: true });
+    useRightPanelStore.getState().openChat(refC, refB, { transient: true });
+
+    const partialize = useRightPanelStore.persist.getOptions().partialize;
+    expect(partialize?.(useRightPanelStore.getState())).toEqual({
+      byThreadKey: {
+        "env-1:thread-A": {
+          isOpen: true,
+          activeSurfaceId: "diff",
+          surfaces: [{ id: "diff", kind: "diff" }],
+        },
+      },
+    });
+  });
+
   it("reopens the same chat surface without duplication and replaces a different target", () => {
     useRightPanelStore.getState().open(refA, "diff");
     useRightPanelStore.getState().openChat(refA, refB);
