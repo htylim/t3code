@@ -80,7 +80,7 @@ export async function showSelectedTextThreadContextMenu(input: {
 
 export async function createSelectedTextThreadDraft(input: {
   readonly prompt: string;
-  readonly createThread: () => Promise<void>;
+  readonly createThread: () => Promise<unknown>;
   readonly findCreatedDraft: () => { readonly draftId: DraftId } | null;
   readonly setPrompt: (draftId: DraftId, prompt: string) => void;
 }): Promise<void> {

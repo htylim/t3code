@@ -400,3 +400,44 @@ upstream.
   Chat availability in the `+` menu, a selected-text side chat with the source reference and Markdown
   quote prefilled but unsent, replacement Cancel and Confirm behavior, and same-target reopening
   without a dialog. Browser verification was not rerun for picker parity because it was not requested.
+
+## 2026-08-13 — Adopt upstream Copy Thread ID
+
+- Upstream baseline: `9e201941a`
+- Change: Removed the fork-specific **Copy Thread ID** variant and adopted upstream's shared thread
+  action for the sidebar and chat header.
+- Reason: Upstream now provides the same behavior, so keeping a second fork implementation would
+  create needless drift.
+- Scope: Web and desktop thread action menus and fork maintenance history. Thread forking remains a
+  separate fork feature.
+- Verification: Passed 160 merge-focused tests, 118 focused web tests, and the contracts, web,
+  mobile, and server type checks. Formatted the resolved files and checked the final diff.
+
+## 2026-08-14 — Restore thread reading positions
+
+- Upstream baseline: `9e201941a`
+- Change: Web and desktop remember a stable timeline row and its intra-row offset when the user
+  switches away from a thread, then restore that position when the user returns during the same app
+  session. Reaching the live edge or sending clears the bookmark.
+- Reason: Thread navigation previously reopened every conversation at the live edge and lost the
+  user's reading position.
+- Scope: A fork-owned in-memory bookmark module, narrow LegendList and chat lifecycle seams, focused
+  tests, and user documentation. Mobile, server contracts, providers, and database persistence are
+  unchanged.
+- Verification: Passed 21 focused bookmark and timeline tests, the web type check, targeted lint
+  and formatting, and `git diff --check`. In an isolated web environment, switched away after
+  positioning a message row at `-52.42px`, then returned to the same row at exactly `-52.42px`.
+
+## 2026-08-15 — Adopt upstream desktop asset staging
+
+- Upstream baseline: `a5e29edee`
+- Change: Fork desktop releases now use upstream's generated macOS icon and DMG background staging.
+  Removed the obsolete runbook fallback that copied the deleted
+  `apps/desktop/resources/icon.icns`. Fork product naming, bundle identity, exact-version checks,
+  and omission of the upstream update feed remain unchanged.
+- Reason: Upstream removed the checked-in desktop icon outputs in favor of generating them from the
+  current brand sources. Keeping the old shim would let a release silently package a stale icon.
+- Scope: Desktop packaging integration and the manual fork release runbook. Runtime behavior and
+  application data remain unchanged.
+- Verification: Passed all 53 focused desktop packaging and fork identity tests, the scripts,
+  shared, and desktop type checks, targeted lint and formatting, and `git diff --check`.

@@ -50,6 +50,12 @@ it.effect("parses keybinding rules", () =>
     });
     assert.strictEqual(parsedRightPanelClose.command, "rightPanel.close");
 
+    const parsedRightPanelToggleMaximized = yield* decode(KeybindingRule, {
+      key: "mod+shift+m",
+      command: "rightPanel.toggleMaximized",
+    });
+    assert.strictEqual(parsedRightPanelToggleMaximized.command, "rightPanel.toggleMaximized");
+
     const parsedClose = yield* decode(KeybindingRule, {
       key: "mod+w",
       command: "terminal.close",

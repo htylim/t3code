@@ -40,3 +40,21 @@ surface after you confirm the replacement, while each target's unsent text remai
 the current target does not ask for confirmation. The compact composer does not include image
 attachments, provider or model controls, plan actions, checkpoint restore, or links to other
 right-panel surfaces.
+
+## Return to your reading position
+
+On web and desktop, switching away from a thread keeps your reading position for the rest of the
+app session. Returning restores the same timeline row and position within it, even if row heights
+changed while you were away. Reaching the live edge or sending a message clears the saved position.
+Reloading the app also clears it.
+
+## Environment artwork
+
+Dev and Nightly environments can identify themselves with artwork at the top of the sidebar and in
+the send button. Choose **Artwork**, **Version pill**, or **None** in Settings under environment
+identification. Artwork is recolored to match each built-in theme. Custom themes use the **Version
+pill** fallback because their colors are not controlled by T3 Code.
+
+To generate a fresh title from the conversation, open a thread's context menu and choose
+**Regenerate title**. While T3 Code is generating it, the action reads **Regenerating…** and cannot
+be selected again. The option is hidden when the connected environment needs a server update.
