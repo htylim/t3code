@@ -5,6 +5,7 @@ import { useComposerDraftStore } from "../../composerDraftStore";
 import { readLocalApi } from "../../localApi";
 import {
   buildAskInNewThreadPrompt,
+  buildAskInSideChatPrompt,
   createSelectedTextThreadDraft,
   readSelectedChatMarkdown,
   showSelectedTextThreadContextMenu,
@@ -49,11 +50,6 @@ export function AskInNewThreadSelectionSurface({
       if (!api) return;
 
       const position = { x: event.clientX, y: event.clientY };
-      const prompt = buildAskInNewThreadPrompt({
-        selectedMarkdown,
-        sourceThreadTitle,
-        sourceThreadRef,
-      });
 
       void (async () => {
         try {
@@ -64,10 +60,15 @@ export function AskInNewThreadSelectionSurface({
           if (action === null) return;
 
           if (action === "ask-in-side-chat") {
-            await createSideThread(prompt);
+            await createSideThread(buildAskInSideChatPrompt(selectedMarkdown));
             return;
           }
 
+          const prompt = buildAskInNewThreadPrompt({
+            selectedMarkdown,
+            sourceThreadTitle,
+            sourceThreadRef,
+          });
           const store = useComposerDraftStore.getState();
           await createSelectedTextThreadDraft({
             prompt,

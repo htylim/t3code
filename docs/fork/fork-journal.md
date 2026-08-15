@@ -518,3 +518,16 @@ upstream.
   open, replacement, and close cleanup calls. In `state/entities.ts` and `state/queries.ts`, keep the
   local collection and content-search filters. If upstream adds a server-owned unlisted or
   transient thread model, prefer it and remove this client registry instead of maintaining both.
+
+## 2026-08-15 — Remove redundant source text from selected side chats
+
+- Upstream baseline: `6a2e4a683`
+- Change: **Ask in side chat** now prefills only the selected Markdown quote. **Ask in new thread**
+  keeps its source-thread reference.
+- Reason: Side-chat turns already carry the owning main thread as provider-only context, so naming
+  the source again in the visible draft duplicated information.
+- Scope: Web and desktop selected-text prompt building, focused tests, and user guidance. Mobile,
+  contracts, server orchestration, providers, and persistence are unchanged.
+- Verification: Passed the focused selected-text tests, web type check, targeted lint and
+  formatting, and `git diff --check`. In the isolated dev app, selected an assistant response and
+  confirmed **Ask in side chat** opened an unsent draft containing only its Markdown quote.

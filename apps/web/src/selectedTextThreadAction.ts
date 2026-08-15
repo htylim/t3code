@@ -68,6 +68,10 @@ export function buildAskInNewThreadPrompt(input: {
   return `Regarding this selection from ${source}:\n\n${markdownBlockquote(input.selectedMarkdown)}\n\n`;
 }
 
+export function buildAskInSideChatPrompt(selectedMarkdown: string): string {
+  return `${markdownBlockquote(selectedMarkdown)}\n\n`;
+}
+
 export async function showSelectedTextThreadContextMenu(input: {
   readonly position: { readonly x: number; readonly y: number };
   readonly showContextMenu: (

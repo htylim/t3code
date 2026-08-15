@@ -5,6 +5,7 @@ import { DraftId } from "./composerDraftStore";
 import {
   SELECTED_TEXT_THREAD_CONTEXT_MENU_ITEMS,
   buildAskInNewThreadPrompt,
+  buildAskInSideChatPrompt,
   createSelectedTextThreadDraft,
   showSelectedTextThreadContextMenu,
 } from "./selectedTextThreadAction";
@@ -22,6 +23,14 @@ describe("Ask in new thread prompt", () => {
       }),
     ).toBe(
       "Regarding this selection from [Epic \\[3\\] finding](t3code://threads/local%2Fenvironment/thread%2Fone):\n\n> First line\n>\n> - Second line\n\n",
+    );
+  });
+});
+
+describe("Ask in side chat prompt", () => {
+  it("quotes selected Markdown without repeating the main thread reference", () => {
+    expect(buildAskInSideChatPrompt("First line\n\n- Second line")).toBe(
+      "> First line\n>\n> - Second line\n\n",
     );
   });
 });
