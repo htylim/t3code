@@ -544,3 +544,26 @@ upstream.
 - Verification: Passed the focused selected-text tests, web type check, targeted lint and
   formatting, and `git diff --check`. In the isolated dev app, selected an assistant response and
   confirmed **Ask in side chat** opened an unsent draft containing only its Markdown quote.
+
+## 2026-08-17 — Render Mermaid diagrams in web Markdown
+
+- Upstream baseline: `a5e29edeec`
+- Change: Completed `mermaid` fences render as themed diagrams in web and desktop Markdown views.
+  Streaming and invalid diagrams remain source blocks. Rendered diagrams retain their fenced source
+  for selection and copying and provide zoom, fit, copy, and expanded-view actions.
+- Reason: Agents often explain control flow and architecture with Mermaid. Rendering the existing
+  Markdown makes those answers readable without sending diagram data through new contracts or
+  external services.
+- Scope: A fork-owned Mermaid component and lazy renderer; one fenced-code branch in the shared web
+  Markdown renderer; focused tests and user documentation. Desktop inherits the web behavior.
+  Native mobile, server contracts, persistence, and providers are unchanged.
+- Verification: Passed 27 focused Mermaid and Markdown tests, the web type check, targeted lint and
+  formatting, the production web build, and `git diff --check`. In the isolated dev app, mounted
+  the production Mermaid component and confirmed the supplied flowchart, fitted rendering, zoom
+  controls, source copy, expanded view, light and dark themes, and invalid-source fallback. The
+  authenticated chat route was not used because the collaborative browser rejected its one-time
+  local pairing credential.
+- Upstream conflict map: `components/chat/MermaidDiagram.tsx` and `mermaidRendering.ts` own the
+  feature. In `ChatMarkdown.tsx`, preserve only the import and the early `language === "mermaid"`
+  branch immediately before the existing code-block return. If upstream adds Mermaid rendering,
+  prefer it and remove the fork-owned component instead of keeping both implementations.

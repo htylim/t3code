@@ -13,6 +13,7 @@
 - [Source control integrations](./user/source-control.md)
 - [Forking a thread](./user/thread-forking.md)
 - [Referencing another thread](./user/thread-references.md)
+- [Mermaid diagrams](./user/mermaid-diagrams.md)
 - [Background service (Linux)](./user/background-service.md)
 - Providers: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md)
 

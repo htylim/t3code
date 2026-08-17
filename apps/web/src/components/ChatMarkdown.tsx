@@ -46,6 +46,7 @@ import remarkGfm from "remark-gfm";
 import { remarkGithubAlerts } from "../markdown-github-alerts";
 import { renderSkillInlineMarkdownChildren } from "./chat/SkillInlineText";
 import { CHAT_FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
+import { MermaidDiagram } from "./chat/MermaidDiagram";
 import { ThreadReferenceLink } from "./chat/ThreadReferenceLink";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import {
@@ -1820,6 +1821,15 @@ function ChatMarkdown({
 
         const language = extractFenceLanguage(codeBlock.className);
         const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
+        if (language === "mermaid" && !isStreaming) {
+          return (
+            <MermaidDiagram
+              source={codeBlock.code}
+              theme={resolvedTheme}
+              fallback={<pre {...props}>{children}</pre>}
+            />
+          );
+        }
         return (
           <MarkdownCodeBlock
             code={codeBlock.code}
