@@ -41,6 +41,31 @@ describe("loadRepoEnv", () => {
     expect(env.VITE_RELAY_OTLP_TRACES_TOKEN).toBeUndefined();
   });
 
+  it("uses the example public configuration only when explicitly requested", () => {
+    const repoRoot = makeTemporaryDirectory();
+    NodeFS.writeFileSync(
+      NodePath.join(repoRoot, ".env.example"),
+      "T3CODE_CLERK_PUBLISHABLE_KEY=pk_example\nT3CODE_CLERK_JWT_TEMPLATE=template_example\nT3CODE_CLERK_CLI_OAUTH_CLIENT_ID=oauth_example\nT3CODE_RELAY_URL=https://relay.example.test\n",
+    );
+
+    expect(loadRepoEnv({ baseEnv: {}, repoRoot }).T3CODE_RELAY_URL).toBeUndefined();
+    expect(loadRepoEnv({ baseEnv: {}, repoRoot, includeExampleDefaults: true })).toMatchObject({
+      T3CODE_CLERK_PUBLISHABLE_KEY: "pk_example",
+      T3CODE_CLERK_JWT_TEMPLATE: "template_example",
+      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "oauth_example",
+      T3CODE_RELAY_URL: "https://relay.example.test",
+      VITE_T3CODE_RELAY_URL: "https://relay.example.test",
+    });
+
+    NodeFS.writeFileSync(
+      NodePath.join(repoRoot, ".env"),
+      "T3CODE_RELAY_URL=https://relay.override.test\n",
+    );
+    expect(
+      loadRepoEnv({ baseEnv: {}, repoRoot, includeExampleDefaults: true }).T3CODE_RELAY_URL,
+    ).toBe("https://relay.override.test");
+  });
+
   it("applies process, root local, and root precedence in that order", () => {
     const repoRoot = makeTemporaryDirectory();
     NodeFS.writeFileSync(

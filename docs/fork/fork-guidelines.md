@@ -105,6 +105,12 @@ and upstream desktop apps must not run at the same time.
 Fork artifacts do not include an upstream auto-update feed. Build and install a new artifact to
 update the fork, incrementing the final fork version identifier for each release.
 
+Fork artifact builds include T3 Connect by using the public identifiers in `.env.example` as
+lowest-precedence defaults. Process environment variables, `.env.local`, and `.env` still override
+them. This keeps T3 Connect enabled in the disposable release worktree without storing secrets or
+copying an ignored file into it. Direct source development remains opt-in; copy `.env.example` to
+`.env` when `vp run dev:desktop` should expose the cloud UI.
+
 Before the first install, back up `~/.t3/userdata` and fully quit every running T3 Code app. Open the
 DMG, drag `T3 Code (Fork)` into `/Applications`, then right-click the installed app and choose
 **Open** because local builds are unsigned.

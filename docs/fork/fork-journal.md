@@ -19,6 +19,19 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-08-17 — Enable T3 Connect in Fork desktop artifacts
+
+- Upstream baseline: `a5e29edeec`
+- Change: Fork desktop packaging now uses `.env.example` as the lowest-precedence source for public
+  T3 Connect build configuration. Ordinary upstream-identity builds and unconfigured development
+  clones remain cloud-disabled.
+- Reason: Disposable fork release worktrees do not contain ignored `.env` files, so previous Fork
+  artifacts silently omitted T3 Connect even though the source supports it.
+- Scope: Public configuration loading, desktop artifact source-build environment, focused tests,
+  and fork release guidance.
+- Verification: Focused public-config and desktop artifact tests, plus targeted formatting, lint,
+  and type checks.
+
 ## 2026-08-02 — Fork initialized
 
 - Upstream baseline: `e60821f0e`

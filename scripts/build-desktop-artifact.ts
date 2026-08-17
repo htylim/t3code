@@ -2028,6 +2028,18 @@ export function resolveDesktopProductName(version: string): string {
     : (desktopPackageJson.productName ?? "T3 Code");
 }
 
+export function resolveDesktopSourceBuildEnvironment(
+  version: string,
+  repoRoot: string,
+  baseEnv: Readonly<Record<string, string | undefined>> = process.env,
+): Record<string, string | undefined> {
+  return loadRepoEnv({
+    baseEnv,
+    repoRoot,
+    includeExampleDefaults: isForkDesktopVersion(version),
+  });
+}
+
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   platform: typeof BuildPlatform.Type,
   target: string,
@@ -2711,10 +2723,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   if (!options.skipBuild) {
     yield* Effect.log("[desktop-artifact] Building desktop/server/web artifacts...");
     const spawnCommand = yield* resolveSpawnCommand("vp", ["run", "build:desktop"]);
+    const sourceBuildEnv = resolveDesktopSourceBuildEnvironment(appVersion, repoRoot, process.env);
     yield* runCommand(
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         cwd: repoRoot,
         shell: spawnCommand.shell,
+        env: sourceBuildEnv,
       }),
       { label: "vp run build:desktop", verbose: options.verbose },
     );

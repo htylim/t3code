@@ -37,6 +37,7 @@ import {
   resolveBuildOptions,
   resolveDesktopBuildIconAssets,
   resolveDesktopProductName,
+  resolveDesktopSourceBuildEnvironment,
   resolveDesktopUpdateChannel,
   resolveDesktopWebAssetBrand,
   resolveResourceMonitorRustTargets,
@@ -520,6 +521,30 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
       }
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it.effect("includes the example T3 Connect configuration in fork source builds", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const repoRoot = yield* fs.makeTempDirectoryScoped({
+          prefix: "t3-fork-public-config-",
+        });
+        yield* fs.writeFileString(
+          path.join(repoRoot, ".env.example"),
+          "T3CODE_CLERK_PUBLISHABLE_KEY=pk_example\nT3CODE_CLERK_JWT_TEMPLATE=template_example\nT3CODE_CLERK_CLI_OAUTH_CLIENT_ID=oauth_example\nT3CODE_RELAY_URL=https://relay.example.test\n",
+        );
+
+        assert.equal(
+          resolveDesktopSourceBuildEnvironment("0.0.33-fork.3", repoRoot, {}).T3CODE_RELAY_URL,
+          "https://relay.example.test",
+        );
+        assert.isUndefined(
+          resolveDesktopSourceBuildEnvironment("0.0.33", repoRoot, {}).T3CODE_RELAY_URL,
+        );
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("validates every ASAR-unpacked native in the packaged Windows payload", () =>
