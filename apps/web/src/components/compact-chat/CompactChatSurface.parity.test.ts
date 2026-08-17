@@ -23,4 +23,10 @@ describe("side chat presentation parity", () => {
     expect(source).toContain("event?.preventDefault()");
     expect(source).not.toContain("onSend={() => void handleSend()}");
   });
+
+  it("focuses the side composer once its target thread is ready", () => {
+    expect(source).toMatch(
+      /useEffect\(\(\) => \{\s+if \(!thread\?\.id\) return;\s+scheduleComposerFocus\(\);\s+\}, \[scheduleComposerFocus, thread\?\.id\]\);/,
+    );
+  });
 });

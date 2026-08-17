@@ -319,6 +319,11 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
     window.requestAnimationFrame(() => composerRef.current?.focusAtEnd());
   }, []);
 
+  useEffect(() => {
+    if (!thread?.id) return;
+    scheduleComposerFocus();
+  }, [scheduleComposerFocus, thread?.id]);
+
   const handleRuntimeModeChange = useCallback(
     (mode: RuntimeMode) => {
       setComposerDraftRuntimeMode(target, mode);

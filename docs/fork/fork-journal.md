@@ -19,6 +19,19 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-08-17 — Focus side chats when opened
+
+- Upstream baseline: `a5e29edeec`
+- Change: Opening a side chat now moves keyboard focus from the main composer to the side-chat
+  composer after its target thread loads.
+- Reason: The side surface became visible while the main composer kept the caret, so typing still
+  went to the main chat.
+- Scope: The fork-owned side-chat adapter and its focused presentation test. Desktop inherits the
+  web behavior. Mobile and other right-panel surfaces are unchanged.
+- Verification: Passed 11 focused side-chat tests, the web type check, targeted lint and formatting,
+  and `git diff --check`. In the isolated dev app, opened Chat from the right-panel picker and
+  confirmed the side composer became `document.activeElement` while the main composer lost focus.
+
 ## 2026-08-17 — Enable T3 Connect in Fork desktop artifacts
 
 - Upstream baseline: `a5e29edeec`
