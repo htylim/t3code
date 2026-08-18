@@ -580,3 +580,16 @@ upstream.
   feature. In `ChatMarkdown.tsx`, preserve only the import and the early `language === "mermaid"`
   branch immediately before the existing code-block return. If upstream adds Mermaid rendering,
   prefer it and remove the fork-owned component instead of keeping both implementations.
+
+## 2026-08-17 — Pan Mermaid diagrams with the mouse
+
+- Upstream baseline: `a5e29edeec`
+- Change: Web and desktop users can drag diagram shapes or empty space to pan inline and expanded
+  Mermaid diagrams. Label text remains selectable, and the existing scrollbars remain available.
+- Reason: Zoomed diagrams previously required direct scrollbar use to move around the canvas.
+- Scope: The fork-owned Mermaid component, focused tests, and user documentation. Native mobile,
+  server contracts, persistence, and providers are unchanged.
+- Verification: Focused Mermaid tests, the web type check, targeted lint and formatting, and
+  `git diff --check`. In an isolated dev app, a wide diagram panned horizontally in both inline and
+  expanded views, a tall diagram panned vertically, label text remained selectable, and scrollbar
+  presses were not intercepted.

@@ -15,5 +15,6 @@ diagram replaces the source block. If Mermaid rejects the syntax, T3 Code keeps 
 instead.
 
 Diagrams initially fit inside the pane. Use the toolbar to zoom from 25% to 200%, return to the
-fitted size, copy the Mermaid source, or open a larger view. Diagram links and callbacks are
-disabled. Native mobile clients continue to show Mermaid fences as code.
+fitted size, copy the Mermaid source, or open a larger view. Drag shapes or empty space to pan while
+zoomed in. Drag across label text to select it. The scrollbars remain available. Diagram links and
+callbacks are disabled. Native mobile clients continue to show Mermaid fences as code.

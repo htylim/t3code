@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type SetStateAction,
 } from "react";
@@ -32,6 +33,71 @@ type RenderState =
 const MERMAID_ZOOM_MIN = 25;
 const MERMAID_ZOOM_MAX = 200;
 const MERMAID_ZOOM_STEP = 25;
+const MERMAID_TEXT_SELECTOR = "text, foreignObject";
+
+interface MermaidPanState {
+  readonly pointerId: number;
+  readonly startLeft: number;
+  readonly startTop: number;
+  readonly startX: number;
+  readonly startY: number;
+}
+
+function hasClosest(target: EventTarget | null): target is EventTarget & Element {
+  return (
+    typeof target === "object" &&
+    target !== null &&
+    "closest" in target &&
+    typeof target.closest === "function"
+  );
+}
+
+export function shouldStartMermaidPan({
+  button,
+  isPrimary,
+  pointerType,
+  target,
+}: {
+  readonly button: number;
+  readonly isPrimary: boolean;
+  readonly pointerType: string;
+  readonly target: EventTarget | null;
+}): boolean {
+  return (
+    button === 0 &&
+    isPrimary &&
+    pointerType === "mouse" &&
+    (!hasClosest(target) || target.closest(MERMAID_TEXT_SELECTOR) === null)
+  );
+}
+
+export function mermaidPanPosition({
+  currentX,
+  currentY,
+  startLeft,
+  startTop,
+  startX,
+  startY,
+}: Omit<MermaidPanState, "pointerId"> & {
+  readonly currentX: number;
+  readonly currentY: number;
+}): { readonly left: number; readonly top: number } {
+  return {
+    left: startLeft - (currentX - startX),
+    top: startTop - (currentY - startY),
+  };
+}
+
+function isMermaidScrollbarPointer(
+  viewport: HTMLDivElement,
+  clientX: number,
+  clientY: number,
+): boolean {
+  const bounds = viewport.getBoundingClientRect();
+  const contentX = clientX - bounds.left - viewport.clientLeft;
+  const contentY = clientY - bounds.top - viewport.clientTop;
+  return contentX >= viewport.clientWidth || contentY >= viewport.clientHeight;
+}
 
 export function stepMermaidZoom(zoom: number, direction: -1 | 1): number {
   return Math.min(
@@ -102,6 +168,85 @@ function MermaidSvg({
         }
         dangerouslySetInnerHTML={{ __html: svg }}
       />
+    </div>
+  );
+}
+
+function MermaidViewport({
+  expanded,
+  svg,
+  zoom,
+}: {
+  readonly expanded: boolean;
+  readonly svg: string;
+  readonly zoom: number;
+}) {
+  const panStateRef = useRef<MermaidPanState>(null);
+  const [isPanning, setIsPanning] = useState(false);
+
+  const finishPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const panState = panStateRef.current;
+    if (!panState || panState.pointerId !== event.pointerId) return;
+
+    panStateRef.current = null;
+    setIsPanning(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const viewportClassName = [
+    expanded ? "min-h-0 flex-1" : "max-h-[32rem] border-t border-border/60",
+    "overflow-auto bg-background",
+    isPanning
+      ? "cursor-grabbing select-none [&_*]:cursor-grabbing"
+      : "cursor-grab [&_foreignObject]:cursor-text [&_foreignObject_*]:cursor-text [&_text]:cursor-text",
+  ].join(" ");
+
+  return (
+    <div
+      className={viewportClassName}
+      onLostPointerCapture={finishPan}
+      onPointerCancel={finishPan}
+      onPointerDown={(event) => {
+        if (
+          !shouldStartMermaidPan(event) ||
+          isMermaidScrollbarPointer(event.currentTarget, event.clientX, event.clientY)
+        ) {
+          return;
+        }
+
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          return;
+        }
+        event.preventDefault();
+        panStateRef.current = {
+          pointerId: event.pointerId,
+          startLeft: event.currentTarget.scrollLeft,
+          startTop: event.currentTarget.scrollTop,
+          startX: event.clientX,
+          startY: event.clientY,
+        };
+        setIsPanning(true);
+      }}
+      onPointerMove={(event) => {
+        const panState = panStateRef.current;
+        if (!panState || panState.pointerId !== event.pointerId) return;
+
+        event.preventDefault();
+        const position = mermaidPanPosition({
+          ...panState,
+          currentX: event.clientX,
+          currentY: event.clientY,
+        });
+        event.currentTarget.scrollLeft = position.left;
+        event.currentTarget.scrollTop = position.top;
+      }}
+      onPointerUp={finishPan}
+    >
+      <MermaidSvg svg={svg} expanded={expanded} zoom={zoom} />
     </div>
   );
 }
@@ -269,9 +414,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({
           </Tooltip>
         </span>
       </div>
-      <div className="max-h-[32rem] overflow-auto border-t border-border/60 bg-background">
-        {expanded ? null : <MermaidSvg svg={renderState.svg} expanded={false} zoom={zoom} />}
-      </div>
+      {expanded ? null : <MermaidViewport svg={renderState.svg} expanded={false} zoom={zoom} />}
 
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogPopup
@@ -282,9 +425,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({
             <DialogTitle className="text-base">Mermaid diagram</DialogTitle>
             <MermaidZoomControls zoom={zoom} setZoom={setZoom} />
           </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-auto bg-background">
-            {expanded ? <MermaidSvg svg={renderState.svg} expanded zoom={zoom} /> : null}
-          </div>
+          {expanded ? <MermaidViewport svg={renderState.svg} expanded zoom={zoom} /> : null}
         </DialogPopup>
       </Dialog>
     </div>

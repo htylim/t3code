@@ -1,7 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
-import { MermaidDiagram, mermaidFenceMarkdown, stepMermaidZoom } from "./MermaidDiagram";
+import {
+  MermaidDiagram,
+  mermaidFenceMarkdown,
+  mermaidPanPosition,
+  shouldStartMermaidPan,
+  stepMermaidZoom,
+} from "./MermaidDiagram";
 
 describe("MermaidDiagram", () => {
   it("preserves the source as a Mermaid fence for selection and copy", () => {
@@ -21,6 +27,48 @@ describe("MermaidDiagram", () => {
     expect(stepMermaidZoom(100, 1)).toBe(125);
     expect(stepMermaidZoom(25, -1)).toBe(25);
     expect(stepMermaidZoom(200, 1)).toBe(200);
+  });
+
+  it("starts primary-button panning outside diagram text", () => {
+    const shape = {
+      closest: () => null,
+    } as unknown as EventTarget;
+
+    expect(
+      shouldStartMermaidPan({ button: 0, isPrimary: true, pointerType: "mouse", target: shape }),
+    ).toBe(true);
+    expect(
+      shouldStartMermaidPan({ button: 1, isPrimary: true, pointerType: "mouse", target: shape }),
+    ).toBe(false);
+    expect(
+      shouldStartMermaidPan({ button: 0, isPrimary: false, pointerType: "mouse", target: shape }),
+    ).toBe(false);
+    expect(
+      shouldStartMermaidPan({ button: 0, isPrimary: true, pointerType: "touch", target: shape }),
+    ).toBe(false);
+  });
+
+  it("leaves SVG and HTML Mermaid labels selectable", () => {
+    const label = {
+      closest: (selector: string) => (selector === "text, foreignObject" ? {} : null),
+    } as unknown as EventTarget;
+
+    expect(
+      shouldStartMermaidPan({ button: 0, isPrimary: true, pointerType: "mouse", target: label }),
+    ).toBe(false);
+  });
+
+  it("moves both scroll axes opposite the pointer drag", () => {
+    expect(
+      mermaidPanPosition({
+        startLeft: 240,
+        startTop: 180,
+        startX: 100,
+        startY: 80,
+        currentX: 70,
+        currentY: 120,
+      }),
+    ).toEqual({ left: 270, top: 140 });
   });
 
   it("server-renders the source fallback without loading Mermaid", () => {
