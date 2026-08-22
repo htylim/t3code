@@ -8,6 +8,7 @@ import {
   ClientOrchestrationOperation,
   ModelSelection,
   OrchestrationCommand,
+  OrchestrationDispatchCommandError,
   OrchestrationEvent,
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetTurnDiffInput,
@@ -57,6 +58,10 @@ const decodeOrchestrationCommand = Schema.decodeUnknownEffect(OrchestrationComma
 const decodeOrchestrationEvent = Schema.decodeUnknownEffect(OrchestrationEvent);
 const decodeThreadMetaUpdatedPayload = Schema.decodeUnknownEffect(ThreadMetaUpdatedPayload);
 const decodeClientOrchestrationOperation = Schema.decodeUnknownEffect(ClientOrchestrationOperation);
+const decodeDispatchCommandError = Schema.decodeUnknownEffect(OrchestrationDispatchCommandError);
+const decodeDispatchCommandInput = Schema.decodeUnknownEffect(
+  OrchestrationRpcSchemas.dispatchCommand.input,
+);
 
 it.effect("decodes the thread.fork operation with source and target ids", () =>
   Effect.gen(function* () {
@@ -94,17 +99,27 @@ it.effect("rejects thread.fork payloads with the same source and target id", () 
 
 it.effect("accepts thread.fork through the existing WebSocket dispatch payload", () =>
   Effect.gen(function* () {
-    const parsed = yield* Schema.decodeUnknownEffect(OrchestrationRpcSchemas.dispatchCommand.input)(
-      {
-        type: "thread.fork",
-        sourceThreadId: "thread-source",
-        threadId: "thread-target",
-        commandId: "cmd-ws-fork",
-        createdAt: "2026-08-06T00:00:00.000Z",
-      },
-    );
+    const parsed = yield* decodeDispatchCommandInput({
+      type: "thread.fork",
+      sourceThreadId: "thread-source",
+      threadId: "thread-target",
+      commandId: "cmd-ws-fork",
+      createdAt: "2026-08-06T00:00:00.000Z",
+    });
 
     assert.strictEqual(parsed.type, "thread.fork");
+  }),
+);
+
+it.effect("decodes a dispatch error after its bootstrap thread was deleted", () =>
+  Effect.gen(function* () {
+    const error = yield* decodeDispatchCommandError({
+      _tag: "OrchestrationDispatchCommandError",
+      message: "Failed to create worktree.",
+      bootstrapThreadDisposition: "deleted",
+    });
+
+    assert.strictEqual(error.bootstrapThreadDisposition, "deleted");
   }),
 );
 

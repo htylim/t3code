@@ -63,7 +63,6 @@ import {
   deriveTimelineEntries,
   deriveTurnPlans,
   deriveWorkLogEntries,
-  isLatestTurnSettled,
 } from "~/session-logic";
 import { useEnvironment } from "~/state/environments";
 import { useProject, useThread } from "~/state/entities";
@@ -267,10 +266,6 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   const interactionMode: ProviderInteractionMode = settings.planModeEnabled
     ? (composerDraft.interactionMode ?? thread?.interactionMode ?? "default")
     : "default";
-  const latestTurnSettled = isLatestTurnSettled(
-    thread?.latestTurn ?? null,
-    thread?.session ?? null,
-  );
   const activePlan = useMemo(
     () => deriveActivePlanState(activities, thread?.latestTurn?.turnId),
     [activities, thread?.latestTurn?.turnId],
@@ -589,7 +584,6 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
           key={routeThreadKey}
           isWorking={isWorking}
           workingStepLabel={workingStepLabel}
-          activeTurnInProgress={isWorking || !latestTurnSettled}
           activeTurnStartedAt={activeWorkStartedAt}
           listRef={legendListRef}
           timelineEntries={timelineEntries}
@@ -636,7 +630,6 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
           >
             <Button
               aria-label="Scroll to end"
-              title="Scroll to end"
               className="pointer-events-auto gap-1.5 rounded-full px-3 text-muted-foreground hover:text-foreground"
               size="xs"
               variant="glass"
@@ -682,6 +675,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   sendBusyLabel="Sending"
                   sendDisabledReason={null}
                   isPreparingWorktree={false}
+                  externalDrawerAttached={false}
                   environmentUnavailable={environmentUnavailable}
                   activePendingApproval={activePendingApproval}
                   pendingApprovals={pendingApprovals}
@@ -698,6 +692,8 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   respondingRequestIds={respondingRequestIds}
                   showPlanFollowUpPrompt={false}
                   activeProposedPlan={null}
+                  activeTasksProgress={null}
+                  activeTaskSteps={null}
                   runtimeMode={runtimeMode}
                   interactionMode={interactionMode}
                   lockedProvider={lockedProvider}

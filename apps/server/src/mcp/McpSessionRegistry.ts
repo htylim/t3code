@@ -15,6 +15,7 @@ export interface McpCredentialRequest {
   readonly threadId: ThreadId;
   readonly providerInstanceId: ProviderInstanceId;
   readonly runtimeMode: RuntimeMode;
+  readonly browserAccessEnabled: boolean;
 }
 
 export interface McpIssuedCredential {
@@ -133,7 +134,10 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         threadId: ThreadId.make(request.threadId),
         providerSessionId,
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
-        capabilities: new Set(["preview", "thread-control"]),
+        capabilities: new Set([
+          ...(request.browserAccessEnabled ? (["preview"] as const) : []),
+          "thread-control" as const,
+        ]),
         maxRuntimeMode: request.runtimeMode,
         controlledThreadIds: new Set(),
         issuedAt,
@@ -149,6 +153,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
           threadId: scope.threadId,
           providerSessionId,
           providerInstanceId: scope.providerInstanceId,
+          browserToolsAvailable: request.browserAccessEnabled,
           endpoint,
           authorizationHeader: `Bearer ${rawToken}`,
         },
