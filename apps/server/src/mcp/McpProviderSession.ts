@@ -5,6 +5,7 @@ export interface McpProviderSessionConfig {
   readonly threadId: ThreadId;
   readonly providerSessionId: string;
   readonly providerInstanceId: ProviderInstanceId;
+  readonly browserToolsAvailable: boolean;
   readonly endpoint: string;
   readonly authorizationHeader: string;
 }

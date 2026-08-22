@@ -642,6 +642,7 @@ it.effect("lists both toolkits for a valid provider credential and rejects an in
         threadId,
         providerInstanceId: ProviderInstanceId.make("codex"),
         runtimeMode: "auto",
+        browserAccessEnabled: true,
       });
       const routes = McpHttpServer.layer.pipe(
         Layer.provide(Layer.succeed(McpSessionRegistry.McpSessionRegistry, registry)),

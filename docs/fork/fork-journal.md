@@ -19,6 +19,24 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-08-22 — Merge upstream without disabling thread control
+
+- Upstream baseline: `2c4158f87a1b`
+- Change: Merged upstream's 113 commits. The new agent-browser setting now removes only the MCP
+  preview capability and browser instructions; fork-owned thread-control credentials and guidance
+  remain available. Adopted upstream's first-message anchoring and follow-up scrolling while
+  retaining fork reading-position bookmarks and clearing them on send.
+- Reason: Upstream gated its browser-only MCP server by withholding the whole credential, but this
+  fork also uses that credential for bounded thread control. A direct merge would have disabled an
+  unrelated fork feature. Upstream's follow-up scrolling fix is preferable to the old all-message
+  anchoring behavior and does not conflict with restoring a saved reading position.
+- Scope: MCP credential capabilities, provider-session setup, Codex developer instructions,
+  orchestration dispatch integration, web composer and timeline seams, and upstream test doubles
+  updated for native thread forking.
+- Verification: Passed focused contracts, MCP, orchestration, provider, Codex, composer, timeline,
+  and bookmark tests, plus affected contracts, shared, client-runtime, server, and web type checks,
+  targeted formatting and lint, and `git diff --check`.
+
 ## 2026-08-02 — Fork initialized
 
 - Upstream baseline: `e60821f0e`

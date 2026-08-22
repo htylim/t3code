@@ -5,24 +5,29 @@ import {
   parseStandaloneComposerSlashCommand,
   type ComposerSlashCommand,
 } from "@t3tools/shared/composerCommands";
-import type {
-  ComposerTrigger as SharedComposerTrigger,
-  ComposerTriggerKind as SharedComposerTriggerKind,
-} from "@t3tools/shared/composerTrigger";
+export type ComposerTriggerKind = "path" | "slash-command" | "skill" | "thread";
+export type ComposerSubmissionIntent = "foreground" | "background";
 
-export type ComposerTriggerKind = SharedComposerTriggerKind | "thread";
-export interface ComposerTrigger extends Omit<SharedComposerTrigger, "kind"> {
+export interface ComposerTrigger {
   kind: ComposerTriggerKind;
+  query: string;
+  rangeStart: number;
+  rangeEnd: number;
 }
 
 export type { ComposerSlashCommand };
 export { parseStandaloneComposerSlashCommand };
 
-export function shouldSubmitComposerOnEnter(input: {
+export function composerSubmissionIntentForEnter(input: {
   isMobileViewport: boolean;
   shiftKey: boolean;
-}): boolean {
-  return !input.isMobileViewport && !input.shiftKey;
+  modifierKey: boolean;
+  isDraftThread: boolean;
+}): ComposerSubmissionIntent | null {
+  if (input.isMobileViewport || input.shiftKey) {
+    return null;
+  }
+  return input.modifierKey && input.isDraftThread ? "background" : "foreground";
 }
 
 const isInlineTokenSegment = (
