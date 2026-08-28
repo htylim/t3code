@@ -27,16 +27,22 @@ upstream.
   default. Side chats now use upstream's attachment upload queue with the legacy inline-image path
   kept for older servers. Manual context compaction remains disabled in side chats because that
   surface has no compaction lifecycle. Codex keeps both native session forking and upstream feedback
-  upload support. Fork desktop builds remain excluded from upstream and preview update feeds.
+  upload support. Fork desktop builds remain excluded from upstream and preview update feeds. The
+  merged server entrypoint canonicalizes both sides of npm and npx symlinks so macOS path aliases do
+  not prevent the CLI from starting.
 - Reason: Upstream changed the composer contract, attachment ownership, Codex runtime API, Markdown
   processing, and desktop packaging in code also extended by the fork. Taking either side whole
   would drop behavior or leak uploaded attachment files after failed dispatches.
 - Scope: Contracts and environment capabilities; HTTP and WebSocket orchestration dispatch;
   provider routing and Codex runtime; web and mobile composers; side chats; Markdown rendering;
-  desktop artifact configuration and tests; provider documentation.
-- Verification: Passed 714 focused contract, orchestration, provider, web, mobile, side-chat, Markdown, and
-  desktop packaging tests. Passed contracts, server, web, mobile, and desktop type checks, targeted
-  formatting and lint, and `git diff --check`.
+  server entrypoint and provider cache compatibility; desktop artifact configuration and tests;
+  provider documentation.
+- Verification: Passed the complete contracts, shared, client-runtime, web, and server test matrix
+  with 7,326 tests passing and 10 skipped, plus merge-focused desktop packaging tests. Passed all
+  affected type checks, production web and server builds, frozen-lockfile validation, targeted
+  formatting and lint, and `git diff --check`. In an isolated web environment, verified native
+  thread forking and independent source follow-up, main and side-chat attachment uploads, Mermaid
+  rendering and controls, thread-reference chips, and side-chat composition.
 
 ## 2026-08-22 — Merge upstream without disabling thread control
 
