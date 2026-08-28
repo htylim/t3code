@@ -10,6 +10,7 @@ import {
 } from "@t3tools/client-runtime/state/threads";
 import type {
   ApprovalRequestId,
+  ChatAttachment,
   MessageId,
   ModelSelection,
   ProviderApprovalDecision,
@@ -46,6 +47,13 @@ import {
 } from "~/composerDraftStore";
 import { useEnvironmentSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
+import {
+  awaitAttachmentUploads,
+  getUploadedAttachments,
+  releaseAttachmentUploads,
+  startAttachmentUpload,
+} from "~/lib/attachmentUploadQueue";
+import { deriveLatestContextWindowSnapshot } from "~/lib/contextWindow";
 import { getProviderModelCapabilities } from "~/providerModels";
 import {
   buildPendingUserInputAnswers,
@@ -249,6 +257,9 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   );
 
   const providerStatuses = environment?.serverConfig?.providers ?? [];
+  const attachmentUploadsCapabilityKnown = environment?.serverConfig !== null;
+  const supportsAttachmentUploads =
+    environment?.serverConfig?.environment.capabilities.attachmentUploads === true;
   const selectedProviderStatus = thread
     ? providerStatuses.find(
         (provider) =>
@@ -269,6 +280,10 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   const activePlan = useMemo(
     () => deriveActivePlanState(activities, thread?.latestTurn?.turnId),
     [activities, thread?.latestTurn?.turnId],
+  );
+  const activeContextWindow = useMemo(
+    () => deriveLatestContextWindowSnapshot(activities),
+    [activities],
   );
   const workingStepLabel = useMemo(() => {
     if (!activePlan || activePlan.turnId !== (thread?.latestTurn?.turnId ?? null)) return null;
@@ -468,18 +483,46 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
     if (!composerRef.current?.validateProviderInput(outgoingText)) return;
 
     sendInFlightRef.current = true;
+    if (supportsAttachmentUploads && sendContext.images.length > 0) {
+      for (const image of sendContext.images) {
+        startAttachmentUpload({ environmentId: target.environmentId, image });
+      }
+      await awaitAttachmentUploads(sendContext.images.map((image) => image.id));
+      if (
+        getUploadedAttachments({
+          environmentId: target.environmentId,
+          images: sendContext.images,
+        }) === null
+      ) {
+        sendInFlightRef.current = false;
+        setError("Retry or remove failed image uploads before sending.");
+        return;
+      }
+    }
     setSending(true);
     setSendingStartedAt(new Date().toISOString());
     setError(null);
     try {
-      const attachments: UploadChatAttachment[] = await Promise.all(
-        sendContext.images.map(async (image) => ({
-          type: "image" as const,
-          name: image.name,
-          mimeType: image.mimeType,
-          sizeBytes: image.sizeBytes,
-          dataUrl: await readFileAsDataUrl(image.file),
-        })),
+      const attachments: Array<UploadChatAttachment | ChatAttachment> = await Promise.all(
+        sendContext.images.map(async (image) => {
+          if (supportsAttachmentUploads) {
+            const uploaded = getUploadedAttachments({
+              environmentId: target.environmentId,
+              images: [image],
+            })?.[0];
+            if (!uploaded) {
+              throw new Error(`Image '${image.name}' did not finish uploading.`);
+            }
+            return uploaded;
+          }
+          return {
+            type: "image" as const,
+            name: image.name,
+            mimeType: image.mimeType,
+            sizeBytes: image.sizeBytes,
+            dataUrl: await readFileAsDataUrl(image.file),
+          };
+        }),
       );
       const result = await startTurn(
         buildCompactChatStartTurnCommand({
@@ -499,6 +542,9 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
       if (failure) {
         setError(failure);
       } else if (result._tag === "Success") {
+        if (supportsAttachmentUploads) {
+          releaseAttachmentUploads(sendContext.images);
+        }
         clearComposerDraftContent(target);
         composerRef.current?.resetCursorState();
         setTimelineLiveFollowEnabled(true);
@@ -524,6 +570,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
     running,
     runtimeMode,
     startTurn,
+    supportsAttachmentUploads,
     target,
     thread,
   ]);
@@ -659,6 +706,8 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   composerRef={composerRef}
                   composerDraftTarget={target}
                   environmentId={target.environmentId}
+                  attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
+                  supportsAttachmentUploads={supportsAttachmentUploads}
                   routeKind="server"
                   routeThreadRef={target}
                   draftId={null}
@@ -700,7 +749,9 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   providerStatuses={providerStatuses as ServerProvider[]}
                   activeProjectDefaultModelSelection={project?.defaultModelSelection}
                   activeThreadModelSelection={thread.modelSelection}
-                  activeThreadActivities={thread.activities}
+                  activeContextWindow={activeContextWindow}
+                  compactDisabled
+                  compactDisabledReason="Compacting is not available from a side chat."
                   resolvedTheme={resolvedTheme}
                   settings={settings}
                   keybindings={keybindings}

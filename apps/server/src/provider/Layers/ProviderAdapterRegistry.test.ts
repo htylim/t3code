@@ -41,6 +41,7 @@ const fakeCodexAdapter: CodexAdapter.CodexAdapterShape = {
   readThread: vi.fn(),
   rollbackThread: vi.fn(),
   forkSession: vi.fn(),
+  uploadFeedback: vi.fn(),
   stopAll: vi.fn(),
   streamEvents: Stream.empty,
 };

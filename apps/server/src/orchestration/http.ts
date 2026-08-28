@@ -9,8 +9,8 @@ import * as Option from "effect/Option";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
 import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
-import { normalizeDispatchCommand } from "./Normalizer.ts";
 import { dispatchClientOperation } from "./ClientOperationDispatcher.ts";
+import { cleanupFailedUploadedAttachments, normalizeDispatchCommand } from "./Normalizer.ts";
 import {
   annotateEnvironmentRequest,
   failEnvironmentInternal,
@@ -103,6 +103,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           return yield* dispatchHttpClientOperation(normalizedOperation, {
             dispatchCommand: (command) =>
               orchestrationEngine.dispatch(command).pipe(
+                Effect.tapError(() => cleanupFailedUploadedAttachments(args.payload, command)),
                 Effect.mapError(
                   (cause) =>
                     new OrchestrationDispatchCommandError({

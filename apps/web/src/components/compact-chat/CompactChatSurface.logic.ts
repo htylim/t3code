@@ -1,5 +1,6 @@
 import type {
   ApprovalRequestId,
+  ChatAttachment,
   KeybindingCommand,
   MessageId,
   ModelSelection,
@@ -59,7 +60,7 @@ export function buildCompactChatStartTurnCommand(input: {
   readonly target: ScopedThreadRef;
   readonly thread: CompactChatTargetThread;
   readonly text: string;
-  readonly attachments?: ReadonlyArray<UploadChatAttachment>;
+  readonly attachments?: ReadonlyArray<UploadChatAttachment | ChatAttachment>;
   readonly modelSelection?: ModelSelection;
   readonly runtimeMode?: RuntimeMode;
   readonly interactionMode?: ProviderInteractionMode;

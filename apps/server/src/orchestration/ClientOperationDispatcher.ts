@@ -5,9 +5,9 @@ import * as Effect from "effect/Effect";
 import { OrchestrationEngineService } from "./Services/OrchestrationEngine.ts";
 import { ThreadForkService } from "./Services/ThreadForkService.ts";
 
-type DispatchCommand = (
+type DispatchCommand<R> = (
   command: OrchestrationCommand,
-) => Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchCommandError>;
+) => Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchCommandError, R>;
 
 const sanitizeDispatchFailure = (cause: unknown) =>
   new OrchestrationDispatchCommandError({
@@ -20,13 +20,13 @@ const sanitizeDispatchFailure = (cause: unknown) =>
         : "Failed to dispatch orchestration operation",
   });
 
-export function dispatchClientOperation(
+export function dispatchClientOperation<R = never>(
   operation: OrchestrationCommand | ThreadForkOperation,
-  options?: { readonly dispatchCommand?: DispatchCommand },
+  options?: { readonly dispatchCommand?: DispatchCommand<R> },
 ): Effect.Effect<
   { readonly sequence: number },
   OrchestrationDispatchCommandError,
-  OrchestrationEngineService
+  OrchestrationEngineService | R
 > {
   if (operation.type === "thread.fork") {
     return ThreadForkService.pipe(

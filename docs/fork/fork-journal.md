@@ -19,6 +19,25 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-08-28 - Merge upstream attachment, feedback, and packaging changes
+
+- Upstream baseline: `acb599d2dc5b`
+- Change: Merged upstream's 112 commits while retaining native thread forking, side chats, thread
+  references, downstream desktop identity, T3 Connect source-build defaults, and the Auto permission
+  default. Side chats now use upstream's attachment upload queue with the legacy inline-image path
+  kept for older servers. Manual context compaction remains disabled in side chats because that
+  surface has no compaction lifecycle. Codex keeps both native session forking and upstream feedback
+  upload support. Fork desktop builds remain excluded from upstream and preview update feeds.
+- Reason: Upstream changed the composer contract, attachment ownership, Codex runtime API, Markdown
+  processing, and desktop packaging in code also extended by the fork. Taking either side whole
+  would drop behavior or leak uploaded attachment files after failed dispatches.
+- Scope: Contracts and environment capabilities; HTTP and WebSocket orchestration dispatch;
+  provider routing and Codex runtime; web and mobile composers; side chats; Markdown rendering;
+  desktop artifact configuration and tests; provider documentation.
+- Verification: Passed 714 focused contract, orchestration, provider, web, mobile, side-chat, Markdown, and
+  desktop packaging tests. Passed contracts, server, web, mobile, and desktop type checks, targeted
+  formatting and lint, and `git diff --check`.
+
 ## 2026-08-22 — Merge upstream without disabling thread control
 
 - Upstream baseline: `2c4158f87a1b`
