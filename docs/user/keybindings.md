@@ -77,6 +77,10 @@ so add one in **Settings** → **Keybindings** if you want to use it.
 `thread.settle` settles the active thread or restores it when it is already settled. Its default
 shortcut is `mod+shift+s`, and it does not run while the terminal has focus.
 
+`thread.settleAndNew` settles the active thread and opens a new thread in the same project. It
+defaults to `mod+w` when the terminal and right panel are closed. If settlement fails, the current
+thread stays open.
+
 `thread.pin` pins the active thread to the pinned section of the sidebar, or unpins it when it is
 already pinned. Its default shortcut is `mod+shift+p`, and it does not run while the terminal has
 focus. See [Organizing threads](./thread-sidebar.md) for how pinned threads are ordered.

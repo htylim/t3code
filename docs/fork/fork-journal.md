@@ -19,6 +19,20 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-08-28 - Settle and replace the active chat with Cmd+W
+
+- Upstream baseline: `acb599d2dc5b`
+- Change: Added `thread.settleAndNew`, defaulted `Cmd/Ctrl+W` to it when neither the terminal nor
+  right panel is open, and waits for settlement before opening a fresh draft in the same project.
+- Reason: Make closing a finished chat behave like closing a tab without weakening the existing
+  terminal and right-panel close shortcuts.
+- Scope: Shared keybinding contracts and defaults, web and desktop shortcut handling, focused
+  tests, and user documentation. Mobile, providers, and server orchestration are unchanged.
+- Verification: Passed 94 focused contract, server-default, and web shortcut tests; affected
+  contracts, shared, server, and web type checks; targeted lint and formatting; and `git diff
+--check`. In an isolated web environment, pressed `Cmd+W` on an unsettled thread with both panels
+  closed, confirmed the source moved to the Settled shelf, and landed on a fresh same-project draft.
+
 ## 2026-08-28 - Merge upstream attachment, feedback, and packaging changes
 
 - Upstream baseline: `acb599d2dc5b`

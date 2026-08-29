@@ -114,6 +114,14 @@ const DEFAULT_BINDINGS = compile([
     whenAst: whenIdentifier("rightPanelOpen"),
   },
   {
+    shortcut: modShortcut("w"),
+    command: "thread.settleAndNew",
+    whenAst: whenAnd(
+      whenAnd(whenNot(whenIdentifier("terminalFocus")), whenNot(whenIdentifier("terminalOpen"))),
+      whenNot(whenIdentifier("rightPanelOpen")),
+    ),
+  },
+  {
     shortcut: modShortcut("d"),
     command: "diff.toggle",
     whenAst: whenNot(whenIdentifier("terminalFocus")),
@@ -233,6 +241,49 @@ describe("settle thread shortcut", () => {
       resolveShortcutCommand(event({ key: "s", ctrlKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
         platform: "Win32",
         context: { terminalFocus: true },
+      }),
+    );
+  });
+});
+
+describe("settle and start new thread shortcut", () => {
+  const shortcut = event({ key: "w", metaKey: true });
+
+  it("resolves when the chat has no terminal or right panel open", () => {
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_BINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: false, terminalOpen: false, rightPanelOpen: false },
+      }),
+      "thread.settleAndNew",
+    );
+  });
+
+  it("keeps right-panel close ahead of settle and new", () => {
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_BINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: false, terminalOpen: false, rightPanelOpen: true },
+      }),
+      "rightPanel.close",
+    );
+  });
+
+  it("keeps terminal close when a terminal has focus", () => {
+    assert.equal(
+      resolveShortcutCommand(shortcut, DEFAULT_BINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: true, terminalOpen: true, rightPanelOpen: false },
+      }),
+      "terminal.close",
+    );
+  });
+
+  it("does not settle and start new while an unfocused terminal is open", () => {
+    assert.isNull(
+      resolveShortcutCommand(shortcut, DEFAULT_BINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: false, terminalOpen: true, rightPanelOpen: false },
       }),
     );
   });

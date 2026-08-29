@@ -196,6 +196,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.equal(defaultsByCommand.get("thread.previous"), "mod+shift+[");
       assert.equal(defaultsByCommand.get("thread.next"), "mod+shift+]");
       assert.equal(defaultsByCommand.get("thread.settle"), "mod+shift+s");
+      assert.equal(defaultsByCommand.get("thread.settleAndNew"), "mod+w");
       assert.equal(defaultsByCommand.get("thread.pin"), "mod+shift+p");
       assert.equal(defaultsByCommand.get("thread.jump.1"), "mod+1");
       assert.equal(defaultsByCommand.get("thread.jump.9"), "mod+9");
@@ -211,6 +212,11 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         Keybindings.DEFAULT_KEYBINDINGS.find((binding) => binding.command === "rightPanel.close")
           ?.when,
         "rightPanelOpen",
+      );
+      assert.equal(
+        Keybindings.DEFAULT_KEYBINDINGS.find((binding) => binding.command === "thread.settleAndNew")
+          ?.when,
+        "!terminalFocus && !terminalOpen && !rightPanelOpen",
       );
       assert.isFalse(defaultsByCommand.has("rightPanel.toggleMaximized"));
       assert.equal(defaultsByCommand.get("terminal.splitVertical"), "mod+shift+d");

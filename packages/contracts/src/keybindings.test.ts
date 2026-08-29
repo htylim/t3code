@@ -141,6 +141,13 @@ it.effect("parses keybinding rules", () =>
       when: "!terminalFocus",
     });
     assert.strictEqual(parsedThreadSettle.command, "thread.settle");
+
+    const parsedThreadSettleAndNew = yield* decode(KeybindingRule, {
+      key: "mod+w",
+      command: "thread.settleAndNew",
+      when: "!terminalFocus && !terminalOpen && !rightPanelOpen",
+    });
+    assert.strictEqual(parsedThreadSettleAndNew.command, "thread.settleAndNew");
   }),
 );
 

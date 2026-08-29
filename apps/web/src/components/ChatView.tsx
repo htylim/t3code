@@ -1292,6 +1292,7 @@ function ChatViewContent(props: ChatViewProps) {
   const threadDetailLoading = threadSyncPhase === "loading";
   const handleNewThread = useNewThreadHandler();
   const { settleThread, pinThread, unpinThread } = useThreadActions();
+  const settleAndNewInFlightRef = useRef(false);
   const routeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -5284,6 +5285,47 @@ function ChatViewContent(props: ChatViewProps) {
         return;
       }
 
+      if (command === "thread.settleAndNew") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (
+          !isServerThread ||
+          !activeThreadRef ||
+          !activeProjectRef ||
+          !supportsSettlement ||
+          settleAndNewInFlightRef.current
+        ) {
+          return;
+        }
+
+        settleAndNewInFlightRef.current = true;
+        void (async () => {
+          try {
+            if (!activeThreadSettled) {
+              const result = await settleThread(activeThreadRef);
+              if (result._tag === "Failure") {
+                if (!isAtomCommandInterrupted(result)) {
+                  const error = squashAtomCommandFailure(result);
+                  toastManager.add(
+                    stackedThreadToast({
+                      type: "error",
+                      title: "Failed to settle thread",
+                      description: error instanceof Error ? error.message : "An error occurred.",
+                    }),
+                  );
+                }
+                return;
+              }
+            }
+
+            await handleNewThread(activeProjectRef);
+          } finally {
+            settleAndNewInFlightRef.current = false;
+          }
+        })();
+        return;
+      }
+
       if (command === "thread.pin") {
         event.preventDefault();
         event.stopPropagation();
@@ -5434,12 +5476,14 @@ function ChatViewContent(props: ChatViewProps) {
     splitPanelTerminal,
     keybindings,
     handleUnsettleActiveThread,
+    handleNewThread,
     isServerThread,
     onToggleDiff,
     openNewSideChat,
     rightPanelOpen,
     pinThread,
     settleThread,
+    activeProjectRef,
     supportsPinning,
     supportsSettlement,
     unpinThread,

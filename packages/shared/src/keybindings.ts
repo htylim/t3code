@@ -27,6 +27,11 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+n", command: "terminal.new", when: "terminalFocus" },
   { key: "mod+w", command: "terminal.close", when: "terminalFocus" },
   { key: "mod+w", command: "rightPanel.close", when: "rightPanelOpen" },
+  {
+    key: "mod+w",
+    command: "thread.settleAndNew",
+    when: "!terminalFocus && !terminalOpen && !rightPanelOpen",
+  },
   { key: "mod+d", command: "diff.toggle", when: "!terminalFocus" },
   { key: "mod+shift+j", command: "preview.toggle" },
   { key: "mod+r", command: "preview.refresh", when: "previewFocus" },
