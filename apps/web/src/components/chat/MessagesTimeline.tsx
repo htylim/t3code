@@ -125,7 +125,7 @@ import {
 } from "./threadScrollBookmark";
 import {
   registerTimelinePromptNavigation,
-  resolveTimelinePromptNavigationTarget,
+  resolveTimelinePromptNavigationIndex,
   timelineOwnsPromptNavigation,
   TIMELINE_PROMPT_VIEW_OFFSET,
 } from "./timelinePromptNavigation";
@@ -301,7 +301,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const disclosureSettleFrameRef = useRef<number | null>(null);
   const disclosureSettleSecondFrameRef = useRef<number | null>(null);
   const previousContentInsetEndAdjustmentRef = useRef(contentInsetEndAdjustment);
-  const pendingPromptNavigationRowIndexRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
     keepTimelineEndVisibleAfterOverlayGrowth({
@@ -468,43 +467,21 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const navigateToPrompt = useCallback(
     (item: TimelineMinimapItem) => {
       const list = listRef.current;
-      if (!list) return;
+      if (!list) return Promise.resolve();
 
       onManualNavigation();
-      pendingPromptNavigationRowIndexRef.current = item.rowIndex;
-      const navigation = list.scrollToIndex({
+      return list.scrollToIndex({
         index: item.rowIndex,
         animated: true,
         viewOffset: TIMELINE_PROMPT_VIEW_OFFSET,
       });
-      void Promise.resolve(navigation).finally(() => {
-        if (pendingPromptNavigationRowIndexRef.current === item.rowIndex) {
-          pendingPromptNavigationRowIndexRef.current = null;
-        }
-      });
     },
     [listRef, onManualNavigation],
   );
-
-  useEffect(() => {
-    return registerTimelinePromptNavigation((command, eventTarget) => {
-      if (
-        !timelineViewportElement ||
-        !timelineOwnsPromptNavigation(timelineViewportElement, eventTarget)
-      ) {
-        return false;
-      }
-
-      const target = resolveTimelinePromptNavigationTarget({
-        command,
-        items: minimapItems,
-        state: listRef.current?.getState?.(),
-        pendingTargetRowIndex: pendingPromptNavigationRowIndexRef.current,
-      });
-      if (target) navigateToPrompt(target);
-      return true;
-    });
-  }, [listRef, minimapItems, navigateToPrompt, timelineViewportElement]);
+  const getVisibleTimelineRowRange = useCallback(() => {
+    const state = listRef.current?.getState?.();
+    return state ? { start: state.start, end: state.end } : undefined;
+  }, [listRef]);
   const anchoredEndSpace = useMemo(() => {
     const config = resolveChatListAnchoredEndSpace(rows, anchorMessageId, (row) =>
       row.kind === "message" && row.message.role === "user" ? row.message.id : null,
@@ -702,6 +679,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             hasPersistentGutter={minimapHasPersistentGutter}
             hitStripWidth={minimapHitStripWidth}
             stripMap={minimapStripMap}
+            timelineViewportElement={timelineViewportElement}
+            getVisibleRowRange={getVisibleTimelineRowRange}
             onSelect={navigateToPrompt}
           />
         </div>
@@ -797,15 +776,68 @@ function TimelineMinimap({
   hitStripWidth,
   items,
   stripMap,
+  timelineViewportElement,
+  getVisibleRowRange,
   onSelect,
 }: {
   hasPersistentGutter: boolean;
   hitStripWidth: number;
   items: ReadonlyArray<TimelineMinimapItem>;
   stripMap: Map<string, HTMLSpanElement>;
-  onSelect: (item: TimelineMinimapItem) => void;
+  timelineViewportElement: HTMLDivElement | null;
+  getVisibleRowRange: () => { readonly start: number; readonly end: number } | undefined;
+  onSelect: (item: TimelineMinimapItem) => Promise<void> | void;
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const selectedPromptIdRef = useRef<string | null>(null);
+  const navigationPendingRef = useRef(false);
+  const navigationSequenceRef = useRef(0);
+
+  const selectItem = useCallback(
+    (item: TimelineMinimapItem) => {
+      selectedPromptIdRef.current = item.id;
+      navigationPendingRef.current = true;
+      const sequence = ++navigationSequenceRef.current;
+      void Promise.resolve(onSelect(item)).finally(() => {
+        if (navigationSequenceRef.current === sequence) {
+          navigationPendingRef.current = false;
+        }
+      });
+    },
+    [onSelect],
+  );
+
+  useEffect(() => {
+    return registerTimelinePromptNavigation((command, eventTarget) => {
+      if (
+        !timelineViewportElement ||
+        !timelineOwnsPromptNavigation(timelineViewportElement, eventTarget)
+      ) {
+        return false;
+      }
+
+      const selectedPromptId = selectedPromptIdRef.current;
+      const selectedIndex =
+        selectedPromptId === null ? null : items.findIndex((item) => item.id === selectedPromptId);
+      const selectedPrompt = selectedIndex === null ? undefined : items[selectedIndex];
+      const visibleRowRange = getVisibleRowRange();
+      const targetIndex = resolveTimelinePromptNavigationIndex({
+        command,
+        items,
+        currentRowIndex: visibleRowRange?.start,
+        selectedIndex: selectedIndex === -1 ? null : selectedIndex,
+        selectedPromptIsVisible:
+          selectedPrompt !== undefined &&
+          visibleRowRange !== undefined &&
+          selectedPrompt.rowIndex >= visibleRowRange.start &&
+          selectedPrompt.rowIndex <= visibleRowRange.end,
+        navigationPending: navigationPendingRef.current,
+      });
+      const target = targetIndex === null ? null : items[targetIndex];
+      if (target) selectItem(target);
+      return true;
+    });
+  }, [getVisibleRowRange, items, selectItem, timelineViewportElement]);
 
   const resolvedActiveIndex =
     activeIndex !== null && activeIndex < items.length ? activeIndex : null;
@@ -886,7 +918,7 @@ function TimelineMinimap({
             const nextIndex = resolveActiveIndexFromPointer(event);
             const nextItem = nextIndex === null ? null : (items[nextIndex] ?? null);
             if (nextItem) {
-              onSelect(nextItem);
+              selectItem(nextItem);
             }
             event.currentTarget.blur();
           }}
@@ -907,7 +939,7 @@ function TimelineMinimap({
             } else if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               if (activeItem) {
-                onSelect(activeItem);
+                selectItem(activeItem);
               }
             }
           }}

@@ -19,6 +19,21 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-08-29 - Keep prompt navigation on the minimap cursor
+
+- Upstream baseline: `acb599d2dc5b`
+- Change: The web timeline minimap now handles prompt-navigation keybinding actions through the
+  same item selection used by clicks. Previous and next move through prompt indices instead of
+  reconstructing the selected prompt from scroll pixels.
+- Reason: The pixel lookup omitted the list header offset, so every settled key press selected the
+  same prompt again and users had to repeat the shortcut.
+- Scope: Web and desktop main timelines and side chats. Mobile, providers, server orchestration,
+  contracts, stored messages, and keybinding defaults are unchanged.
+- Verification: Passed 88 focused timeline tests, the web type check, targeted lint and formatting,
+  and `git diff --check`. In an isolated web client, six-prompt navigation passed consecutive and
+  rapid previous/next actions, first/last and boundary actions, manual-scroll re-anchoring, minimap
+  clicks, and main-versus-side-chat focus ownership.
+
 ## 2026-08-28 - Follow Chat: New project selection in a filtered sidebar
 
 - Upstream baseline: `eafbc4e216e1`

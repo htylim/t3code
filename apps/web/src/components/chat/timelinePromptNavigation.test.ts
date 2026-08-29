@@ -2,19 +2,22 @@ import { describe, expect, it } from "vite-plus/test";
 import { TIMELINE_PROMPT_KEYBINDING_COMMANDS } from "@t3tools/contracts";
 import { DEFAULT_KEYBINDINGS } from "@t3tools/shared/keybindings";
 
-import { resolveTimelinePromptNavigationTarget } from "./timelinePromptNavigation";
+import { resolveTimelinePromptNavigationIndex } from "./timelinePromptNavigation";
 
 const items = [{ rowIndex: 0 }, { rowIndex: 3 }, { rowIndex: 7 }, { rowIndex: 11 }];
-const positions = new Map([
-  [0, 100],
-  [3, 500],
-  [7, 900],
-  [11, 1300],
-]);
-const state = (scroll: number) => ({
-  scroll,
-  positionAtIndex: (index: number) => positions.get(index),
-});
+
+const resolveIndex = (
+  input: Partial<Parameters<typeof resolveTimelinePromptNavigationIndex>[0]> &
+    Pick<Parameters<typeof resolveTimelinePromptNavigationIndex>[0], "command">,
+) =>
+  resolveTimelinePromptNavigationIndex({
+    items,
+    currentRowIndex: undefined,
+    selectedIndex: null,
+    selectedPromptIsVisible: false,
+    navigationPending: false,
+    ...input,
+  });
 
 describe("timeline prompt navigation", () => {
   it("leaves all four commands unbound by default", () => {
@@ -25,90 +28,92 @@ describe("timeline prompt navigation", () => {
     ).toEqual([]);
   });
 
-  it("moves to the prompt owning the visible response, then to the previous prompt", () => {
-    expect(
-      resolveTimelinePromptNavigationTarget({
-        command: "timeline.previousPrompt",
-        items,
-        state: state(700),
-        pendingTargetRowIndex: null,
-      }),
-    ).toEqual({ rowIndex: 3 });
-
-    expect(
-      resolveTimelinePromptNavigationTarget({
-        command: "timeline.previousPrompt",
-        items,
-        state: state(476),
-        pendingTargetRowIndex: null,
-      }),
-    ).toEqual({ rowIndex: 0 });
+  it("selects the prompt owning the visible response", () => {
+    expect(resolveIndex({ command: "timeline.previousPrompt", currentRowIndex: 5 })).toBe(1);
+    expect(resolveIndex({ command: "timeline.nextPrompt", currentRowIndex: 5 })).toBe(2);
   });
 
-  it("moves down to the next prompt", () => {
+  it("moves before a prompt that is already the first visible row", () => {
+    expect(resolveIndex({ command: "timeline.previousPrompt", currentRowIndex: 7 })).toBe(1);
+  });
+
+  it("continues through selected prompt indices after each settled jump", () => {
     expect(
-      resolveTimelinePromptNavigationTarget({
+      resolveIndex({
+        command: "timeline.previousPrompt",
+        currentRowIndex: 7,
+        selectedIndex: 2,
+        selectedPromptIsVisible: true,
+      }),
+    ).toBe(1);
+    expect(
+      resolveIndex({
+        command: "timeline.previousPrompt",
+        currentRowIndex: 3,
+        selectedIndex: 1,
+        selectedPromptIsVisible: true,
+      }),
+    ).toBe(0);
+    expect(
+      resolveIndex({
         command: "timeline.nextPrompt",
-        items,
-        state: state(700),
-        pendingTargetRowIndex: null,
+        currentRowIndex: 2,
+        selectedIndex: 1,
+        selectedPromptIsVisible: true,
       }),
-    ).toEqual({ rowIndex: 7 });
+    ).toBe(2);
   });
 
-  it("uses the pending target during rapid key repeats", () => {
+  it("continues from the selected index before the viewport settles", () => {
     expect(
-      resolveTimelinePromptNavigationTarget({
-        command: "timeline.nextPrompt",
-        items,
-        state: state(100),
-        pendingTargetRowIndex: 7,
-      }),
-    ).toEqual({ rowIndex: 11 });
-    expect(
-      resolveTimelinePromptNavigationTarget({
+      resolveIndex({
         command: "timeline.previousPrompt",
-        items,
-        state: state(100),
-        pendingTargetRowIndex: 7,
+        currentRowIndex: 7,
+        selectedIndex: 1,
+        navigationPending: true,
       }),
-    ).toEqual({ rowIndex: 3 });
+    ).toBe(0);
+    expect(
+      resolveIndex({
+        command: "timeline.nextPrompt",
+        currentRowIndex: 3,
+        selectedIndex: 2,
+        navigationPending: true,
+      }),
+    ).toBe(3);
   });
 
-  it("jumps to the first and last loaded prompts without needing list geometry", () => {
+  it("uses the visible prompt after manual scrolling moves the selection out of view", () => {
     expect(
-      resolveTimelinePromptNavigationTarget({
-        command: "timeline.firstPrompt",
-        items,
-        state: undefined,
-        pendingTargetRowIndex: null,
+      resolveIndex({
+        command: "timeline.previousPrompt",
+        currentRowIndex: 5,
+        selectedIndex: 3,
+        selectedPromptIsVisible: false,
       }),
-    ).toEqual({ rowIndex: 0 });
-    expect(
-      resolveTimelinePromptNavigationTarget({
-        command: "timeline.lastPrompt",
-        items,
-        state: undefined,
-        pendingTargetRowIndex: null,
-      }),
-    ).toEqual({ rowIndex: 11 });
+    ).toBe(1);
+  });
+
+  it("jumps to the first and last loaded prompts without a visible row", () => {
+    expect(resolveIndex({ command: "timeline.firstPrompt" })).toBe(0);
+    expect(resolveIndex({ command: "timeline.lastPrompt" })).toBe(3);
   });
 
   it("does nothing past either boundary", () => {
     expect(
-      resolveTimelinePromptNavigationTarget({
+      resolveIndex({
         command: "timeline.previousPrompt",
-        items,
-        state: state(76),
-        pendingTargetRowIndex: null,
+        currentRowIndex: 0,
+        selectedIndex: 0,
+        selectedPromptIsVisible: true,
       }),
     ).toBeNull();
     expect(
-      resolveTimelinePromptNavigationTarget({
+      resolveIndex({
         command: "timeline.nextPrompt",
-        items,
-        state: state(1500),
-        pendingTargetRowIndex: null,
+        currentRowIndex: 11,
+        selectedIndex: 3,
+        selectedPromptIsVisible: true,
       }),
     ).toBeNull();
   });
