@@ -74,6 +74,11 @@ successful pick; its hover glow and badge preview the element and color family t
 `rightPanel.toggleMaximized` maximizes or restores the open right panel. It has no default shortcut,
 so add one in **Settings** → **Keybindings** if you want to use it.
 
+`timeline.previousPrompt`, `timeline.nextPrompt`, `timeline.firstPrompt`, and
+`timeline.lastPrompt` navigate between the user prompts currently loaded in the chat timeline.
+They have no default shortcuts. Add the bindings you want in **Settings** → **Keybindings**.
+When a side chat has focus, these commands control its timeline instead of the main chat.
+
 `thread.settle` settles the active thread or restores it when it is already settled. Its default
 shortcut is `mod+shift+s`, and it does not run while the terminal has focus.
 

@@ -19,6 +19,21 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-08-28 - Add unbound prompt navigation actions
+
+- Upstream baseline: `3283bffbdc01`
+- Change: Added keybinding actions for moving to the previous, next, first, or last loaded user
+  prompt. The actions have no default shortcuts. Main chats and focused side chats navigate their
+  own timelines.
+- Reason: Make long conversations keyboard-navigable without choosing shortcuts for the user or
+  conflicting with operating-system and editor bindings.
+- Scope: Shared keybinding contracts, web and desktop timeline navigation, focused tests, and user
+  documentation. Mobile, providers, server orchestration, and stored message contracts are
+  unchanged.
+- Verification: Passed 68 focused tests, affected package type checks, targeted lint and format
+  checks, and an isolated browser pass covering all four actions plus main and side-chat focus
+  ownership.
+
 ## 2026-08-28 - Settle and replace the active chat with Cmd+W
 
 - Upstream baseline: `acb599d2dc5b`

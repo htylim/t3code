@@ -51,6 +51,14 @@ export const MODEL_PICKER_KEYBINDING_COMMANDS = [
 ] as const;
 export type ModelPickerKeybindingCommand = (typeof MODEL_PICKER_KEYBINDING_COMMANDS)[number];
 
+export const TIMELINE_PROMPT_KEYBINDING_COMMANDS = [
+  "timeline.previousPrompt",
+  "timeline.nextPrompt",
+  "timeline.firstPrompt",
+  "timeline.lastPrompt",
+] as const;
+export type TimelinePromptKeybindingCommand = (typeof TIMELINE_PROMPT_KEYBINDING_COMMANDS)[number];
+
 export const STATIC_KEYBINDING_COMMANDS = [
   "sidebar.toggle",
   "project.switch",
@@ -78,6 +86,7 @@ export const STATIC_KEYBINDING_COMMANDS = [
   "chat.newLocal",
   "chat.newSide",
   "editor.openFavorite",
+  ...TIMELINE_PROMPT_KEYBINDING_COMMANDS,
   ...MODEL_PICKER_KEYBINDING_COMMANDS,
   ...THREAD_KEYBINDING_COMMANDS,
 ] as const;
@@ -96,6 +105,12 @@ export const KeybindingCommand = Schema.Union([
   SCRIPT_RUN_COMMAND_PATTERN,
 ]);
 export type KeybindingCommand = typeof KeybindingCommand.Type;
+
+export function isTimelinePromptKeybindingCommand(
+  command: KeybindingCommand | null,
+): command is TimelinePromptKeybindingCommand {
+  return TIMELINE_PROMPT_KEYBINDING_COMMANDS.includes(command as TimelinePromptKeybindingCommand);
+}
 
 export const KeybindingValue = TrimmedString.check(
   Schema.isMinLength(1),

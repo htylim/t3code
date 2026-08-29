@@ -124,6 +124,7 @@ describe("KeybindingsSettings.logic", () => {
     expect(commandLabel("commandPalette.toggle")).toBe("Command Palette: Toggle");
     expect(commandLabel("project.switch")).toBe("Project: Switch");
     expect(commandLabel("thread.rename")).toBe("Thread: Rename");
+    expect(commandLabel("timeline.previousPrompt")).toBe("Timeline: Previous Prompt");
     expect(commandLabel("themeEditor.toggle")).toBe("Theme Editor: Toggle");
     expect(commandLabel("script.setup-db.run")).toBe("Run Script: Setup Db");
   });
@@ -165,6 +166,10 @@ describe("KeybindingsSettings.logic", () => {
         "chat.newSide",
         "project.switch",
         "rightPanel.toggleMaximized",
+        "timeline.firstPrompt",
+        "timeline.lastPrompt",
+        "timeline.nextPrompt",
+        "timeline.previousPrompt",
         "thread.rename",
         "script.setup-db.run",
       ]),

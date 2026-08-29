@@ -124,6 +124,12 @@ import {
   resolveTimelineInitialScrollPosition,
 } from "./threadScrollBookmark";
 import {
+  registerTimelinePromptNavigation,
+  resolveTimelinePromptNavigationTarget,
+  timelineOwnsPromptNavigation,
+  TIMELINE_PROMPT_VIEW_OFFSET,
+} from "./timelinePromptNavigation";
+import {
   buildReviewCommentRenderablePatch,
   formatReviewCommentFence,
   parseReviewCommentMessageSegments,
@@ -295,6 +301,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const disclosureSettleFrameRef = useRef<number | null>(null);
   const disclosureSettleSecondFrameRef = useRef<number | null>(null);
   const previousContentInsetEndAdjustmentRef = useRef(contentInsetEndAdjustment);
+  const pendingPromptNavigationRowIndexRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
     keepTimelineEndVisibleAfterOverlayGrowth({
@@ -458,6 +465,46 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     },
     [anchorMessageId, onAnchorReady],
   );
+  const navigateToPrompt = useCallback(
+    (item: TimelineMinimapItem) => {
+      const list = listRef.current;
+      if (!list) return;
+
+      onManualNavigation();
+      pendingPromptNavigationRowIndexRef.current = item.rowIndex;
+      const navigation = list.scrollToIndex({
+        index: item.rowIndex,
+        animated: true,
+        viewOffset: TIMELINE_PROMPT_VIEW_OFFSET,
+      });
+      void Promise.resolve(navigation).finally(() => {
+        if (pendingPromptNavigationRowIndexRef.current === item.rowIndex) {
+          pendingPromptNavigationRowIndexRef.current = null;
+        }
+      });
+    },
+    [listRef, onManualNavigation],
+  );
+
+  useEffect(() => {
+    return registerTimelinePromptNavigation((command, eventTarget) => {
+      if (
+        !timelineViewportElement ||
+        !timelineOwnsPromptNavigation(timelineViewportElement, eventTarget)
+      ) {
+        return false;
+      }
+
+      const target = resolveTimelinePromptNavigationTarget({
+        command,
+        items: minimapItems,
+        state: listRef.current?.getState?.(),
+        pendingTargetRowIndex: pendingPromptNavigationRowIndexRef.current,
+      });
+      if (target) navigateToPrompt(target);
+      return true;
+    });
+  }, [listRef, minimapItems, navigateToPrompt, timelineViewportElement]);
   const anchoredEndSpace = useMemo(() => {
     const config = resolveChatListAnchoredEndSpace(rows, anchorMessageId, (row) =>
       row.kind === "message" && row.message.role === "user" ? row.message.id : null,
@@ -655,14 +702,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             hasPersistentGutter={minimapHasPersistentGutter}
             hitStripWidth={minimapHitStripWidth}
             stripMap={minimapStripMap}
-            onSelect={(item) => {
-              onManualNavigation();
-              void listRef.current?.scrollToIndex({
-                index: item.rowIndex,
-                animated: true,
-                viewOffset: 24,
-              });
-            }}
+            onSelect={navigateToPrompt}
           />
         </div>
       </TimelineRowActivityCtx>

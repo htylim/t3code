@@ -134,6 +134,10 @@ it.effect("parses keybinding rules", () =>
     });
     assert.strictEqual(parsedProjectSwitch.command, "project.switch");
     assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("project.switch"));
+    assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("timeline.previousPrompt"));
+    assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("timeline.nextPrompt"));
+    assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("timeline.firstPrompt"));
+    assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("timeline.lastPrompt"));
 
     const parsedThreadSettle = yield* decode(KeybindingRule, {
       key: "mod+shift+s",

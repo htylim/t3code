@@ -1,18 +1,19 @@
-import type {
-  ApprovalRequestId,
-  ChatAttachment,
-  KeybindingCommand,
-  MessageId,
-  ModelSelection,
-  OrchestrationSession,
-  ProjectId,
-  ProviderApprovalDecision,
-  ProviderInteractionMode,
-  ProviderUserInputAnswers,
-  RuntimeMode,
-  ScopedThreadRef,
-  UploadChatAttachment,
-  TurnId,
+import {
+  isTimelinePromptKeybindingCommand,
+  type ApprovalRequestId,
+  type ChatAttachment,
+  type KeybindingCommand,
+  type MessageId,
+  type ModelSelection,
+  type OrchestrationSession,
+  type ProjectId,
+  type ProviderApprovalDecision,
+  type ProviderInteractionMode,
+  type ProviderUserInputAnswers,
+  type RuntimeMode,
+  type ScopedThreadRef,
+  type UploadChatAttachment,
+  type TurnId,
 } from "@t3tools/contracts";
 
 import type { RightPanelKind } from "~/rightPanelStore";
@@ -136,7 +137,10 @@ export function buildCompactChatUserInputCommand(input: {
 
 export function compactChatAllowsMainShortcut(command: KeybindingCommand): boolean {
   return (
-    command === "chat.newSide" || command === "rightPanel.close" || command === "rightPanel.toggle"
+    command === "chat.newSide" ||
+    command === "rightPanel.close" ||
+    command === "rightPanel.toggle" ||
+    isTimelinePromptKeybindingCommand(command)
   );
 }
 

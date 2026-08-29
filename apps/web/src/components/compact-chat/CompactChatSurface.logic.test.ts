@@ -183,6 +183,8 @@ describe("compact Chat availability", () => {
     expect(compactChatAllowsMainShortcut("chat.newSide")).toBe(true);
     expect(compactChatAllowsMainShortcut("rightPanel.close")).toBe(true);
     expect(compactChatAllowsMainShortcut("rightPanel.toggle")).toBe(true);
+    expect(compactChatAllowsMainShortcut("timeline.previousPrompt")).toBe(true);
+    expect(compactChatAllowsMainShortcut("timeline.lastPrompt")).toBe(true);
     expect(compactChatAllowsMainShortcut("diff.toggle")).toBe(false);
     expect(compactChatAllowsMainShortcut("terminal.toggle")).toBe(false);
     expect(compactChatAllowsMainShortcut("modelPicker.toggle")).toBe(false);

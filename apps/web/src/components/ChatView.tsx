@@ -185,6 +185,10 @@ import {
 import { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
+import {
+  dispatchTimelinePromptNavigation,
+  isTimelinePromptKeybindingCommand,
+} from "./chat/timelinePromptNavigation";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
   AlarmClockIcon,
@@ -5244,6 +5248,14 @@ function ChatViewContent(props: ChatViewProps) {
       });
       if (!command) return;
       if (compactChatOrigin && !compactChatAllowsMainShortcut(command)) return;
+
+      if (isTimelinePromptKeybindingCommand(command)) {
+        if (terminalFocusOwner !== null || shortcutContext.modelPickerOpen) return;
+        if (!dispatchTimelinePromptNavigation(command, event.target)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
 
       if (command === "chat.newSide") {
         event.preventDefault();
