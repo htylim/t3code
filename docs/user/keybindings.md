@@ -60,7 +60,9 @@ while the legacy sidebar is mounted, or from Settings navigation.
 
 The default sidebar's new-chat button follows that filter. Under **All projects**, it runs
 `chat.new` and opens the project picker. Under a specific project, it runs `chat.newLocal` for that
-project without opening the picker.
+project without opening the picker. When `chat.new` opens the picker while a project filter is
+active, choosing another project moves the filter to that project. Choosing from **All projects**
+keeps **All projects** selected.
 
 `themeEditor.toggle` opens or closes the floating theme editor and defaults to
 `mod+alt+shift+t`. Select a color label to spotlight the elements that use it; select the label

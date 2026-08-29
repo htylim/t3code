@@ -92,7 +92,10 @@ import {
 } from "../lib/projectPaths";
 import { onOpenCommandPalette } from "../commandPaletteBus";
 import { isProjectSwitchAvailable, switchProject } from "../projectSwitch.logic";
-import { requestSidebarProjectFilterScope } from "../sidebarProjectFilterBus";
+import {
+  requestSidebarProjectFilterScope,
+  requestSidebarProjectFilterScopeIfFiltered,
+} from "../sidebarProjectFilterBus";
 import { requestThreadRename } from "../threadRenameBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
@@ -1104,7 +1107,13 @@ function OpenCommandPaletteDialog(props: {
             );
           },
           icon: projectFavicon,
-          runProject: startNewThreadInProject,
+          runProject: async (project) => {
+            await startNewThreadInProject(project);
+            const group = projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
+            if (group) {
+              requestSidebarProjectFilterScopeIfFiltered(group.projectKey);
+            }
+          },
         }),
       ),
     [pickerProjects, projectGroupByTargetKey, startNewThreadInProject],

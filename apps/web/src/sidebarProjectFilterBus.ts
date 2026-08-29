@@ -1,14 +1,23 @@
 "use client";
 
 export type SidebarProjectFilterScope = string | null;
-type SidebarProjectFilterListener = (scopeKey: SidebarProjectFilterScope) => void;
+export type SidebarProjectFilterUpdate =
+  | SidebarProjectFilterScope
+  | ((currentScopeKey: SidebarProjectFilterScope) => SidebarProjectFilterScope);
+type SidebarProjectFilterListener = (update: SidebarProjectFilterUpdate) => void;
 
 const listeners = new Set<SidebarProjectFilterListener>();
 
-export function requestSidebarProjectFilterScope(scopeKey: SidebarProjectFilterScope): void {
+export function requestSidebarProjectFilterScope(update: SidebarProjectFilterUpdate): void {
   for (const listener of listeners) {
-    listener(scopeKey);
+    listener(update);
   }
+}
+
+export function requestSidebarProjectFilterScopeIfFiltered(scopeKey: string): void {
+  requestSidebarProjectFilterScope((currentScopeKey) =>
+    currentScopeKey === null ? null : scopeKey,
+  );
 }
 
 export function subscribeSidebarProjectFilterScope(

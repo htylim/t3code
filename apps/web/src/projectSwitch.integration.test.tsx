@@ -119,8 +119,8 @@ describe("project switch integration", () => {
     let scopeKey: string | null = null;
     const selectedThreadKeys = new Set(["thread-1"]);
     const startNewThread = vi.fn(async () => undefined);
-    const unsubscribe = subscribeSidebarProjectFilterScope((nextScopeKey) => {
-      scopeKey = nextScopeKey;
+    const unsubscribe = subscribeSidebarProjectFilterScope((update) => {
+      scopeKey = typeof update === "function" ? update(scopeKey) : update;
       selectedThreadKeys.clear();
     });
 

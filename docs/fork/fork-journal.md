@@ -19,6 +19,21 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-08-28 - Follow Chat: New project selection in a filtered sidebar
+
+- Upstream baseline: `eafbc4e216e1`
+- Change: When **Chat: New** opens the project picker while Sidebar v2 has a project filter, the
+  selected project becomes the new filter after its draft opens. **All projects** remains selected
+  when no filter was active.
+- Reason: A draft created in another project was immediately hidden by the previous sidebar filter.
+- Scope: The existing fork-owned Sidebar v2 filter bus, the web command palette, focused tests, and
+  user documentation. Desktop inherits the web behavior. Legacy sidebar, mobile, server,
+  contracts, providers, and persistence are unchanged.
+- Verification: Passed 30 focused filter, project-switch, and command-palette tests; the web type
+  check; targeted lint and formatting; and `git diff --check`. In an isolated web environment with
+  two projects, **Chat: New** kept **All projects** selected when it was already active, then moved
+  an active `t3code` filter to `t3code-filter-project` after opening that project's draft.
+
 ## 2026-08-28 - Add unbound prompt navigation actions
 
 - Upstream baseline: `3283bffbdc01`
