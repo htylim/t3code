@@ -19,6 +19,21 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-08-30 - Keep settled threads anchored to their last message
+
+- Upstream baseline: `acb599d2dc5b`
+- Change: The default web and desktop sidebar now labels and sorts settled threads by their last
+  user message, with creation time as the fallback for threads without one.
+- Reason: Upstream changed a row's timestamp from conversation age to settlement age when the user
+  settled it, so old threads suddenly read `now` despite receiving no new prompt.
+- Scope: Default web and desktop sidebar ordering, focused tests, and user documentation. The
+  legacy sidebar, mobile, server lifecycle metadata, contracts, providers, and persistence are
+  unchanged.
+- Verification: Passed 108 focused sidebar tests, the web type check, targeted lint and formatting,
+  and `git diff --check`. In an isolated web environment, manually settled a seven-day-old thread.
+  The server stamped its settlement as current, while the sidebar kept the `7d` label and sorted it
+  below a settled thread whose last message was 21 hours old.
+
 ## 2026-08-29 - Keep prompt navigation on the minimap cursor
 
 - Upstream baseline: `acb599d2dc5b`

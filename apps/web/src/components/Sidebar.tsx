@@ -217,9 +217,8 @@ function threadTimeLabel(thread: SidebarThreadSummary): string {
   return compactSidebarTimeLabel(formatRelativeTimeLabel(timestamp));
 }
 
-// Settled rows read "how long ago did this wrap up", matching their sort
-// key: both go through resolveSettledTimestamp so label and order can't
-// disagree.
+// Settled rows keep the conversation's last-message age. Settlement is a
+// lifecycle change and must not make old work appear recent.
 function settledTimeLabel(thread: SidebarThreadSummary): string {
   const timestamp = resolveSettledTimestamp(thread);
   return timestamp === null ? "" : compactSidebarTimeLabel(formatRelativeTimeLabel(timestamp));

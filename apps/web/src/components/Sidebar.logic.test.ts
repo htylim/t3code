@@ -18,6 +18,7 @@ import {
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
+  resolveSettledTimestamp,
   resolveSidebarStageBadgeLabel,
   resolveThreadRowClassName,
   resolveSidebarThreadStatus,
@@ -968,12 +969,14 @@ describe("sortPinnedThreadsForSidebar", () => {
 
 describe("sortSettledThreadsForSidebar", () => {
   const settled = (input: {
+    createdAt?: string;
     id: string;
     settledAt?: string | null;
     latestUserMessageAt?: string | null;
     latestTurn?: OrchestrationLatestTurn | null;
     updatedAt?: string;
   }) => ({
+    createdAt: input.createdAt ?? "2026-03-09T07:00:00.000Z",
     id: input.id,
     settledAt: input.settledAt ?? null,
     latestUserMessageAt: input.latestUserMessageAt ?? null,
@@ -981,47 +984,67 @@ describe("sortSettledThreadsForSidebar", () => {
     updatedAt: input.updatedAt ?? "2026-03-09T09:00:00.000Z",
   });
 
-  it("orders by settle time, most recently settled first", () => {
+  it("orders by last user message instead of settle time", () => {
     const sorted = sortSettledThreadsForSidebar([
       settled({
-        id: "settled-first",
+        id: "recent-message",
         settledAt: "2026-03-09T10:00:00.000Z",
-        // Created/active later than the other thread: settle time must win.
-        latestUserMessageAt: "2026-03-09T09:59:00.000Z",
+        latestUserMessageAt: "2026-03-09T09:00:00.000Z",
+        updatedAt: "2026-03-09T10:00:00.000Z",
       }),
       settled({
-        id: "settled-last",
+        id: "recent-settle",
         settledAt: "2026-03-09T12:00:00.000Z",
         latestUserMessageAt: "2026-03-09T08:00:00.000Z",
+        updatedAt: "2026-03-09T12:00:00.000Z",
       }),
     ]);
 
-    expect(sorted.map((thread) => thread.id)).toEqual(["settled-last", "settled-first"]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["recent-message", "recent-settle"]);
   });
 
-  it("falls back to last activity for auto-settled threads without a settledAt stamp", () => {
+  it("keeps the displayed timestamp at the last user message after settlement", () => {
+    expect(
+      resolveSettledTimestamp(
+        settled({
+          id: "old-thread",
+          settledAt: "2026-03-09T12:00:00.000Z",
+          latestUserMessageAt: "2026-03-01T08:00:00.000Z",
+          updatedAt: "2026-03-09T12:00:00.000Z",
+        }),
+      ),
+    ).toBe("2026-03-01T08:00:00.000Z");
+  });
+
+  it("ignores whether settlement was explicit or automatic", () => {
     const sorted = sortSettledThreadsForSidebar([
       settled({ id: "auto-old", latestUserMessageAt: "2026-03-09T08:00:00.000Z" }),
-      settled({ id: "explicit", settledAt: "2026-03-09T10:00:00.000Z" }),
+      settled({
+        id: "explicit",
+        settledAt: "2026-03-09T12:00:00.000Z",
+        latestUserMessageAt: "2026-03-09T10:00:00.000Z",
+      }),
       settled({ id: "auto-recent", latestUserMessageAt: "2026-03-09T11:00:00.000Z" }),
     ]);
 
     expect(sorted.map((thread) => thread.id)).toEqual(["auto-recent", "explicit", "auto-old"]);
   });
 
-  it("counts a turn completion as activity for auto-settled threads", () => {
-    // The message came in before the other thread's, but its turn finished
-    // after: completion time is the real "work ended" moment.
+  it("falls back to creation time when there is no user message", () => {
     const sorted = sortSettledThreadsForSidebar([
-      settled({ id: "message-only", latestUserMessageAt: "2026-03-09T10:04:00.000Z" }),
       settled({
-        id: "completed-later",
-        latestUserMessageAt: "2026-03-09T10:00:00.000Z",
-        latestTurn: makeLatestTurn({ completedAt: "2026-03-09T10:30:00.000Z" }),
+        id: "created-later",
+        createdAt: "2026-03-09T09:00:00.000Z",
+        settledAt: "2026-03-09T10:00:00.000Z",
+      }),
+      settled({
+        id: "settled-later",
+        createdAt: "2026-03-09T08:00:00.000Z",
+        settledAt: "2026-03-09T12:00:00.000Z",
       }),
     ]);
 
-    expect(sorted.map((thread) => thread.id)).toEqual(["completed-later", "message-only"]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["created-later", "settled-later"]);
   });
 
   it("breaks timestamp ties by id so the order is stable", () => {
