@@ -582,16 +582,14 @@ export function firstValidTimestamp(
   return null;
 }
 
-// Sidebar sort: newest user activity on top. Assistant progress does not move
-// rows, while a new prompt does. An un-settle or wake also surfaces a thread
-// whose last message is old. Status (including pending approval) is carried by
-// each card's edge strip, not by position.
+// Sidebar sort: newest user activity on top. Assistant progress and lifecycle
+// changes do not move rows, while a new prompt does. Status (including pending
+// approval) is carried by each card's edge strip, not by position.
 export function sortThreadsForSidebar<
   T extends {
     readonly id: string;
     readonly createdAt: string;
     readonly latestUserMessageAt?: string | null | undefined;
-    readonly unsettledAt?: string | null | undefined;
   },
 >(threads: readonly T[]): T[] {
   return [...threads].toSorted(

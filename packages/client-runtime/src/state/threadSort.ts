@@ -101,20 +101,17 @@ export function getThreadSortTimestamp(
 
 /**
  * Sort anchor for the active thread list: latest user activity, with creation
- * time as the fallback. An explicit un-settle or wake can re-anchor the thread
- * even when its last message is old. Assistant progress does not move rows.
- * Shared by web and mobile so both render the same order. Malformed timestamps
- * sink to 0.
+ * time as the fallback. Lifecycle metadata such as un-settle time does not
+ * count as activity. Shared by web and mobile so both render the same order.
+ * Malformed timestamps sink to 0.
  */
 export function activeThreadAnchorTimestampMs(thread: {
   readonly createdAt: string;
   readonly latestUserMessageAt?: string | null | undefined;
-  readonly unsettledAt?: string | null | undefined;
 }): number {
   return Math.max(
     toSortableTimestamp(thread.createdAt) ?? 0,
     toSortableTimestamp(thread.latestUserMessageAt ?? undefined) ?? 0,
-    toSortableTimestamp(thread.unsettledAt ?? undefined) ?? 0,
   );
 }
 

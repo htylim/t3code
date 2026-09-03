@@ -258,16 +258,20 @@ describe("resolveThreadListV2SnoozeGateExpiryMs", () => {
 });
 
 describe("sortThreadsForListV2", () => {
-  it("orders by creation time, newest first, ignoring activity", () => {
+  it("orders by latest user activity, with creation time as the fallback", () => {
     const sorted = sortThreadsForListV2([
-      { id: "oldest", createdAt: "2026-06-01T08:00:00.000Z" },
+      {
+        id: "oldest",
+        createdAt: "2026-06-01T08:00:00.000Z",
+        latestUserMessageAt: "2026-06-01T13:00:00.000Z",
+      },
       { id: "newest", createdAt: "2026-06-01T12:00:00.000Z" },
       { id: "middle", createdAt: "2026-06-01T10:00:00.000Z" },
     ]);
-    expect(sorted.map((thread) => thread.id)).toEqual(["newest", "middle", "oldest"]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["oldest", "newest", "middle"]);
   });
 
-  it("surfaces an un-settled thread at the top via its re-entry stamp", () => {
+  it("does not treat an un-settle stamp as user activity", () => {
     const sorted = sortThreadsForListV2([
       {
         id: "old-unsettled",
@@ -277,7 +281,7 @@ describe("sortThreadsForListV2", () => {
       { id: "newest", createdAt: "2026-06-01T12:00:00.000Z" },
       { id: "middle", createdAt: "2026-06-01T10:00:00.000Z" },
     ]);
-    expect(sorted.map((thread) => thread.id)).toEqual(["old-unsettled", "newest", "middle"]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["newest", "middle", "old-unsettled"]);
   });
 });
 

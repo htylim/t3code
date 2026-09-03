@@ -34,8 +34,8 @@ the new-thread workspace mode and the source control writing style.
 A settings change affects future settlement and does not reopen a settled thread. Settings saved
 by older clients on one device no longer control this behavior.
 
-When you un-settle a thread, it returns to the top of the active list so you can find it right away.
-Its message timestamps do not change.
+Un-settling a thread does not count as new activity. It returns to the active list at the position
+set by its latest user message, or its creation time when it has no user messages.
 
 Right-click a pull request link in a thread and choose **Link to thread** to show that pull request
 in the sidebar. The thread settles when the linked pull request merges if **Auto-settle merged

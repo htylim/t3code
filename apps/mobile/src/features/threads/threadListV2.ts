@@ -151,16 +151,15 @@ function parseTimestampMs(isoDate: string): number {
 }
 
 /**
- * v2 sort: newest user activity on top. Assistant progress does not move rows,
- * while a new prompt does. An un-settle or wake also surfaces a thread whose
- * last message is old. Mirrors web's sortThreadsForSidebar.
+ * v2 sort: newest user activity on top. Assistant progress and lifecycle
+ * changes do not move rows, while a new prompt does. Mirrors web's
+ * sortThreadsForSidebar.
  */
 export function sortThreadsForListV2<
   T extends {
     readonly id: string;
     readonly createdAt: string;
     readonly latestUserMessageAt?: string | null | undefined;
-    readonly unsettledAt?: string | null | undefined;
   },
 >(threads: readonly T[]): T[] {
   // .sort() on a copy, not .toSorted(): Hermes doesn't ship the ES2023

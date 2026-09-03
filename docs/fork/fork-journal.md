@@ -22,14 +22,14 @@ upstream.
 ## 2026-09-03 - Sort active threads by user activity
 
 - Upstream baseline: `fff33f9e8`
-- Change: Web, desktop, and mobile now sort active threads by their latest user message, with
-  un-settle time and creation time as fallbacks. Agent progress and completion do not move rows.
-- Reason: Static creation order buried an older thread after the user resumed it, even though the
-  sidebar showed a fresh unread completion.
+- Change: Web, desktop, and mobile sort active threads by their latest user message, with creation
+  time as the fallback. Agent progress and lifecycle changes do not move rows.
+- Reason: The sidebar should match the activity age shown on each row. Treating an un-settle stamp
+  as activity put 3d and 4d threads above a thread with a message from minutes ago.
 - Scope: Shared active-thread ordering, web and mobile sidebar tests, and user documentation.
-- Verification: Passed 160 focused web, mobile, and shared-runtime tests; affected package type
-  checks; targeted lint and formatting; and `git diff --check`. An isolated dev server started and
-  accepted browser pairing, but the shared preview stopped responding before visual inspection.
+- Verification: Passed 159 focused web, mobile, and shared-runtime tests; affected package type
+  checks; targeted lint and formatting; and `git diff --check`. An isolated dev app using the
+  reported thread data placed the minutes-old thread above every 3d and 4d thread.
 
 ## 2026-09-03 - Merge upstream assistant citations, attachments, and desktop changes
 
