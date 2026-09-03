@@ -23,7 +23,8 @@ import { checkpointRefForThreadTurn } from "../../checkpointing/Utils.ts";
 import { ServerConfig } from "../../config.ts";
 import { OrchestrationCommandReceiptRepository } from "../../persistence/Services/OrchestrationCommandReceipts.ts";
 import * as ProviderService from "../../provider/Services/ProviderService.ts";
-import { hasOpenBlockingRequest, threadHasQueuedTurnStart } from "../decider.ts";
+import { hasOpenBlockingRequest } from "../decider.ts";
+import { threadHasQueuedTurnStart } from "../ThreadSettlementPolicy.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
@@ -169,7 +170,14 @@ const makeThreadForkService = Effect.gen(function* () {
                 message: "Wait for the source turn to finish before forking it.",
               });
             }
-            if (threadHasQueuedTurnStart(source, operation.createdAt)) {
+            const latestUserMessageAt =
+              source.messages.findLast((message) => message.role === "user")?.createdAt ?? null;
+            if (
+              threadHasQueuedTurnStart(
+                { latestUserMessageAt, latestTurn: source.latestTurn, session: source.session },
+                operation.createdAt,
+              )
+            ) {
               return yield* new ThreadForkError({
                 message: "Wait for the queued source turn to start before forking it.",
               });

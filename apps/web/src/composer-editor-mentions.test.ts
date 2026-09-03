@@ -1,3 +1,5 @@
+import { EnvironmentId, MessageId, ThreadId, type AssistantCitation } from "@t3tools/contracts";
+import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -5,6 +7,18 @@ import {
   splitPromptIntoComposerSegments,
 } from "./composer-editor-mentions";
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
+
+const citation: AssistantCitation = {
+  version: 1,
+  environmentId: EnvironmentId.make("remote/環境"),
+  threadId: ThreadId.make("thread-1"),
+  messageId: MessageId.make("message-1"),
+  text: 'Use @AGENTS.md, $review and "雪 ❄️" (carefully).',
+  start: 4,
+  end: 50,
+  prefix: "前: ",
+  suffix: " 後",
+};
 
 describe("splitPromptIntoComposerSegments", () => {
   it("splits mention tokens followed by whitespace into mention segments", () => {
@@ -71,37 +85,66 @@ describe("splitPromptIntoComposerSegments", () => {
     ).toEqual([{ type: "text", text: "Read [the docs](https://example.com/docs) first" }]);
   });
 
-  it("splits canonical thread references into thread segments", () => {
-    const source = "[Release notes](t3code://threads/local/thread-1)";
+  it("keeps multiple assistant citations atomic next to punctuation and Unicode", () => {
+    const source = serializeAssistantCitation(citation);
+    const otherCitation = {
+      ...citation,
+      messageId: MessageId.make("message-2"),
+      text: "A second quote",
+    };
+    const otherSource = serializeAssistantCitation(otherCitation);
 
-    expect(splitPromptIntoComposerSegments(`Compare ${source} next`)).toEqual([
-      { type: "text", text: "Compare " },
-      {
-        type: "thread",
-        threadRef: { environmentId: "local", threadId: "thread-1" },
-        label: "Release notes",
-        source,
-      },
-      { type: "text", text: " next" },
+    expect(splitPromptIntoComposerSegments(`前(${source}),${otherSource}後`)).toEqual([
+      { type: "text", text: "前(" },
+      { type: "citation", citation, source },
+      { type: "text", text: ")," },
+      { type: "citation", citation: otherCitation, source: otherSource },
+      { type: "text", text: "後" },
     ]);
   });
 
-  it("keeps token-like thread titles inside one thread segment", () => {
-    const source = "[Use $cmux now](t3code://threads/local/thread-1)";
+  it("preserves exact citation source encoding for adjacent chips at the end of a prompt", () => {
+    const source = serializeAssistantCitation(citation).replaceAll("+", "%20");
 
-    expect(splitPromptIntoComposerSegments(`${source} next`)).toEqual([
-      {
-        type: "thread",
-        threadRef: { environmentId: "local", threadId: "thread-1" },
-        label: "Use $cmux now",
-        source,
-      },
-      { type: "text", text: " next" },
+    expect(splitPromptIntoComposerSegments(`${source}${source}`)).toEqual([
+      { type: "citation", citation, source },
+      { type: "citation", citation, source },
     ]);
   });
 
-  it("leaves malformed thread references as text", () => {
-    const prompt = "Compare [Release](t3code://threads/local/thread-1?view=full) next";
+  it.each(["@", "@AGENTS.md"])(
+    "keeps a citation after the unfinished mention %s intact",
+    (prefix) => {
+      const source = serializeAssistantCitation(citation);
+
+      expect(splitPromptIntoComposerSegments(`${prefix}${source}`)).toEqual([
+        { type: "text", text: prefix },
+        { type: "citation", citation, source },
+      ]);
+    },
+  );
+
+  it("parses citations alongside file mentions, skills, and terminal contexts", () => {
+    const source = serializeAssistantCitation(citation);
+
+    expect(
+      splitPromptIntoComposerSegments(
+        `@AGENTS.md ${source}\n$review ${INLINE_TERMINAL_CONTEXT_PLACEHOLDER}${source}`,
+      ),
+    ).toEqual([
+      { type: "mention", path: "AGENTS.md", source: "@AGENTS.md" },
+      { type: "text", text: " " },
+      { type: "citation", citation, source },
+      { type: "text", text: "\n" },
+      { type: "skill", name: "review" },
+      { type: "text", text: " " },
+      { type: "terminal-context", context: null },
+      { type: "citation", citation, source },
+    ]);
+  });
+
+  it("keeps malformed citation links as editable text", () => {
+    const prompt = "[Assistant quote](t3-citation://v1/env/thread/message?text=missing+metadata)";
 
     expect(splitPromptIntoComposerSegments(prompt)).toEqual([{ type: "text", text: prompt }]);
   });
@@ -203,6 +246,12 @@ describe("splitPromptIntoComposerSegments", () => {
 });
 
 describe("selectionTouchesMentionBoundary", () => {
+  it("does not treat text before a citation as an overlapping file mention", () => {
+    const prompt = `before @${serializeAssistantCitation(citation)}`;
+
+    expect(selectionTouchesMentionBoundary(prompt, "before".length, "before ".length)).toBe(false);
+  });
+
   it("returns true when selection includes the whitespace after a mention", () => {
     expect(
       selectionTouchesMentionBoundary(

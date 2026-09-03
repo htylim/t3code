@@ -146,12 +146,12 @@ it.effect("parses keybinding rules", () =>
     });
     assert.strictEqual(parsedThreadSettle.command, "thread.settle");
 
-    const parsedThreadSettleAndNew = yield* decode(KeybindingRule, {
-      key: "mod+w",
-      command: "thread.settleAndNew",
-      when: "!terminalFocus && !terminalOpen && !rightPanelOpen",
+    const parsedThreadCopyReference = yield* decode(KeybindingRule, {
+      key: "mod+shift+c",
+      command: "thread.copyReference",
+      when: "!terminalFocus",
     });
-    assert.strictEqual(parsedThreadSettleAndNew.command, "thread.settleAndNew");
+    assert.strictEqual(parsedThreadCopyReference.command, "thread.copyReference");
   }),
 );
 

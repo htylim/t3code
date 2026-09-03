@@ -166,6 +166,11 @@ const DEFAULT_BINDINGS = compile([
   { shortcut: modShortcut("[", { shiftKey: true }), command: "thread.previous" },
   { shortcut: modShortcut("]", { shiftKey: true }), command: "thread.next" },
   {
+    shortcut: modShortcut("c", { shiftKey: true }),
+    command: "thread.copyReference",
+    whenAst: whenNot(whenIdentifier("terminalFocus")),
+  },
+  {
     shortcut: modShortcut("s", { shiftKey: true }),
     command: "thread.settle",
     whenAst: whenNot(whenIdentifier("terminalFocus")),
@@ -246,44 +251,27 @@ describe("settle thread shortcut", () => {
   });
 });
 
-describe("settle and start new thread shortcut", () => {
-  const shortcut = event({ key: "w", metaKey: true });
-
-  it("resolves when the chat has no terminal or right panel open", () => {
+describe("copy thread reference shortcut", () => {
+  it("resolves Cmd+Shift+C on macOS and Ctrl+Shift+C elsewhere", () => {
     assert.equal(
-      resolveShortcutCommand(shortcut, DEFAULT_BINDINGS, {
+      resolveShortcutCommand(event({ key: "c", metaKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
         platform: "MacIntel",
-        context: { terminalFocus: false, terminalOpen: false, rightPanelOpen: false },
       }),
-      "thread.settleAndNew",
+      "thread.copyReference",
+    );
+    assert.equal(
+      resolveShortcutCommand(event({ key: "c", ctrlKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
+        platform: "Linux",
+      }),
+      "thread.copyReference",
     );
   });
 
-  it("keeps right-panel close ahead of settle and new", () => {
-    assert.equal(
-      resolveShortcutCommand(shortcut, DEFAULT_BINDINGS, {
-        platform: "MacIntel",
-        context: { terminalFocus: false, terminalOpen: false, rightPanelOpen: true },
-      }),
-      "rightPanel.close",
-    );
-  });
-
-  it("keeps terminal close when a terminal has focus", () => {
-    assert.equal(
-      resolveShortcutCommand(shortcut, DEFAULT_BINDINGS, {
-        platform: "MacIntel",
-        context: { terminalFocus: true, terminalOpen: true, rightPanelOpen: false },
-      }),
-      "terminal.close",
-    );
-  });
-
-  it("does not settle and start new while an unfocused terminal is open", () => {
+  it("leaves terminal copy untouched", () => {
     assert.isNull(
-      resolveShortcutCommand(shortcut, DEFAULT_BINDINGS, {
-        platform: "MacIntel",
-        context: { terminalFocus: false, terminalOpen: true, rightPanelOpen: false },
+      resolveShortcutCommand(event({ key: "c", ctrlKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
+        platform: "Linux",
+        context: { terminalFocus: true },
       }),
     );
   });
@@ -866,6 +854,24 @@ describe("resolveShortcutCommand", () => {
         platform: "Linux",
       }),
       "script.setup.run",
+    );
+  });
+
+  it("routes mod+w by the active surface", () => {
+    const closeEvent = event({ key: "w", metaKey: true });
+    assert.strictEqual(
+      resolveShortcutCommand(closeEvent, DEFAULT_BINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: true },
+      }),
+      "terminal.close",
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(closeEvent, DEFAULT_BINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: false },
+      }),
+      "thread.settleAndNew",
     );
   });
 

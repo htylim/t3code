@@ -1,3 +1,5 @@
+import type { AssistantCitation } from "@t3tools/contracts";
+import { collectAssistantCitations } from "@t3tools/shared/assistantCitations";
 import {
   INLINE_TERMINAL_CONTEXT_PLACEHOLDER,
   type TerminalContextDraft,
@@ -23,6 +25,11 @@ export type ComposerPromptSegment =
   | {
       type: "skill";
       name: string;
+    }
+  | {
+      type: "citation";
+      citation: AssistantCitation;
+      source: string;
     }
   | {
       type: "thread";
@@ -121,7 +128,7 @@ function forEachMentionMatch(
   ) => boolean | void,
 ): boolean {
   return forEachPromptTextSlice(prompt, (text, promptOffset) => {
-    for (const match of collectComposerInlineTokens(text)) {
+    for (const match of collectComposerPromptInlineTokens(text)) {
       if (match.type !== "mention") {
         continue;
       }
@@ -133,19 +140,32 @@ function forEachMentionMatch(
   });
 }
 
+export function collectComposerPromptInlineTokens(text: string) {
+  const tokens = collectComposerInlineTokens(text);
+  const citations = collectAssistantCitations(text);
+  const threadReferences = collectThreadReferenceMarkdownTokens(text).map((match) => ({
+    ...match,
+    type: "thread" as const,
+  }));
+
+  // An unfinished @ mention can otherwise consume the start of a citation's label.
+  return [
+    ...tokens.filter(
+      (token) =>
+        !citations.some((citation) => token.start < citation.end && token.end > citation.start),
+    ),
+    ...citations.map((match) => ({ ...match, type: "citation" as const })),
+    ...threadReferences,
+  ].sort((left, right) => left.start - right.start || right.end - left.end);
+}
+
 function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegment[] {
   const segments: ComposerPromptSegment[] = [];
   if (!text) {
     return segments;
   }
 
-  const tokenMatches = [
-    ...collectComposerInlineTokens(text),
-    ...collectThreadReferenceMarkdownTokens(text).map((token) => ({
-      ...token,
-      type: "thread" as const,
-    })),
-  ].sort((left, right) => left.start - right.start || right.end - left.end);
+  const tokenMatches = collectComposerPromptInlineTokens(text);
   let cursor = 0;
   for (const match of tokenMatches) {
     if (match.start < cursor) {
@@ -156,7 +176,9 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
       pushTextSegment(segments, text.slice(cursor, match.start));
     }
 
-    if (match.type === "mention") {
+    if (match.type === "citation") {
+      segments.push({ type: "citation", citation: match.citation, source: match.source });
+    } else if (match.type === "mention") {
       segments.push({
         type: "mention",
         path: match.value,

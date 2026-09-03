@@ -1,4 +1,5 @@
-import type { ContextMenuItem, ScopedThreadRef } from "@t3tools/contracts";
+import type { AssistantCitation, ContextMenuItem, ScopedThreadRef } from "@t3tools/contracts";
+import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
 
 import type { DraftId } from "./composerDraftStore";
 import { chatMarkdownClipboardPayload } from "./markdown-clipboard";
@@ -68,8 +69,13 @@ export function buildAskInNewThreadPrompt(input: {
   return `Regarding this selection from ${source}:\n\n${markdownBlockquote(input.selectedMarkdown)}\n\n`;
 }
 
-export function buildAskInSideChatPrompt(selectedMarkdown: string): string {
-  return `${markdownBlockquote(selectedMarkdown)}\n\n`;
+export function buildAskInSideChatPrompt(
+  selectedMarkdown: string,
+  assistantCitation?: AssistantCitation,
+): string {
+  return assistantCitation
+    ? `${serializeAssistantCitation(assistantCitation)} `
+    : `${markdownBlockquote(selectedMarkdown)}\n\n`;
 }
 
 export async function showSelectedTextThreadContextMenu(input: {

@@ -1,11 +1,7 @@
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  ThreadArchiveBlockedError,
-  ThreadForkBlockedError,
-  ThreadForkUnsupportedError,
-} from "./useThreadActions";
+import { requestThreadUnpinConfirmation, ThreadArchiveBlockedError } from "./useThreadActions";
 
 describe("ThreadArchiveBlockedError", () => {
   it("keeps the blocked thread context with the fixed message", () => {
@@ -22,22 +18,56 @@ describe("ThreadArchiveBlockedError", () => {
   });
 });
 
-describe("thread fork errors", () => {
-  it("web rejects /fork while the source has work in flight", () => {
-    expect(
-      new ThreadForkBlockedError({
-        environmentId: EnvironmentId.make("environment-1"),
-        threadId: ThreadId.make("thread-1"),
-      }).message,
-    ).toBe("Wait for the current thread work to finish before forking it.");
+describe("requestThreadUnpinConfirmation", () => {
+  it("skips the dialog when confirmation is disabled", async () => {
+    let callCount = 0;
+    const result = await requestThreadUnpinConfirmation({
+      enabled: false,
+      title: "Pinned thread",
+      confirm: async () => {
+        callCount += 1;
+        return false;
+      },
+    });
+
+    expect(result).toMatchObject({ _tag: "Success", value: true });
+    expect(callCount).toBe(0);
   });
 
-  it("web reports unsupported manual /fork attempts clearly", () => {
-    expect(
-      new ThreadForkUnsupportedError({
-        environmentId: EnvironmentId.make("environment-1"),
-        threadId: ThreadId.make("thread-1"),
-      }).message,
-    ).toContain("does not support thread forking");
+  it("degrades gracefully when dialogs are unavailable", async () => {
+    const result = await requestThreadUnpinConfirmation({
+      enabled: true,
+      title: "Pinned thread",
+      confirm: null,
+    });
+
+    expect(result).toMatchObject({ _tag: "Success", value: true });
+  });
+
+  it("uses the thread title and returns the user's decision", async () => {
+    let message = "";
+    const result = await requestThreadUnpinConfirmation({
+      enabled: true,
+      title: "Release prep",
+      confirm: async (nextMessage) => {
+        message = nextMessage;
+        return false;
+      },
+    });
+
+    expect(message).toBe(
+      'Unpin thread "Release prep"?\nThis will move the thread out of your pinned section.',
+    );
+    expect(result).toMatchObject({ _tag: "Success", value: false });
+  });
+
+  it("keeps dialog failures observable", async () => {
+    const result = await requestThreadUnpinConfirmation({
+      enabled: true,
+      title: "Pinned thread",
+      confirm: () => Promise.reject(new Error("dialog unavailable")),
+    });
+
+    expect(result._tag).toBe("Failure");
   });
 });

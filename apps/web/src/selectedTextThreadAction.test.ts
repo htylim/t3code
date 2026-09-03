@@ -1,4 +1,5 @@
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, MessageId, ThreadId, type AssistantCitation } from "@t3tools/contracts";
+import { collectAssistantCitations } from "@t3tools/shared/assistantCitations";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { DraftId } from "./composerDraftStore";
@@ -32,6 +33,25 @@ describe("Ask in side chat prompt", () => {
     expect(buildAskInSideChatPrompt("First line\n\n- Second line")).toBe(
       "> First line\n>\n> - Second line\n\n",
     );
+  });
+
+  it("uses an assistant citation when the selection came from an assistant message", () => {
+    const citation: AssistantCitation = {
+      version: 1,
+      environmentId: EnvironmentId.make("environment-1"),
+      threadId: ThreadId.make("thread-1"),
+      messageId: MessageId.make("message-1"),
+      text: "the selected answer",
+      start: 4,
+      end: 23,
+      prefix: "See ",
+      suffix: " here",
+    };
+
+    const prompt = buildAskInSideChatPrompt("the selected answer", citation);
+
+    expect(collectAssistantCitations(prompt).map((match) => match.citation)).toEqual([citation]);
+    expect(prompt).not.toContain("> the selected answer");
   });
 });
 

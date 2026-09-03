@@ -1,9 +1,13 @@
 import type {
+  EnvironmentId,
   ModelSelection,
+  ProviderInstanceId,
   ProviderOptionDescriptor,
   ProviderOptionSelection,
   RuntimeMode,
+  ServerProvider,
 } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
 import type { LegendListRenderItemProps } from "@legendapp/list/react-native";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
 import { HeaderHeightContext } from "@react-navigation/elements";
@@ -27,7 +31,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -47,7 +51,18 @@ import {
   nativeHeaderScrollEdgeEffects,
 } from "../../native/StackHeader";
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
+import { serverEnvironment } from "../../state/server";
+import { ProviderSetupLink } from "../settings/ProviderSetupLink";
+import {
+  SettingsProviderSetupRouteScreen,
+  type ProviderSetupRouteParams,
+} from "../settings/SettingsProviderSetupRouteScreen";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { useNewTaskFlow } from "./new-task-flow-provider";
+import {
+  createProviderCatalogRefreshRunner,
+  providerCatalogRefreshError,
+} from "./provider-catalog-refresh";
 import {
   createNativeMailSearchToolbarItem,
   NATIVE_MAIL_SEARCH_TOOLBAR_CONTENT_INSET,
@@ -55,8 +70,10 @@ import {
 } from "../layout/native-mail-search-toolbar";
 import { RUNTIME_MODE_CHOICES, selectableChoices } from "./thread-settings-options";
 import {
+  canCommitPendingModel,
   modelMatchesCatalogQuery,
   pendingModelAfterPress,
+  providerSetupCandidates,
   providerSectionIsCollapsed,
 } from "./thread-settings-sheet-state";
 
@@ -65,7 +82,11 @@ import {
  * and friends) starts folded so a 300-model catalog cannot bury the list. All
  * provider headers remain user-collapsible.
  */
-const PRIMARY_PROVIDER_DRIVERS: ReadonlySet<string> = new Set(["claudeAgent", "codex"]);
+const PRIMARY_PROVIDER_DRIVERS: ReadonlySet<string> = new Set([
+  "claudeAgent",
+  "codex",
+  "antigravity",
+]);
 /**
  * Keep measured row changes stable, but let catalog mutations use the list's
  * native bounds so a filtered catalog that underflows returns to the top.
@@ -95,7 +116,11 @@ function ModelRow(props: {
     <Pressable
       accessibilityLabel={[props.option.label, props.option.subtitle].filter(Boolean).join(", ")}
       accessibilityRole="radio"
-      accessibilityState={{ checked: props.selected }}
+      accessibilityState={{
+        checked: props.selected,
+        disabled: props.option.isUnavailable === true,
+      }}
+      disabled={props.option.isUnavailable}
       onPress={props.onPress}
       className={cn(
         "mx-4 min-h-11 flex-row items-center gap-2 bg-card px-4 py-2 active:bg-subtle",
@@ -120,6 +145,9 @@ function ModelRow(props: {
             <View className="rounded-md bg-subtle px-1.5 py-0.5">
               <Text className="text-3xs font-t3-bold text-foreground-muted">Legacy</Text>
             </View>
+          ) : null}
+          {props.option.isUnavailable ? (
+            <Text className="text-xs text-foreground">Unavailable</Text>
           ) : null}
         </View>
         {props.option.subtitle ? (
@@ -293,6 +321,8 @@ type ThreadSettingsSubmenuPage =
   | { readonly kind: "runtime" };
 
 type ThreadSettingsSessionProps = {
+  readonly environmentId: EnvironmentId | null;
+  readonly providerInstanceId?: ProviderInstanceId;
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
   readonly selectedModel: ModelSelection | null;
   readonly onSelectModel: (option: ModelOption) => void;
@@ -344,6 +374,8 @@ export function useExistingThreadSettingsRoutePresentation() {
 }
 
 type ThreadSettingsSessionValue = {
+  readonly environmentId: EnvironmentId | null;
+  readonly providerInstanceId?: ProviderInstanceId;
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
@@ -355,7 +387,7 @@ type ThreadSettingsSessionValue = {
   readonly searchQuery: string;
   readonly showLegacy: boolean;
   readonly applyOptionChange: (id: string, value: string | boolean) => void;
-  readonly commitPendingModel: () => void;
+  readonly commitPendingModel: () => boolean;
   readonly isApplied: (option: ModelOption) => boolean;
   readonly isDisplayed: (option: ModelOption) => boolean;
   readonly pressModel: (option: ModelOption) => void;
@@ -413,10 +445,15 @@ function ThreadSettingsSessionProvider(
   );
   const commitPendingModel = useCallback(() => {
     if (pendingModel) {
+      if (!canCommitPendingModel(pendingModel, props.providerGroups)) {
+        Alert.alert("Model unavailable", "Complete provider setup or select another model.");
+        return false;
+      }
       void Haptics.selectionAsync();
       props.onSelectModel(pendingModel);
     }
-  }, [pendingModel, props.onSelectModel]);
+    return true;
+  }, [pendingModel, props.onSelectModel, props.providerGroups]);
 
   const applyOptionChange = useCallback(
     (id: string, value: string | boolean) => {
@@ -462,6 +499,8 @@ function ThreadSettingsSessionProvider(
 
   const value = useMemo<ThreadSettingsSessionValue>(
     () => ({
+      environmentId: props.environmentId,
+      providerInstanceId: props.providerInstanceId,
       providerGroups: props.providerGroups,
       runtimeMode: props.runtimeMode,
       onUpdateRuntimeMode: props.onUpdateRuntimeMode,
@@ -490,6 +529,8 @@ function ThreadSettingsSessionProvider(
       hasLegacyModels,
       isApplied,
       isDisplayed,
+      props.environmentId,
+      props.providerInstanceId,
       pendingModel,
       pressModel,
       providerFilter,
@@ -539,6 +580,11 @@ type ThreadSettingsCatalogItem =
       readonly option: ModelOption;
       readonly isFirst: boolean;
       readonly isLast: boolean;
+    }
+  | {
+      readonly kind: "setup";
+      readonly key: string;
+      readonly provider: ServerProvider;
     }
   | {
       readonly kind: "empty";
@@ -749,22 +795,37 @@ function ThreadSettingsOptionsItem(props: {
 /** One native scroll owner for the model catalog and its related settings. */
 function ThreadSettingsMainContent(props: {
   readonly onOpenSubmenu: (submenu: ThreadSettingsSubmenuPage) => void;
+  readonly onOpenProviderSetup: (instanceId: ProviderInstanceId) => void;
 }) {
   const session = useThreadSettingsSession();
+  const config = useAtomValue(serverEnvironment.configValueAtom(session.environmentId));
   const catalogItems = useThreadSettingsCatalogItems(session);
   const [animationsReady, setAnimationsReady] = useState(false);
   const nativeHeaderHeight = use(HeaderHeightContext) ?? 0;
   const hasActiveCatalogFilter =
     session.providerFilter !== null || session.searchQuery.trim().length > 0;
   const usesTransparentNativeHeader = Platform.OS === "ios" && NATIVE_LIQUID_GLASS_SUPPORTED;
+  const setupProviders = useMemo(
+    () =>
+      providerSetupCandidates({
+        providers: config?.providers ?? [],
+        instanceId: session.providerInstanceId,
+        providerFilter: session.providerFilter,
+        query: session.searchQuery,
+      }),
+    [config?.providers, session.providerInstanceId, session.providerFilter, session.searchQuery],
+  );
   const listItems = useMemo<ReadonlyArray<ThreadSettingsCatalogItem>>(
     () => [
-      ...(catalogItems.length === 0 && hasActiveCatalogFilter
-        ? ([{ kind: "empty", key: "empty" }] as const)
-        : catalogItems),
+      ...(catalogItems.length === 0 ? ([{ kind: "empty", key: "empty" }] as const) : catalogItems),
+      ...setupProviders.map((provider) => ({
+        kind: "setup" as const,
+        key: `setup:${provider.instanceId}`,
+        provider,
+      })),
       { kind: "options", key: "options" },
     ],
-    [catalogItems, hasActiveCatalogFilter],
+    [catalogItems, setupProviders],
   );
   const renderCatalogItem = useCallback(
     (itemProps: LegendListRenderItemProps<ThreadSettingsCatalogItem>) => {
@@ -781,10 +842,19 @@ function ThreadSettingsMainContent(props: {
             option={item.option}
           />
         );
+      } else if (item.kind === "setup") {
+        content = (
+          <ProviderSetupLink
+            provider={item.provider}
+            onPress={() => props.onOpenProviderSetup(item.provider.instanceId)}
+          />
+        );
       } else if (item.kind === "empty") {
         content = (
           <View className="items-center px-8 py-14">
-            <Text className="text-center text-sm text-foreground-muted">No matching models</Text>
+            <Text className="text-center text-sm text-foreground-muted">
+              {hasActiveCatalogFilter ? "No matching models" : "No available models"}
+            </Text>
           </View>
         );
       } else {
@@ -806,7 +876,7 @@ function ThreadSettingsMainContent(props: {
         </Animated.View>
       );
     },
-    [animationsReady, props.onOpenSubmenu],
+    [animationsReady, hasActiveCatalogFilter, props.onOpenProviderSetup, props.onOpenSubmenu],
   );
 
   return (
@@ -932,6 +1002,7 @@ function ThreadSettingsChoiceContent(props: {
 type ThreadSettingsPickerStackParams = {
   ThreadSettingsModels: undefined;
   ThreadSettingsChoice: ThreadSettingsSubmenuPage & { readonly title: string };
+  ThreadSettingsProviderSetup: ProviderSetupRouteParams;
 };
 
 type ThreadSettingsPickerPresentation = {
@@ -958,8 +1029,25 @@ function ThreadSettingsModelsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ThreadSettingsPickerStackParams>>();
   const usesNativeMailSearchToolbar = Platform.OS === "ios" && NATIVE_MAIL_SEARCH_TOOLBAR_SUPPORTED;
   const hasCustomCatalogFilter = session.providerFilter !== null || session.showLegacy;
+  const refreshProvidersCommand = useAtomCommand(serverEnvironment.refreshProviders, {
+    reportFailure: false,
+  });
+  const refreshProviderCatalog = useMemo(
+    () => createProviderCatalogRefreshRunner(refreshProvidersCommand),
+    [refreshProvidersCommand],
+  );
+  const [isRefreshingProviders, setIsRefreshingProviders] = useState(false);
+  const refreshProviders = useCallback(() => {
+    if (!session.environmentId || isRefreshingProviders) return;
+    setIsRefreshingProviders(true);
+    void refreshProviderCatalog(session.environmentId).then((result) => {
+      setIsRefreshingProviders(false);
+      const error = providerCatalogRefreshError(result);
+      if (error) Alert.alert("Could not refresh models", error);
+    });
+  }, [isRefreshingProviders, refreshProviderCatalog, session.environmentId]);
   const commitAndClose = useCallback(() => {
-    session.commitPendingModel();
+    if (!session.commitPendingModel()) return;
     presentation.onClose();
   }, [presentation, session]);
   const filterMenu = useMemo(
@@ -1005,6 +1093,12 @@ function ThreadSettingsModelsScreen() {
       {Platform.OS === "android" ? (
         <AndroidScreenHeader
           actions={[
+            {
+              accessibilityLabel: "Refresh models",
+              disabled: isRefreshingProviders || session.environmentId === null,
+              icon: "arrow.clockwise",
+              onPress: refreshProviders,
+            },
             {
               accessibilityLabel: session.pendingModel ? "Save thread settings" : "Done",
               icon: "checkmark",
@@ -1052,6 +1146,13 @@ function ThreadSettingsModelsScreen() {
         }}
       />
       <ThreadSettingsMainContent
+        onOpenProviderSetup={(instanceId) => {
+          if (!session.environmentId) return;
+          navigation.navigate("ThreadSettingsProviderSetup", {
+            environmentId: session.environmentId,
+            instanceId,
+          });
+        }}
         onOpenSubmenu={(submenu) => {
           const title =
             submenu.kind === "runtime"
@@ -1070,6 +1171,13 @@ function ThreadSettingsModelsScreen() {
         />
       </NativeHeaderToolbar>
       <NativeHeaderToolbar placement="right">
+        <NativeHeaderToolbar.Button
+          accessibilityLabel="Refresh models"
+          disabled={isRefreshingProviders || session.environmentId === null}
+          icon="arrow.clockwise"
+          onPress={refreshProviders}
+          separateBackground
+        />
         <NativeHeaderToolbar.Button
           accessibilityLabel={session.pendingModel ? "Save thread settings" : "Done"}
           label={session.pendingModel ? "Save" : "Done"}
@@ -1179,6 +1287,11 @@ function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) 
           component={ThreadSettingsChoiceScreen}
           options={({ route }) => ({ title: route.params.title })}
         />
+        <ThreadSettingsPickerStack.Screen
+          name="ThreadSettingsProviderSetup"
+          component={SettingsProviderSetupRouteScreen}
+          options={{ title: "Antigravity" }}
+        />
       </ThreadSettingsPickerStack.Navigator>
     </ThreadSettingsPickerPresentationContext.Provider>
   );
@@ -1230,6 +1343,7 @@ export function NewTaskThreadSettingsRouteScreen() {
 
   return (
     <ThreadSettingsSessionProvider
+      environmentId={flow.selectedEnvironmentId}
       providerGroups={flow.providerGroups}
       selectedModel={flow.selectedModel}
       onSelectModel={(option) => flow.setSelectedModelKey(option.key, option.selection.options)}

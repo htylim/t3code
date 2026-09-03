@@ -1,4 +1,10 @@
-import type { ScopedProjectRef, ScopedThreadRef } from "@t3tools/contracts";
+import {
+  ASSISTANT_CITATION_MAX_TEXT_LENGTH,
+  MessageId,
+  type AssistantCitation,
+  type ScopedProjectRef,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useRef } from "react";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
@@ -11,6 +17,7 @@ import {
   showSelectedTextThreadContextMenu,
 } from "../../selectedTextThreadAction";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import { captureAssistantTextSelection } from "../../lib/assistantTextSelection";
 
 interface AskInNewThreadSelectionSurfaceProps {
   readonly children: ReactNode;
@@ -43,6 +50,17 @@ export function AskInNewThreadSelectionSurface({
 
       const selectedMarkdown = readSelectedChatMarkdown(selection, container);
       if (selectedMarkdown === null) return;
+      const captured = captureAssistantTextSelection(container, selection);
+      const messageId = captured?.source.dataset.assistantCitationSource;
+      const assistantCitation: AssistantCitation | undefined =
+        captured && messageId && captured.selector.text.length <= ASSISTANT_CITATION_MAX_TEXT_LENGTH
+          ? {
+              version: 1,
+              ...sourceThreadRef,
+              messageId: MessageId.make(messageId),
+              ...captured.selector,
+            }
+          : undefined;
 
       event.preventDefault();
       event.stopPropagation();
@@ -60,7 +78,7 @@ export function AskInNewThreadSelectionSurface({
           if (action === null) return;
 
           if (action === "ask-in-side-chat") {
-            await createSideThread(buildAskInSideChatPrompt(selectedMarkdown));
+            await createSideThread(buildAskInSideChatPrompt(selectedMarkdown, assistantCitation));
             return;
           }
 

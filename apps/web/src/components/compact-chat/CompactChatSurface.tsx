@@ -41,6 +41,7 @@ import { MessagesTimeline } from "~/components/chat/MessagesTimeline";
 import { ThreadErrorBanner } from "~/components/chat/ThreadErrorBanner";
 import { Button } from "~/components/ui/button";
 import {
+  type ComposerFileAttachment,
   type ComposerImageAttachment,
   useComposerDraftStore,
   useComposerThreadDraft,
@@ -50,7 +51,7 @@ import { useTheme } from "~/hooks/useTheme";
 import {
   awaitAttachmentUploads,
   getUploadedAttachments,
-  releaseAttachmentUploads,
+  releaseDraftAttachments,
   startAttachmentUpload,
 } from "~/lib/attachmentUploadQueue";
 import { deriveLatestContextWindowSnapshot } from "~/lib/contextWindow";
@@ -63,13 +64,11 @@ import {
   type PendingUserInputDraftAnswer,
 } from "~/pendingUserInput";
 import {
-  deriveActivePlanState,
   deriveActiveWorkStartedAt,
   derivePendingApprovals,
   derivePendingUserInputs,
   derivePhase,
   deriveTimelineEntries,
-  deriveTurnPlans,
   deriveWorkLogEntries,
 } from "~/session-logic";
 import { useEnvironment } from "~/state/environments";
@@ -80,6 +79,12 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import type { ChatMessage, TurnDiffSummary } from "~/types";
 import { newMessageId } from "~/lib/utils";
 import { resolveAppModelSelectionForInstance } from "~/modelSelection";
+import {
+  createPageScrollController,
+  type PageScrollKey,
+} from "~/components/chat/pageScrollController";
+import { useRightPanelStore } from "~/rightPanelStore";
+import { isBrowserPreviewAttachment } from "~/types";
 
 import {
   buildCompactChatApprovalCommand,
@@ -166,6 +171,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   const composerRef = useRef<ChatComposerHandle | null>(null);
   const promptRef = useRef("");
   const composerImagesRef = useRef<ComposerImageAttachment[]>([]);
+  const composerFilesRef = useRef<ComposerFileAttachment[]>([]);
   const composerTerminalContextsRef = useRef([]);
   const composerElementContextsRef = useRef([]);
   const legendListRef = useRef<LegendListRef | null>(null);
@@ -220,10 +226,9 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
     [attachmentUrlById, messages],
   );
   const workEntries = useMemo(() => deriveWorkLogEntries(activities), [activities]);
-  const turnPlans = useMemo(() => deriveTurnPlans(activities), [activities]);
   const timelineEntries = useMemo(
-    () => deriveTimelineEntries(displayMessages, proposedPlans, workEntries, turnPlans),
-    [displayMessages, proposedPlans, turnPlans, workEntries],
+    () => deriveTimelineEntries(displayMessages, proposedPlans, workEntries),
+    [displayMessages, proposedPlans, workEntries],
   );
   const pendingApprovals = useMemo(() => derivePendingApprovals(activities), [activities]);
   const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
@@ -260,6 +265,8 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   const attachmentUploadsCapabilityKnown = environment?.serverConfig !== null;
   const supportsAttachmentUploads =
     environment?.serverConfig?.environment.capabilities.attachmentUploads === true;
+  const maxFileAttachmentBytes =
+    environment?.serverConfig?.environment.capabilities.fileAttachments?.maxUploadBytes ?? null;
   const selectedProviderStatus = thread
     ? providerStatuses.find(
         (provider) =>
@@ -277,22 +284,10 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   const interactionMode: ProviderInteractionMode = settings.planModeEnabled
     ? (composerDraft.interactionMode ?? thread?.interactionMode ?? "default")
     : "default";
-  const activePlan = useMemo(
-    () => deriveActivePlanState(activities, thread?.latestTurn?.turnId),
-    [activities, thread?.latestTurn?.turnId],
-  );
   const activeContextWindow = useMemo(
     () => deriveLatestContextWindowSnapshot(activities),
     [activities],
   );
-  const workingStepLabel = useMemo(() => {
-    if (!activePlan || activePlan.turnId !== (thread?.latestTurn?.turnId ?? null)) return null;
-    return (
-      activePlan.steps.find((step) => step.status === "inProgress")?.step ??
-      activePlan.steps.find((step) => step.status === "pending")?.step ??
-      null
-    );
-  }, [activePlan, thread?.latestTurn?.turnId]);
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     thread?.latestTurn ?? null,
     thread?.session ?? null,
@@ -318,6 +313,33 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
     observer.observe(composerOverlayElement);
     return () => observer.disconnect();
   }, [composerOverlayElement]);
+
+  const pageScrollControllerRef = useRef<ReturnType<typeof createPageScrollController> | null>(
+    null,
+  );
+  useEffect(() => {
+    const controller = createPageScrollController({
+      getContainer: () => legendListRef.current?.getScrollableNode() ?? null,
+      getScrollPaddingBottomPx: () => composerOverlayHeight,
+      onScrollStart: (key) => {
+        if (key === "PageUp") setTimelineLiveFollowEnabled(false);
+      },
+    });
+    pageScrollControllerRef.current = controller;
+    return () => {
+      controller.dispose();
+      if (pageScrollControllerRef.current === controller) pageScrollControllerRef.current = null;
+    };
+  }, [composerOverlayHeight]);
+  const handlePageScrollKeyDown = useCallback((key: PageScrollKey) => {
+    pageScrollControllerRef.current?.handleKeyDown(key);
+  }, []);
+  const handlePageScrollKeyUp = useCallback((key: string) => {
+    pageScrollControllerRef.current?.handleKeyUp(key);
+  }, []);
+  const handlePageScrollRelease = useCallback(() => {
+    pageScrollControllerRef.current?.releaseActiveKey();
+  }, []);
 
   useEffect(() => {
     setError(null);
@@ -471,27 +493,28 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
     const sendContext = composerRef.current?.getSendContext();
     if (!sendContext?.providerAvailable) return;
     const prompt = promptRef.current.trim();
-    if (prompt.length === 0 && sendContext.images.length === 0) return;
+    const composerAttachments = [...sendContext.images, ...sendContext.files];
+    if (prompt.length === 0 && composerAttachments.length === 0) return;
 
     const outgoingText = formatOutgoingPrompt({
       provider: sendContext.selectedProvider,
       model: sendContext.selectedModel,
       models: sendContext.selectedProviderModels,
       effort: sendContext.selectedPromptEffort,
-      text: prompt || "Describe the attached image.",
+      text: prompt || "Describe the attached file.",
     });
     if (!composerRef.current?.validateProviderInput(outgoingText)) return;
 
     sendInFlightRef.current = true;
-    if (supportsAttachmentUploads && sendContext.images.length > 0) {
-      for (const image of sendContext.images) {
-        startAttachmentUpload({ environmentId: target.environmentId, image });
+    if (supportsAttachmentUploads && composerAttachments.length > 0) {
+      for (const image of composerAttachments) {
+        startAttachmentUpload({ environmentId: target.environmentId, image, draftTarget: target });
       }
-      await awaitAttachmentUploads(sendContext.images.map((image) => image.id));
+      await awaitAttachmentUploads(composerAttachments.map((image) => image.id));
       if (
         getUploadedAttachments({
           environmentId: target.environmentId,
-          images: sendContext.images,
+          images: composerAttachments,
         }) === null
       ) {
         sendInFlightRef.current = false;
@@ -503,27 +526,23 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
     setSendingStartedAt(new Date().toISOString());
     setError(null);
     try {
-      const attachments: Array<UploadChatAttachment | ChatAttachment> = await Promise.all(
-        sendContext.images.map(async (image) => {
-          if (supportsAttachmentUploads) {
-            const uploaded = getUploadedAttachments({
-              environmentId: target.environmentId,
-              images: [image],
-            })?.[0];
-            if (!uploaded) {
-              throw new Error(`Image '${image.name}' did not finish uploading.`);
-            }
-            return uploaded;
-          }
-          return {
-            type: "image" as const,
-            name: image.name,
-            mimeType: image.mimeType,
-            sizeBytes: image.sizeBytes,
-            dataUrl: await readFileAsDataUrl(image.file),
-          };
-        }),
-      );
+      const attachments: Array<UploadChatAttachment | ChatAttachment> = supportsAttachmentUploads
+        ? (getUploadedAttachments({
+            environmentId: target.environmentId,
+            images: composerAttachments,
+          }) ?? [])
+        : await Promise.all(
+            sendContext.images.map(async (image) => ({
+              type: "image" as const,
+              name: image.name,
+              mimeType: image.mimeType,
+              sizeBytes: image.sizeBytes,
+              dataUrl: await readFileAsDataUrl(image.file),
+            })),
+          );
+      if (!supportsAttachmentUploads && sendContext.files.length > 0) {
+        throw new Error("This server cannot upload file attachments.");
+      }
       const result = await startTurn(
         buildCompactChatStartTurnCommand({
           owner,
@@ -543,7 +562,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
         setError(failure);
       } else if (result._tag === "Success") {
         if (supportsAttachmentUploads) {
-          releaseAttachmentUploads(sendContext.images);
+          releaseDraftAttachments(composerAttachments);
         }
         clearComposerDraftContent(target);
         composerRef.current?.resetCursorState();
@@ -630,7 +649,6 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
         <MessagesTimeline
           key={routeThreadKey}
           isWorking={isWorking}
-          workingStepLabel={workingStepLabel}
           activeTurnStartedAt={activeWorkStartedAt}
           listRef={legendListRef}
           timelineEntries={timelineEntries}
@@ -708,6 +726,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   environmentId={target.environmentId}
                   attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                   supportsAttachmentUploads={supportsAttachmentUploads}
+                  maxFileAttachmentBytes={maxFileAttachmentBytes}
                   routeKind="server"
                   routeThreadRef={target}
                   draftId={null}
@@ -724,7 +743,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   sendBusyLabel="Sending"
                   sendDisabledReason={null}
                   isPreparingWorktree={false}
-                  externalDrawerAttached={false}
+                  bannerItems={[]}
                   environmentUnavailable={environmentUnavailable}
                   activePendingApproval={activePendingApproval}
                   pendingApprovals={pendingApprovals}
@@ -743,6 +762,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   activeProposedPlan={null}
                   activeTasksProgress={null}
                   activeTaskSteps={null}
+                  threadSyncPhase={null}
                   runtimeMode={runtimeMode}
                   interactionMode={interactionMode}
                   lockedProvider={lockedProvider}
@@ -758,10 +778,22 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   terminalOpen={false}
                   gitCwd={thread.worktreePath ?? project?.workspaceRoot ?? null}
                   forkEligibility={SIDE_CHAT_FORK_ELIGIBILITY}
+                  restingControlsHost={null}
+                  restingControlsHaveLeadingContext={false}
+                  onRestingControlsVisibilityChange={() => {}}
+                  getTimelineScrollableNode={() =>
+                    legendListRef.current?.getScrollableNode() ?? null
+                  }
+                  isTimelineAtLogicalEnd={() => timelineLiveFollowEnabled}
+                  onComposerOverlayHeightChange={() => {}}
                   promptRef={promptRef}
                   composerImagesRef={composerImagesRef}
+                  composerFilesRef={composerFilesRef}
                   composerTerminalContextsRef={composerTerminalContextsRef}
                   composerElementContextsRef={composerElementContextsRef}
+                  onPageScrollKeyDown={handlePageScrollKeyDown}
+                  onPageScrollKeyUp={handlePageScrollKeyUp}
+                  onPageScrollRelease={handlePageScrollRelease}
                   onSend={(event) => {
                     event?.preventDefault();
                     void handleSend();
@@ -815,6 +847,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                     }));
                   }}
                   onProviderModelSelect={handleProviderModelSelect}
+                  onOpenProviderSetup={() => {}}
                   getModelDisabledReason={getModelDisabledReason}
                   toggleInteractionMode={() =>
                     handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan")
@@ -827,6 +860,11 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                     if (threadId === null || threadId === target.threadId) setError(nextError);
                   }}
                   onExpandImage={setExpandedImage}
+                  onFileOpen={(attachment) => {
+                    if (isBrowserPreviewAttachment(attachment)) {
+                      useRightPanelStore.getState().openAttachment(owner, attachment);
+                    }
+                  }}
                 />
               </div>
             </div>

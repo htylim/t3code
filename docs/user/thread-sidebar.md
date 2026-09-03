@@ -4,11 +4,32 @@ Pin a thread from its context menu to keep it in the pinned section above your a
 `mod+shift+p` pins or unpins the thread you have open. Pinned threads are shown independently of
 their project, including when you connect to more than one environment.
 
+To require confirmation before unpinning, enable **Settings → General → Unpin confirmation**. The
+confirmation applies to the sidebar controls, thread menus, and the `mod+shift+p` shortcut.
+
 Pinned threads still move to **Settled** when they become inactive. They also move when their pull
 request merges if **Auto-settle merged threads** is enabled.
 
-Settled threads keep showing and sorting by their last user message. Settling an old thread does
-not make it appear recent. Threads without a user message use their creation time.
+Each server stores its own copy of the automatic settlement settings and checks them even when no
+web, desktop, or mobile client is connected. By default, it settles threads after three days without
+activity and when their pull request merges. An eligible idle thread also settles when its pull
+request closes. An open pull request blocks inactivity settlement. Active work, pending input, and
+live background work keep the thread active. T3 Code settles from a closed or merged pull request
+only when its timestamp is not older than the user's latest activity. If that timestamp is not
+available, the inactivity rule still applies. A manual un-settle also keeps the thread active.
+
+**Settled** lists threads by when their work finished, newest first. A thread you settle yourself
+sorts by the moment you settled it. A thread that settled on its own sorts by its last message or
+turn, not by when the server noticed it was inactive.
+
+Change these rules in **Settings > General**. The change is written to every environment you are
+connected to at that moment. An environment that is offline keeps its old value. When a connected
+environment holds a different value, **Settings > General** shows a warning that names it. Choose
+**Apply to all** to write your current values to every connected environment. The same applies to
+the new-thread workspace mode and the source control writing style.
+
+A settings change affects future settlement and does not reopen a settled thread. Settings saved
+by older clients on one device no longer control this behavior.
 
 When you un-settle a thread, it returns to the top of the active list so you can find it right
 away. Its timestamps do not change. Other threads keep their positions.
@@ -25,54 +46,29 @@ If reordering is unavailable for one environment, update the T3 Code server runn
 environment. Older servers can still pin and unpin threads, but do not understand synced ordering;
 their pinned threads keep the default newest-first order below the ones you have arranged.
 
-## Continue another thread in the right panel
+## Panel motion
 
-On web and desktop, open a different thread's context menu and choose **Open in side surface**.
-The thread opens in the current chat's right panel without changing the main chat. You can follow
-its live timeline, send a message, stop its current work, and answer approvals or questions. The
-side chat uses the same message rendering and composer as the main chat. It supports image
-attachments, provider and model controls, permission and interaction modes, `%` thread references,
-`$` skills, and `@` file or folder references.
+The main sidebar, right panel, and terminal drawer open and close immediately by default. Under
+**Settings → Appearance → Motion**, move the **Panel animations** slider above 0 ms to add motion.
+The duration can be set up to 400 ms. Clicking the preview replays all three panel transitions; at
+0 ms, it snaps between the same open and closed states.
 
-Press `mod+t` (`Cmd+T` on macOS, `Ctrl+T` elsewhere) to create a blank side chat from the current
-main chat. It inherits the main chat's environment, project, model and model options, permission
-mode, interaction mode, branch, and worktree at creation time. Those settings then belong to the
-new thread and do not stay linked to later changes in the main chat. T3 Code treats this new side
-chat as transient. It stays out of this client's thread lists and search results, and closing or
-replacing its side surface deletes the T3 thread. The provider may retain its own native transcript.
-The shortcut is the `chat.newSide` command and can be changed in **Settings** → **Keybindings**.
-Desktop receives the default shortcut directly; web browsers normally reserve `Cmd/Ctrl+T`, so bind
-another shortcut when using the web client.
+## Environment icons
 
-You can also choose **Chat** from the right panel's surface controls to create the same blank side
-chat.
+When you are connected to more than one environment, every thread that lives somewhere other than
+the machine you are on wears a small icon for that machine at the end of its row: a server, a cloud
+VM, a desktop, a laptop, a Mac mini, or a Mac Studio. In the hosted web app and the mobile app,
+where every environment is remote, each row wears its machine so you can tell them apart at a
+glance. The same icon appears wherever an environment is named: the thread tooltip, the command
+palette, the "Run on" picker, the pull request server filter, the provider settings device tabs,
+and the environment lists under **Settings → Connections**. On mobile it appears in the thread
+lists, the archive, the new-task environment picker, and the Environments and storage settings.
 
-The Chat surface belongs to the main thread where you opened it. Moving to another main thread
-hides that right panel; returning restores it during the same app session. Threads opened through
-**Open in side surface** remain ordinary persistent threads, so closing only removes that view.
-Blank side chats and chats created through **Ask in side chat** are transient and are deleted when
-their surface closes.
-
-Transient side surfaces are not restored after T3 Code quits. Their IDs remain in browser storage
-until deletion succeeds. On the next launch, T3 Code deletes any transient thread left behind by a
-normal quit, crash, or forced termination after that thread's environment reconnects.
-
-When you send from the side surface, T3 Code tells the agent which main thread owns the surface.
-The agent can use `thread_read` when it needs that conversation. This context is not added to the
-visible user message. T3 Code omits it when the main thread belongs to another environment.
-Otherwise, it tells the agent to use `thread_read` only when the provider exposes T3's thread tools.
-
-Each main thread can hold one Chat surface. Opening a different target replaces the previous Chat
-surface after you confirm the replacement. Replacing a transient side chat also deletes its T3
-thread. Reopening the current target does not ask for confirmation. Forking, checkpoint restore,
-terminal capture, and links to other right-panel surfaces remain available only from the main chat.
-
-## Return to your reading position
-
-On web and desktop, switching away from a thread keeps your reading position for the rest of the
-app session. Returning restores the same timeline row and position within it, even if row heights
-changed while you were away. Reaching the live edge or sending a message clears the saved position.
-Reloading the app also clears it.
+Servers pick the icon themselves from the hardware they run on. A Mac reports its model, a Linux
+machine reports its chassis type and whether it is a virtual machine, and anything without a usable
+signal shows a generic server. To override it, open **Settings → Connections** and choose an icon
+for that environment; **Automatic** goes back to what the server detected. The choice is stored on
+that server, so every device that connects to it sees the same icon.
 
 ## Environment artwork
 

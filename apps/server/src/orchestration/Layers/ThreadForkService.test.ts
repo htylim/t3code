@@ -130,6 +130,7 @@ function makeHarness(input?: {
       }),
     readEvents: () => Stream.empty,
     streamDomainEvents: Stream.empty,
+    subscribeDomainEvents: Effect.succeed(Stream.empty),
     latestSequence: Effect.succeed(0),
   } satisfies OrchestrationEngineService["Service"];
   const projection = {

@@ -19,6 +19,29 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-03 - Merge upstream assistant citations, attachments, and desktop changes
+
+- Upstream baseline: `fff33f9e8`
+- Change: Merged upstream's 276 commits while retaining native thread forking, MCP thread control,
+  side chats and transient context, thread references, Mermaid rendering, timeline bookmarks, prompt
+  navigation, Sidebar v2 project filtering, the Auto permission default, and fork desktop identity
+  and update rules. `Cmd/Ctrl+W` now follows upstream's terminal and right-panel close behavior, then
+  falls back to `thread.settleAndNew` when neither panel is open. **Ask in side chat** now sends an
+  assistant citation token for assistant-message selections, with the old blockquote prompt kept as
+  the fallback for selections that cannot be cited.
+- Reason: Upstream added first-class assistant citations and changed the composer, provider,
+  attachment, timeline, desktop, and mobile seams extended by this fork. Taking either side whole
+  would lose fork features or skip upstream's newer behavior.
+- Scope: Contracts, orchestration, provider capabilities and session handling, web and mobile
+  composers, side chats, Markdown, timeline state, keybindings, Sidebar v2, desktop, and dependency
+  metadata.
+- Verification: Passed 699 focused contract, shared, server, web, and mobile tests, then reran a
+  400-test integration subset after the final dependency install. Passed affected package type
+  checks, targeted lint with no errors, targeted formatting, frozen-lockfile installation, and
+  conflict-marker checks. Started the full web and server stack against the repository-local `.t3`
+  state, received HTTP 200 from the web client, and confirmed the server responded before stopping
+  the captured process.
+
 ## 2026-08-30 - Keep settled threads anchored to their last message
 
 - Upstream baseline: `acb599d2dc5b`
