@@ -4,6 +4,9 @@ Pin a thread from its context menu to keep it in the pinned section above your a
 `mod+shift+p` pins or unpins the thread you have open. Pinned threads are shown independently of
 their project, including when you connect to more than one environment.
 
+Active threads sort by the latest user message, newest first. Agent progress and completion do not
+move a row. Sending another message does. A thread without a user message sorts by creation time.
+
 To require confirmation before unpinning, enable **Settings → General → Unpin confirmation**. The
 confirmation applies to the sidebar controls, thread menus, and the `mod+shift+p` shortcut.
 
@@ -31,8 +34,8 @@ the new-thread workspace mode and the source control writing style.
 A settings change affects future settlement and does not reopen a settled thread. Settings saved
 by older clients on one device no longer control this behavior.
 
-When you un-settle a thread, it returns to the top of the active list so you can find it right
-away. Its timestamps do not change. Other threads keep their positions.
+When you un-settle a thread, it returns to the top of the active list so you can find it right away.
+Its message timestamps do not change.
 
 Right-click a pull request link in a thread and choose **Link to thread** to show that pull request
 in the sidebar. The thread settles when the linked pull request merges if **Auto-settle merged

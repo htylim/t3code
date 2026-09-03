@@ -811,19 +811,28 @@ describe("reduceSidebarProjectScopeMenuState", () => {
 });
 
 describe("sortThreadsForSidebar", () => {
-  const sortable = (input: { id: string; createdAt: string }) => ({
+  const sortable = (input: {
+    id: string;
+    createdAt: string;
+    latestUserMessageAt?: string | null;
+  }) => ({
     id: input.id,
     createdAt: input.createdAt,
+    latestUserMessageAt: input.latestUserMessageAt ?? null,
   });
 
-  it("orders by creation time, newest first, ignoring activity", () => {
+  it("orders by latest user activity, with creation time as the fallback", () => {
     const sorted = sortThreadsForSidebar([
-      sortable({ id: "oldest", createdAt: "2026-03-09T08:00:00.000Z" }),
+      sortable({
+        id: "oldest",
+        createdAt: "2026-03-09T08:00:00.000Z",
+        latestUserMessageAt: "2026-03-09T13:00:00.000Z",
+      }),
       sortable({ id: "newest", createdAt: "2026-03-09T12:00:00.000Z" }),
       sortable({ id: "middle", createdAt: "2026-03-09T10:00:00.000Z" }),
     ]);
 
-    expect(sorted.map((thread) => thread.id)).toEqual(["newest", "middle", "oldest"]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["oldest", "newest", "middle"]);
   });
 
   it("breaks creation-time ties by id so the order is stable", () => {

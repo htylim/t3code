@@ -618,14 +618,14 @@ describe("buildThreadListV2Items", () => {
     expect(layout.settledShelfHeaderIndex).toBe(0);
   });
 
-  it("keeps cards in creation order while settled sorts by recency", () => {
+  it("promotes cards with newer user activity", () => {
     const { items } = buildThreadListV2Items({
       threads: [
         makeThread({
           id: ThreadId.make("older-created"),
           title: "Older",
           createdAt: "2026-06-01T08:00:00.000Z",
-          updatedAt: NOW, // recent activity must NOT promote it
+          latestUserMessageAt: NOW,
         }),
         makeThread({
           id: ThreadId.make("newer-created"),
@@ -638,7 +638,7 @@ describe("buildThreadListV2Items", () => {
       now: NOW,
     });
 
-    expect(items.map((item) => item.thread.id)).toEqual(["newer-created", "older-created"]);
+    expect(items.map((item) => item.thread.id)).toEqual(["older-created", "newer-created"]);
   });
 
   it("sorts settled threads by their persisted settlement timestamp", () => {
