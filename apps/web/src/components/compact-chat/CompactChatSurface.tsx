@@ -35,6 +35,7 @@ import {
   readFileAsDataUrl,
 } from "~/components/ChatView.logic";
 import { type ChatComposerHandle, ChatComposer } from "~/components/chat/ChatComposer";
+import { ComposerSurface } from "~/components/chat/ComposerSurface";
 import { ExpandedImageDialog } from "~/components/chat/ExpandedImageDialog";
 import type { ExpandedImagePreview } from "~/components/chat/ExpandedImagePreview";
 import { MessagesTimeline } from "~/components/chat/MessagesTimeline";
@@ -718,8 +719,8 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
       >
         <div className="w-full px-3 sm:px-5">
           <div className="pointer-events-auto relative z-10">
-            <div className="chat-composer-glass-shell relative mx-auto w-full max-w-3xl">
-              <div className="chat-composer-glass-host relative z-10 w-full rounded-[22px]">
+            <ComposerSurface.Shell>
+              <ComposerSurface.Host>
                 <ChatComposer
                   composerRef={composerRef}
                   composerDraftTarget={target}
@@ -866,8 +867,8 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                     }
                   }}
                 />
-              </div>
-            </div>
+              </ComposerSurface.Host>
+            </ComposerSurface.Shell>
           </div>
           <div
             aria-hidden

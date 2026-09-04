@@ -6,8 +6,13 @@ describe("side chat presentation parity", () => {
   it("uses the main chat timeline and composer instead of local presentation copies", () => {
     expect(source).toContain('from "~/components/chat/MessagesTimeline"');
     expect(source).toContain('from "~/components/chat/ChatComposer"');
+    expect(source).toContain('from "~/components/chat/ComposerSurface"');
     expect(source).toContain("<MessagesTimeline");
     expect(source).toContain("<ChatComposer");
+    expect(source).toContain("<ComposerSurface.Shell>");
+    expect(source).toContain("<ComposerSurface.Host>");
+    expect(source).not.toContain("chat-composer-glass-shell");
+    expect(source).not.toContain("chat-composer-glass-host");
     expect(source).not.toContain("<ChatMarkdown");
     expect(source).not.toContain("<ComposerPromptEditor");
     expect(source).not.toContain("data-compact-chat-timeline");

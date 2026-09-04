@@ -19,6 +19,22 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-04 - Keep side-chat composer styling aligned with upstream
+
+- Upstream baseline: `fff33f9e8519`
+- Change: The fork-owned side chat now wraps the shared `ChatComposer` with upstream's
+  `ComposerSurface.Shell` and `ComposerSurface.Host` components.
+- Reason: Upstream moved the composer backdrop, outline, radius, and shadow out of global
+  `.chat-composer-glass-*` classes and into `ComposerSurface`. The side-chat adapter kept the
+  removed class names, so its controls rendered without the composer container.
+- Scope: Web and desktop side chats and the focused presentation-parity test. Mobile and the
+  upstream main composer are unchanged.
+- Verification: Passed 11 focused side-chat tests, targeted formatting, targeted lint with no
+  errors, and `git diff --check` for the changed files. In an isolated browser with synthetic
+  threads, opened the target in the side surface and typed into its composer. The side composer
+  retained upstream's 1px outline, 22px corners, translucent backdrop, and light-mode shadow in
+  both light and dark appearances.
+
 ## 2026-09-03 - Sort active threads by user activity
 
 - Upstream baseline: `fff33f9e8`
