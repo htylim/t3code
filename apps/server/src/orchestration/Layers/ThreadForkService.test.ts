@@ -129,6 +129,9 @@ function makeHarness(input?: {
         return { sequence: 42 };
       }),
     readEvents: () => Stream.empty,
+    readThreadEvents: () => Stream.empty,
+    getThreadReplayStats: () =>
+      Effect.succeed({ eventCount: 0, payloadBytes: 0, hasCreateEvent: false }),
     streamDomainEvents: Stream.empty,
     subscribeDomainEvents: Effect.succeed(Stream.empty),
     latestSequence: Effect.succeed(0),

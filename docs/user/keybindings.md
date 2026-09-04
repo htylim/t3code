@@ -1,14 +1,13 @@
 # Keybindings
 
-Edit keybindings from **Settings** → **Keybindings**. That page lists every command, its current
-shortcut, whether it is a default or your own, and warns about conflicts.
+Customize shortcuts in **Settings → Keybindings** on web and desktop. That page
+also lists the command IDs and defaults available in your version.
 
-The same configuration lives in `~/.t3/userdata/keybindings.json` on the machine running the
-server, if you prefer editing it directly. T3 Code writes the built-in defaults into that file on
-first run, and adds any new defaults on later startups unless a rule of yours already claims the
-command or the shortcut.
+## Edit the configuration file
 
-The file is a JSON array of rules.
+Keybindings live on the environment's machine, in
+`~/.t3/userdata/keybindings.json` by default. You can edit this file directly.
+It is a JSON array of rules:
 
 ```json
 [
@@ -17,124 +16,77 @@ The file is a JSON array of rules.
 ]
 ```
 
-Invalid rules are ignored. An invalid file is ignored entirely, and the server logs a warning.
+T3 Code creates the file with its defaults and adds new defaults on later startups.
+New defaults do not replace commands you customized. If a new default overlaps one
+of your shortcuts, [rule order](#precedence) decides which runs.
+Invalid rules are ignored; if the file cannot be parsed, T3 Code uses defaults.
 
-## Rule Shape
+## Rule shape
 
-- `key` (required): shortcut string, like `mod+j`, `ctrl+k`, `cmd+shift+d`
-- `command` (required): the command ID to run
-- `when` (optional): boolean expression controlling when the shortcut is active
+Each rule requires a `key` shortcut and a `command` ID. An optional `when`
+expression restricts when it runs.
 
-## Key Syntax
+Project scripts use `script.{id}.run`, such as `script.test.run`.
 
-Modifiers: `mod` (`cmd` on macOS, `ctrl` elsewhere), `cmd` / `meta`, `ctrl` / `control`, `shift`,
-`alt` / `option`.
+## Key syntax
 
-Examples: `mod+j`, `mod+shift+d`, `ctrl+l`, `cmd+k`.
+Join modifiers and a key with `+`, such as `mod+shift+d` or `ctrl+l`.
+`mod` means Command on macOS and Control elsewhere. Other modifiers are
+`cmd` / `meta`, `ctrl` / `control`, `alt` / `option`, and `shift`.
 
-## Commands
+## When conditions
 
-Commands are IDs like `terminal.toggle`, `commandPalette.toggle`, `preview.refresh`, and
-`chat.new`. Project scripts are addressable as `script.{id}.run`, for example `script.test.run`.
+Available context keys are `terminalFocus`, `terminalOpen`, `previewFocus`,
+`previewOpen`, `rightPanelOpen`, and `modelPickerOpen`. Unknown keys evaluate to `false`.
 
-`filePicker.toggle` opens file search for the active project and defaults to `mod+p`.
-`projectSearch.toggle` searches inside the active project's files and defaults to `mod+shift+f`.
-Repeating either shortcut closes that search, and switching shortcuts replaces the open search.
-`thread.rename` starts renaming the active thread and defaults to `f2` outside the terminal.
-`rightPanel.close` closes the active right-panel tab, or closes an empty right panel, and defaults
-to `mod+w` while the right panel is open. In the macOS desktop app, `Cmd+W` does not fall through
-to closing the window; use **File** → **Close Window** or the window controls instead.
+Combine keys with `!` for not, `&&` for and, `||` for or, and parentheses:
 
-`chat.newSide` creates a blank chat in the current main chat's right panel. It copies the current
-project, model options, permission mode, interaction mode, branch, and worktree, and defaults to
-`mod+t` (`Cmd+T` on macOS). The new thread is transient. Pressing the shortcut again while that Chat
-surface is visible closes the surface and deletes the T3 thread. If another right-panel surface is
-active, the shortcut opens a new transient side chat instead. Desktop receives `mod+t`; browsers
-normally reserve it for opening a browser tab, so web users should assign another shortcut.
-
-`project.switch` opens a searchable project picker for the default sidebar. It has no default
-shortcut; add one with the **+** button in **Settings** → **Keybindings**, or run **Switch
-project...** from the command palette. Choosing a project opens its new-chat draft and filters the
-sidebar to that logical project. The command is unavailable with fewer than two logical projects,
-while the legacy sidebar is mounted, or from Settings navigation.
-
-The default sidebar's new-chat button follows that filter. Under **All projects**, it runs
-`chat.new` and opens the project picker. Under a specific project, it runs `chat.newLocal` for that
-project without opening the picker. When `chat.new` opens the picker while a project filter is
-active, choosing another project moves the filter to that project. Choosing from **All projects**
-keeps **All projects** selected.
-
-`themeEditor.toggle` opens or closes the floating theme editor and defaults to
-`mod+alt+shift+t`. Select a color label to spotlight the elements that use it; select the label
-again to clear the spotlight. The swatch and hex field keep that color selected while you edit it.
-Advanced mode groups related app tokens into a smaller set of color families. Changing a family
-updates its paired text and interaction states while leaving every unrelated imported color intact.
-Use **Inspect** to pick an element in the app and reveal its color token. Inspect disarms after one
-successful pick; its hover glow and badge preview the element and color family that click will select.
-**Cancel** or `Escape` exits Inspect and clears its selection and spotlight.
-
-`rightPanel.toggleMaximized` maximizes or restores the open right panel. It has no default shortcut,
-so add one in **Settings** → **Keybindings** if you want to use it.
-
-`rightPanel.close` closes the active right panel tab and defaults to `mod+w`. Press it again to close
-the next tab. With the terminal focused, `mod+w` closes the terminal instead, and with nothing left
-to close it closes the desktop window as before. Browsers reserve `mod+w` for closing their own tab
-and never pass it to the page, so in a browser rebind this command (and `terminal.close`) to a
-shortcut the browser leaves alone, such as `alt+w`.
-
-`thread.copyReference` copies the active thread's pull request link, or its thread ID when no pull
-request is available. Its default shortcut is `mod+shift+c`, and it does not replace terminal copy
-while the terminal has focus.
-
-`thread.settle` settles the active thread or restores it when it is already settled. Its default
-shortcut is `mod+shift+s`, and it does not run while the terminal has focus.
-
-`thread.settleAndNew` settles the active thread and opens a new thread in the same project. It
-defaults to `mod+w` when the terminal and right panel are closed. If settlement fails, the current
-thread stays open.
-
-`thread.pin` pins the active thread to the pinned section of the sidebar, or unpins it when it is
-already pinned. Its default shortcut is `mod+shift+p`, and it does not run while the terminal has
-focus. See [Organizing threads](./thread-sidebar.md) for how pinned threads are ordered.
-
-The command palette searches settings, active thread titles, projects, branches, user messages, and
-final agent responses across connected environments. A setting result opens its exact control or
-section. Message matches show one labeled excerpt while keeping the thread's project, branch, and
-machine context visible. Message search begins after two characters and uses SQLite's ASCII
-case-insensitive matching.
-
-The full command list and the current defaults are shown in **Settings** → **Keybindings**, which
-always matches the build you are running. Use that rather than a copied list.
-
-Note that `chat.new` and `chat.newLocal` both create a thread through the same path. A new thread
-inherits the project you were in, along with model and mode selections. Branch, worktree, and
-environment mode always come from your configured defaults, not from the thread you were looking
-at. To keep a worktree, use the explicit "new thread in this worktree" action in the branch
-toolbar. The only difference between the two commands: with the current sidebar and more than one
-project, `chat.new` opens a project chooser first.
-
-Background submission from a new thread is the exception. `mod+enter` starts that thread and opens
-another new thread with the same workspace mode and base branch. **New worktree** remains selected,
-but the new thread does not reuse the worktree created for the thread that just started.
-
-## `when` Conditions
-
-A `when` expression is evaluated against context keys describing the current UI state. The keys
-the app supplies today are `terminalFocus`, `terminalOpen`, `previewFocus`, `previewOpen`,
-`rightPanelOpen`, and `modelPickerOpen`. The set is open and grows over time, so treat that as the
-current list rather than a fixed one. Any key the running app does not supply evaluates to `false`.
-
-Operators: `!` (not), `&&` (and), `||` (or), and parentheses.
-
-Examples:
-
-- `"when": "terminalFocus"`
-- `"when": "terminalOpen && !terminalFocus"`
-- `"when": "!terminalFocus"`
+```json
+{ "key": "mod+j", "command": "terminal.toggle", "when": "terminalOpen && !terminalFocus" }
+```
 
 ## Precedence
 
-- Rules are evaluated in array order.
-- For a key event, the last rule where both `key` matches and `when` evaluates to `true` wins.
-- Precedence is across commands, not only within the same command. A later rule for a different
-  command can take a key away from an earlier one.
+The last rule whose key and condition both match wins, even if it belongs to a
+different command. Put a more specific rule after a general one when they share
+a shortcut.
+
+## Commands with special behavior
+
+`chat.new` may ask you to choose a project when there is more than one.
+`chat.newLocal` skips that chooser. Both use your
+[new-thread defaults](./thread-sidebar.md#start-a-thread).
+
+`thread.rename` starts renaming the active thread and defaults to `f2` outside the terminal.
+
+`chat.newSide` creates a transient blank chat in the current thread's right panel. It defaults to
+`mod+t`. Browsers normally reserve that shortcut, so web users may need to assign another one.
+
+`project.switch` opens the searchable project picker and moves the sidebar filter to the selected
+project. It has no default shortcut.
+
+`thread.settleAndNew` settles the active thread and opens a new thread in the same project. It uses
+`mod+w` when the terminal and right panel are closed.
+
+The `timeline.previousPrompt`, `timeline.nextPrompt`, `timeline.firstPrompt`, and
+`timeline.lastPrompt` commands move between user prompts. They have no default shortcuts.
+
+## Reserved shortcuts
+
+In the desktop app, `mod+w` closes the focused terminal or the active right-panel
+tab. When nothing remains to close, it closes the window. In a browser, `mod+w`
+closes the browser tab; rebind `rightPanel.close` and `terminal.close` to an available
+shortcut such as `alt+w`.
+
+Many defaults include `!terminalFocus` so they do not intercept terminal input.
+Keep that condition when remapping them if you want the same behavior.
+
+## Desktop quit shortcut
+
+Use `Cmd+Q` on macOS or `Ctrl+Q` on Windows and Linux. In the default **Hold** mode,
+hold for 1.2 seconds or press twice within 500 milliseconds. Holding requires
+keyboard repeat; if repeat is disabled, use two presses or the application menu.
+
+Change **Settings → General → Confirmations → Quit shortcut** to **Direct** for a
+single press or **Double press** for two presses only. Choosing **Quit** from the
+application menu always quits immediately.

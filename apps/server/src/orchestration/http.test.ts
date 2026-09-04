@@ -27,6 +27,9 @@ it.effect("HTTP dispatch routes thread.fork through the shared dispatcher with o
           Layer.succeed(OrchestrationEngineService, {
             dispatch: () => Effect.succeed({ sequence: 0 }),
             readEvents: () => Stream.empty,
+            readThreadEvents: () => Stream.empty,
+            getThreadReplayStats: () =>
+              Effect.succeed({ eventCount: 0, payloadBytes: 0, hasCreateEvent: false }),
             streamDomainEvents: Stream.empty,
             subscribeDomainEvents: Effect.succeed(Stream.empty),
             latestSequence: Effect.succeed(0),

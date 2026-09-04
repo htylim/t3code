@@ -771,6 +771,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   activeProjectDefaultModelSelection={project?.defaultModelSelection}
                   activeThreadModelSelection={thread.modelSelection}
                   activeContextWindow={activeContextWindow}
+                  compactThreadUnavailable
                   compactDisabled
                   compactDisabledReason="Compacting is not available from a side chat."
                   resolvedTheme={resolvedTheme}
@@ -787,6 +788,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   }
                   isTimelineAtLogicalEnd={() => timelineLiveFollowEnabled}
                   onComposerOverlayHeightChange={() => {}}
+                  onRestingChange={() => {}}
                   promptRef={promptRef}
                   composerImagesRef={composerImagesRef}
                   composerFilesRef={composerFilesRef}

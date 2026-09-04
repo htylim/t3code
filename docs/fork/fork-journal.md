@@ -19,6 +19,27 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-04 - Merge upstream browser, usage, terminal, and provider changes
+
+- Upstream baseline: `163d86a78`
+- Change: Merged upstream's 174 commits while retaining native thread forking, bounded MCP thread
+  control, side chats and transient context, thread references, Mermaid rendering, timeline
+  bookmarks and prompt navigation, Sidebar v2 project filtering and user-activity sorting, the Auto
+  permission default, and fork desktop identity and update rules. Adopted upstream's orchestration
+  replay and runtime-context queries, provider compaction and analytics, Markdown renderer changes,
+  browser import, usage-limit reporting, and terminal work.
+- Reason: Upstream changed the orchestration, provider-session, composer, Markdown, sidebar,
+  desktop, and mobile seams extended by the fork. A direct conflict choice would have dropped either
+  downstream behavior or upstream's newer contracts.
+- Scope: Server orchestration and providers; web and mobile composers; Markdown, side-chat, sidebar,
+  and keybinding UI; desktop browser support; shared contracts; dependencies; and documentation.
+- Verification: Passed 790 focused server, web, mobile, contracts, shared, and client-runtime tests
+  plus the server, web, mobile, contracts, and shared package type checks. Refreshed dependencies
+  with the merged lockfile, which passed the
+  repository supply-chain policy check. Also ran targeted formatting, conflict-marker checks, and
+  whitespace checks. The only reported whitespace is three payload lines in upstream's
+  `react-native-screens` patch.
+
 ## 2026-09-04 - Keep side-chat composer styling aligned with upstream
 
 - Upstream baseline: `fff33f9e8519`

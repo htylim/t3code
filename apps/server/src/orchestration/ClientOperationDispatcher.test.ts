@@ -38,6 +38,9 @@ it.effect(
               readEvents: () => {
                 throw new Error("unused");
               },
+              readThreadEvents: () => Stream.empty,
+              getThreadReplayStats: () =>
+                Effect.succeed({ eventCount: 0, payloadBytes: 0, hasCreateEvent: false }),
               streamDomainEvents: Stream.empty,
               subscribeDomainEvents: Effect.succeed(Stream.empty),
               latestSequence: Effect.succeed(0),
@@ -71,6 +74,9 @@ it.effect("shared dispatcher routes ordinary commands to OrchestrationEngine", (
             readEvents: () => {
               throw new Error("unused");
             },
+            readThreadEvents: () => Stream.empty,
+            getThreadReplayStats: () =>
+              Effect.succeed({ eventCount: 0, payloadBytes: 0, hasCreateEvent: false }),
             streamDomainEvents: Stream.empty,
             subscribeDomainEvents: Effect.succeed(Stream.empty),
             latestSequence: Effect.succeed(0),
