@@ -4,6 +4,7 @@ import {
   withAssistantCitationComment,
 } from "@t3tools/shared/assistantCitations";
 import {
+  collectComposerPromptInlineTokens,
   splitPromptIntoComposerSegments,
   type ComposerPromptSegment,
 } from "./composer-editor-mentions";
@@ -23,6 +24,7 @@ export interface ComposerTrigger {
   query: string;
   rangeStart: number;
   rangeEnd: number;
+  threadScope?: "project" | "environment";
 }
 
 export function formatAssistantCitationForComposer(citation: AssistantCitation, comment = "") {
@@ -226,7 +228,11 @@ export function isCollapsedCursorAdjacentToInlineToken(
   return false;
 }
 
-export function detectComposerTrigger(text: string, cursorInput: number): ComposerTrigger | null {
+export function detectComposerTrigger(
+  text: string,
+  cursorInput: number,
+  dismissedThreadStarts: readonly number[] = [],
+): ComposerTrigger | null {
   const cursor = clampCursor(text, cursorInput);
   const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
   const linePrefix = text.slice(lineStart, cursor);
@@ -254,23 +260,76 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
       rangeEnd: cursor,
     };
   }
-  if (token.startsWith("%")) {
+  if (token.startsWith("@")) {
     return {
-      kind: "thread",
+      kind: "path",
       query: token.slice(1),
       rangeStart: tokenStart,
       rangeEnd: cursor,
     };
   }
-  if (!token.startsWith("@")) {
-    return null;
+  let rangeStart = cursor - 1;
+  while (rangeStart >= 0) {
+    if (text[rangeStart] === "%" && (rangeStart === 0 || isWhitespace(text[rangeStart - 1] ?? "")))
+      break;
+    rangeStart--;
   }
-
+  if (rangeStart < 0 || dismissedThreadStarts.includes(rangeStart)) return null;
+  const markerLength = text.slice(rangeStart, cursor).startsWith("%%") ? 2 : 1;
+  if (text.slice(rangeStart, cursor).startsWith("%%%")) return null;
+  // A selected inline token ends earlier queries; its label is never a trigger.
+  for (const inlineToken of collectComposerPromptInlineTokens(text)) {
+    if (inlineToken.start >= cursor) break;
+    if (inlineToken.end > rangeStart) return null;
+  }
   return {
-    kind: "path",
-    query: token.slice(1),
-    rangeStart: tokenStart,
+    kind: "thread",
+    threadScope: markerLength === 2 ? "environment" : "project",
+    query: text.slice(rangeStart + markerLength, cursor),
+    rangeStart,
     rangeEnd: cursor,
+  };
+}
+
+/** Keeps escaped thread queries dismissed as text and the caret change. */
+export function createComposerTriggerDetector() {
+  let previousText = "";
+  let dismissedThreadStarts: number[] = [];
+  const detect = (text: string, cursor: number) => {
+    if (dismissedThreadStarts.length > 0 && text !== previousText) {
+      let start = 0;
+      while (
+        start < text.length &&
+        start < previousText.length &&
+        text[start] === previousText[start]
+      )
+        start++;
+      let oldEnd = previousText.length;
+      let newEnd = text.length;
+      while (oldEnd > start && newEnd > start && previousText[oldEnd - 1] === text[newEnd - 1]) {
+        oldEnd--;
+        newEnd--;
+      }
+      // Move dismissed markers with an edit, dropping any markers it replaces.
+      dismissedThreadStarts = dismissedThreadStarts.flatMap((position) =>
+        position < start ? [position] : position >= oldEnd ? [position + newEnd - oldEnd] : [],
+      );
+    }
+    previousText = text;
+    return detectComposerTrigger(text, cursor, dismissedThreadStarts);
+  };
+  return {
+    detect,
+    dismiss(text: string, cursor: number) {
+      const trigger = detect(text, cursor);
+      if (trigger?.kind !== "thread") return false;
+      dismissedThreadStarts.push(trigger.rangeStart);
+      return true;
+    },
+    reset() {
+      previousText = "";
+      dismissedThreadStarts = [];
+    },
   };
 }
 

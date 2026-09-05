@@ -2,13 +2,17 @@ import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/models";
-import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import { activeThreadAnchorTimestampMs } from "@t3tools/client-runtime/state/thread-sort";
 
 export const THREAD_REFERENCE_RESULT_LIMIT = 20;
 
 export interface BuildThreadReferenceOptions {
   readonly environmentId: EnvironmentId;
   readonly currentThreadId: ThreadId | null;
+  /** Null means there is no selected project; environment scope is explicit. */
+  readonly projectId: ProjectId | null;
+  readonly scope: "project" | "environment";
   readonly query: string;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly projects: ReadonlyArray<EnvironmentProject>;
@@ -139,6 +143,7 @@ export function buildThreadReferenceItems(
     .filter(
       (thread) =>
         thread.environmentId === options.environmentId &&
+        (options.scope === "environment" || thread.projectId === options.projectId) &&
         thread.archivedAt === null &&
         thread.id !== options.currentThreadId,
     )
@@ -151,7 +156,8 @@ export function buildThreadReferenceItems(
     })
     .sort(
       (left, right) =>
-        compareAscending(right.updatedAt, left.updatedAt) || compareAscending(left.id, right.id),
+        activeThreadAnchorTimestampMs(right) - activeThreadAnchorTimestampMs(left) ||
+        compareAscending(left.id, right.id),
     )
     .slice(0, THREAD_REFERENCE_RESULT_LIMIT)
     .map((thread) => {

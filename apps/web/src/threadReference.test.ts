@@ -62,6 +62,74 @@ function thread(id: string, options: Partial<EnvironmentThreadShell> = {}): Envi
   };
 }
 
+describe("thread picker project scope and recency", () => {
+  const otherProjectId = ProjectId.make("project-2");
+  const threads = [
+    thread("renamed", { updatedAt: "2026-09-05T00:00:00.000Z" }),
+    thread("recent", { latestUserMessageAt: "2026-09-04T00:00:00.000Z" }),
+    thread("other", { projectId: otherProjectId, latestUserMessageAt: "2026-09-05T00:00:00.000Z" }),
+    thread("other-older", {
+      projectId: otherProjectId,
+      latestUserMessageAt: "2026-08-02T00:00:00.000Z",
+    }),
+    thread("new", { createdAt: "2026-09-03T00:00:00.000Z" }),
+    thread("foreign", {
+      environmentId: otherEnvironmentId,
+      latestUserMessageAt: "2026-09-05T00:00:00.000Z",
+    }),
+    thread("archived", { archivedAt: "2026-09-05T00:00:00.000Z" }),
+  ];
+  const options = {
+    environmentId,
+    currentThreadId: null,
+    query: "",
+    threads,
+    projects: [project()],
+    projectId,
+  };
+
+  it("shows only the composing project, using user activity and creation instead of metadata updates", () => {
+    expect(
+      buildThreadReferenceItems({ ...options, scope: "project" }).map(
+        (item) => item.threadRef.threadId,
+      ),
+    ).toEqual(["recent", "new", "renamed"]);
+  });
+
+  it("interleaves all projects by recency in environment scope", () => {
+    expect(
+      buildThreadReferenceItems({ ...options, scope: "environment" }).map(
+        (item) => item.threadRef.threadId,
+      ),
+    ).toEqual(["other", "recent", "new", "other-older", "renamed"]);
+  });
+
+  it("does not broaden a draft with no selected project, but still allows explicit environment search", () => {
+    expect(buildThreadReferenceItems({ ...options, projectId: null, scope: "project" })).toEqual(
+      [],
+    );
+    expect(
+      buildThreadReferenceItems({ ...options, projectId: null, scope: "environment" }),
+    ).toHaveLength(5);
+  });
+
+  it("filters the project before applying the result cap", () => {
+    const busyOtherProject = Array.from({ length: 25 }, (_, index) =>
+      thread(`other-${index}`, {
+        projectId: otherProjectId,
+        latestUserMessageAt: "2026-09-05T00:00:00.000Z",
+      }),
+    );
+    expect(
+      buildThreadReferenceItems({
+        ...options,
+        scope: "project",
+        threads: [...busyOtherProject, thread("local")],
+      }).map((item) => item.threadRef.threadId),
+    ).toEqual(["local"]);
+  });
+});
+
 describe("thread reference URI", () => {
   it("serializes escaped Markdown and round-trips encoded scoped IDs", () => {
     const threadRef = {
@@ -135,18 +203,20 @@ describe("buildThreadReferenceItems", () => {
   it("scopes, excludes archived/current threads, sorts, and snapshots labels", () => {
     const currentThreadId = ThreadId.make("current");
     const items = buildThreadReferenceItems({
+      projectId,
+      scope: "environment",
       environmentId,
       currentThreadId,
       query: "",
       projects: [project(), project(ProjectId.make("other-project"), "Other", otherEnvironmentId)],
       threads: [
-        thread("older", { title: "Older", updatedAt: "2026-08-01T10:00:00.000Z" }),
+        thread("older", { title: "Older", latestUserMessageAt: "2026-08-01T10:00:00.000Z" }),
         thread("b", {
           title: "Beta",
           branch: "feature/picker",
-          updatedAt: "2026-08-02T10:00:00.000Z",
+          latestUserMessageAt: "2026-08-02T10:00:00.000Z",
         }),
-        thread("a", { title: "Alpha", updatedAt: "2026-08-02T10:00:00.000Z" }),
+        thread("a", { title: "Alpha", latestUserMessageAt: "2026-08-02T10:00:00.000Z" }),
         thread("archived", { archivedAt: "2026-08-03T00:00:00.000Z" }),
         thread("current"),
         thread("remote", { environmentId: otherEnvironmentId }),
@@ -168,6 +238,8 @@ describe("buildThreadReferenceItems", () => {
   ])("searches %s across the fixed metadata", (query, expectedTitle) => {
     const docsProjectId = ProjectId.make("docs-project-id");
     const items = buildThreadReferenceItems({
+      projectId,
+      scope: "environment",
       environmentId,
       currentThreadId: null,
       query,
@@ -187,10 +259,12 @@ describe("buildThreadReferenceItems", () => {
     const threads = Array.from({ length: THREAD_REFERENCE_RESULT_LIMIT + 5 }, (_, index) =>
       thread(`thread-${String(index).padStart(2, "0")}`, {
         projectId: ProjectId.make("missing-project"),
-        updatedAt: `2026-08-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+        latestUserMessageAt: `2026-08-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
       }),
     );
     const items = buildThreadReferenceItems({
+      projectId,
+      scope: "environment",
       environmentId,
       currentThreadId: null,
       query: "",

@@ -8183,6 +8183,7 @@ export default function ChatView(props: ChatViewProps) {
                           <ChatComposer
                             composerRef={composerRef}
                             composerDraftTarget={composerDraftTarget}
+                            projectId={activeProject?.id ?? null}
                             environmentId={environmentId}
                             attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                             supportsAttachmentUploads={supportsAttachmentUploads}

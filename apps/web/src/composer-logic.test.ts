@@ -11,6 +11,7 @@ import {
   collapseExpandedComposerCursor,
   composerSubmissionIntentForEnter,
   detectComposerTrigger,
+  createComposerTriggerDetector,
   expandCollapsedComposerCursor,
   executeWebForkSubmission,
   formatAssistantCitationForComposer,
@@ -194,12 +195,14 @@ describe("detectComposerTrigger", () => {
   it("detects bare and queried thread triggers at token boundaries", () => {
     expect(detectComposerTrigger("Compare %", "Compare %".length)).toEqual({
       kind: "thread",
+      threadScope: "project",
       query: "",
       rangeStart: "Compare ".length,
       rangeEnd: "Compare %".length,
     });
     expect(detectComposerTrigger("Compare %release", "Compare %release".length)).toEqual({
       kind: "thread",
+      threadScope: "project",
       query: "release",
       rangeStart: "Compare ".length,
       rangeEnd: "Compare %release".length,
@@ -209,6 +212,38 @@ describe("detectComposerTrigger", () => {
   it("does not treat a percentage embedded in another token as a thread trigger", () => {
     expect(detectComposerTrigger("Use 100%", "Use 100%".length)).toBeNull();
     expect(detectComposerTrigger("value%other", "value%other".length)).toBeNull();
+  });
+
+  it.each(["%review ", "%review changes", "%%review changes", "%review\nchanges"])(
+    "keeps a thread query open across whitespace: %s",
+    (text) => {
+      const markerLength = text.startsWith("%%") ? 2 : 1;
+      expect(detectComposerTrigger(text, text.length)).toEqual({
+        kind: "thread",
+        threadScope: markerLength === 2 ? "environment" : "project",
+        query: text.slice(markerLength),
+        rangeStart: 0,
+        rangeEnd: text.length,
+      });
+    },
+  );
+
+  it("replaces the whole multiword query, including both percent signs", () => {
+    const text = "Compare %%review changes with this";
+    const cursor = "Compare %%review changes".length;
+    const trigger = detectComposerTrigger(text, cursor)!;
+    const replacement = "[Review changes](t3code://threads/local/thread-1)";
+    const result = replaceTextRange(text, trigger.rangeStart, trigger.rangeEnd, replacement);
+    expect(result.text).toBe(`Compare ${replacement} with this`);
+    expect(detectComposerTrigger(result.text, result.cursor + 1)).toBeNull();
+  });
+
+  it("does not reopen a query from inside or before a selected chip", () => {
+    const text = "%old [Review %changes](t3code://threads/local/thread-1) ";
+    expect(detectComposerTrigger(text, text.length)).toBeNull();
+    expect(detectComposerTrigger(text, text.indexOf("changes") + 3)).toBeNull();
+    const fresh = `${text}%new query`;
+    expect(detectComposerTrigger(fresh, fresh.length)?.query).toBe("new query");
   });
 
   it("detects @path trigger in the middle of existing text", () => {
@@ -249,6 +284,61 @@ describe("detectComposerTrigger", () => {
     expect(trigger).not.toBeNull();
     expect(trigger?.kind).toBe("path");
     expect(trigger?.query).toBe("");
+  });
+});
+
+describe("thread picker dismissal", () => {
+  it("keeps an escaped query closed while typing or moving the caret, and allows a fresh trigger", () => {
+    const detector = createComposerTriggerDetector();
+    const text = "Compare %review";
+    expect(detector.detect(text, text.length)?.query).toBe("review");
+    expect(detector.dismiss(text, text.length)).toBe(true);
+    const continued = `${text} changes`;
+    expect(detector.detect(continued, continued.length)).toBeNull();
+    expect(detector.detect(continued, text.length)).toBeNull();
+    const fresh = `${continued} %%another review`;
+    expect(detector.detect(fresh, fresh.length)).toMatchObject({
+      query: "another review",
+      threadScope: "environment",
+    });
+    expect(detector.dismiss(fresh, fresh.length)).toBe(true);
+    expect(detector.detect(fresh, text.length)).toBeNull();
+  });
+
+  it("tracks a dismissed trigger when text before it is inserted or removed", () => {
+    const detector = createComposerTriggerDetector();
+    detector.dismiss("Compare %review", 15);
+    const prefixed = "Please compare %review";
+    // Insert without replacing the dismissed marker.
+    const inserted = "Please Compare %review";
+    expect(detector.detect(inserted, inserted.length)).toBeNull();
+    expect(detector.detect(prefixed, prefixed.length)).toBeNull();
+    expect(detector.detect("%review", 7)).toBeNull();
+    expect(detector.detect("%review changes", 15)).toBeNull();
+    detector.detect("", 0);
+    expect(detector.detect("%new", 4)?.query).toBe("new");
+  });
+
+  it("preserves other trigger kinds after Escape and resets for a different draft", () => {
+    const detector = createComposerTriggerDetector();
+    detector.dismiss("%review", 7);
+    expect(detector.detect("%review @src", 12)?.kind).toBe("path");
+    expect(detector.detect("%review $skill", 14)?.kind).toBe("skill");
+    detector.reset();
+    expect(detector.detect("%review", 7)?.kind).toBe("thread");
+  });
+
+  it("allows a fresh trigger before an escaped query without reopening the escaped query", () => {
+    const detector = createComposerTriggerDetector();
+    detector.dismiss("Compare %review", 15);
+    const inserted = "%%new Compare %review";
+    expect(detector.detect(inserted, 5)).toMatchObject({
+      query: "new",
+      threadScope: "environment",
+    });
+    expect(detector.detect(inserted, inserted.length)).toBeNull();
+    const selected = "[New](t3code://threads/local/thread-1) Compare %review";
+    expect(detector.detect(selected, selected.length)).toBeNull();
   });
 });
 

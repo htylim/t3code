@@ -40,11 +40,11 @@ database field, provider adapter, native mobile editor change, or external deskt
 
 | Area                      | Decision                                                          |
 | ------------------------- | ----------------------------------------------------------------- |
-| Trigger                   | `%` at the beginning of the active non-whitespace token           |
+| Trigger                   | `%` or `%%` at a whitespace boundary; spaces continue the query   |
 | Clients                   | Web and desktop only in v1; mobile is explicitly unchanged        |
-| Picker scope              | Active, non-archived threads in the current environment           |
+| Picker scope              | `%`: current project; `%%`: current environment; non-archived     |
 | Current thread            | Excluded from picker results                                      |
-| Default ordering          | `updatedAt` descending, then thread ID ascending                  |
+| Default ordering          | Latest user activity (creation fallback) descending, then ID      |
 | Result limit              | 20 rows after filtering and sorting                               |
 | Search fields             | Thread title, thread ID, project title, and branch                |
 | Stored text               | Ordinary Markdown in the existing user-message text field         |
@@ -104,6 +104,8 @@ The picker helper accepts its dependencies as plain values:
 interface BuildThreadReferenceOptions {
   environmentId: EnvironmentId;
   currentThreadId: ThreadId | null;
+  projectId: ProjectId | null;
+  scope: "project" | "environment";
   query: string;
   threads: ReadonlyArray<EnvironmentThreadShell>;
   projects: ReadonlyArray<EnvironmentProject>;
@@ -113,8 +115,9 @@ interface BuildThreadReferenceOptions {
 It returns view data only: `threadRef`, `label`, and `description`. The description is the project
 title followed by `#branch` when present. If a matching project shell is temporarily absent, retain
 the thread and use its project ID as the description fallback. Search is case-insensitive substring
-matching over the four fixed fields. An empty query returns the 20 most recently updated eligible
-threads. The result cap is a module constant, not a configurable helper argument.
+matching over the four fixed fields. An empty query returns the 20 eligible threads with the most
+recent user activity. Project filtering precedes the cap for `%`. The result cap is a module
+constant, not a configurable helper argument.
 
 The Markdown label is a snapshot of the title when the reference is inserted. Renaming a thread
 later does not rewrite old messages or add a live title lookup to message rendering.
@@ -125,9 +128,11 @@ Do not widen `@t3tools/shared` for a web/desktop-only feature. Extend the web-lo
 `apps/web/src/composer-logic.ts` so its `kind` is the shared kinds plus `"thread"`. Add `%` detection
 beside the existing `$` and `@` token checks.
 
-The trigger opens for a bare `%`. As with the existing triggers, whitespace ends the query. This
-means typing a modulo operator may briefly open the menu when `%` is the active token; that is an
-accepted v1 tradeoff.
+The trigger opens for a bare `%` or `%%`; whitespace continues a thread query. Selection replaces
+the query, and Escape dismisses it without deleting text. Dismissal survives continued typing and
+caret movement; a fresh trigger can reopen the picker. Keep dismissal local to each composer and
+reset it when the composing thread or draft changes. Embedded percentages such as `100%` do not
+open the picker.
 
 ### 3. Picker composition
 
@@ -212,7 +217,7 @@ Cover:
 - Current-environment and non-archived filtering.
 - Current-thread exclusion.
 - Search across every fixed field.
-- Updated-time ordering, stable ID tie-breaking, and the 20-row cap.
+- User-activity ordering, stable ID tie-breaking, and the 20-row cap.
 - Missing-project fallback behavior and stored-label title snapshots.
 
 ### Phase 2: Composer trigger and picker

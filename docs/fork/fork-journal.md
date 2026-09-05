@@ -19,6 +19,24 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-05 - Scope thread references and support multiword queries
+
+- Upstream baseline: `163d86a78`
+- Change: `%` searches the composing project; `%%` searches all projects in the current environment.
+  Both lists sort by latest user activity, with creation time as the fallback. Spaces continue a
+  query, selection replaces it, and Escape leaves its text intact while keeping it dismissed during
+  further editing. A fresh trigger opens a new query. Enter with no matches keeps the picker open.
+- Reason: Unrelated projects crowded out relevant threads, and whitespace prevented searching
+  multiword titles.
+- Scope: Web and desktop main and side-chat composers, thread-reference filtering, and user guidance.
+  Native mobile, contracts, server queries, and provider adapters are unchanged.
+- Verification: 150 focused trigger, dismissal, replacement, picker, editor, and inline-token tests
+  passed, along with the web typecheck, targeted lint (existing warnings), formatting, and whitespace
+  checks. In an isolated browser with copied thread data, verified project scope after switching
+  draft projects and in a side chat belonging to a different project than the main chat. Confirmed
+  environment-wide ordering against SQLite, multiword queries, Enter/Tab selection, Escape followed
+  by continued typing, fresh triggers, current-thread exclusion, and Enter with no matches.
+
 ## 2026-09-05 - Manage worktrees from the workspace picker
 
 - Upstream baseline: `163d86a78`

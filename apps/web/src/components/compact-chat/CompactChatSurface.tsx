@@ -724,6 +724,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                 <ChatComposer
                   composerRef={composerRef}
                   composerDraftTarget={target}
+                  projectId={thread.projectId}
                   environmentId={target.environmentId}
                   attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                   supportsAttachmentUploads={supportsAttachmentUploads}

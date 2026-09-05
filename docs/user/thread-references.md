@@ -1,8 +1,14 @@
 # Reference another thread
 
-On web or desktop, type `%` at the start of a composer token to find an active thread in the current
-environment. Keep typing to search by thread title, ID, project, or branch, then choose a result with
-the mouse or keyboard.
+On web or desktop, type `%` to find a thread in the project where you are writing, or `%%` to search
+all projects in the current environment. Results show the most recent user activity first, falling
+back to creation time for threads without a user message. Archived threads and the current thread
+are excluded.
+
+Keep typing to search by thread title, ID, project, or branch. Spaces continue the query. Choose a
+result with the mouse, Enter, or Tab, or press Escape to close the picker and keep your text.
+After Escape, continuing to type leaves the picker closed; start a fresh `%` or `%%` query to reopen
+it. Both triggers must start at the beginning of the prompt or after whitespace.
 
 The composer inserts ordinary Markdown such as:
 
@@ -10,9 +16,9 @@ The composer inserts ordinary Markdown such as:
 [Investigate startup time](t3code://threads/local/thread-123)
 ```
 
-The raw Markdown stays visible while you write. After you send the message, T3 renders it as a
-thread chip. The chip opens that thread inside T3. References to threads that were later removed use
-the normal missing-thread fallback.
+The reference appears as a chip while you write. After you send the message, the chip opens that
+thread inside T3. References to threads that were later removed use the normal missing-thread
+fallback.
 
 The title is a snapshot from when you inserted the reference. Renaming the target thread does not
 rewrite old messages.
