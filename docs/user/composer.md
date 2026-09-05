@@ -6,6 +6,11 @@ include a skill when the task needs more context.
 Messages can contain up to 120,000 characters. Longer drafts stay in the composer
 so you can shorten them or split them into several messages.
 
+## Choose a workspace
+
+The Workspace picker lists existing worktrees by directory and branch, with busy or dirty status.
+Use a row's menu to rename an available worktree, copy its path, or remove it while keeping the branch.
+
 ## Attach files
 
 Attach up to eight files per message. Images can be up to 10 MB; other files can

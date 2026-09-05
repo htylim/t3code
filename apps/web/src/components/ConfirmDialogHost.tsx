@@ -83,11 +83,18 @@ export function ConfirmDialogHost() {
               {copy.description}
             </AlertDialogDescription>
           ) : null}
+          {state.status !== "idle" && state.details ? (
+            <ul className="list-disc pl-5 text-sm text-muted-foreground">
+              {state.details.map((detail) => (
+                <li key={detail}>{detail}</li>
+              ))}
+            </ul>
+          ) : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
           <Button variant={confirmVariant} onClick={onConfirm}>
-            Confirm
+            {state.status !== "idle" ? (state.confirmLabel ?? "Confirm") : "Confirm"}
           </Button>
         </AlertDialogFooter>
       </AlertDialogPopup>

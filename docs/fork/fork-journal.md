@@ -19,6 +19,26 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-05 - Manage worktrees from the workspace picker
+
+- Upstream baseline: `163d86a78`
+- Change: Web and desktop share a workspace menu listing local worktrees with busy or dirty status.
+  Row menus support inline directory rename, path copy, desktop reveal, and confirmed removal.
+  The menu fetches only checked-out local refs, retains selection indicators, and stays open after
+  rename. Removal warnings report no upstream instead of treating default-branch distance as unpushed commits.
+  Rename updates settled and archived thread paths. Running worktrees cannot be removed, and the
+  current worktree cannot be renamed or removed.
+- Reason: Reuse and manage existing worktrees without hunting through branches or leaving the composer.
+- Scope: Wide and narrow web composer menus, an additive rename RPC, desktop shell reveal, and
+  optional confirmation labels and details, and a worktree-only ref query. Native mobile and provider
+  adapters are unchanged.
+- Verification: 146 focused toolbar, confirmation, and Git driver tests passed, along with web,
+  server, contracts, client-runtime, and desktop type checks. An isolated seeded dev server verified
+  listing, dirty and busy labels, running restrictions, nested menus, right-click, copying, rename
+  errors and success, settled and archived path updates, and clean and forced removal. Regression
+  checks cover no-upstream warning text, a worktree-only query without pagination, restored radio
+  selection, and rename leaving the menu open.
+
 ## 2026-09-04 - Merge upstream browser, usage, terminal, and provider changes
 
 - Upstream baseline: `163d86a78`

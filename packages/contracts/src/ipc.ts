@@ -9,6 +9,8 @@ import type {
   VcsPullInput,
   VcsPullResult,
   VcsRemoveWorktreeInput,
+  VcsRenameWorktreeInput,
+  VcsRenameWorktreeResult,
   VcsSwitchRefInput,
   VcsSwitchRefResult,
   GitPreparePullRequestThreadInput,
@@ -1118,6 +1120,8 @@ export interface DesktopBridge {
     items: readonly ContextMenuItem<T>[],
     position?: { x: number; y: number },
   ) => Promise<T | null>;
+  /** Reveals a path on the desktop host. */
+  revealPath: (path: string) => Promise<void>;
   openExternal: (url: string) => Promise<boolean>;
   /**
    * Probe this desktop machine for installed remote-capable editor CLIs
@@ -1266,6 +1270,8 @@ export interface LocalApi {
     confirm: (message: string, options?: ConfirmDialogOptions) => Promise<boolean>;
   };
   shell: {
+    /** Available only when the client has a desktop shell. */
+    revealPath?: (path: string) => Promise<void>;
     openExternal: (url: string) => Promise<void>;
   };
   contextMenu: {
@@ -1338,6 +1344,7 @@ export interface EnvironmentApi {
   vcs: {
     listRefs: (input: VcsListRefsInput) => Promise<VcsListRefsResult>;
     createWorktree: (input: VcsCreateWorktreeInput) => Promise<VcsCreateWorktreeResult>;
+    renameWorktree: (input: VcsRenameWorktreeInput) => Promise<VcsRenameWorktreeResult>;
     removeWorktree: (input: VcsRemoveWorktreeInput) => Promise<void>;
     createRef: (input: VcsCreateRefInput) => Promise<VcsCreateRefResult>;
     switchRef: (input: VcsSwitchRefInput) => Promise<VcsSwitchRefResult>;

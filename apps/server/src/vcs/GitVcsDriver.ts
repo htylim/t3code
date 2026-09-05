@@ -27,6 +27,8 @@ import {
   type VcsListRefsResult,
   type VcsPullResult,
   type VcsRemoveWorktreeInput,
+  type VcsRenameWorktreeInput,
+  type VcsRenameWorktreeResult,
   type VcsStatusInput,
   type VcsStatusResult,
 } from "@t3tools/contracts";
@@ -318,6 +320,10 @@ export class GitVcsDriver extends Context.Service<
     readonly setBranchUpstream: (
       input: GitSetBranchUpstreamInput,
     ) => Effect.Effect<void, GitCommandError>;
+    /** Moves a worktree to a sibling directory without renaming its branch. */
+    readonly renameWorktree: (
+      input: VcsRenameWorktreeInput,
+    ) => Effect.Effect<VcsRenameWorktreeResult, GitCommandError>;
     readonly removeWorktree: (
       input: VcsRemoveWorktreeInput,
     ) => Effect.Effect<void, GitCommandError>;

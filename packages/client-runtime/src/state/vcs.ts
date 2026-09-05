@@ -46,6 +46,7 @@ function canUseVcsRefsCache(input: VcsListRefsInput): boolean {
     input.cursor === undefined &&
     input.includeMatchingRemoteRefs === undefined &&
     input.refKind === undefined &&
+    input.worktreesOnly === undefined &&
     input.limit === OFFLINE_BRANCH_LIST_LIMIT
   );
 }
@@ -307,6 +308,13 @@ export function createVcsEnvironmentAtoms<R, E>(
     createWorktree: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:vcs:create-worktree",
       tag: WS_METHODS.vcsCreateWorktree,
+      scheduler: vcsCommandScheduler,
+      concurrency: vcsCommandConcurrency,
+      onSettled: invalidateRefs,
+    }),
+    renameWorktree: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:vcs:rename-worktree",
+      tag: WS_METHODS.vcsRenameWorktree,
       scheduler: vcsCommandScheduler,
       concurrency: vcsCommandConcurrency,
       onSettled: invalidateRefs,

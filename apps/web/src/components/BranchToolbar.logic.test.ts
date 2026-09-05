@@ -16,6 +16,9 @@ import {
   resolveLocalCheckoutBranchMismatch,
   resolvePreviousWorktreeLabel,
   resolvePreviousWorktreeSeed,
+  resolveWorktreeRows,
+  resolveWorktreeStatusWord,
+  resolveWorktreeUnpushedWarning,
   sanitizeNewRefName,
   shouldIncludeBranchPickerItem,
   shouldShowComposerContextStrip,
@@ -832,5 +835,87 @@ describe("sanitizeNewRefName", () => {
   it("does not collapse dashes the user typed", () => {
     expect(sanitizeNewRefName("new - branch")).toBe("new---branch");
     expect(sanitizeNewRefName("foo--bar")).toBe("foo--bar");
+  });
+});
+
+describe("workspace rows", () => {
+  /** Builds only the ref fields consumed by the workspace list. */
+  function ref(name: string, worktreePath: string, isRemote = false): VcsRef {
+    return { name, worktreePath, isRemote, current: false, isDefault: false };
+  }
+
+  it("deduplicates local paths, sorts directory names and excludes current and main", () => {
+    const rows = resolveWorktreeRows({
+      refs: [
+        ref("z", "/trees/zeta"),
+        ref("a", "/trees/alpha"),
+        ref("alias", "/trees/alpha"),
+        ref("main", "/repo"),
+        ref("current", "/current"),
+        ref("remote", "/remote", true),
+      ],
+      threads: [],
+      activeProjectCwd: "/repo",
+      activeWorktreePath: "/current",
+    });
+    expect(rows.map((row) => row.dirName)).toEqual(["alpha", "zeta"]);
+    expect(rows.every((row) => !row.isBusy && row.isIdle)).toBe(true);
+  });
+
+  it("distinguishes busy idle threads, settled history and archived running turns", () => {
+    const rows = resolveWorktreeRows({
+      refs: [ref("busy", "/busy"), ref("settled", "/settled"), ref("archived", "/archived")],
+      threads: [
+        {
+          worktreePath: "/busy",
+          archivedAt: null,
+          settledOverride: null,
+          latestTurn: { state: "completed" },
+        },
+        {
+          worktreePath: "/settled",
+          archivedAt: null,
+          settledOverride: "settled",
+          latestTurn: null,
+        },
+        {
+          worktreePath: "/archived",
+          archivedAt: "2026-09-01",
+          settledOverride: null,
+          latestTurn: { state: "running" },
+        },
+      ],
+      activeProjectCwd: "/repo",
+      activeWorktreePath: null,
+    });
+    expect(rows.map(({ dirName, isBusy, isIdle }) => ({ dirName, isBusy, isIdle }))).toEqual([
+      { dirName: "archived", isBusy: false, isIdle: false },
+      { dirName: "busy", isBusy: true, isIdle: true },
+      { dirName: "settled", isBusy: false, isIdle: true },
+    ]);
+  });
+
+  it.each([
+    [true, true, "busy"],
+    [true, false, "busy"],
+    [false, true, "dirty"],
+    [false, false, null],
+  ] as const)("resolves busy=%s dirty=%s", (isBusy, isDirty, expected) => {
+    expect(resolveWorktreeStatusWord({ isBusy, isDirty })).toBe(expected);
+  });
+});
+
+describe("worktree removal upstream warning", () => {
+  it("does not describe distance to the default branch as unpushed commits", () => {
+    const status = { hasUpstream: false, aheadCount: 0, aheadOfDefaultCount: 1021 };
+    expect(resolveWorktreeUnpushedWarning(status)).toBe("No upstream");
+  });
+  it("uses the tracked upstream count", () => {
+    expect(resolveWorktreeUnpushedWarning({ hasUpstream: true, aheadCount: 3 })).toBe(
+      "3 unpushed commits",
+    );
+  });
+  it("does not invent a count before status loads", () => {
+    expect(resolveWorktreeUnpushedWarning(null)).toBe("Unpushed commit count unavailable");
   });
 });

@@ -127,6 +127,8 @@ export const VcsListRefsInput = Schema.Struct({
   query: Schema.optional(TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(256))),
   cursor: Schema.optional(NonNegativeInt),
   includeMatchingRemoteRefs: Schema.optional(Schema.Boolean),
+  /** Returns all checked-out local refs without pagination. */
+  worktreesOnly: Schema.optional(Schema.Boolean),
   refKind: Schema.optional(Schema.Literals(["all", "local", "remote"])),
   refresh: Schema.optional(Schema.Boolean),
   limit: Schema.optional(
@@ -157,6 +159,16 @@ export const GitPreparePullRequestThreadInput = Schema.Struct({
   threadId: Schema.optional(ThreadId),
 });
 export type GitPreparePullRequestThreadInput = typeof GitPreparePullRequestThreadInput.Type;
+
+export const VcsRenameWorktreeInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  path: TrimmedNonEmptyStringSchema,
+  newDirName: TrimmedNonEmptyStringSchema,
+});
+export type VcsRenameWorktreeInput = typeof VcsRenameWorktreeInput.Type;
+
+export const VcsRenameWorktreeResult = Schema.Struct({ worktree: VcsWorktree });
+export type VcsRenameWorktreeResult = typeof VcsRenameWorktreeResult.Type;
 
 export const VcsRemoveWorktreeInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,

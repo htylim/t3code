@@ -1489,6 +1489,94 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
       }),
     );
 
+    it.effect("returns only checked-out local refs in one worktree query", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(cwd);
+        const pathService = yield* Path.Path;
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        yield* git(cwd, ["branch", "unused-local"]);
+        yield* git(cwd, ["update-ref", "refs/remotes/origin/unused-remote", "HEAD"]);
+        const worktreePath = pathService.join(yield* makeTmpDir("git-worktrees-"), "occupied");
+        yield* driver.createWorktree({
+          cwd,
+          path: worktreePath,
+          refName: initialBranch,
+          newRefName: "occupied",
+        });
+        const worktrees = yield* driver.listRefs({ cwd, worktreesOnly: true, limit: 1 });
+        assert.deepEqual(
+          worktrees.refs.map((ref) => ref.name).sort(),
+          [initialBranch, "occupied"].sort(),
+        );
+        assert.equal(worktrees.nextCursor, null);
+        assert.equal(worktrees.totalCount, 2);
+        assert.equal(
+          worktrees.refs.every((ref) => !ref.isRemote && ref.worktreePath !== null),
+          true,
+        );
+        const branches = yield* driver.listRefs({ cwd, limit: 1 });
+        assert.equal(branches.refs.length, 1);
+        assert.notEqual(branches.nextCursor, null);
+      }),
+    );
+
+    it.effect("renames a worktree and refreshes cached refs", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(cwd);
+        const pathService = yield* Path.Path;
+        const fs = yield* FileSystem.FileSystem;
+        const parent = yield* fs.realPath(yield* makeTmpDir("git-worktrees-"));
+        const oldPath = pathService.join(parent, "before");
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        yield* driver.createWorktree({
+          cwd,
+          path: oldPath,
+          refName: initialBranch,
+          newRefName: "rename-test",
+        });
+        yield* driver.listRefs({ cwd });
+        const renamed = yield* driver.renameWorktree({ cwd, path: oldPath, newDirName: "after" });
+        assert.equal(renamed.worktree.path, pathService.join(parent, "after"));
+        assert.equal(renamed.worktree.refName, "rename-test");
+        const refs = yield* driver.listRefs({ cwd });
+        assert.equal(
+          refs.refs.find((ref) => ref.name === "rename-test")?.worktreePath,
+          renamed.worktree.path,
+        );
+      }),
+    );
+
+    it.effect("rejects existing targets and path separators when renaming a worktree", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(cwd);
+        const pathService = yield* Path.Path;
+        const fs = yield* FileSystem.FileSystem;
+        const parent = yield* fs.realPath(yield* makeTmpDir("git-worktrees-"));
+        const oldPath = pathService.join(parent, "before");
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        yield* driver.createWorktree({
+          cwd,
+          path: oldPath,
+          refName: initialBranch,
+          newRefName: "rename-test",
+        });
+        for (const newDirName of ["before", "nested/name", "nested\\name", ".", ".."]) {
+          const failure = yield* driver
+            .renameWorktree({ cwd, path: oldPath, newDirName })
+            .pipe(Effect.flip);
+          assert.equal(failure._tag, "GitCommandError");
+        }
+        assert.equal(
+          (yield* driver.listRefs({ cwd })).refs.find((ref) => ref.name === "rename-test")
+            ?.worktreePath,
+          oldPath,
+        );
+      }),
+    );
+
     it.effect("creates and removes a worktree for a new refName", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();

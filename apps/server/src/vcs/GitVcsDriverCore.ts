@@ -2799,6 +2799,16 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           ? ref.worktreePath === repositoryPaths.worktreeRoot
           : ref.name === repositoryPaths.currentBranch,
       }));
+      if (input.worktreesOnly) {
+        const worktreeRefs = localBranches.filter((ref) => ref.worktreePath !== null);
+        return {
+          refs: worktreeRefs,
+          isRepo: true,
+          hasPrimaryRemote: snapshot.hasPrimaryRemote,
+          nextCursor: null,
+          totalCount: worktreeRefs.length,
+        };
+      }
       const combinedBranches = input.includeMatchingRemoteRefs
         ? [...localBranches, ...snapshot.remoteBranches]
         : dedupeRemoteBranchesWithLocalMatches([...localBranches, ...snapshot.remoteBranches]);
@@ -3074,6 +3084,53 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       input.branch,
     ]);
 
+  /** Validates a sibling name before asking Git to move its registered worktree. */
+  const renameWorktree: GitVcsDriver.GitVcsDriver["Service"]["renameWorktree"] = Effect.fn(
+    "renameWorktree",
+  )(function* (input) {
+    const newPath = path.join(path.dirname(input.path), input.newDirName);
+    const args = ["worktree", "move", "--", input.path, newPath];
+    if (
+      !input.newDirName.trim() ||
+      /[/\\]/.test(input.newDirName) ||
+      input.newDirName === "." ||
+      input.newDirName === ".."
+    ) {
+      return yield* new GitCommandError({
+        ...gitCommandContext({ operation: "GitVcsDriver.renameWorktree", cwd: input.cwd, args }),
+        detail: "Enter a directory name without path separators.",
+      });
+    }
+    const targetExists = yield* fileSystem.exists(newPath).pipe(
+      Effect.mapError(
+        () =>
+          new GitCommandError({
+            ...gitCommandContext({
+              operation: "GitVcsDriver.renameWorktree",
+              cwd: input.cwd,
+              args,
+            }),
+            detail: "Unable to inspect the target directory.",
+          }),
+      ),
+    );
+    if (targetExists) {
+      return yield* new GitCommandError({
+        ...gitCommandContext({ operation: "GitVcsDriver.renameWorktree", cwd: input.cwd, args }),
+        detail: "The target directory already exists.",
+      });
+    }
+    const branch = yield* runGitStdout("GitVcsDriver.renameWorktree.ref", input.path, [
+      "symbolic-ref",
+      "--short",
+      "HEAD",
+    ]);
+    yield* executeGit("GitVcsDriver.renameWorktree", input.cwd, args, {
+      fallbackErrorDetail: "git worktree move failed",
+    });
+    return { worktree: { path: newPath, refName: branch.trim() } };
+  });
+
   const removeWorktree: GitVcsDriver.GitVcsDriver["Service"]["removeWorktree"] = Effect.fn(
     "removeWorktree",
   )(function* (input) {
@@ -3337,6 +3394,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     fetchRemoteTrackingBranch: (input) =>
       withListRefsInvalidation(input.cwd, fetchRemoteTrackingBranch(input)),
     setBranchUpstream: (input) => withListRefsInvalidation(input.cwd, setBranchUpstream(input)),
+    renameWorktree: (input) => withListRefsInvalidation(input.cwd, renameWorktree(input)),
     removeWorktree: (input) => withListRefsInvalidation(input.cwd, removeWorktree(input)),
     pruneWorktrees: (input) => withListRefsInvalidation(input.cwd, pruneWorktrees(input)),
     renameBranch: (input) => withListRefsInvalidation(input.cwd, renameBranch(input)),

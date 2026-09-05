@@ -78,6 +78,31 @@ describe("confirm dialog coordinator", () => {
     unregister();
   });
 
+  it("preserves force-removal copy while queued behind the first confirmation", async () => {
+    const unregister = registerConfirmDialogHost();
+    const initial = requireConfirmation(requestConfirmDialog("Remove worktree?"));
+    respondToConfirmDialog(true);
+    await expect(initial).resolves.toBe(true);
+    const forced = requireConfirmation(
+      requestConfirmDialog("Remove worktree?", {
+        variant: "destructive",
+        confirmLabel: "Force remove",
+        details: ["1 uncommitted file"],
+      }),
+    );
+    completeConfirmDialogClose();
+    expect(readConfirmDialogState()).toEqual({
+      status: "confirming",
+      message: "Remove worktree?",
+      variant: "destructive",
+      confirmLabel: "Force remove",
+      details: ["1 uncommitted file"],
+    });
+    respondToConfirmDialog(false);
+    await expect(forced).resolves.toBe(false);
+    unregister();
+  });
+
   it("cancels active and queued confirmations if the last host unmounts", async () => {
     const unregister = registerConfirmDialogHost();
     const active = requireConfirmation(requestConfirmDialog("Delete the thread?"));

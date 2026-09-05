@@ -18,6 +18,9 @@ function createBrowserLocalApi(): LocalApi {
       },
     },
     shell: {
+      ...(window.desktopBridge
+        ? { revealPath: (path: string) => window.desktopBridge!.revealPath(path) }
+        : {}),
       openExternal: async (url) => {
         if (window.desktopBridge) {
           const opened = await window.desktopBridge.openExternal(url);

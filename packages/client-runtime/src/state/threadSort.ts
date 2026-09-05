@@ -324,3 +324,8 @@ export function planPinnedMove(input: {
   newOrder.splice(to, 0, movedId);
   return planPinnedReorder({ orderedIds: newOrder, keysById, movedId });
 }
+
+/** Uses the server's explicit settlement classification, shared with workspace actions. */
+export function isThreadSettled(thread: { readonly settledOverride: string | null }): boolean {
+  return thread.settledOverride === "settled";
+}

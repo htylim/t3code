@@ -1,3 +1,4 @@
+import { isThreadSettled } from "@t3tools/client-runtime/state/thread-sort";
 import type { EnvironmentId, EnvironmentMachineKind, VcsRef, ProjectId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { toSortableTimestamp } from "../lib/threadSort";
@@ -310,4 +311,71 @@ export function shouldIncludeBranchPickerItem(input: {
     sanitizedQuery !== normalizedQuery &&
     lowerItemValue.includes(sanitizedQuery)
   );
+}
+
+export interface WorktreeThreadState {
+  readonly worktreePath: string | null;
+  readonly archivedAt: string | null;
+  readonly settledOverride: string | null;
+  readonly latestTurn: { readonly state: string } | null;
+}
+
+export interface WorktreeRow {
+  worktreePath: string;
+  dirName: string;
+  refName: string;
+  isBusy: boolean;
+  isIdle: boolean;
+}
+
+/** Lists local worktrees once, excluding the main checkout and current row. */
+export function resolveWorktreeRows(input: {
+  refs: readonly VcsRef[];
+  threads: readonly WorktreeThreadState[];
+  activeProjectCwd: string;
+  activeWorktreePath: string | null;
+}): WorktreeRow[] {
+  const rows = new Map<string, WorktreeRow>();
+  for (const ref of input.refs) {
+    const worktreePath = ref.worktreePath;
+    if (
+      ref.isRemote ||
+      !worktreePath ||
+      worktreePath === input.activeProjectCwd ||
+      worktreePath === input.activeWorktreePath ||
+      rows.has(worktreePath)
+    )
+      continue;
+    const threads = input.threads.filter((thread) => thread.worktreePath === worktreePath);
+    rows.set(worktreePath, {
+      worktreePath,
+      dirName:
+        worktreePath
+          .replace(/[\\/]+$/, "")
+          .split(/[\\/]/)
+          .at(-1) ?? worktreePath,
+      refName: ref.name,
+      isBusy: threads.some((thread) => thread.archivedAt === null && !isThreadSettled(thread)),
+      isIdle: !threads.some((thread) => thread.latestTurn?.state === "running"),
+    });
+  }
+  return [...rows.values()].sort((left, right) => left.dirName.localeCompare(right.dirName));
+}
+
+/** Busy takes precedence over uncommitted changes and unpushed commits. */
+export function resolveWorktreeStatusWord(input: {
+  isBusy: boolean;
+  isDirty: boolean;
+}): "busy" | "dirty" | null {
+  if (input.isBusy) return "busy";
+  return input.isDirty ? "dirty" : null;
+}
+
+/** Counts unpushed commits only against the branch's configured upstream. */
+export function resolveWorktreeUnpushedWarning(
+  status: { hasUpstream: boolean; aheadCount: number } | null,
+): string {
+  if (status === null) return "Unpushed commit count unavailable";
+  if (!status.hasUpstream) return "No upstream";
+  return `${status.aheadCount} unpushed commits`;
 }

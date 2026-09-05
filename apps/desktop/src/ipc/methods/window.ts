@@ -1,3 +1,4 @@
+import { shell as nativeShell } from "electron";
 import {
   ContextMenuItemSchema,
   DesktopAppBrandingSchema,
@@ -366,5 +367,15 @@ export const pickThemeFiles = DesktopIpc.makeIpcMethod({
         Effect.orElseSucceed((): PickedThemeFile => ({ name, size: 0, text: "" })),
       );
     });
+  }),
+});
+
+/** Reveals a filesystem path in the desktop host's file manager. */
+export const revealPath = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.REVEAL_PATH_CHANNEL,
+  payload: Schema.String,
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.window.revealPath")(function* (path) {
+    yield* Effect.sync(() => nativeShell.showItemInFolder(path));
   }),
 });

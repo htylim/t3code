@@ -1,3 +1,4 @@
+import { isThreadSettled } from "@t3tools/client-runtime/state/thread-sort";
 import { autoAnimate } from "@formkit/auto-animate";
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
@@ -2277,7 +2278,7 @@ export default function Sidebar() {
       // Snooze outranks settlement and pinning until the thread wakes.
       if (supportsSnooze && effectiveSnoozed(thread, { now: preciseNow })) {
         snoozed.push(thread);
-      } else if (supportsSettlement && thread.settledOverride === "settled") {
+      } else if (supportsSettlement && isThreadSettled(thread)) {
         settled.push(thread);
       } else if (thread.pinnedAt != null) {
         pinned.push(thread);
