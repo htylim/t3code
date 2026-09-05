@@ -87,12 +87,26 @@ export function resolveEnvModeLabel(mode: EnvMode): string {
   return mode === "worktree" ? "New worktree" : "Current checkout";
 }
 
-export function resolveCurrentWorkspaceLabel(activeWorktreePath: string | null): string {
-  return activeWorktreePath ? "Current worktree" : resolveEnvModeLabel("local");
+/** Returns the directory name shown for a worktree on either host platform. */
+export function resolveWorktreeDirectoryName(worktreePath: string): string {
+  return (
+    worktreePath
+      .replace(/[\\/]+$/, "")
+      .split(/[\\/]/)
+      .at(-1) || worktreePath
+  );
 }
 
+/** Names the selected worktree or the project checkout. */
+export function resolveCurrentWorkspaceLabel(activeWorktreePath: string | null): string {
+  return activeWorktreePath
+    ? resolveWorktreeDirectoryName(activeWorktreePath)
+    : resolveEnvModeLabel("local");
+}
+
+/** Keeps the workspace name visible after the picker locks. */
 export function resolveLockedWorkspaceLabel(activeWorktreePath: string | null): string {
-  return activeWorktreePath ? "Worktree" : "Local checkout";
+  return resolveCurrentWorkspaceLabel(activeWorktreePath);
 }
 
 export interface PreviousWorktreeSeed {
@@ -349,11 +363,7 @@ export function resolveWorktreeRows(input: {
     const threads = input.threads.filter((thread) => thread.worktreePath === worktreePath);
     rows.set(worktreePath, {
       worktreePath,
-      dirName:
-        worktreePath
-          .replace(/[\\/]+$/, "")
-          .split(/[\\/]/)
-          .at(-1) ?? worktreePath,
+      dirName: resolveWorktreeDirectoryName(worktreePath),
       refName: ref.name,
       isBusy: threads.some((thread) => thread.archivedAt === null && !isThreadSettled(thread)),
       isIdle: !threads.some((thread) => thread.latestTurn?.state === "running"),

@@ -7,7 +7,7 @@ import type {
   ScopedProjectRef,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import { ChevronDownIcon, FolderGitIcon, FolderIcon, PlusIcon } from "lucide-react";
+import { ChevronDownIcon, FolderGit2Icon, FolderGitIcon, FolderIcon, PlusIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { requestConfirmDialog } from "../confirmDialog";
@@ -75,6 +75,8 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
     <>
       {props.activeWorktreePath ? (
         <FolderGitIcon className="size-3" />
+      ) : props.effectiveEnvMode === "worktree" && !props.envLocked ? (
+        <FolderGit2Icon className="size-3" />
       ) : (
         <FolderIcon className="size-3" />
       )}
@@ -477,7 +479,11 @@ function WorkspaceRow(
   return (
     <MenuItem
       closeOnClick={false}
-      className="group/worktree flex gap-2"
+      className={`group/worktree grid items-center gap-2 ${
+        props.current
+          ? "grid-cols-[0.75rem_minmax(0,1fr)_minmax(0,8rem)_2.5rem_1.25rem]"
+          : "grid-cols-[0.75rem_minmax(0,1fr)_minmax(0,8rem)_1.5rem_1.25rem]"
+      }`}
       aria-disabled={!props.canUseWorktree}
       onClick={(event) => {
         if (
@@ -495,17 +501,21 @@ function WorkspaceRow(
       }}
     >
       <FolderGitIcon className="size-3 shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{row.dirName}</span>
-      <span className="max-w-32 truncate text-xs text-muted-foreground">{row.refName}</span>
-      {props.current ? (
-        <span className="text-[10px] text-muted-foreground">current</span>
-      ) : (
-        <WorktreeRowStatus isBusy={row.isBusy} status={statusQuery.data} />
-      )}
+      <span className="min-w-0 truncate">{row.dirName}</span>
+      <span className="min-w-0 truncate text-right text-xs text-muted-foreground">
+        {row.refName}
+      </span>
+      <span className="min-w-0 text-left">
+        {props.current ? (
+          <span className="text-[10px] text-muted-foreground">current</span>
+        ) : (
+          <WorktreeRowStatus isBusy={row.isBusy} status={statusQuery.data} />
+        )}
+      </span>
       <Menu open={actionsOpen} onOpenChange={setActionsOpen}>
         <MenuTrigger
           aria-label={`Actions for ${row.dirName}`}
-          className="rounded px-1 text-[10px] opacity-25 group-hover/worktree:opacity-100 data-popup-open:bg-accent data-popup-open:opacity-100"
+          className="w-5 rounded text-center text-[10px] opacity-25 group-hover/worktree:opacity-100 data-popup-open:bg-accent data-popup-open:opacity-100"
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}
           onMouseUp={(event) => event.stopPropagation()}

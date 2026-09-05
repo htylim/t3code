@@ -506,18 +506,28 @@ describe("resolveCurrentWorkspaceLabel", () => {
     expect(resolveCurrentWorkspaceLabel(null)).toBe("Current checkout");
   });
 
-  it("describes the active checkout as a worktree when one is attached", () => {
-    expect(resolveCurrentWorkspaceLabel("/repo/.t3/worktrees/feature-a")).toBe("Current worktree");
+  it("shows the directory name of the attached worktree", () => {
+    expect(resolveCurrentWorkspaceLabel("/repo/.t3/worktrees/feature-a")).toBe("feature-a");
+  });
+});
+
+describe("worktree directory labels", () => {
+  it.each([
+    ["/repo/worktrees/feature-a/", "feature-a"],
+    ["C:\\repo\\worktrees\\feature-b\\", "feature-b"],
+  ])("uses the final directory in %s", (worktreePath, expectedName) => {
+    expect(resolveCurrentWorkspaceLabel(worktreePath)).toBe(expectedName);
+    expect(resolveLockedWorkspaceLabel(worktreePath)).toBe(expectedName);
   });
 });
 
 describe("resolveLockedWorkspaceLabel", () => {
-  it("uses a shorter label for the main repo checkout", () => {
-    expect(resolveLockedWorkspaceLabel(null)).toBe("Local checkout");
+  it("keeps the checkout label when locked", () => {
+    expect(resolveLockedWorkspaceLabel(null)).toBe("Current checkout");
   });
 
-  it("uses a shorter label for an attached worktree", () => {
-    expect(resolveLockedWorkspaceLabel("/repo/.t3/worktrees/feature-a")).toBe("Worktree");
+  it("keeps the worktree name when locked", () => {
+    expect(resolveLockedWorkspaceLabel("/repo/.t3/worktrees/feature-a")).toBe("feature-a");
   });
 });
 
