@@ -24,6 +24,7 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { vcsEnvironment } from "../state/vcs";
 import {
   resolveCurrentWorkspaceLabel,
+  resolveLockedWorkspaceLabel,
   resolveWorktreeRows,
   resolveWorktreeStatusWord,
   resolveWorktreeUnpushedWarning,
@@ -70,6 +71,39 @@ export interface WorkspaceMenuProps {
 export function WorkspaceMenu(props: WorkspaceMenuProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const triggerContent = props.trigger ?? (
+    <>
+      {props.activeWorktreePath ? (
+        <FolderGitIcon className="size-3" />
+      ) : (
+        <FolderIcon className="size-3" />
+      )}
+      <span
+        data-composer-label
+        className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
+      >
+        <span data-composer-label-motion className="block truncate">
+          {props.envLocked
+            ? resolveLockedWorkspaceLabel(props.activeWorktreePath)
+            : props.effectiveEnvMode === "worktree" && !props.activeWorktreePath
+              ? "New worktree"
+              : resolveCurrentWorkspaceLabel(props.activeWorktreePath)}
+        </span>
+      </span>
+    </>
+  );
+
+  if (props.envLocked) {
+    return (
+      <span
+        className="inline-flex h-7 min-w-0 items-center gap-1 border border-transparent px-[calc(--spacing(2)-1px)] font-normal text-muted-foreground/70 text-xs sm:h-6"
+        data-composer-context-control
+      >
+        {triggerContent}
+      </span>
+    );
+  }
+
   return (
     <Menu
       open={open}
@@ -83,25 +117,7 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
         className="min-w-0 shrink font-normal text-muted-foreground/70 text-xs!"
         data-composer-context-control
       >
-        {props.trigger ?? (
-          <>
-            {props.activeWorktreePath ? (
-              <FolderGitIcon className="size-3" />
-            ) : (
-              <FolderIcon className="size-3" />
-            )}
-            <span
-              data-composer-label
-              className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
-            >
-              <span data-composer-label-motion className="block truncate">
-                {props.effectiveEnvMode === "worktree" && !props.activeWorktreePath
-                  ? "New worktree"
-                  : resolveCurrentWorkspaceLabel(props.activeWorktreePath)}
-              </span>
-            </span>
-          </>
-        )}
+        {triggerContent}
         <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
       </MenuTrigger>
       <MenuPopup

@@ -28,6 +28,8 @@ upstream.
   rename. Removal warnings report no upstream instead of treating default-branch distance as unpushed commits.
   Rename updates settled and archived thread paths. Running worktrees cannot be removed, and the
   current worktree cannot be renamed or removed.
+  The picker retains the previous static label once a thread has messages, an active session, or
+  an assigned worktree on a saved thread.
 - Reason: Reuse and manage existing worktrees without hunting through branches or leaving the composer.
 - Scope: Wide and narrow web composer menus, an additive rename RPC, desktop shell reveal, and
   optional confirmation labels and details, and a worktree-only ref query. Native mobile and provider

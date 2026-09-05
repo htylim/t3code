@@ -10,6 +10,8 @@ so you can shorten them or split them into several messages.
 
 The Workspace picker lists existing worktrees by directory and branch, with busy or dirty status.
 Use a row's menu to rename an available worktree, copy its path, or remove it while keeping the branch.
+Choose the workspace before starting a thread. The picker locks once the thread has messages or an
+active session, or a saved thread has an assigned worktree.
 
 ## Attach files
 
