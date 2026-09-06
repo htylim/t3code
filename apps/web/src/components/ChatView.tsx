@@ -226,6 +226,7 @@ import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
   NO_PROVIDER_MODEL_SELECTION,
+  resolveDefaultProviderModelSelection,
   sortProviderInstanceEntries,
 } from "../providerInstances";
 import {
@@ -5793,7 +5794,14 @@ export default function ChatView(props: ChatViewProps) {
       }
 
       const target = scopeThreadRef(activeThread.environmentId, newThreadId());
+      const configuredModelSelection = primaryServerSettings.newChatDefaults
+        ? resolveDefaultProviderModelSelection(
+            providerStatuses,
+            primaryServerSettings.newChatDefaults.modelSelection,
+          )
+        : null;
       const modelSelection =
+        configuredModelSelection ??
         composerRef.current?.getSendContext()?.selectedModelSelection ??
         activeThread.modelSelection;
       const result = await createThread(
@@ -5802,7 +5810,7 @@ export default function ChatView(props: ChatViewProps) {
           sourceThread: {
             projectId: activeThread.projectId,
             modelSelection,
-            runtimeMode,
+            runtimeMode: primaryServerSettings.newChatDefaults?.runtimeMode ?? runtimeMode,
             interactionMode,
             branch: activeThread.branch,
             worktreePath: activeThread.worktreePath,
@@ -5845,6 +5853,8 @@ export default function ChatView(props: ChatViewProps) {
       createThread,
       deleteTransientSideChat,
       interactionMode,
+      primaryServerSettings.newChatDefaults,
+      providerStatuses,
       runtimeMode,
       setComposerDraftPrompt,
     ],

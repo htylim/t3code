@@ -91,6 +91,7 @@ const SETTINGS_PAGE_SECTIONS: Partial<
     { label: "Projects & threads", targetId: "projects-and-threads" },
     { label: "Confirmations", targetId: "confirmations" },
     { label: "Text generation", targetId: "text-generation" },
+    { label: "Fork", targetId: "fork" },
     { label: "About", targetId: "about" },
     { label: "Legacy features", targetId: "legacy-features" },
   ],

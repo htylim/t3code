@@ -39,6 +39,12 @@ device until you sign back into the same account.
 
 ## Model defaults
 
+In Settings → General → Fork, enable **New chat defaults** to choose a provider
+account, model, effort, and permission mode. These choices override project pins
+and remembered selections for new chats, including new side chats. You can still
+change a draft's choices in the composer. Existing chats keep their settings.
+Turn the setting off or reset it to restore the behavior below.
+
 T3 Code remembers your provider, model, and model options for new threads. A
 project's configured model takes precedence; resetting that project setting
 returns to the remembered selection.

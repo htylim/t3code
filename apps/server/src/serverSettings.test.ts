@@ -25,6 +25,7 @@ import * as ServerSettingsModule from "./serverSettings.ts";
 
 const decodeSettingsPatch = Schema.decodeUnknownEffect(ServerSettingsPatch);
 const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
+const decodeServerSettingsJson = Schema.decodeUnknownEffect(Schema.fromJsonString(ServerSettings));
 
 const makeServerSettingsLayer = () =>
   ServerSettingsModule.layer.pipe(
@@ -296,6 +297,32 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         assert.isFalse(change?.sidebarAutoSettleOnMerge);
         assert.strictEqual(persisted.sidebarAutoSettleAfterDays, null);
         assert.isFalse(persisted.sidebarAutoSettleOnMerge);
+      }),
+    ).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("persists, broadcasts, and clears new chat defaults", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const serverConfig = yield* ServerConfig.ServerConfig;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+        const changes = yield* serverSettings.subscribeChanges;
+        const newChatDefaults = {
+          modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.6-sol", [
+            { id: "reasoningEffort", value: "high" },
+          ]),
+          runtimeMode: "approval-required" as const,
+        };
+        const updated = yield* serverSettings.updateSettings({ newChatDefaults });
+        assert.deepStrictEqual(updated.newChatDefaults, newChatDefaults);
+        const change = Option.getOrUndefined(yield* Stream.runHead(changes));
+        assert.deepStrictEqual(change?.newChatDefaults, newChatDefaults);
+        const persisted = yield* fileSystem.readFileString(serverConfig.settingsPath);
+        const decoded = yield* decodeServerSettingsJson(persisted);
+        assert.deepStrictEqual(decoded.newChatDefaults, newChatDefaults);
+        const reset = yield* serverSettings.updateSettings({ newChatDefaults: null });
+        assert.isNull(reset.newChatDefaults);
       }),
     ).pipe(Effect.provide(makeServerSettingsLayer())),
   );

@@ -131,14 +131,17 @@ export function resolveDefaultableModelSelection(
   return provider?.driver !== "antigravity" && model?.isLegacy === true ? null : usable;
 }
 
+/** Preserve draft choices, then use configured chat defaults before project pins. */
 export function resolveNewTaskModelSelection(input: {
   readonly draftSelection: ModelSelection | null;
+  readonly newChatSelection?: ModelSelection | null;
   readonly projectDefaultSelection: ModelSelection | null;
   readonly stickySelection: ModelSelection | null;
   readonly modelOptions: ReadonlyArray<ModelOption>;
 }): ModelSelection | null {
   return (
     input.draftSelection ??
+    input.newChatSelection ??
     input.projectDefaultSelection ??
     input.stickySelection ??
     input.modelOptions.find((option) => option.isDefault && !option.isUnavailable)?.selection ??

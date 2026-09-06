@@ -190,6 +190,8 @@ export function applyServerSettingsPatch(
   const next = deepMerge(current, patchForMerge);
   const nextWithReplacementsBase = {
     ...next,
+    // A new provider/model snapshot must not inherit the previous model's options.
+    ...(patch.newChatDefaults !== undefined ? { newChatDefaults: patch.newChatDefaults } : {}),
     ...(backgroundActivity !== undefined
       ? {
           backgroundActivity: {

@@ -160,6 +160,7 @@ import {
 import { searchableSetting } from "./settingsSearch";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
+import { ForkSettingsSection } from "./ForkSettingsSection";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
   artwork: "Artwork",
@@ -567,6 +568,7 @@ export function useSettingsRestore(onRestored?: () => void) {
         ? ["Continue threads after server updates"]
         : []),
       ...(isBackgroundActivityDirty ? ["Background activity"] : []),
+      ...(settings.newChatDefaults !== null ? ["New chat defaults"] : []),
       ...(settings.defaultThreadEnvMode !== DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode
         ? ["New thread mode"]
         : []),
@@ -612,6 +614,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.composerCollapseOnScroll,
       settings.addProjectBaseDirectory,
       settings.defaultThreadEnvMode,
+      settings.newChatDefaults,
       settings.newWorktreesStartFromOrigin,
       settings.diffIgnoreWhitespace,
       settings.diffLayout,
@@ -732,6 +735,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       automaticGitFetchInterval: DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval,
       providerHealthRefreshInterval: DEFAULT_UNIFIED_SETTINGS.providerHealthRefreshInterval,
       defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
+      newChatDefaults: null,
       newWorktreesStartFromOrigin: DEFAULT_UNIFIED_SETTINGS.newWorktreesStartFromOrigin,
       addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
       confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
@@ -2879,6 +2883,8 @@ export function GeneralSettingsPanel() {
           }
         />
       </SettingsSection>
+
+      <ForkSettingsSection />
 
       <SettingsSection id="about" title="About">
         {isElectron || HOSTED_APP_CHANNEL ? (

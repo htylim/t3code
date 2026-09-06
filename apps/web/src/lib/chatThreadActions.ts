@@ -44,13 +44,16 @@ export function resolveNewDraftStartFromOrigin(input: {
   return input.envMode === "worktree" && input.newWorktreesStartFromOrigin;
 }
 
+/** Prefer configured chat defaults, then project pins, then the previous chat. */
 export function resolveNewThreadModelSelectionOverride(input: {
+  readonly newChatSelection?: ModelSelection | null;
   readonly projectDefaultSelection: ModelSelection | null;
   readonly carrySelection: ModelSelection | null;
   readonly carrySourceDraftId: string | null;
   readonly destinationDraftId: string;
 }): ModelSelection | null {
   return (
+    input.newChatSelection ??
     input.projectDefaultSelection ??
     (input.carrySourceDraftId === input.destinationDraftId ? null : input.carrySelection)
   );

@@ -54,6 +54,7 @@ function pickExplicitWorkspaceOptions(options: NewThreadWorkspaceOptions | undef
   };
 }
 
+/** Open an empty draft using configured defaults while retaining explicit draft choices. */
 export function useNewThreadHandler() {
   // New-thread defaults are a user preference, and the settings UI only ever
   // edits the primary environment's settings.json. Reading the target
@@ -96,10 +97,9 @@ export function useNewThreadHandler() {
       const requestingRouteHref = router.state.location.href;
       const routeChangedSinceRequest = () => router.state.location.href !== requestingRouteHref;
       const currentRouteTarget = getCurrentRouteTarget();
-      // A new thread carries the user's working mode from the thread being
-      // viewed. The target project's configured model still wins; runtime and
-      // interaction modes carry independently. Branch, worktree, and env mode
-      // come from configured defaults unless the caller passes them explicitly.
+      // Explicit new-chat defaults win over project pins and carried choices.
+      // Without them, model and permission modes inherit the current context.
+      // Workspace defaults and interaction mode retain their own rules.
       const carrySourceShell =
         currentRouteTarget?.kind === "server"
           ? readThreadShell(currentRouteTarget.threadRef)
@@ -122,6 +122,7 @@ export function useNewThreadHandler() {
       const carryModelSelection =
         composerModelSelection ?? carrySourceShell?.modelSelection ?? null;
       const carryRuntimeMode =
+        primaryServerSettings.newChatDefaults?.runtimeMode ??
         carrySourceComposer?.runtimeMode ??
         carrySourceShell?.runtimeMode ??
         carrySourceDraft?.runtimeMode ??
@@ -138,6 +139,7 @@ export function useNewThreadHandler() {
       );
       const resolveModelSelectionOverride = (destinationDraftId: DraftId) =>
         resolveNewThreadModelSelectionOverride({
+          newChatSelection: primaryServerSettings.newChatDefaults?.modelSelection ?? null,
           projectDefaultSelection: project?.defaultModelSelection ?? null,
           carrySelection: carryModelSelection,
           carrySourceDraftId:
@@ -417,8 +419,7 @@ export function useNewThreadHandler() {
         applyStickyState(draftId);
         const modelSelectionOverride = resolveModelSelectionOverride(draftId);
         if (modelSelectionOverride) {
-          // Project defaults and carried selections both outrank global sticky
-          // state. The project default wins when both are present.
+          // Configured chat defaults outrank project pins and carried selections.
           setModelSelection(draftId, modelSelectionOverride, { replaceOptions: true });
         }
         await router.navigate({

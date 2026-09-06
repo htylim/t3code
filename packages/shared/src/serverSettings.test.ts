@@ -19,6 +19,28 @@ import {
 } from "./serverSettings.ts";
 
 describe("serverSettings helpers", () => {
+  it("replaces new chat defaults without carrying options across models and supports reset", () => {
+    const initial = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      newChatDefaults: {
+        modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.6-sol", [
+          { id: "reasoningEffort", value: "high" },
+        ]),
+        runtimeMode: "auto",
+      },
+    });
+    const replacement = {
+      modelSelection: createModelSelection(
+        ProviderInstanceId.make("claudeAgent"),
+        "claude-sonnet-5",
+      ),
+      runtimeMode: "approval-required" as const,
+    };
+    const updated = applyServerSettingsPatch(initial, { newChatDefaults: replacement });
+    expect(updated.newChatDefaults).toEqual(replacement);
+    expect(applyServerSettingsPatch(updated, {}).newChatDefaults).toEqual(replacement);
+    expect(applyServerSettingsPatch(updated, { newChatDefaults: null }).newChatDefaults).toBeNull();
+  });
+
   it("normalizes optional persisted strings", () => {
     expect(normalizePersistedServerSettingString(undefined)).toBeUndefined();
     expect(normalizePersistedServerSettingString("   ")).toBeUndefined();

@@ -21,6 +21,38 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
+describe("new chat defaults", () => {
+  it("leaves existing installations unchanged and round-trips explicit defaults", () => {
+    expect(decodeServerSettings({}).newChatDefaults).toBeNull();
+    const newChatDefaults = {
+      modelSelection: {
+        instanceId: ProviderInstanceId.make("codex_personal"),
+        model: "gpt-5.6-sol",
+        options: [{ id: "reasoningEffort", value: "high" }],
+      },
+      runtimeMode: "approval-required" as const,
+    };
+    expect(
+      decodeServerSettings(encodeServerSettings(decodeServerSettings({ newChatDefaults })))
+        .newChatDefaults,
+    ).toEqual(newChatDefaults);
+    expect(decodeServerSettingsPatch({ newChatDefaults }).newChatDefaults).toEqual(newChatDefaults);
+    expect(decodeServerSettingsPatch({ newChatDefaults: null }).newChatDefaults).toBeNull();
+  });
+
+  it("rejects incomplete selections and unknown permission modes", () => {
+    expect(() => decodeServerSettingsPatch({ newChatDefaults: { runtimeMode: "auto" } })).toThrow();
+    expect(() =>
+      decodeServerSettingsPatch({
+        newChatDefaults: {
+          modelSelection: { instanceId: "codex", model: "gpt-5.6-sol" },
+          runtimeMode: "unknown",
+        },
+      }),
+    ).toThrow();
+  });
+});
+
 describe("ClaudeSettings auto-compaction", () => {
   it("uses Claude's default threshold when no override is configured", () => {
     expect(decodeClaudeSettings({}).autoCompactWindow).toBe("");

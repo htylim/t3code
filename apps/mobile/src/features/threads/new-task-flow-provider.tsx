@@ -415,7 +415,10 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     draftStartFromOrigin ??
     selectedEnvironmentServerConfig?.settings.newWorktreesStartFromOrigin ??
     true;
-  const runtimeMode = selectedProjectDraft.runtimeMode ?? DEFAULT_RUNTIME_MODE;
+  const runtimeMode =
+    selectedProjectDraft.runtimeMode ??
+    selectedEnvironmentServerConfig?.settings.newChatDefaults?.runtimeMode ??
+    DEFAULT_RUNTIME_MODE;
 
   // Antigravity keeps unavailable selections so sign-out or a catalog change
   // cannot switch the user's model. Other providers retain their fallback
@@ -428,6 +431,10 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     selectedEnvironmentServerConfig,
     selectedProject?.defaultModelSelection ?? null,
   );
+  const newChatModelSelection = resolveSelectableModelSelection(
+    selectedEnvironmentServerConfig,
+    selectedEnvironmentServerConfig?.settings.newChatDefaults?.modelSelection ?? null,
+  );
   const storedStickyModelSelection = useStickyComposerModelSelection();
   const stickyModelSelection = resolveDefaultableModelSelection(
     selectedEnvironmentServerConfig,
@@ -437,20 +444,24 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     () =>
       buildModelOptions(
         selectedEnvironmentServerConfig,
-        draftModelSelection ?? projectDefaultModelSelection ?? stickyModelSelection,
+        draftModelSelection ??
+          newChatModelSelection ??
+          projectDefaultModelSelection ??
+          stickyModelSelection,
       ),
     [
       selectedEnvironmentServerConfig,
       draftModelSelection,
+      newChatModelSelection,
       projectDefaultModelSelection,
       stickyModelSelection,
     ],
   );
 
-  // An unsent draft keeps its explicit pick. Fresh drafts resolve the project
-  // default before the last manual app-wide selection and provider default.
+  // Explicit draft picks win, followed by new-chat defaults and project pins.
   const selectedModel = resolveNewTaskModelSelection({
     draftSelection: draftModelSelection,
+    newChatSelection: newChatModelSelection,
     projectDefaultSelection: projectDefaultModelSelection,
     stickySelection: stickyModelSelection,
     modelOptions,
@@ -906,7 +917,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         text,
         attachments: draft.attachments,
         modelSelection: draftModelSelection,
-        runtimeMode: draft.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+        runtimeMode: draft.runtimeMode ?? runtimeMode,
         interactionMode: resolvePendingTaskInteractionMode({
           preferenceLoaded: planModePreferenceLoaded,
           planModeEnabled: legacyPlanModeEnabled,
@@ -948,6 +959,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       planModePreferenceLoaded,
       startFromOrigin,
       workspaceMode,
+      runtimeMode,
     ],
   );
 

@@ -281,6 +281,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["generated thread titles source control content default provider"],
   },
   {
+    id: "new-chat-defaults",
+    title: "New chat defaults",
+    to: "/settings/general",
+    searchTerms: ["fork new thread provider account model effort reasoning permission runtime"],
+  },
+  {
     id: "diagnostics",
     title: "Diagnostics",
     to: "/settings/general",
