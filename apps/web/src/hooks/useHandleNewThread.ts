@@ -125,7 +125,6 @@ export function useNewThreadHandler() {
       const carryModelSelection =
         composerModelSelection ?? carrySourceShell?.modelSelection ?? null;
       const carryRuntimeMode =
-        targetServerSettings.defaultRuntimeMode ??
         carrySourceComposer?.runtimeMode ??
         carrySourceShell?.runtimeMode ??
         carrySourceDraft?.runtimeMode ??

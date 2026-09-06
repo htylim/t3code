@@ -16,7 +16,6 @@ import {
   DEFAULT_MODEL_BY_PROVIDER,
   DEFAULT_SERVER_SETTINGS,
   ModelSelection,
-  RuntimeMode,
   type ProviderInstanceConfig,
   type ProviderInstanceEnvironmentVariable,
   type UsageLimitSourceConfig,
@@ -262,12 +261,10 @@ const PersistedOptionalProviderSettings = Schema.Struct({
     Schema.NullOr(
       Schema.Struct({
         modelSelection: ModelSelection,
-        runtimeMode: RuntimeMode,
       }),
     ),
   ),
   defaultModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
-  defaultRuntimeMode: Schema.optionalKey(Schema.NullOr(RuntimeMode)),
   providers: Schema.optionalKey(
     Schema.Struct({
       cursor: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
@@ -479,9 +476,6 @@ const make = Effect.gen(function* () {
             ...settings,
             ...(persisted.defaultModelSelection === undefined
               ? { defaultModelSelection: persisted.newChatDefaults.modelSelection }
-              : {}),
-            ...(persisted.defaultRuntimeMode === undefined
-              ? { defaultRuntimeMode: persisted.newChatDefaults.runtimeMode }
               : {}),
           };
         }

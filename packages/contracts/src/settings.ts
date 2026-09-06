@@ -16,7 +16,7 @@ import {
   DEFAULT_TEXT_GENERATION_REASONING_EFFORT,
   ProviderOptionSelections,
 } from "./model.ts";
-import { ModelSelection, ProjectScript, RuntimeMode } from "./orchestration.ts";
+import { ModelSelection, ProjectScript } from "./orchestration.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
 import {
   DEFAULT_PREVIEW_APPEARANCE,
@@ -881,10 +881,6 @@ export const ServerSettings = Schema.Struct({
   projectAutoPullOverrides: Schema.Record(ProjectId, Schema.Boolean).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
-  /** Null inherits the current chat permission mode for new drafts. */
-  defaultRuntimeMode: Schema.NullOr(RuntimeMode).pipe(
-    Schema.withDecodingDefault(Effect.succeed(null)),
-  ),
   defaultModelSelection: Schema.NullOr(ModelSelection).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
@@ -1159,7 +1155,6 @@ export const ServerSettingsPatch = Schema.Struct({
   projectAutoPullOverrides: Schema.optionalKey(
     Schema.Record(ProjectId, Schema.NullOr(Schema.Boolean)),
   ),
-  defaultRuntimeMode: Schema.optionalKey(Schema.NullOr(RuntimeMode)),
   defaultModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),

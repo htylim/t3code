@@ -49,9 +49,9 @@ In Settings → Projects, choose shared provider, model, and effort defaults. A 
 model override takes precedence. Resetting it uses the shared default, then the remembered
 selection when no shared default is set. These defaults also apply to new side chats.
 
-Use Permissions on the same page to choose a starting permission mode or inherit the
-current chat's mode. Explicit draft choices and existing chats keep their settings.
-Previously saved Fork defaults move to these settings automatically.
+New chats inherit permissions from the current chat. Explicit draft choices and existing
+chats keep their settings. Previously saved Fork provider, model, and effort defaults move
+to these settings automatically; the old permission default is discarded.
 
 Leaving reasoning level or service tier unset uses the provider's own configuration.
 

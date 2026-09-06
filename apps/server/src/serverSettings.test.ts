@@ -136,27 +136,27 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           serverConfig.settingsPath,
           yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
             newChatDefaults: { modelSelection, runtimeMode: "approval-required" },
-            ...(reset ? { defaultModelSelection: null, defaultRuntimeMode: null } : {}),
+            ...(reset ? { defaultModelSelection: null } : {}),
           }),
         );
         const loaded = yield* serverSettings.getSettings;
         assert.deepStrictEqual(loaded.defaultModelSelection, reset ? null : modelSelection);
-        assert.strictEqual(loaded.defaultRuntimeMode, reset ? null : "approval-required");
+        assert.notProperty(loaded, "defaultRuntimeMode");
         // Saving removes the retired field so a later reset cannot resurrect it.
-        yield* serverSettings.updateSettings({ defaultRuntimeMode: "auto" });
+        yield* serverSettings.updateSettings({
+          defaultModelSelection: loaded.defaultModelSelection,
+        });
         const persistedJson = yield* fileSystem.readFileString(serverConfig.settingsPath);
         assert.notInclude(persistedJson, "newChatDefaults");
         const persisted = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ServerSettings))(
           persistedJson,
         );
         assert.deepStrictEqual(persisted.defaultModelSelection, reset ? null : modelSelection);
-        assert.strictEqual(persisted.defaultRuntimeMode, "auto");
+        assert.notInclude(persistedJson, "runtimeMode");
         const cleared = yield* serverSettings.updateSettings({
           defaultModelSelection: null,
-          defaultRuntimeMode: null,
         });
         assert.isNull(cleared.defaultModelSelection);
-        assert.isNull(cleared.defaultRuntimeMode);
       }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 

@@ -20,22 +20,6 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
-describe("new chat permission defaults", () => {
-  it("defaults to inheritance and validates explicit permission choices", () => {
-    expect(decodeServerSettings({}).defaultRuntimeMode).toBeNull();
-    for (const defaultRuntimeMode of [null, "auto", "approval-required", "full-access"]) {
-      const settings = decodeServerSettings({ defaultRuntimeMode });
-      expect(decodeServerSettings(encodeServerSettings(settings)).defaultRuntimeMode).toBe(
-        defaultRuntimeMode,
-      );
-      expect(decodeServerSettingsPatch({ defaultRuntimeMode }).defaultRuntimeMode).toBe(
-        defaultRuntimeMode,
-      );
-    }
-    expect(() => decodeServerSettingsPatch({ defaultRuntimeMode: "unknown" })).toThrow();
-  });
-});
-
 describe("ServerSettings usage price overrides", () => {
   const prices = { inputCostPerMillionTokens: 2, outputCostPerMillionTokens: 8 };
 

@@ -87,10 +87,6 @@ export function ProjectDefaultsSettings({
       JSON.stringify(target.serverConfig?.settings.defaultModelSelection) !==
       JSON.stringify(storedSelection),
   );
-  const mixedPermissions = targets.some(
-    (target) =>
-      target.serverConfig?.settings.defaultRuntimeMode !== serverSettings.defaultRuntimeMode,
-  );
   const mixedWorkspace = targets.some(
     (target) =>
       target.serverConfig?.settings.defaultThreadEnvMode !== serverSettings.defaultThreadEnvMode,
@@ -274,54 +270,6 @@ export function ProjectDefaultsSettings({
             ) : (
               <span className="text-sm text-muted-foreground">No providers available</span>
             )
-          }
-        />
-        <SettingsRow
-          title="Permissions"
-          description="Permission mode for new chats, including side chats. Existing chats keep their settings."
-          status={mixedPermissions ? "Differs by machine" : undefined}
-          resetAction={
-            serverSettings.defaultRuntimeMode !== null || mixedPermissions ? (
-              <SettingResetButton
-                label="default permissions"
-                disabled={disabled("defaultRuntimeMode")}
-                onClick={() => void save({ defaultRuntimeMode: null })}
-              />
-            ) : null
-          }
-          control={
-            <Select
-              disabled={disabled("defaultRuntimeMode")}
-              value={mixedPermissions ? "mixed" : (serverSettings.defaultRuntimeMode ?? "inherit")}
-              onValueChange={(permissionMode) => {
-                if (permissionMode === "inherit") void save({ defaultRuntimeMode: null });
-                else if (
-                  permissionMode === "auto" ||
-                  permissionMode === "approval-required" ||
-                  permissionMode === "full-access"
-                ) {
-                  void save({ defaultRuntimeMode: permissionMode });
-                }
-              }}
-            >
-              <SelectTrigger
-                className={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-                aria-label="Default permissions"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                {mixedPermissions ? (
-                  <SelectItem value="mixed" disabled>
-                    Differs by machine
-                  </SelectItem>
-                ) : null}
-                <SelectItem value="inherit">Inherit current chat</SelectItem>
-                <SelectItem value="auto">Auto</SelectItem>
-                <SelectItem value="approval-required">Ask for approval</SelectItem>
-                <SelectItem value="full-access">Full access</SelectItem>
-              </SelectPopup>
-            </Select>
           }
         />
         <SettingsRow

@@ -416,10 +416,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     draftStartFromOrigin ??
     selectedEnvironmentServerConfig?.settings.newWorktreesStartFromOrigin ??
     true;
-  const runtimeMode =
-    selectedProjectDraft.runtimeMode ??
-    selectedEnvironmentServerConfig?.settings.defaultRuntimeMode ??
-    DEFAULT_RUNTIME_MODE;
+  const runtimeMode = selectedProjectDraft.runtimeMode ?? DEFAULT_RUNTIME_MODE;
 
   // Antigravity keeps unavailable selections so sign-out or a catalog change
   // cannot switch the user's model. Other providers retain their fallback

@@ -1,4 +1,3 @@
-import type { RuntimeMode } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 const testState = vi.hoisted(() => {
@@ -10,12 +9,6 @@ const testState = vi.hoisted(() => {
     readonly promotedTo: null;
     readonly threadId: string;
   } | null = null;
-  const settings = {
-    defaultThreadEnvMode: "local",
-    newWorktreesStartFromOrigin: false,
-    defaultModelSelection: null,
-    defaultRuntimeMode: null as RuntimeMode | null,
-  };
   const router = {
     state: {
       location: { href: "/" },
@@ -39,14 +32,11 @@ const testState = vi.hoisted(() => {
   return {
     completeProjectFileRead: (value: null) => completeProjectFileRead(value),
     draftStore,
-    settings,
     get projectFileRead() {
       return projectFileRead;
     },
     reset(nextStoredDraft: typeof storedDraft) {
       storedDraft = nextStoredDraft;
-      settings.defaultRuntimeMode = null;
-      draftStore.setDraftThreadContext.mockClear();
       router.state.location.href = "/";
       router.navigate.mockClear();
       draftStore.setLogicalProjectDraftThreadId.mockClear();
@@ -61,12 +51,16 @@ const testState = vi.hoisted(() => {
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: unknown) =>
     atom === "primary-settings"
-      ? { newWorktreesStartFromOrigin: false, defaultRuntimeMode: "full-access" }
+      ? { newWorktreesStartFromOrigin: false }
       : new Map([
           [
             "environment-ssh",
             {
-              settings: testState.settings,
+              settings: {
+                defaultThreadEnvMode: "local",
+                newWorktreesStartFromOrigin: false,
+                defaultModelSelection: null,
+              },
             },
           ],
         ]),
@@ -77,7 +71,7 @@ vi.mock("@t3tools/client-runtime/environment", () => ({
   scopeThreadRef: (environmentId: string, threadId: string) => ({ environmentId, threadId }),
 }));
 vi.mock("@t3tools/contracts", () => ({
-  DEFAULT_RUNTIME_MODE: "auto",
+  DEFAULT_RUNTIME_MODE: "default",
   DEFAULT_SERVER_SETTINGS: {},
 }));
 vi.mock("@t3tools/shared/threadEnvMode", () => ({
@@ -150,26 +144,6 @@ vi.mock("./useSettings", () => ({ useClientSettings: () => ({}) }));
 import { useNewThreadHandler } from "./useHandleNewThread";
 
 describe("useNewThreadHandler", () => {
-  it.each(["approval-required", null] as const)(
-    "uses the destination machine's permission default: %s",
-    async (permissionMode) => {
-      testState.reset(null);
-      testState.settings.defaultRuntimeMode = permissionMode;
-      const pending = useNewThreadHandler()({
-        environmentId: "environment-ssh",
-        projectId: "project-remote",
-      } as never);
-      testState.completeProjectFileRead(null);
-      await pending;
-      expect(testState.draftStore.setLogicalProjectDraftThreadId).toHaveBeenCalledWith(
-        "remote-project",
-        { environmentId: "environment-ssh", projectId: "project-remote" },
-        "draft-delayed",
-        expect.objectContaining({ runtimeMode: permissionMode ?? "auto" }),
-      );
-    },
-  );
-
   it.each([
     ["new", null],
     [

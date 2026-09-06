@@ -23,13 +23,14 @@ upstream.
 
 - Upstream baseline: `223ff4490`
 - Change: Merged 293 upstream commits. Replaced the Fork new-chat provider, model, and effort
-  controls with upstream's shared project defaults and scoped overrides. Retained an optional
-  permission default alongside those controls because upstream does not offer one. Saved
-  `newChatDefaults` migrate when settings load; explicit values and resets in the new fields win.
+  controls with upstream's shared project defaults and scoped overrides. Saved provider, model,
+  and effort defaults migrate when settings load; explicit values and resets in the new field win.
+  Removed the permission-default extension and discarded its saved value, using upstream's
+  inherited-permission behavior.
   Saving removes the retired field. New side chats use project model overrides before shared
-  defaults, and all clients resolve permission defaults from the destination environment.
-- Reason: Keep one model-default system while preserving saved preferences and the fork's
-  permission choice. Project overrides now take precedence over shared model defaults.
+  defaults.
+- Reason: Adopt upstream's defaults behavior while preserving saved model preferences. Project
+  overrides now take precedence over shared model defaults.
 - Scope: Settings contracts and persistence, web and desktop settings, main and side-chat creation,
   and mobile drafts. Integrated upstream compaction declarations, project browser access,
   environment balancing, pending request handling, composer APIs, and sidebar filter persistence
@@ -39,7 +40,12 @@ upstream.
   web, desktop, mobile, contracts, shared, and client-runtime. Web and server bundles built.
   Frozen dependency installation passed supply-chain checks. Targeted lint reported no errors;
   formatting and resolution whitespace checks passed. The unchanged upstream Pierre patch has
-  space-before-tab payload lines. Browser verification awaits explicit approval.
+  space-before-tab payload lines. After removing the permission extension, 160 focused tests and
+  server, web, and mobile type checks passed. In an isolated browser with copied thread data and
+  a temporary Git project, verified migration, effort changes, inherited permissions, preserved
+  unsent drafts, worktree selection, side-chat creation, project model overrides, and reset to
+  shared defaults. Preview screenshot capture failed; browser verification used DOM inspection
+  and interactions, with saved settings and thread records checked separately.
 
 ## 2026-09-05 - Scope thread references and support multiword queries
 

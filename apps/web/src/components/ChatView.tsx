@@ -5857,7 +5857,7 @@ export default function ChatView(props: ChatViewProps) {
           sourceThread: {
             projectId: activeThread.projectId,
             modelSelection,
-            runtimeMode: settings.defaultRuntimeMode ?? runtimeMode,
+            runtimeMode,
             interactionMode,
             branch: activeThread.branch,
             worktreePath: activeThread.worktreePath,
@@ -5901,7 +5901,6 @@ export default function ChatView(props: ChatViewProps) {
       deleteTransientSideChat,
       interactionMode,
       activeProjectDefaultModelSelection,
-      settings.defaultRuntimeMode,
       providerStatuses,
       runtimeMode,
       setComposerDraftPrompt,
