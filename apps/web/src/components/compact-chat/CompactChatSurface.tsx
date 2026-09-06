@@ -1,3 +1,4 @@
+import { derivePendingRequests } from "@t3tools/client-runtime/pending-requests";
 import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
@@ -11,7 +12,6 @@ import {
 import type {
   ApprovalRequestId,
   ChatAttachment,
-  MessageId,
   ModelSelection,
   ProviderApprovalDecision,
   ProviderInstanceId,
@@ -66,8 +66,6 @@ import {
 } from "~/pendingUserInput";
 import {
   deriveActiveWorkStartedAt,
-  derivePendingApprovals,
-  derivePendingUserInputs,
   derivePhase,
   deriveTimelineEntries,
   deriveWorkLogEntries,
@@ -77,7 +75,7 @@ import { useProject, useThread } from "~/state/entities";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { threadEnvironment, useEnvironmentThread } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
-import type { ChatMessage, TurnDiffSummary } from "~/types";
+import type { ChatMessage } from "~/types";
 import { newMessageId } from "~/lib/utils";
 import { resolveAppModelSelectionForInstance } from "~/modelSelection";
 import {
@@ -99,8 +97,6 @@ interface CompactChatSurfaceProps {
   target: ScopedThreadRef;
 }
 
-const EMPTY_TURN_DIFF_SUMMARIES = new Map<MessageId, TurnDiffSummary>();
-const EMPTY_REVERT_COUNTS = new Map<MessageId, number>();
 const SIDE_CHAT_FORK_ELIGIBILITY = {
   eligible: false,
   reason: "unsupported-environment",
@@ -192,6 +188,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(0);
   const [timelineLiveFollowEnabled, setTimelineLiveFollowEnabled] = useState(true);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [timelineOverflows, setTimelineOverflows] = useState(false);
 
   const messages = thread?.messages ?? [];
   const activities = thread?.activities ?? [];
@@ -231,8 +228,10 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
     () => deriveTimelineEntries(displayMessages, proposedPlans, workEntries),
     [displayMessages, proposedPlans, workEntries],
   );
-  const pendingApprovals = useMemo(() => derivePendingApprovals(activities), [activities]);
-  const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
+  const { approvals: pendingApprovals, userInputs: pendingUserInputs } = useMemo(
+    () => derivePendingRequests(activities),
+    [activities],
+  );
   const activePendingApproval = pendingApprovals[0] ?? null;
   const activePendingUserInput = pendingUserInputs[0] ?? null;
   const activePendingDraftAnswers = useMemo(
@@ -655,11 +654,11 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
           timelineEntries={timelineEntries}
           latestTurn={thread.latestTurn}
           runningTurnId={thread.session?.status === "running" ? thread.session.activeTurnId : null}
-          turnDiffSummaryByAssistantMessageId={EMPTY_TURN_DIFF_SUMMARIES}
           routeThreadKey={routeThreadKey}
           onOpenTurnDiff={() => {}}
-          revertTurnCountByUserMessageId={EMPTY_REVERT_COUNTS}
-          onRevertUserMessage={() => {}}
+          turnDiffSummaries={[]}
+          supportsConversationRollback={false}
+          onRevertToTurnCount={() => {}}
           isRevertingCheckpoint={false}
           onImageExpand={setExpandedImage}
           activeThreadEnvironmentId={target.environmentId}
@@ -676,6 +675,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
             setTimelineLiveFollowEnabled(isAtEnd);
             setShowScrollToBottom(!isAtEnd);
           }}
+          onContentOverflowChange={setTimelineOverflows}
           onManualNavigation={() => setTimelineLiveFollowEnabled(false)}
           topFadeEnabled={false}
           loadEarlier={
@@ -723,6 +723,8 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
               <ComposerSurface.Host>
                 <ChatComposer
                   composerRef={composerRef}
+                  promptHistoryMessages={messages}
+                  timelineOverflows={timelineOverflows}
                   composerDraftTarget={target}
                   projectId={thread.projectId}
                   environmentId={target.environmentId}

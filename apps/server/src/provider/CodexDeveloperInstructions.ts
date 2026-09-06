@@ -40,7 +40,7 @@ In T3 Code, a **thread** is a durable conversation visible in the web, desktop, 
 const browserToolInstructions = (browserToolsAvailable: boolean): string =>
   browserToolsAvailable ? T3_CODE_BROWSER_TOOL_INSTRUCTIONS : "";
 
-export const codexPlanModeDeveloperInstructions = (
+const codexPlanModeDeveloperInstructions = (
   browserToolsAvailable: boolean,
 ): string => `<collaboration_mode># Plan Mode (Conversational)
 
@@ -173,7 +173,7 @@ ${T3_CODE_THREAD_CONTROL_INSTRUCTIONS}
 ${browserToolInstructions(browserToolsAvailable)}
 </collaboration_mode>`;
 
-export const codexDefaultModeDeveloperInstructions = (
+const codexDefaultModeDeveloperInstructions = (
   browserToolsAvailable: boolean,
 ): string => `<collaboration_mode># Collaboration Mode: Default
 

@@ -14,6 +14,7 @@ import * as Duration from "effect/Duration";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -22,10 +23,10 @@ import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ServerConfig from "./config.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import * as ServerSettingsModule from "./serverSettings.ts";
+import { resolveProviderInstanceTerminalEnvironment } from "./terminal/Manager.ts";
 
 const decodeSettingsPatch = Schema.decodeUnknownEffect(ServerSettingsPatch);
 const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
-const decodeServerSettingsJson = Schema.decodeUnknownEffect(Schema.fromJsonString(ServerSettings));
 
 const makeServerSettingsLayer = () =>
   ServerSettingsModule.layer.pipe(
@@ -118,6 +119,46 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.notInclude(error.message, cause.message);
     }).pipe(Effect.provide(settingsLayer));
   });
+
+  it.effect.each([false, true])(
+    "migrates fork defaults while respecting explicit resets: %s",
+    (reset) =>
+      Effect.gen(function* () {
+        const serverConfig = yield* ServerConfig.ServerConfig;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+        const modelSelection = createModelSelection(
+          ProviderInstanceId.make("codex"),
+          "gpt-5.6-sol",
+          [{ id: "reasoningEffort", value: "high" }],
+        );
+        yield* fileSystem.writeFileString(
+          serverConfig.settingsPath,
+          yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
+            newChatDefaults: { modelSelection, runtimeMode: "approval-required" },
+            ...(reset ? { defaultModelSelection: null, defaultRuntimeMode: null } : {}),
+          }),
+        );
+        const loaded = yield* serverSettings.getSettings;
+        assert.deepStrictEqual(loaded.defaultModelSelection, reset ? null : modelSelection);
+        assert.strictEqual(loaded.defaultRuntimeMode, reset ? null : "approval-required");
+        // Saving removes the retired field so a later reset cannot resurrect it.
+        yield* serverSettings.updateSettings({ defaultRuntimeMode: "auto" });
+        const persistedJson = yield* fileSystem.readFileString(serverConfig.settingsPath);
+        assert.notInclude(persistedJson, "newChatDefaults");
+        const persisted = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ServerSettings))(
+          persistedJson,
+        );
+        assert.deepStrictEqual(persisted.defaultModelSelection, reset ? null : modelSelection);
+        assert.strictEqual(persisted.defaultRuntimeMode, "auto");
+        const cleared = yield* serverSettings.updateSettings({
+          defaultModelSelection: null,
+          defaultRuntimeMode: null,
+        });
+        assert.isNull(cleared.defaultModelSelection);
+        assert.isNull(cleared.defaultRuntimeMode);
+      }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
 
   it.effect("identifies provider history query failures", () =>
     Effect.gen(function* () {
@@ -273,6 +314,32 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     ).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
+  it.effect("persists custom usage prices and removes them from the settings file", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const serverConfig = yield* ServerConfig.ServerConfig;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+        const prices = {
+          inputCostPerMillionTokens: 2,
+          outputCostPerMillionTokens: 8,
+          cacheReadCostPerMillionTokens: 0,
+        };
+        const readPersisted = fileSystem
+          .readFileString(serverConfig.settingsPath)
+          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ServerSettings))));
+
+        yield* serverSettings.updateSettings({ usagePriceOverrides: { "example-model": prices } });
+        const persisted = yield* readPersisted;
+        assert.deepStrictEqual(persisted.usagePriceOverrides, { "example-model": prices });
+
+        yield* serverSettings.updateSettings({ usagePriceOverrides: { "example-model": null } });
+        const restored = yield* readPersisted;
+        assert.deepStrictEqual(restored.usagePriceOverrides, {});
+      }),
+    ).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
   it.effect("persists and broadcasts thread settlement settings", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -297,32 +364,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         assert.isFalse(change?.sidebarAutoSettleOnMerge);
         assert.strictEqual(persisted.sidebarAutoSettleAfterDays, null);
         assert.isFalse(persisted.sidebarAutoSettleOnMerge);
-      }),
-    ).pipe(Effect.provide(makeServerSettingsLayer())),
-  );
-
-  it.effect("persists, broadcasts, and clears new chat defaults", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const serverConfig = yield* ServerConfig.ServerConfig;
-        const fileSystem = yield* FileSystem.FileSystem;
-        const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
-        const changes = yield* serverSettings.subscribeChanges;
-        const newChatDefaults = {
-          modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.6-sol", [
-            { id: "reasoningEffort", value: "high" },
-          ]),
-          runtimeMode: "approval-required" as const,
-        };
-        const updated = yield* serverSettings.updateSettings({ newChatDefaults });
-        assert.deepStrictEqual(updated.newChatDefaults, newChatDefaults);
-        const change = Option.getOrUndefined(yield* Stream.runHead(changes));
-        assert.deepStrictEqual(change?.newChatDefaults, newChatDefaults);
-        const persisted = yield* fileSystem.readFileString(serverConfig.settingsPath);
-        const decoded = yield* decodeServerSettingsJson(persisted);
-        assert.deepStrictEqual(decoded.newChatDefaults, newChatDefaults);
-        const reset = yield* serverSettings.updateSettings({ newChatDefaults: null });
-        assert.isNull(reset.newChatDefaults);
       }),
     ).pipe(Effect.provide(makeServerSettingsLayer())),
   );
@@ -652,6 +693,24 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isFalse(settings.providerInstances[ProviderInstanceId.make("grok")]?.enabled);
       assert.isFalse(settings.providerInstances[ProviderInstanceId.make("opencode")]?.enabled);
       assert.isFalse(settings.providerInstances[ProviderInstanceId.make("cursor")]?.enabled);
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("skips a disabled provider instance when picking the text generation fallback", () =>
+    Effect.gen(function* () {
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      // The Providers UI writes providerInstances only, so the legacy providers
+      // map decodes to defaults where codex is enabled and listed first.
+      yield* fileSystem.writeFileString(
+        serverConfig.settingsPath,
+        '{"providerInstances":{"codex":{"driver":"codex","enabled":false,"config":{}}}}',
+      );
+
+      const settings = yield* serverSettings.getSettings;
+
+      assert.equal(settings.textGenerationModelSelection.instanceId, "claudeAgent");
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
@@ -1101,6 +1160,41 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         roundTripped.providerInstances[instanceId]?.environment?.[0]?.value,
         "sk-or-secret",
       );
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("materializes provider secrets for terminal environment resolution", () =>
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const instanceId = ProviderInstanceId.make("codex_terminal");
+
+      yield* serverSettings.updateSettings({
+        providerInstances: {
+          [instanceId]: {
+            driver: ProviderDriverKind.make("codex"),
+            environment: [
+              { name: "OPENROUTER_API_KEY", value: "sk-terminal-secret", sensitive: true },
+            ],
+            config: { homePath: "~/.codex-terminal" },
+          },
+        },
+      });
+
+      const environment = yield* resolveProviderInstanceTerminalEnvironment({
+        serverSettings,
+        path,
+        rawProviderInstanceId: instanceId,
+        env: undefined,
+      });
+      const persisted = yield* fileSystem.readFileString(serverConfig.settingsPath);
+
+      assert.equal(environment.OPENROUTER_API_KEY, "sk-terminal-secret");
+      assert.match(environment.CODEX_HOME ?? "", /[\\/][.]codex-terminal$/);
+      assert.notInclude(persisted, "sk-terminal-secret");
+      assert.include(persisted, '"valueRedacted": true');
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 });

@@ -37,17 +37,21 @@ messages while disconnected. Uploads resume when you reconnect. Drafts and queue
 messages survive app restarts. Signing out of T3 Connect keeps that work on your
 device until you sign back into the same account.
 
+## Custom models
+
+On web and desktop, use Settings → Providers → **Models** to add an unlisted model with a custom
+name and options. Only options supported by the provider integration affect turns. Antigravity
+uses its account catalog and does not support custom models.
+
 ## Model defaults
 
-In Settings → General → Fork, enable **New chat defaults** to choose a provider
-account, model, effort, and permission mode. These choices override project pins
-and remembered selections for new chats, including new side chats. You can still
-change a draft's choices in the composer. Existing chats keep their settings.
-Turn the setting off or reset it to restore the behavior below.
+In Settings → Projects, choose shared provider, model, and effort defaults. A project's
+model override takes precedence. Resetting it uses the shared default, then the remembered
+selection when no shared default is set. These defaults also apply to new side chats.
 
-T3 Code remembers your provider, model, and model options for new threads. A
-project's configured model takes precedence; resetting that project setting
-returns to the remembered selection.
+Use Permissions on the same page to choose a starting permission mode or inherit the
+current chat's mode. Explicit draft choices and existing chats keep their settings.
+Previously saved Fork defaults move to these settings automatically.
 
 Leaving reasoning level or service tier unset uses the provider's own configuration.
 
@@ -62,6 +66,19 @@ is unavailable or has changed, the saved quote remains readable.
 
 Mobile displays saved quotes and comments, but does not create citations or
 navigate to their sources.
+
+## Recall a sent prompt
+
+Press `ArrowUp` in an empty composer to bring back the last prompt you sent in this thread. Press
+`ArrowUp` again to go further back, and `ArrowDown` to come forward. Moving forward past the newest
+prompt clears the composer. Recall walks the prompts loaded in the thread. Attachments, terminal
+context, and other extras from the original message are not restored, only the text you typed. A
+composer that holds an attachment or a picked element does not count as empty.
+
+When the composer has text, the arrow keys move the caret as usual. Recall takes over only while
+the text is an unedited recalled prompt, with the caret on the first visual line for `ArrowUp` or
+the last visual line for `ArrowDown`, counting wrapped lines. Editing a recalled prompt turns it
+into a normal draft.
 
 ## Prompt stash
 

@@ -38,23 +38,6 @@ function createContext(overrides: Partial<ChatThreadActionContext> = {}): ChatTh
 }
 
 describe("chatThreadActions", () => {
-  it("uses new chat defaults above project pins and carried options", () => {
-    const newChatSelection = {
-      instanceId: ProviderInstanceId.make("codex_personal"),
-      model: "gpt-6-astra",
-      options: [{ id: "reasoningEffort", value: "medium" }],
-    };
-    expect(
-      resolveNewThreadModelSelectionOverride({
-        newChatSelection,
-        projectDefaultSelection: PROJECT_DEFAULT_SELECTION,
-        carrySelection: CARRIED_SELECTION,
-        carrySourceDraftId: "draft-a",
-        destinationDraftId: "draft-b",
-      }),
-    ).toEqual(newChatSelection);
-  });
-
   it("only treats an active stored selection marked explicit as an explicit pick", () => {
     const draft = {
       activeProvider: PROJECT_DEFAULT_SELECTION.instanceId,

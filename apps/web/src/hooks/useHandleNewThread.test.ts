@@ -1,6 +1,5 @@
+import type { RuntimeMode } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { ProviderInstanceId } from "@t3tools/contracts";
-import type { NewChatDefaults } from "@t3tools/contracts/settings";
 
 const testState = vi.hoisted(() => {
   let completeProjectFileRead: (value: null) => void = () => undefined;
@@ -11,6 +10,12 @@ const testState = vi.hoisted(() => {
     readonly promotedTo: null;
     readonly threadId: string;
   } | null = null;
+  const settings = {
+    defaultThreadEnvMode: "local",
+    newWorktreesStartFromOrigin: false,
+    defaultModelSelection: null,
+    defaultRuntimeMode: null as RuntimeMode | null,
+  };
   const router = {
     state: {
       location: { href: "/" },
@@ -30,11 +35,6 @@ const testState = vi.hoisted(() => {
     setLogicalProjectDraftThreadId: vi.fn(),
     setModelSelection: vi.fn(),
   };
-  const settings = {
-    defaultThreadEnvMode: "local",
-    newWorktreesStartFromOrigin: false,
-    newChatDefaults: null as NewChatDefaults | null,
-  };
 
   return {
     completeProjectFileRead: (value: null) => completeProjectFileRead(value),
@@ -45,8 +45,8 @@ const testState = vi.hoisted(() => {
     },
     reset(nextStoredDraft: typeof storedDraft) {
       storedDraft = nextStoredDraft;
-      settings.newChatDefaults = null;
-      draftStore.setModelSelection.mockClear();
+      settings.defaultRuntimeMode = null;
+      draftStore.setDraftThreadContext.mockClear();
       router.state.location.href = "/";
       router.navigate.mockClear();
       draftStore.setLogicalProjectDraftThreadId.mockClear();
@@ -59,12 +59,26 @@ const testState = vi.hoisted(() => {
 });
 
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: () => testState.settings,
+  useAtomValue: (atom: unknown) =>
+    atom === "primary-settings"
+      ? { newWorktreesStartFromOrigin: false, defaultRuntimeMode: "full-access" }
+      : new Map([
+          [
+            "environment-ssh",
+            {
+              settings: testState.settings,
+            },
+          ],
+        ]),
 }));
 vi.mock("@t3tools/client-runtime/environment", () => ({
   scopedProjectKey: () => "remote-project",
   scopeProjectRef: (environmentId: string, projectId: string) => ({ environmentId, projectId }),
   scopeThreadRef: (environmentId: string, threadId: string) => ({ environmentId, threadId }),
+}));
+vi.mock("@t3tools/contracts", () => ({
+  DEFAULT_RUNTIME_MODE: "auto",
+  DEFAULT_SERVER_SETTINGS: {},
 }));
 vi.mock("@t3tools/shared/threadEnvMode", () => ({
   resolveDefaultThreadEnvMode: (input: {
@@ -91,6 +105,11 @@ vi.mock("../composerDraftStore", () => {
     useComposerDraftStore,
   };
 });
+vi.mock("../lib/chatThreadActions", () => ({
+  hasExplicitComposerModelSelection: () => false,
+  resolveNewDraftStartFromOrigin: () => false,
+  resolveNewThreadModelSelectionOverride: () => null,
+}));
 vi.mock("../lib/t3ProjectFileDefaults", () => ({
   readT3ProjectFileDefaultThreadEnvMode: () => testState.projectFileRead,
 }));
@@ -117,7 +136,10 @@ vi.mock("../state/entities", () => ({
   useProjects: () => [],
   useThread: () => null,
 }));
-vi.mock("../state/server", () => ({ primaryServerSettingsAtom: {} }));
+vi.mock("../state/server", () => ({
+  environmentServerConfigsAtom: {},
+  primaryServerSettingsAtom: "primary-settings",
+}));
 vi.mock("../threadRoutes", () => ({ resolveThreadRouteTarget: () => null }));
 vi.mock("../uiStateStore", () => ({
   legacyProjectCwdPreferenceKey: () => "remote-project",
@@ -128,46 +150,22 @@ vi.mock("./useSettings", () => ({ useClientSettings: () => ({}) }));
 import { useNewThreadHandler } from "./useHandleNewThread";
 
 describe("useNewThreadHandler", () => {
-  it.each([
-    ["fresh", null],
-    [
-      "reused",
-      {
-        draftId: "draft-existing",
-        environmentId: "environment-ssh",
-        promotedTo: null,
-        threadId: "thread-existing",
-      },
-    ],
-  ] as const)(
-    "seeds configured model, effort, and permission into a %s draft",
-    async (_, draft) => {
-      testState.reset(draft);
-      const defaults: NewChatDefaults = {
-        modelSelection: {
-          instanceId: ProviderInstanceId.make("codex_personal"),
-          model: "gpt-6-astra",
-          options: [{ id: "reasoningEffort", value: "high" }],
-        },
-        runtimeMode: "approval-required",
-      };
-      testState.settings.newChatDefaults = defaults;
+  it.each(["approval-required", null] as const)(
+    "uses the destination machine's permission default: %s",
+    async (permissionMode) => {
+      testState.reset(null);
+      testState.settings.defaultRuntimeMode = permissionMode;
       const pending = useNewThreadHandler()({
         environmentId: "environment-ssh",
         projectId: "project-remote",
       } as never);
       testState.completeProjectFileRead(null);
-      const opened = await pending;
-      expect(testState.draftStore.setModelSelection).toHaveBeenCalledWith(
-        opened?.draftId,
-        defaults.modelSelection,
-        { replaceOptions: true },
-      );
+      await pending;
       expect(testState.draftStore.setLogicalProjectDraftThreadId).toHaveBeenCalledWith(
         "remote-project",
-        expect.anything(),
-        opened?.draftId,
-        expect.objectContaining({ runtimeMode: "approval-required" }),
+        { environmentId: "environment-ssh", projectId: "project-remote" },
+        "draft-delayed",
+        expect.objectContaining({ runtimeMode: permissionMode ?? "auto" }),
       );
     },
   );

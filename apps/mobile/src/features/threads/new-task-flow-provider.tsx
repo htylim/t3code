@@ -92,6 +92,7 @@ import {
   resolveNewTaskBranchWorktreePath,
   resolveNewTaskLocalWorkspaceSelection,
 } from "./new-task-context-presentation";
+import { resolveEnvironmentProjectMatch } from "./new-task-project-selection";
 
 type WorkspaceMode = "local" | "worktree";
 
@@ -417,7 +418,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     true;
   const runtimeMode =
     selectedProjectDraft.runtimeMode ??
-    selectedEnvironmentServerConfig?.settings.newChatDefaults?.runtimeMode ??
+    selectedEnvironmentServerConfig?.settings.defaultRuntimeMode ??
     DEFAULT_RUNTIME_MODE;
 
   // Antigravity keeps unavailable selections so sign-out or a catalog change
@@ -429,11 +430,9 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   );
   const projectDefaultModelSelection = resolveDefaultableModelSelection(
     selectedEnvironmentServerConfig,
-    selectedProject?.defaultModelSelection ?? null,
-  );
-  const newChatModelSelection = resolveSelectableModelSelection(
-    selectedEnvironmentServerConfig,
-    selectedEnvironmentServerConfig?.settings.newChatDefaults?.modelSelection ?? null,
+    selectedProject?.defaultModelSelection ??
+      selectedEnvironmentServerConfig?.settings.defaultModelSelection ??
+      null,
   );
   const storedStickyModelSelection = useStickyComposerModelSelection();
   const stickyModelSelection = resolveDefaultableModelSelection(
@@ -444,24 +443,20 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     () =>
       buildModelOptions(
         selectedEnvironmentServerConfig,
-        draftModelSelection ??
-          newChatModelSelection ??
-          projectDefaultModelSelection ??
-          stickyModelSelection,
+        draftModelSelection ?? projectDefaultModelSelection ?? stickyModelSelection,
       ),
     [
       selectedEnvironmentServerConfig,
       draftModelSelection,
-      newChatModelSelection,
       projectDefaultModelSelection,
       stickyModelSelection,
     ],
   );
 
-  // Explicit draft picks win, followed by new-chat defaults and project pins.
+  // An unsent draft keeps its explicit pick. Fresh drafts resolve the project
+  // default before the last manual app-wide selection and provider default.
   const selectedModel = resolveNewTaskModelSelection({
     draftSelection: draftModelSelection,
-    newChatSelection: newChatModelSelection,
     projectDefaultSelection: projectDefaultModelSelection,
     stickySelection: stickyModelSelection,
     modelOptions,
@@ -633,51 +628,44 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     );
   }, [availableBranches, branchQuery]);
 
-  const setProject = useCallback(
+  // New-task drafts are keyed per (environment, project), so retargeting the
+  // composer would otherwise show the target's empty draft and strand what the
+  // user typed under the old key.
+  const carryDraftContentTo = useCallback(
     (project: EnvironmentProject) => {
-      const nextProjectKey = scopedProjectKey(project.environmentId, project.id);
-      const nextDraftKey = `new-task:${nextProjectKey}`;
+      const nextDraftKey = `new-task:${scopedProjectKey(project.environmentId, project.id)}`;
       if (
         selectedProjectDraftKey?.startsWith("new-task:") &&
         selectedProjectDraftKey !== nextDraftKey
       ) {
         void copyComposerDraftContentIfEmpty(selectedProjectDraftKey, nextDraftKey);
       }
-      setSelectedEnvironmentId(project.environmentId);
-      setSelectedProjectKey(nextProjectKey);
     },
     [selectedProjectDraftKey],
   );
 
+  const setProject = useCallback(
+    (project: EnvironmentProject) => {
+      carryDraftContentTo(project);
+      setSelectedEnvironmentId(project.environmentId);
+      setSelectedProjectKey(scopedProjectKey(project.environmentId, project.id));
+    },
+    [carryDraftContentTo],
+  );
+
   const selectEnvironment = useCallback(
     (environmentId: EnvironmentId) => {
-      const projectsOnTarget = projects.filter(
-        (project) => project.environmentId === environmentId,
+      const match = resolveEnvironmentProjectMatch(
+        projects.filter((project) => project.environmentId === environmentId),
+        selectedProject,
       );
-      const repositoryKey = selectedProject?.repositoryIdentity?.canonicalKey ?? null;
-      // Prefer the repository identity; projects without one (e.g. not yet
-      // indexed) fall back to workspace basename, then title, so switching
-      // computers still follows the same repo instead of resetting to
-      // whatever project is first on the target machine.
-      const workspaceBasename = selectedProject?.workspaceRoot.split("/").at(-1) || null;
-      const match =
-        (repositoryKey !== null
-          ? projectsOnTarget.find(
-              (project) => (project.repositoryIdentity?.canonicalKey ?? null) === repositoryKey,
-            )
-          : undefined) ??
-        (workspaceBasename !== null
-          ? projectsOnTarget.find(
-              (project) => project.workspaceRoot.split("/").at(-1) === workspaceBasename,
-            )
-          : undefined) ??
-        (selectedProject !== null
-          ? projectsOnTarget.find((project) => project.title === selectedProject.title)
-          : undefined);
+      if (match) {
+        carryDraftContentTo(match);
+      }
       setSelectedEnvironmentId(environmentId);
       setSelectedProjectKey(match ? scopedProjectKey(match.environmentId, match.id) : null);
     },
-    [projects, selectedProject],
+    [projects, selectedProject, carryDraftContentTo],
   );
 
   const setWorkspaceMode = useCallback(
@@ -917,7 +905,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         text,
         attachments: draft.attachments,
         modelSelection: draftModelSelection,
-        runtimeMode: draft.runtimeMode ?? runtimeMode,
+        runtimeMode: draft.runtimeMode ?? DEFAULT_RUNTIME_MODE,
         interactionMode: resolvePendingTaskInteractionMode({
           preferenceLoaded: planModePreferenceLoaded,
           planModeEnabled: legacyPlanModeEnabled,
@@ -959,7 +947,6 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       planModePreferenceLoaded,
       startFromOrigin,
       workspaceMode,
-      runtimeMode,
     ],
   );
 

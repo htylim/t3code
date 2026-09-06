@@ -34,9 +34,11 @@ import {
 import { expandAssistantCitationsForProvider } from "@t3tools/shared/assistantCitations";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import { resolveProjectAgentBrowserAccess } from "@t3tools/shared/serverSettings";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
@@ -62,6 +64,7 @@ import {
   ProviderAdapterRequestError,
   ProviderOperationUnsupportedError,
   ProviderValidationError,
+  ProviderWorkspaceMissingError,
 } from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
@@ -73,7 +76,11 @@ import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 import * as ServerSettings from "../../serverSettings.ts";
+import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 const isModelSelection = Schema.is(ModelSelection);
+
+/** How long a manual context compaction may run before ProviderService gives up on it. */
+const COMPACTION_COMPLETION_TIMEOUT = "10 minutes";
 
 interface PendingCompaction {
   readonly completion: Deferred.Deferred<string>;
@@ -234,6 +241,7 @@ function toRuntimePayloadFromSession(
   session: ProviderSession,
   extra?: {
     readonly modelSelection?: unknown;
+    readonly continueAfterServerUpdate?: TurnId;
     readonly lastRuntimeEvent?: string;
     readonly lastRuntimeEventAt?: string;
   },
@@ -243,6 +251,9 @@ function toRuntimePayloadFromSession(
     model: session.model ?? null,
     activeTurnId: session.activeTurnId ?? null,
     lastError: session.lastError ?? null,
+    ...(extra?.continueAfterServerUpdate !== undefined
+      ? { continueAfterServerUpdate: extra.continueAfterServerUpdate }
+      : {}),
     ...(extra?.modelSelection !== undefined ? { modelSelection: extra.modelSelection } : {}),
     ...(extra?.lastRuntimeEvent !== undefined ? { lastRuntimeEvent: extra.lastRuntimeEvent } : {}),
     ...(extra?.lastRuntimeEventAt !== undefined
@@ -325,10 +336,14 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistry;
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const projectionQuery = yield* Effect.serviceOption(
+    ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+  );
   const issueMcpCredential =
     options?.issueMcpCredential ?? McpSessionRegistry.issueActiveMcpCredential;
   const revokeMcpCredential =
     options?.revokeMcpCredential ?? McpSessionRegistry.revokeActiveMcpThread;
+  const fileSystem = yield* FileSystem.FileSystem;
   const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
   const pendingCompactions = new Map<ThreadId, PendingCompaction>();
   const timedOutNativeCompactions = new Set<ThreadId>();
@@ -346,8 +361,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   });
   let turnAnalyticsRequestId = 0;
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
-  // An unreadable setting denies browser access but does not remove the fork's
-  // thread-control tools from the provider session.
 
   const finishTurnAnalytics = (
     state: TurnAnalyticsState,
@@ -717,8 +730,19 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
    * "off" silently becoming "on" would violate the user's stated choice,
    * whereas the reverse costs an agent one toolset and is visible immediately.
    */
-  const agentBrowserAccessEnabled = serverSettings.getSettings.pipe(
-    Effect.map((settings) => settings.enableAgentBrowserAccess),
+  const agentBrowserAccessEnabled = Effect.fn("ProviderService.agentBrowserAccessEnabled")(
+    function* (threadId: ThreadId) {
+      const settings = yield* serverSettings.getSettings;
+      if (Object.keys(settings.projectAgentBrowserAccessOverrides).length === 0) {
+        return settings.enableAgentBrowserAccess;
+      }
+      // Provider-only runtimes may omit orchestration. An unresolved project
+      // must not bypass an explicit browser override.
+      if (Option.isNone(projectionQuery)) return false;
+      const thread = yield* projectionQuery.value.getThreadShellById(threadId);
+      if (Option.isNone(thread)) return false;
+      return resolveProjectAgentBrowserAccess(settings, thread.value.projectId);
+    },
     Effect.catch((cause) =>
       Effect.logWarning(
         "Could not read server settings; withholding agent browser access for this session.",
@@ -727,13 +751,15 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     ),
   );
 
+  // An unreadable setting denies browser access but does not remove the fork's
+  // thread-control tools from the provider session.
   const prepareMcpSession = (
     threadId: ThreadId,
     providerInstanceId: ProviderInstanceId,
     runtimeMode: RuntimeMode,
   ) =>
     Effect.gen(function* () {
-      const browserAccessEnabled = yield* agentBrowserAccessEnabled;
+      const browserAccessEnabled = yield* agentBrowserAccessEnabled(threadId);
       const credential = yield* issueMcpCredential({
         threadId,
         providerInstanceId,
@@ -843,6 +869,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     threadId: ThreadId,
     extra?: {
       readonly modelSelection?: unknown;
+      readonly continueAfterServerUpdate?: TurnId;
       readonly lastRuntimeEvent?: string;
       readonly lastRuntimeEventAt?: string;
     },
@@ -1246,6 +1273,20 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
                 : "none",
           "provider.cwd.effective": effectiveCwd ?? "",
         });
+        if (effectiveCwd !== undefined) {
+          // Fail fast with an actionable error when the workspace folder is
+          // gone (e.g. moved, deleted, or replaced by a plain file).
+          // Otherwise every adapter surfaces this as a misleading "failed to
+          // spawn <binary>" process error. Stat failures other than "missing"
+          // fall through to the adapter.
+          const workspaceIsDirectory = yield* fileSystem.stat(effectiveCwd).pipe(
+            Effect.map((workspaceStat) => workspaceStat.type === "Directory"),
+            Effect.catch((statError) => Effect.succeed(statError.reason._tag !== "NotFound")),
+          );
+          if (!workspaceIsDirectory) {
+            return yield* new ProviderWorkspaceMissingError({ threadId, cwd: effectiveCwd });
+          }
+        }
         const adapter = yield* registry.getByInstance(resolvedInstanceId);
         yield* clearTurnAnalyticsSession(resolvedInstanceId, threadId);
         yield* prepareMcpSession(threadId, resolvedInstanceId, input.runtimeMode);
@@ -1551,6 +1592,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         runtimePayload: {
           ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
           activeTurnId: turn.turnId,
+          // Admission and marker consumption must survive the same restart.
+          continueAfterServerUpdate: null,
+          continueAfterServerUpdatePrepared: null,
           lastRuntimeEvent: "provider.sendTurn",
           lastRuntimeEventAt: yield* nowIso,
         },
@@ -1596,18 +1640,24 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         "provider.thread_id": threadId,
       });
       yield* McpSessionRegistry.touchActiveMcpThread(threadId);
-      const nativeCompaction = routed.adapter.compactThread;
+      const compaction = routed.adapter.compaction;
+      if (compaction === undefined) {
+        return yield* toValidationError(
+          "ProviderService.compactThread",
+          `Provider '${routed.adapter.provider}' does not support context compaction.`,
+        );
+      }
       const completion = yield* Deferred.make<string>();
       const pending: PendingCompaction = {
         completion,
-        native: nativeCompaction !== undefined,
+        native: compaction.type === "native",
         providerInstanceId: routed.instanceId,
         requestId,
         earlyEvents: [],
         compactedEventObserved: false,
         expectedTurnId: undefined,
       };
-      if (nativeCompaction !== undefined && timedOutNativeCompactions.has(threadId)) {
+      if (compaction.type === "native" && timedOutNativeCompactions.has(threadId)) {
         return yield* new ProviderAdapterRequestError({
           provider: routed.adapter.provider,
           method: "thread/compact",
@@ -1632,14 +1682,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           pendingCompactions.delete(threadId);
         }
       });
-      const nativeCompletionTimeout =
-        routed.adapter.provider === "codex" || routed.adapter.provider === "opencode"
-          ? "10 minutes"
-          : "30 seconds";
       const awaitNativeCompaction = (start: Effect.Effect<void, ProviderAdapterError>) =>
         start.pipe(
           Effect.andThen(Deferred.await(completion)),
-          Effect.timeout(nativeCompletionTimeout),
+          Effect.timeout(COMPACTION_COMPLETION_TIMEOUT),
           Effect.catchTag("TimeoutError", (cause) =>
             Effect.sync(() => {
               timedOutNativeCompactions.add(threadId);
@@ -1649,7 +1695,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
                   new ProviderAdapterRequestError({
                     provider: routed.adapter.provider,
                     method: "thread/compact",
-                    detail: `Provider did not report completed context compaction within ${nativeCompletionTimeout}.`,
+                    detail: `Provider did not report completed context compaction within ${COMPACTION_COMPLETION_TIMEOUT}.`,
                     cause,
                   }),
                 ),
@@ -1658,24 +1704,24 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           ),
         );
       const awaitFallbackCompaction = Deferred.await(completion).pipe(
-        Effect.timeout("10 minutes"),
+        Effect.timeout(COMPACTION_COMPLETION_TIMEOUT),
         Effect.mapError(
           (cause) =>
             new ProviderAdapterRequestError({
               provider: routed.adapter.provider,
               method: "turn/start",
-              detail: "Provider did not finish context compaction within 10 minutes.",
+              detail: `Provider did not finish context compaction within ${COMPACTION_COMPLETION_TIMEOUT}.`,
               cause,
             }),
         ),
       );
       const terminal = yield* (
-        nativeCompaction
-          ? awaitNativeCompaction(nativeCompaction(routed.threadId, modelSelection))
+        compaction.type === "native"
+          ? awaitNativeCompaction(compaction.start(routed.threadId, modelSelection))
           : Effect.gen(function* () {
               const turn = yield* sendTurn({
                 threadId,
-                input: routed.adapter.provider === "cursor" ? "/compress" : "/compact",
+                input: compaction.command,
                 ...(modelSelection !== undefined ? { modelSelection } : {}),
               }).pipe(
                 Effect.onError(() =>
@@ -1695,7 +1741,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       if (terminal !== "completed") {
         return yield* new ProviderAdapterRequestError({
           provider: routed.adapter.provider,
-          method: nativeCompaction ? "thread/compact" : "turn/start",
+          method: compaction.type === "native" ? "thread/compact" : "turn/start",
           detail: `Context compaction ended with ${terminal}.`,
         });
       }
@@ -1851,6 +1897,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           status: "stopped",
           runtimePayload: {
             activeTurnId: null,
+            continueAfterServerUpdate: null,
+            continueAfterServerUpdatePrepared: null,
           },
         });
         yield* analytics.record("provider.session.stopped", {
@@ -2060,6 +2108,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   );
 
   const runStopAll = Effect.fn("runStopAll")(function* () {
+    const continueAfterRestart = yield* serverSettings.getSettings.pipe(
+      Effect.map((settings) => settings.continueThreadsAfterServerUpdate),
+      Effect.orElseSucceed(() => false),
+    );
     const properties = yield* Ref.modify(turnAnalytics, (state) => {
       const completed: Array<Readonly<Record<string, unknown>>> = [];
       for (const [sessionKey, session] of state.sessions) {
@@ -2087,6 +2139,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     yield* Effect.forEach(activeSessions, (session) =>
       Effect.flatMap(nowIso, (lastRuntimeEventAt) =>
         upsertSessionBinding(session, session.threadId, {
+          ...(continueAfterRestart && session.status === "running" && session.activeTurnId
+            ? { continueAfterServerUpdate: session.activeTurnId }
+            : {}),
           lastRuntimeEvent: "provider.stopAll",
           lastRuntimeEventAt,
         }),

@@ -19,20 +19,27 @@ upstream.
 - Verification: How the change was checked.
 ```
 
-## 2026-09-06 - Configure new chat defaults
+## 2026-09-06 - Integrate upstream shared project defaults
 
-- Upstream baseline: `163d86a78`
-- Change: General settings has a Fork section with optional new-chat provider, model, effort, and
-  permission defaults. Enabled defaults override project pins and inherited choices; reset restores
-  existing behavior. Explicit draft choices and existing threads remain unchanged.
-- Reason: A project model pin should not force the same model and effort without a visible way to
-  choose a preferred starting configuration.
-- Scope: Web and desktop settings, main and side-chat creation, mobile new-task resolution,
-  nullable server settings and replacement semantics, and composer guidance. Provider adapters and
-  thread-control API defaults are unchanged. Provider identities remain local to each environment.
-- Verification: Focused settings persistence, schema, patch, draft creation, model resolution, and
-  settings search tests; web, mobile, and server type checks; targeted lint and formatting.
-  Browser verification was not requested.
+- Upstream baseline: `223ff4490`
+- Change: Merged 293 upstream commits. Replaced the Fork new-chat provider, model, and effort
+  controls with upstream's shared project defaults and scoped overrides. Retained an optional
+  permission default alongside those controls because upstream does not offer one. Saved
+  `newChatDefaults` migrate when settings load; explicit values and resets in the new fields win.
+  Saving removes the retired field. New side chats use project model overrides before shared
+  defaults, and all clients resolve permission defaults from the destination environment.
+- Reason: Keep one model-default system while preserving saved preferences and the fork's
+  permission choice. Project overrides now take precedence over shared model defaults.
+- Scope: Settings contracts and persistence, web and desktop settings, main and side-chat creation,
+  and mobile drafts. Integrated upstream compaction declarations, project browser access,
+  environment balancing, pending request handling, composer APIs, and sidebar filter persistence
+  with native thread forking, MCP thread control, workspace management, and thread references.
+- Verification: Focused provider, orchestration, HTTP/WebSocket, settings migration, contracts,
+  client-runtime, web, desktop, mobile, and packaging tests passed. Type checks passed for server,
+  web, desktop, mobile, contracts, shared, and client-runtime. Web and server bundles built.
+  Frozen dependency installation passed supply-chain checks. Targeted lint reported no errors;
+  formatting and resolution whitespace checks passed. The unchanged upstream Pierre patch has
+  space-before-tab payload lines. Browser verification awaits explicit approval.
 
 ## 2026-09-05 - Scope thread references and support multiword queries
 

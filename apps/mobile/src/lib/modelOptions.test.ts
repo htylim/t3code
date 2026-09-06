@@ -13,32 +13,6 @@ import {
 } from "./modelOptions";
 
 describe("mobile model options", () => {
-  it("puts explicit draft choices above new chat defaults and new chat defaults above project pins", () => {
-    const newChatSelection: ModelSelection = {
-      instanceId: ProviderInstanceId.make("codex_personal"),
-      model: "gpt-6-astra",
-      options: [{ id: "reasoningEffort", value: "medium" }],
-    };
-    const projectDefaultSelection: ModelSelection = {
-      instanceId: ProviderInstanceId.make("codex"),
-      model: "gpt-5.6-sol",
-    };
-    const input = {
-      draftSelection: null,
-      newChatSelection,
-      projectDefaultSelection,
-      stickySelection: null,
-      modelOptions: [],
-    };
-    expect(resolveNewTaskModelSelection(input)).toEqual(newChatSelection);
-    expect(
-      resolveNewTaskModelSelection({ ...input, draftSelection: projectDefaultSelection }),
-    ).toEqual(projectDefaultSelection);
-    expect(resolveNewTaskModelSelection({ ...input, newChatSelection: null })).toEqual(
-      projectDefaultSelection,
-    );
-  });
-
   it("groups models by provider and flags legacy entries", () => {
     const config = {
       providers: [

@@ -15,12 +15,14 @@ import {
   DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER,
   DEFAULT_MODEL_BY_PROVIDER,
   DEFAULT_SERVER_SETTINGS,
-  type ModelSelection,
+  ModelSelection,
+  RuntimeMode,
   type ProviderInstanceConfig,
   type ProviderInstanceEnvironmentVariable,
   type UsageLimitSourceConfig,
   ProviderDriverKind,
   ProviderInstanceId,
+  resolveProviderInstanceEnabled,
   ServerSettings,
   ServerSettingsError,
   type ServerSettingsPatch,
@@ -254,6 +256,18 @@ export const layerTest = (overrides: DeepPartial<ServerSettings> = {}) =>
 const ServerSettingsJson = fromLenientJson(ServerSettings);
 const decodeServerSettingsJsonExit = Schema.decodeUnknownExit(ServerSettingsJson);
 const PersistedOptionalProviderSettings = Schema.Struct({
+  // Read the retired fork setting only at the disk boundary. New fields, even
+  // explicit null resets, take precedence and saving drops the legacy key.
+  newChatDefaults: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Struct({
+        modelSelection: ModelSelection,
+        runtimeMode: RuntimeMode,
+      }),
+    ),
+  ),
+  defaultModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
+  defaultRuntimeMode: Schema.optionalKey(Schema.NullOr(RuntimeMode)),
   providers: Schema.optionalKey(
     Schema.Struct({
       cursor: Schema.optionalKey(Schema.Struct({ enabled: Schema.optionalKey(Schema.Boolean) })),
@@ -321,7 +335,13 @@ function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings
 }
 
 function fallbackTextGenerationProvider(settings: ServerSettings): ServerSettings {
-  const fallbackEntry = Object.entries(settings.providers).find(([, provider]) => provider.enabled);
+  // Same precedence as isModelSelectionProviderEnabled: an explicit provider
+  // instance wins over the legacy providers map, which decodes to defaults
+  // (codex enabled) when the Providers UI has only written providerInstances.
+  const fallbackEntry = Object.entries(settings.providers).find(([driver, provider]) => {
+    const instance = settings.providerInstances[ProviderInstanceId.make(driver)];
+    return instance === undefined ? provider.enabled : resolveProviderInstanceEnabled(instance);
+  });
   const fallback = fallbackEntry ? ProviderDriverKind.make(fallbackEntry[0]) : undefined;
   if (!fallback) {
     return settings;
@@ -454,6 +474,17 @@ const make = Effect.gen(function* () {
         }
       } else {
         settings = decoded.value;
+        if (persisted.newChatDefaults) {
+          settings = {
+            ...settings,
+            ...(persisted.defaultModelSelection === undefined
+              ? { defaultModelSelection: persisted.newChatDefaults.modelSelection }
+              : {}),
+            ...(persisted.defaultRuntimeMode === undefined
+              ? { defaultRuntimeMode: persisted.newChatDefaults.runtimeMode }
+              : {}),
+          };
+        }
       }
     }
 
