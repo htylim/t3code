@@ -735,13 +735,28 @@ it.effect("lists both toolkits for a valid provider credential and rejects an in
       });
       expect(listResponse.status).toBe(200);
       const listBody = (yield* listResponse.json) as {
-        readonly result: { readonly tools: ReadonlyArray<{ readonly name: string }> };
+        readonly result: {
+          readonly tools: ReadonlyArray<{
+            readonly name: string;
+            readonly inputSchema: { readonly type?: unknown };
+          }>;
+        };
       };
       const toolNames = listBody.result.tools.map(({ name }) => name);
       expect(toolNames).toContain("preview_status");
       expect(toolNames).toContain("preview_snapshot");
       expect(toolNames).toContain("thread_context");
       expect(toolNames).not.toContain("thread_respond");
+      expect(toolNames).toContain("thread_read");
+      expect(toolNames).toContain("thread_update");
+      // Claude rejects the entire tools/list response if even one input lacks
+      // the MCP-required object type, hiding the browser toolkit as well.
+      for (const tool of listBody.result.tools) {
+        expect(tool.inputSchema.type, tool.name).toBe("object");
+        for (const keyword of ["anyOf", "oneOf", "allOf"]) {
+          expect(tool.inputSchema, tool.name).not.toHaveProperty(keyword);
+        }
+      }
 
       const callResponse = yield* httpClient.post("/mcp", {
         headers: {

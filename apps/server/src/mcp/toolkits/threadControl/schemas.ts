@@ -383,7 +383,12 @@ const ThreadReadInputBase = {
   ).pipe(Schema.withDecodingDefault(Effect.succeed(THREAD_READ_DEFAULT_MAX_BYTES))),
 } as const;
 
-export const ThreadReadInput = Schema.Union([
+const ThreadReadIncludeToolPayloads = described(
+  Schema.Boolean,
+  "Include full stored tool arguments and results; only valid for the transcript view.",
+);
+
+const ThreadReadInputVariants = Schema.Union([
   Schema.Struct({
     ...ThreadReadInputBase,
     view: Schema.Literal("final"),
@@ -395,14 +400,19 @@ export const ThreadReadInput = Schema.Union([
   Schema.Struct({
     ...ThreadReadInputBase,
     view: Schema.Literal("transcript"),
-    includeToolPayloads: Schema.optional(
-      described(
-        Schema.Boolean,
-        "Include full stored tool arguments and results for transcript reads.",
-      ),
-    ).pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+    includeToolPayloads: Schema.optional(ThreadReadIncludeToolPayloads).pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+    ),
   }),
 ]);
+
+// MCP inputs must expose an object at the root. Decode the flat wire shape
+// into the union to retain view-specific validation, defaults, and types.
+export const ThreadReadInput = Schema.Struct({
+  ...ThreadReadInputBase,
+  view: Schema.Literals(["final", "messages", "transcript"]),
+  includeToolPayloads: Schema.optional(ThreadReadIncludeToolPayloads),
+}).pipe(Schema.decodeTo(ThreadReadInputVariants));
 
 export const ThreadReadItem = Schema.Struct({
   id: Schema.String,
@@ -557,13 +567,27 @@ const ThreadUpdateWithoutPayload = <const Action extends typeof ThreadUpdateActi
     action: Schema.Literal(action),
   });
 
-export const ThreadUpdateInput = Schema.Union([
+const ThreadUpdatePayloadFields = {
+  snoozedUntil: described(IsoDateTime, "Future ISO timestamp required by snooze."),
+  title: described(NonEmptyText, "New title required by rename."),
+  modelSelection: described(ModelSelection, "New model selection required by set_model."),
+  runtimeMode: described(
+    RuntimeMode,
+    "New runtime mode required by set_runtime_mode, within the calling credential's ceiling.",
+  ),
+  interactionMode: described(
+    ProviderInteractionMode,
+    "New default or plan interaction mode required by set_interaction_mode.",
+  ),
+} as const;
+
+const ThreadUpdateInputVariants = Schema.Union([
   ThreadUpdateWithoutPayload("settle"),
   ThreadUpdateWithoutPayload("unsettle"),
   Schema.Struct({
     ...ThreadUpdateBaseFields,
     action: Schema.Literal("snooze"),
-    snoozedUntil: described(IsoDateTime, "Future ISO timestamp required by snooze."),
+    snoozedUntil: ThreadUpdatePayloadFields.snoozedUntil,
   }),
   ThreadUpdateWithoutPayload("unsnooze"),
   ThreadUpdateWithoutPayload("pin"),
@@ -571,28 +595,34 @@ export const ThreadUpdateInput = Schema.Union([
   Schema.Struct({
     ...ThreadUpdateBaseFields,
     action: Schema.Literal("rename"),
-    title: described(NonEmptyText, "New title for the thread."),
+    title: ThreadUpdatePayloadFields.title,
   }),
   ThreadUpdateWithoutPayload("regenerate_title"),
   Schema.Struct({
     ...ThreadUpdateBaseFields,
     action: Schema.Literal("set_model"),
-    modelSelection: described(ModelSelection, "New model selection for the thread."),
+    modelSelection: ThreadUpdatePayloadFields.modelSelection,
   }),
   Schema.Struct({
     ...ThreadUpdateBaseFields,
     action: Schema.Literal("set_runtime_mode"),
-    runtimeMode: described(
-      RuntimeMode,
-      "New runtime mode within the calling credential's ceiling.",
-    ),
+    runtimeMode: ThreadUpdatePayloadFields.runtimeMode,
   }),
   Schema.Struct({
     ...ThreadUpdateBaseFields,
     action: Schema.Literal("set_interaction_mode"),
-    interactionMode: described(
-      ProviderInteractionMode,
-      "New default or plan interaction mode for the thread.",
-    ),
+    interactionMode: ThreadUpdatePayloadFields.interactionMode,
   }),
 ]);
+
+// Keep action requirements in the decoder without advertising a top-level
+// union, which prevents Claude from loading the shared MCP tool list.
+export const ThreadUpdateInput = Schema.Struct({
+  ...ThreadUpdateBaseFields,
+  action: ThreadUpdateAction,
+  snoozedUntil: Schema.optional(ThreadUpdatePayloadFields.snoozedUntil),
+  title: Schema.optional(ThreadUpdatePayloadFields.title),
+  modelSelection: Schema.optional(ThreadUpdatePayloadFields.modelSelection),
+  runtimeMode: Schema.optional(ThreadUpdatePayloadFields.runtimeMode),
+  interactionMode: Schema.optional(ThreadUpdatePayloadFields.interactionMode),
+}).pipe(Schema.decodeTo(ThreadUpdateInputVariants));

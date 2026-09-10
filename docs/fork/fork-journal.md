@@ -19,6 +19,22 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-10 — Restore Claude discovery of T3 MCP tools
+
+- Upstream baseline: `223ff4490`
+- Change: `thread_read` and `thread_update` advertise object input schemas and decode them into
+  their existing discriminated unions, preserving conditional requirements, defaults, and handler
+  types. Regression checks cover the full HTTP tool list and reject top-level union inputs.
+- Reason: Claude rejected the entire MCP tool list because these two fork tools advertised unions
+  without an object type, making both thread control and the upstream browser tools unavailable.
+- Scope: Fork thread-control schemas and focused tests. Shared MCP registration carries the fix to
+  every provider; clients, provider adapters, and persistence are unchanged.
+- Verification: Passed 66 focused MCP, schema, handler, and service tests, server typechecking,
+  targeted lint, formatting, and whitespace checks. In an isolated dev server, real Claude Fable
+  5.1 and Opus 5 sessions discovered all 25 tools, created Claude child threads, read their replies,
+  and renamed them. Browser status/open reached the server and returned the expected missing-host
+  error; actual navigation was not exercised because no desktop automation host was attached.
+
 ## 2026-09-10 — Start agent threads across projects on the same server
 
 - Upstream baseline: `223ff4490`

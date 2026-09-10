@@ -100,16 +100,11 @@ it("declares the complete thread-control surface with the specified annotations"
   ]);
 
   for (const tool of Object.values(ThreadControlToolkit.tools)) {
-    const schema = Tool.getJsonSchema(tool) as {
-      readonly type?: unknown;
-      readonly anyOf?: ReadonlyArray<{ readonly type?: unknown }>;
-    };
-    const isObjectSchema =
-      schema.type === "object" ||
-      (schema.anyOf?.length !== undefined &&
-        schema.anyOf.length > 0 &&
-        schema.anyOf.every((member) => member.type === "object"));
-    expect(isObjectSchema, `${tool.name} must expose only object input variants`).toBe(true);
+    const schema = Tool.getJsonSchema(tool);
+    expect(schema.type, `${tool.name} must expose an MCP object input schema`).toBe("object");
+    for (const keyword of ["anyOf", "oneOf", "allOf"]) {
+      expect(schema, `${tool.name} must not expose a top-level union`).not.toHaveProperty(keyword);
+    }
     expect(tool.description?.length ?? 0).toBeGreaterThan(40);
     if (readTools.has(tool.name)) {
       expect(Context.get(tool.annotations, Tool.Readonly)).toBe(true);
@@ -189,6 +184,19 @@ it.effect("applies the documented schema defaults and rejects oversized limits",
     ]);
     expect(decoded.wait.progress).toBe(false);
     expect(decoded.read.maxBytes).toBe(THREAD_READ_DEFAULT_MAX_BYTES);
+    expect(
+      yield* decodeThreadReadInput({ threadId: "thread-1", view: "transcript" }),
+    ).toMatchObject({
+      maxBytes: THREAD_READ_DEFAULT_MAX_BYTES,
+      includeToolPayloads: false,
+    });
+    expect(
+      yield* decodeThreadReadInputStrict({
+        threadId: "thread-1",
+        view: "transcript",
+        includeToolPayloads: true,
+      }),
+    ).toMatchObject({ includeToolPayloads: true });
 
     yield* decodeThreadsListInput({ limit: 201 }).pipe(Effect.flip);
     yield* decodeThreadsWaitInput({
@@ -240,9 +248,15 @@ it.effect("requires action-specific thread update payloads", () =>
       runtimeMode: "auto",
     });
 
-    yield* decodeThreadUpdateInputStrict({ threadId: "thread-1", action: "rename" }).pipe(
-      Effect.flip,
-    );
+    for (const action of [
+      "rename",
+      "snooze",
+      "set_model",
+      "set_runtime_mode",
+      "set_interaction_mode",
+    ]) {
+      yield* decodeThreadUpdateInputStrict({ threadId: "thread-1", action }).pipe(Effect.flip);
+    }
     yield* decodeThreadUpdateInputStrict({
       threadId: "thread-1",
       action: "settle",
