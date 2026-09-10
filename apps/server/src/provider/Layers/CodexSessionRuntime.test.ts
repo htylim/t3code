@@ -558,6 +558,7 @@ describe("T3 thread-control developer instructions", () => {
     ]) {
       NodeAssert.match(instructions, /T3 Code thread control/);
       NodeAssert.match(instructions, /thread_start/);
+      NodeAssert.match(instructions, /projects_list/);
       NodeAssert.match(instructions, /threads_wait/);
       NodeAssert.match(instructions, /not provider-native subagents/);
     }

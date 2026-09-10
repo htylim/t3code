@@ -86,6 +86,12 @@ export interface ProjectionThreadDetailQuery {
  * ProjectionSnapshotQueryShape - Service API for read-model snapshots.
  */
 export interface ProjectionSnapshotQueryShape {
+  /** List registered projects without reading thread state or inspecting repositories. */
+  readonly getProjectSummaries: () => Effect.Effect<
+    ReadonlyArray<Pick<OrchestrationProjectShell, "id" | "title" | "workspaceRoot">>,
+    ProjectionRepositoryError
+  >;
+
   /** Read the latest request or resolution without loading the thread history. */
   readonly getUserInputActivity: (input: {
     readonly threadId: ThreadId;

@@ -5,6 +5,8 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import {
   ModelsListInput,
   ModelsListResult,
+  ProjectsListInput,
+  ProjectsListResult,
   ThreadContextInput,
   ThreadContextResult,
   ThreadControlFailure,
@@ -53,6 +55,17 @@ export const ThreadContextTool = readTool(
     failure: ThreadControlFailure,
     dependencies,
   }).annotate(Tool.Title, "Get calling thread context"),
+);
+
+export const ProjectsListTool = readTool(
+  Tool.make("projects_list", {
+    description:
+      "List all registered, non-deleted projects on this T3 server with their IDs, titles, and workspace roots. Use a returned projectId with thread_start or threads_list. Projects on other connected servers are not included.",
+    parameters: ProjectsListInput,
+    success: ProjectsListResult,
+    failure: ThreadControlFailure,
+    dependencies,
+  }).annotate(Tool.Title, "List projects"),
 );
 
 export const ModelsListTool = readTool(
@@ -115,7 +128,7 @@ export const ThreadReadTool = readTool(
 export const ThreadStartTool = agentActionTool(
   Tool.make("thread_start", {
     description:
-      "Create a controlled child thread in the calling thread's project and exact workspace, within the calling provider session's permission ceiling, and submit its initial prompt.",
+      "Create a controlled child thread in any registered project on this T3 server and submit its initial prompt, within the calling provider session's permission ceiling. Use projects_list to discover project IDs. Defaults to the caller's project and exact workspace; another project defaults to its workspace root. Model and modes inherit from the caller unless explicitly supplied.",
     parameters: ThreadStartInput,
     success: ThreadStartResult,
     failure: ThreadControlFailure,
@@ -161,6 +174,7 @@ export const ThreadUpdateTool = Tool.make("thread_update", {
 
 export const ThreadControlToolkit = Toolkit.make(
   ThreadContextTool,
+  ProjectsListTool,
   ModelsListTool,
   ThreadsListTool,
   ThreadStatusTool,

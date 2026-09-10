@@ -40,6 +40,7 @@ import {
   ThreadMutationResult,
   type ModelsListInput,
   type ModelsListResult,
+  type ProjectsListResult,
   ThreadReadInput,
   ThreadReadResult,
   ThreadSendInput,
@@ -63,6 +64,7 @@ import { projectThreadStatus } from "./toolkits/threadControl/status.ts";
 
 type ModelsInput = typeof ModelsListInput.Type;
 type ModelsResult = typeof ModelsListResult.Type;
+type ProjectsResult = typeof ProjectsListResult.Type;
 type ContextResult = typeof ThreadContextResult.Type;
 type ListInput = typeof ThreadsListInput.Type;
 type ListResult = typeof ThreadsListResult.Type;
@@ -304,6 +306,9 @@ const threadReadTargetIsCoherent = (
   latestUserMessageAt(detail.thread.messages) === shell.latestUserMessageAt;
 
 export interface ThreadControlServiceShape {
+  readonly projectsList: (
+    invocation: McpInvocationScope,
+  ) => Effect.Effect<ProjectsResult, ThreadControlError>;
   readonly threadContext: (
     invocation: McpInvocationScope,
   ) => Effect.Effect<ContextResult, ThreadControlError>;
@@ -797,6 +802,22 @@ export const layer = Layer.effect(
         interactionMode: thread.interactionMode,
         status: projectThreadStatus(thread, { cursor: cursor.snapshotSequence, now }),
       } satisfies ContextResult;
+    });
+
+    const projectsList = Effect.fn("ThreadControlService.projectsList")(function* (
+      invocation: McpInvocationScope,
+    ) {
+      const projects = yield* snapshots
+        .getProjectSummaries()
+        .pipe(mapReadError("projects_list", { invocation }));
+      return {
+        environmentId: invocation.environmentId,
+        projects: projects.map(({ id, title, workspaceRoot }) => ({
+          projectId: id,
+          title,
+          workspaceRoot,
+        })),
+      } satisfies ProjectsResult;
     });
 
     const modelsList = Effect.fn("ThreadControlService.modelsList")(function* (input: ModelsInput) {
@@ -1324,15 +1345,13 @@ export const layer = Layer.effect(
     ) {
       const callingThread = yield* readCallingThread("thread_start", invocation);
       const projectId = input.projectId ?? callingThread.projectId;
-      if (projectId !== callingThread.projectId) {
-        return yield* error(
-          "thread_start",
-          "capability_denied",
-          "An MCP credential may create child threads only in its calling project.",
-          { invocation, targetProjectId: projectId },
-        );
-      }
-      const targetProject = yield* readProject("thread_start", invocation, projectId, true);
+      const isCallingProject = projectId === callingThread.projectId;
+      const targetProject = yield* readProject(
+        "thread_start",
+        invocation,
+        projectId,
+        isCallingProject,
+      );
       const modelSelection = input.modelSelection ?? callingThread.modelSelection;
       if (modelSelection === null) {
         return yield* error(
@@ -1346,7 +1365,9 @@ export const layer = Layer.effect(
         targetProjectId: projectId,
       });
       const workspacePath =
-        input.workspacePath ?? callingThread.worktreePath ?? targetProject.workspaceRoot;
+        input.workspacePath ??
+        (isCallingProject ? callingThread.worktreePath : null) ??
+        targetProject.workspaceRoot;
       const workspace = yield* validateWorkspace(
         invocation,
         targetProject.workspaceRoot,
@@ -1358,25 +1379,27 @@ export const layer = Layer.effect(
       yield* requireRuntimeModeAuthority("thread_start", invocation, runtimeMode, {
         targetProjectId: projectId,
       });
-      const callingWorkspacePath = yield* fileSystem
-        .realPath(callingThread.worktreePath ?? targetProject.workspaceRoot)
-        .pipe(
-          Effect.mapError(() =>
-            error(
-              "thread_start",
-              "invalid_workspace",
-              "The calling thread's workspace path no longer exists.",
-              { invocation, targetProjectId: projectId },
+      if (isCallingProject) {
+        const callingWorkspacePath = yield* fileSystem
+          .realPath(callingThread.worktreePath ?? targetProject.workspaceRoot)
+          .pipe(
+            Effect.mapError(() =>
+              error(
+                "thread_start",
+                "invalid_workspace",
+                "The calling thread's workspace path no longer exists.",
+                { invocation, targetProjectId: projectId },
+              ),
             ),
-          ),
-        );
-      if (workspace.effectivePath !== callingWorkspacePath) {
-        return yield* error(
-          "thread_start",
-          "capability_denied",
-          "An MCP credential may create child threads only in its calling workspace.",
-          { invocation, targetProjectId: projectId },
-        );
+          );
+        if (workspace.effectivePath !== callingWorkspacePath) {
+          return yield* error(
+            "thread_start",
+            "capability_denied",
+            "Child threads in the calling project must use the calling workspace.",
+            { invocation, targetProjectId: projectId },
+          );
+        }
       }
       const interactionMode = input.interactionMode ?? callingThread.interactionMode;
       const title = input.title ?? input.titleSeed ?? "New thread";
@@ -1750,6 +1773,7 @@ export const layer = Layer.effect(
     });
 
     return ThreadControlService.of({
+      projectsList,
       threadContext,
       modelsList,
       threadsList,

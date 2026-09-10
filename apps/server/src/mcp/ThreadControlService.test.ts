@@ -491,6 +491,7 @@ const gitResult = (stdout: string, exitCode = 0): ExecuteGitResult => ({
 
 interface MutationHarnessInput {
   readonly projectRoot: string;
+  readonly otherProjects?: ReadonlyArray<OrchestrationProjectShell>;
   readonly callingThread?: OrchestrationThreadShell;
   readonly activeThreads?: ReadonlyArray<OrchestrationThreadShell>;
   readonly archivedThreads?: ReadonlyArray<OrchestrationThreadShell>;
@@ -514,10 +515,11 @@ function makeMutationLayer(input: MutationHarnessInput) {
     });
   const activeThreads = [caller, ...(input.activeThreads ?? [])];
   const archivedThreads = input.archivedThreads ?? [];
+  const projects = [targetProject, ...(input.otherProjects ?? [])];
   const projection = Layer.mock(ProjectionSnapshotQuery)({
     getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 40 }),
     getProjectShellById: (id) =>
-      Effect.succeed(id === projectId ? Option.some(targetProject) : Option.none()),
+      Effect.succeed(Option.fromNullishOr(projects.find((candidate) => candidate.id === id))),
     getThreadShellById: (id) =>
       Effect.succeed(Option.fromNullishOr(activeThreads.find((candidate) => candidate.id === id))),
     getShellSnapshot: () =>
@@ -599,6 +601,30 @@ it.effect("returns the calling thread context from local shell state", () => {
     });
     expect(harness.getThreadDetailById).not.toHaveBeenCalled();
     expect(harness.getThreadDetailSnapshot).not.toHaveBeenCalled();
+  }).pipe(Effect.provide(harness.testLayer));
+});
+
+it.effect("discovers projects without loading thread state or inspecting repositories", () => {
+  const harness = makeTestLayer({
+    getProjectSummaries: () =>
+      Effect.succeed([
+        { id: projectId, title: "Same name", workspaceRoot: "/workspace/a" },
+        { id: otherProjectId, title: "Same name", workspaceRoot: "/workspace/b" },
+      ]),
+    getShellSnapshot: () => Effect.die("project discovery must not load threads"),
+    getThreadShellById: () => Effect.die("project discovery must not load the caller"),
+  });
+  return Effect.gen(function* () {
+    const service = yield* ThreadControlService;
+    expect(yield* service.projectsList(invocation)).toEqual({
+      environmentId: invocation.environmentId,
+      projects: [
+        { projectId, title: "Same name", workspaceRoot: "/workspace/a" },
+        { projectId: otherProjectId, title: "Same name", workspaceRoot: "/workspace/b" },
+      ],
+    });
+    expect(harness.getThreadDetailSnapshot).not.toHaveBeenCalled();
+    expect(harness.dispatch).not.toHaveBeenCalled();
   }).pipe(Effect.provide(harness.testLayer));
 });
 
@@ -1422,18 +1448,22 @@ it.effect("binds real registered worktrees to their own Git administrative direc
       expect(worktrees.stdout).toContain("prunable gitdir file points to non-existent location");
 
       const dispatch = vi.fn((_command: OrchestrationCommand) => Effect.succeed({ sequence: 1 }));
-      const start = (workspacePath: string, branch?: string) =>
+      const start = (workspacePath: string, branch?: string, crossProject = false) =>
         ThreadControlService.pipe(
           Effect.flatMap((service) =>
             service.threadStart(invocation, {
               prompt: "Use this registered worktree",
+              ...(crossProject ? { projectId: otherProjectId } : {}),
               workspacePath,
               ...(branch === undefined ? {} : { branch }),
             }),
           ),
           Effect.provide(
             makeMutationLayer({
-              projectRoot,
+              projectRoot: crossProject ? path.join(root, "caller") : projectRoot,
+              otherProjects: crossProject
+                ? [{ ...project, id: otherProjectId, workspaceRoot: projectRoot }]
+                : [],
               callingThread: thread(String(callingThreadId), {
                 branch: null,
                 worktreePath: workspacePath === projectRoot ? null : workspacePath,
@@ -1486,6 +1516,33 @@ it.effect("binds real registered worktrees to their own Git administrative direc
         message: "The requested workspace does not use its registered Git worktree metadata.",
       });
       expect(dispatch).toHaveBeenCalledTimes(8);
+
+      yield* start(projectRoot, "main", true);
+      yield* start(linkedAlias, "feature/linked", true);
+      expect(dispatch.mock.calls[8]?.[0]).toMatchObject({
+        projectId: otherProjectId,
+        branch: "main",
+        worktreePath: null,
+      });
+      expect(dispatch.mock.calls[10]?.[0]).toMatchObject({
+        projectId: otherProjectId,
+        branch: "feature/linked",
+        worktreePath: yield* fileSystem.realPath(linkedRoot),
+      });
+      const unrelatedRoot = path.join(root, "unrelated");
+      yield* fileSystem.makeDirectory(unrelatedRoot);
+      yield* runGit(unrelatedRoot, ["init", "-b", "main"]);
+      const unrelated = yield* start(unrelatedRoot, undefined, true).pipe(Effect.flip);
+      expect(unrelated).toMatchObject({
+        code: "invalid_workspace",
+        targetProjectId: otherProjectId,
+      });
+      const wrongBranch = yield* start(linkedRoot, "wrong-branch", true).pipe(Effect.flip);
+      expect(wrongBranch).toMatchObject({
+        code: "invalid_workspace",
+        targetProjectId: otherProjectId,
+      });
+      expect(dispatch).toHaveBeenCalledTimes(12);
     }),
   ).pipe(
     Effect.provide(
@@ -1716,7 +1773,7 @@ it.effect("reports create rejection and create-then-turn partial failure distinc
   ),
 );
 
-it.effect("grants control before creating a child and rejects broader project authority", () =>
+it.effect("grants control before creating a child and rejects unknown projects", () =>
   runInTemp(({ root, fileSystem, path }) =>
     Effect.gen(function* () {
       const projectRoot = path.join(root, "authority-project");
@@ -1751,12 +1808,12 @@ it.effect("grants control before creating a child and rejects broader project au
 
       const crossProject = yield* service
         .threadStart(invocation, {
-          prompt: "Do not cross projects",
+          prompt: "Do not create in an unknown project",
           projectId: otherProjectId,
         })
         .pipe(Effect.flip);
       expect(crossProject).toMatchObject({
-        code: "capability_denied",
+        code: "project_not_found",
         operation: "thread_start",
         targetProjectId: otherProjectId,
       });
@@ -1764,6 +1821,135 @@ it.effect("grants control before creating a child and rejects broader project au
       expect(grantControlledThread).toHaveBeenCalledTimes(1);
     }),
   ),
+);
+
+it.effect(
+  "starts and controls a child in another project without inheriting the caller's worktree",
+  () =>
+    runInTemp(({ root, fileSystem, path }) =>
+      Effect.gen(function* () {
+        const projectRoot = path.join(root, "source");
+        const destinationRoot = path.join(root, "destination");
+        yield* fileSystem.makeDirectory(projectRoot);
+        yield* fileSystem.makeDirectory(destinationRoot);
+        const destination = { ...project, id: otherProjectId, workspaceRoot: destinationRoot };
+        const commands: Array<OrchestrationCommand> = [];
+        const children: Array<OrchestrationThreadShell> = [];
+        const grants = new Set<ThreadId>();
+        const testLayer = makeMutationLayer({
+          projectRoot,
+          otherProjects: [destination],
+          // This path deliberately does not exist: a cross-project start must never inspect it.
+          callingThread: thread(String(callingThreadId), {
+            worktreePath: path.join(root, "old-worktree"),
+          }),
+          grantControlledThread: (_sessionId, id) =>
+            Effect.sync(() => {
+              grants.add(id);
+              return true;
+            }),
+          dispatch: (command) =>
+            Effect.sync(() => {
+              if (command.type === "thread.create" || command.type === "thread.turn.start") {
+                expect(grants.has(command.threadId)).toBe(true);
+              }
+              commands.push(command);
+              if (command.type === "thread.create") {
+                children.push(
+                  thread(command.threadId, {
+                    projectId: command.projectId,
+                    branch: command.branch,
+                    worktreePath: command.worktreePath,
+                  }),
+                );
+              }
+              return { sequence: commands.length };
+            }),
+        });
+        const service = yield* ThreadControlService.pipe(Effect.provide(testLayer));
+        const started = yield* service.threadStart(invocation, {
+          projectId: otherProjectId,
+          prompt: "Review the destination project",
+        });
+        expect(started).toMatchObject({ threadCreated: true, promptAccepted: true, cursor: 2 });
+        expect(commands[0]).toMatchObject({
+          type: "thread.create",
+          projectId: otherProjectId,
+          worktreePath: null,
+          branch: null,
+          modelSelection: calling.modelSelection,
+          runtimeMode: "auto",
+          interactionMode: "plan",
+        });
+        expect(commands[1]).toMatchObject({
+          type: "thread.turn.start",
+          threadId: started.threadId,
+          message: { text: "Review the destination project" },
+        });
+
+        for (const input of [
+          { workspacePath: projectRoot },
+          { workspacePath: path.join(root, "missing") },
+          { branch: "main" },
+          { runtimeMode: "full-access" as const },
+        ]) {
+          const failure = yield* service
+            .threadStart(invocation, {
+              projectId: otherProjectId,
+              prompt: "Invalid target",
+              ...input,
+            })
+            .pipe(Effect.flip);
+          expect(failure.code).toBe(
+            "runtimeMode" in input ? "capability_denied" : "invalid_workspace",
+          );
+        }
+        expect(commands).toHaveLength(2);
+        expect(grants.size).toBe(1);
+
+        const child = children[0]!;
+        const followup = yield* ThreadControlService.pipe(
+          Effect.provide(
+            makeMutationLayer({
+              projectRoot,
+              otherProjects: [destination],
+              activeThreads: [child],
+              dispatch: (command) =>
+                Effect.sync(() => {
+                  commands.push(command);
+                  return { sequence: commands.length };
+                }),
+            }),
+          ),
+        );
+        const owned = controlledInvocation([...grants]);
+        expect(
+          yield* followup.threadSend(owned, { threadId: child.id, message: "Continue" }),
+        ).toMatchObject({ messageAccepted: true });
+        expect(
+          yield* followup.threadUpdate(owned, {
+            threadId: child.id,
+            action: "rename",
+            title: "Destination review",
+          }),
+        ).toMatchObject({ accepted: true });
+        expect(yield* followup.threadInterrupt(owned, { threadId: child.id })).toMatchObject({
+          accepted: true,
+        });
+        const unowned = yield* followup
+          .threadSend(invocation, { threadId: child.id, message: "Not mine" })
+          .pipe(Effect.flip);
+        expect(unowned.code).toBe("capability_denied");
+        const escalation = yield* followup
+          .threadSend(owned, {
+            threadId: child.id,
+            message: "Escalate",
+            runtimeMode: "full-access",
+          })
+          .pipe(Effect.flip);
+        expect(escalation.code).toBe("capability_denied");
+      }),
+    ),
 );
 
 it.effect("enforces child ownership and the credential runtime-mode ceiling", () =>

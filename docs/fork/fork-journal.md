@@ -19,6 +19,24 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-10 — Start agent threads across projects on the same server
+
+- Upstream baseline: `223ff4490`
+- Change: Added `projects_list` and allowed MCP `thread_start` to target any registered project on
+  the authenticated server. Cross-project starts default to the destination root and may select a
+  validated existing worktree. Same-project defaults, credential permission ceilings, and child
+  ownership checks remain in place.
+- Reason: Agents need to coordinate work across loaded projects without moving their current thread.
+- Scope: Fork MCP tools, provider guidance, a project-only projection query, focused tests and
+  existing user guidance. Existing orchestration commands carry the results to web, desktop and
+  mobile; provider adapters and persistence schemas are unchanged.
+- Verification: Passed 148 focused MCP, credential, projection and provider-instruction tests,
+  including real Git worktrees and HTTP registration/authorization, plus server typechecking,
+  targeted lint, formatting and `git diff --check`. In an isolated dev server, a real Codex session
+  discovered projects, started children in another project and its own project, and read distinct
+  workspace markers. Cross-project follow-up and rename succeeded; missing-project and broader-mode
+  starts were rejected without creating threads. Verified the conversations in the web client.
+
 ## 2026-09-06 - Integrate upstream shared project defaults
 
 - Upstream baseline: `223ff4490`

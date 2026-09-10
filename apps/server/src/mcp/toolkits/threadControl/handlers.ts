@@ -25,6 +25,12 @@ export const requireThreadControlCapability = Effect.fn("ThreadControlToolkit.re
 );
 
 const handlers = {
+  projects_list: () =>
+    Effect.gen(function* () {
+      const invocation = yield* requireThreadControlCapability("projects_list");
+      const service = yield* ThreadControlService;
+      return yield* service.projectsList(invocation);
+    }),
   thread_context: () =>
     Effect.gen(function* () {
       const invocation = yield* requireThreadControlCapability("thread_context");

@@ -52,6 +52,27 @@ const projectionSnapshotLayer = it.layer(
 );
 
 projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
+  it.effect("lists only active project summaries, including projects without threads", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`DELETE FROM projection_projects`;
+      yield* sql`
+        INSERT INTO projection_projects (project_id, title, workspace_root, scripts_json, created_at, updated_at, deleted_at)
+        VALUES
+          ('summary-b', 'Same name', '/missing/b', '[]', '2026-09-10T00:00:00.000Z', '2026-09-10T00:00:00.000Z', NULL),
+          ('summary-a', 'Same name', '/missing/a', '[]', '2026-09-10T00:00:00.000Z', '2026-09-10T00:00:00.000Z', NULL),
+          ('summary-deleted', 'Deleted', '/missing/deleted', '[]', '2026-09-10T00:00:00.000Z', '2026-09-10T00:00:00.000Z', '2026-09-10T00:00:00.000Z')
+      `;
+      assert.deepEqual(yield* snapshotQuery.getProjectSummaries(), [
+        { id: asProjectId("summary-a"), title: "Same name", workspaceRoot: "/missing/a" },
+        { id: asProjectId("summary-b"), title: "Same name", workspaceRoot: "/missing/b" },
+      ]);
+      yield* sql`DELETE FROM projection_projects`;
+      assert.deepEqual(yield* snapshotQuery.getProjectSummaries(), []);
+    }),
+  );
+
   it.effect("hydrates read model from projection tables and computes snapshot sequence", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;

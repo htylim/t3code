@@ -2,10 +2,10 @@
 
 ## Status
 
-Product plan captured on 2026-08-08 and reconciled with the completed v1 implementation and its
-authority hardening on 2026-08-09. It records the shipped behavior, product boundaries, and v1/v2
-split. The implementation remains confined to the existing server MCP area plus capability,
-credential, provider-session, and toolkit registration edits.
+Product plan captured on 2026-08-08 and reconciled with same-server project discovery and
+cross-project creation on 2026-09-10. It records the shipped behavior, product boundaries, and v1/v2
+split. The implementation uses the existing server MCP area, capability and credential machinery,
+provider-session guidance, and a narrow project-summary projection query.
 
 ## Intent
 
@@ -37,29 +37,29 @@ workflow.
 
 ## Fixed Product Decisions
 
-| Area                  | Decision                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------ |
-| MCP host              | Extend the existing T3 MCP server; do not create another MCP server                  |
-| Control model         | Expose semantic T3 thread operations, not browser or pointer automation              |
-| Environment boundary  | An MCP credential may operate only within its own T3 environment                     |
-| Mutation boundary     | A credential may mutate only children it created during its provider session         |
-| Authority ceiling     | A child or follow-up may not exceed the credential's provider-session runtime mode   |
-| Availability          | Thread-control tools are available to provider sessions by default                   |
-| Permissions setting   | No Off/Read/Operate setting in v1                                                    |
-| Clients               | Created and updated threads remain ordinary threads visible to all existing clients  |
-| Workflow ownership    | The parent agent owns workflow decisions and the list of child thread IDs            |
-| Workflow engine       | Do not add a scheduler, DAG, durable monitor, or orchestration subsystem             |
-| Lineage               | Do not persist parent, child, or spawned-by relationships                            |
-| Search                | Provide project-scoped thread listing and metadata filtering, not transcript search  |
-| Monitoring            | Monitor lightweight status and events; never poll or repeatedly read transcripts     |
-| Worktrees             | Child creation stays in the caller's exact existing workspace or worktree            |
-| Transcript v1         | Support one-time final-result, message, and transcript reads with bounded output     |
-| Transcript v2         | Add efficient last-N and cursor-paginated reads without hydrating the whole thread   |
-| Reasoning             | Do not promise hidden reasoning or reconstruct reasoning that T3 did not persist     |
-| Destructive actions   | Omit delete, archive, checkpoint revert, and session stop from v1                    |
-| User responses        | Omit approval and structured user-input responses from v1                            |
-| Existing fork feature | Native conversation forking is outside this MCP v1                                   |
-| Upstream impact       | Keep v1 confined to the existing MCP implementation; reduce scope before widening it |
+| Area                  | Decision                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| MCP host              | Extend the existing T3 MCP server; do not create another MCP server                                                |
+| Control model         | Expose semantic T3 thread operations, not browser or pointer automation                                            |
+| Environment boundary  | An MCP credential may operate only within its own T3 environment                                                   |
+| Mutation boundary     | A credential may mutate only children it created during its provider session                                       |
+| Authority ceiling     | A child or follow-up may not exceed the credential's provider-session runtime mode                                 |
+| Availability          | Thread-control tools are available to provider sessions by default                                                 |
+| Permissions setting   | No Off/Read/Operate setting in v1                                                                                  |
+| Clients               | Created and updated threads remain ordinary threads visible to all existing clients                                |
+| Workflow ownership    | The parent agent owns workflow decisions and the list of child thread IDs                                          |
+| Workflow engine       | Do not add a scheduler, DAG, durable monitor, or orchestration subsystem                                           |
+| Lineage               | Do not persist parent, child, or spawned-by relationships                                                          |
+| Search                | Provide project-scoped thread listing and metadata filtering, not transcript search                                |
+| Monitoring            | Monitor lightweight status and events; never poll or repeatedly read transcripts                                   |
+| Worktrees             | Same-project children share the caller's workspace; other projects use their root or a validated existing worktree |
+| Transcript v1         | Support one-time final-result, message, and transcript reads with bounded output                                   |
+| Transcript v2         | Add efficient last-N and cursor-paginated reads without hydrating the whole thread                                 |
+| Reasoning             | Do not promise hidden reasoning or reconstruct reasoning that T3 did not persist                                   |
+| Destructive actions   | Omit delete, archive, checkpoint revert, and session stop from v1                                                  |
+| User responses        | Omit approval and structured user-input responses from v1                                                          |
+| Existing fork feature | Native conversation forking is outside this MCP v1                                                                 |
+| Upstream impact       | Keep behavior in MCP; use a project-only projection query for discovery                                            |
 
 ## V1 Tool Surface
 
@@ -88,6 +88,14 @@ variant, agent, or service-tier choices.
 
 The tool output is the source of truth for model options. Callers must not assume that every
 provider uses the same effort field or vocabulary.
+
+### `projects_list`
+
+Return the authenticated environment ID and all non-deleted projects registered on that server,
+including their IDs, titles, and workspace roots. Query project summaries only; do not load thread
+state or inspect repositories. A project does not need existing threads to be discoverable.
+Callers select an exact returned ID for `thread_start` or `threads_list`; duplicate titles remain
+distinguishable by path and ID. Projects on other servers are outside this credential's scope.
 
 ### `threads_list`
 
@@ -186,8 +194,8 @@ Create a normal T3 thread and submit its first prompt.
 
 The caller may select:
 
-- Project and workspace fields, but they must resolve to the calling thread's own project and
-  effective workspace.
+- Any registered project on the same server. Same-project children use the caller's effective
+  workspace; another project defaults to its root and may select an existing worktree of that repository.
 - Provider instance and model.
 - Provider-specific model options, including effort where supported.
 - Runtime permission mode.
@@ -204,7 +212,8 @@ Requirements:
 - Never create, fetch, initialize, clean up, or delete a Git worktree.
 - When a worktree path is supplied, it must already exist and belong to the expected project
   repository.
-- Reject a project or workspace different from the calling thread even when it is otherwise valid.
+- Reject missing or deleted projects, workspaces outside the destination repository, and a different
+  workspace for a same-project start.
 - Reject a runtime mode broader than the calling provider session's credential ceiling.
 - Starting a thread in an existing worktree does not copy uncommitted changes from another
   worktree. The caller is responsible for preparing the intended Git state first.
@@ -272,9 +281,11 @@ runtime mode to be no broader than the credential ceiling. A lower-authority cal
 cannot create an unrestricted child, promote a child, or send work to an existing unrestricted
 thread. Approval and structured user-input responses remain user actions and are not exposed.
 
-Child creation is limited to the calling thread's exact project and effective workspace. The MCP
-still validates an explicitly supplied path and branch, but it rejects a different valid worktree.
-For isolation, the user should start the parent in the desired worktree before delegating children.
+Child creation may target any registered project on the authenticated server. Same-project starts
+retain the calling thread's exact effective workspace. Cross-project starts default to the
+destination root and may use a validated existing worktree belonging to that destination. The
+caller’s worktree is never inherited across projects. An explicit branch must match the existing
+workspace; this operation does not switch branches.
 
 The MCP does not create worktrees, run setup scripts, fetch remotes, select checkpoint refs, or clean
 up failed worktrees. Review and validation children can safely share the parent workspace when
@@ -388,7 +399,7 @@ Responsibilities:
   lifecycle metadata.
 - `output.ts` builds the three read views and applies the response byte budget.
 - `providerValidation.ts` validates model selections against cached provider snapshots.
-- `tools.ts` declares the ten tools, descriptions, annotations, and dependencies.
+- `tools.ts` declares the eleven tools, descriptions, annotations, and dependencies.
 - `handlers.ts` checks the `thread-control` capability and delegates to `ThreadControlService`.
 - `registration.ts` registers the toolkit with MCP-specific success and failure encoding.
 - `ThreadControlService.ts` performs local-environment lookup, validation, command composition,
@@ -410,6 +421,8 @@ Modify only these existing runtime files:
   when issuing its MCP credential.
 - `apps/server/src/mcp/McpHttpServer.ts`: merge the thread-control toolkit registration beside the
   preview toolkit on the existing `McpServer` and `/mcp` transport.
+- `apps/server/src/orchestration/Services/ProjectionSnapshotQuery.ts` and its layer: expose a narrow
+  project-summary read for discovery without loading thread state or resolving repository identities.
 
 `apps/server/src/server.ts` should need no new transport or route. Its existing runtime dependency
 layer already supplies the orchestration engine, projection query, provider registry, filesystem,
@@ -431,8 +444,8 @@ provider instance IDs for diagnostics. It must not expose the bearer token or au
 
 Mutation authority is narrower than environment access. `thread_start` grants its generated child
 ID to the calling credential before dispatch. `thread_send`, `thread_interrupt`, and `thread_update`
-reject any target not granted to that credential. Creation stays in the calling project and exact
-effective workspace. Start, send, and runtime-mode updates reject modes above the credential's
+reject any target not granted to that credential. Creation stays on the authenticated server and
+validates the destination project's workspace. Start, send, and runtime-mode updates reject modes above the credential's
 ceiling. Credential revocation removes both the bearer token and its in-memory child grants.
 
 #### Sequence cursors
@@ -751,16 +764,16 @@ Input:
 Defaults:
 
 - Project: calling thread's project.
-- Workspace: calling thread's effective workspace.
+- Workspace: calling thread's effective workspace for the same project; destination root for another project.
 - Model selection, runtime mode, and interaction mode: calling thread's current values.
 - Title: explicit title, otherwise title seed, otherwise `New thread`.
 
 Preflight every input before creating anything:
 
-1. Require the calling project and reject any different project ID.
+1. Resolve the selected project on the authenticated server and reject missing or deleted targets.
 2. Validate the provider/model/options against the cached provider snapshot.
-3. Resolve and validate the existing workspace/worktree, then require its real path to equal the
-   calling thread's effective workspace real path.
+3. Resolve and validate the existing workspace/worktree against the destination repository. For a
+   same-project start, also require its real path to equal the calling thread's effective workspace.
 4. Require the selected runtime mode to stay within the credential ceiling.
 5. Generate thread, command, and message IDs with `Crypto`; generate one server timestamp with
    `DateTime` and use it consistently.
@@ -962,7 +975,7 @@ is against the live provider/model snapshot before a mutation begins.
 1. Implement existing-workspace validation.
 2. Implement `thread_start` with explicit two-command partial results.
 3. Implement `thread_send`, `thread_interrupt`, and `thread_update` as existing command composition.
-4. Enforce same-project/workspace child creation, child ownership on every later mutation, and the
+4. Enforce destination-project workspace validation, child ownership on every later mutation, and the
    credential runtime-mode ceiling before dispatch.
 5. Verify that accepted operations appear through ordinary projection queries and require no MCP
    persistence.
@@ -996,26 +1009,26 @@ is against the live provider/model snapshot before a mutation begins.
 Use Effect test services, TestClock, queues, and real scoped streams. Do not use sleeps or browser
 automation.
 
-| Area              | Required proof                                                                                                                                                                    |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Credential scope  | Missing/expired credentials are rejected; credentials carry the session mode ceiling and isolated child grants; no input can select another environment                           |
-| Registration      | Existing preview tools remain registered and all ten thread-control tools appear once                                                                                             |
-| Context           | Calling thread/project/provider/model/modes/workspace are returned from local state                                                                                               |
-| Models            | Multiple instances and provider-specific option descriptors round-trip; unavailable instances are reported and rejected for mutation                                              |
-| Listing           | Project, visibility, status, lifecycle, model, and timestamp filters work without detail reads; limits and stable ordering are correct                                            |
-| Status            | Every public status, dual blockers, queued grace, background-after-foreground, archived visibility, and settlement separation are covered as pure cases                           |
-| Workspaces        | The caller's project root or linked worktree passes; another valid worktree, missing paths, subdirectories, another repository, and branch mismatches fail; no Git mutation runs  |
-| Start             | Child control is granted before dispatch; broader project, workspace, and runtime modes fail; create and partial-turn failures remain distinct                                    |
-| Send              | Only controlled children accept messages; broader effective runtime modes fail; changed settings still dispatch before the turn                                                   |
-| Interrupt         | Controlled-child interruption dispatches normally; arbitrary targets and self-interruption are rejected before dispatch                                                           |
-| Update            | Every tagged action maps to the intended existing command for a controlled child; runtime-mode updates obey the ceiling                                                           |
-| Wait race safety  | Live subscription attaches before the snapshot; an event during snapshot load is observed; current terminal/blocked states return immediately                                     |
-| Wait efficiency   | Timeout uses TestClock; cancellation closes the scoped fiber; token/message deltas do not wake; status reads never hydrate transcript detail                                      |
-| Cursor behavior   | Equal cursor waits live; bounded gaps replay only watched transitions; unrelated events catch up silently; ahead/too-stale cursors resynchronize; every response returns a cursor |
-| Background work   | Foreground completion with live agents is not `completed`; the end of background liveness wakes a default wait                                                                    |
-| Read views        | Final selects only the latest completed assistant message; messages exclude system rows; transcript merges messages/plans/activities stably                                       |
-| Read bounds       | ASCII, multi-byte Unicode, one oversized item, many small items, slim payloads, requested full payloads, and truncation metadata all stay within the byte cap                     |
-| Provider boundary | At least one mocked case per provider instance proves identical command routing; provider-specific failure is surfaced through ordinary state rather than special MCP logic       |
+| Area              | Required proof                                                                                                                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Credential scope  | Missing/expired credentials are rejected; credentials carry the session mode ceiling and isolated child grants; no input can select another environment                             |
+| Registration      | Existing preview tools remain registered and all eleven thread-control tools appear once                                                                                            |
+| Context           | Calling thread/project/provider/model/modes/workspace are returned from local state                                                                                                 |
+| Models            | Multiple instances and provider-specific option descriptors round-trip; unavailable instances are reported and rejected for mutation                                                |
+| Listing           | Project, visibility, status, lifecycle, model, and timestamp filters work without detail reads; limits and stable ordering are correct                                              |
+| Status            | Every public status, dual blockers, queued grace, background-after-foreground, archived visibility, and settlement separation are covered as pure cases                             |
+| Workspaces        | The caller's project root or linked worktree passes; another valid worktree, missing paths, subdirectories, another repository, and branch mismatches fail; no Git mutation runs    |
+| Start             | Child control is granted before dispatch; registered same-server projects work; invalid workspaces and broader runtime modes fail; create and partial-turn failures remain distinct |
+| Send              | Only controlled children accept messages; broader effective runtime modes fail; changed settings still dispatch before the turn                                                     |
+| Interrupt         | Controlled-child interruption dispatches normally; arbitrary targets and self-interruption are rejected before dispatch                                                             |
+| Update            | Every tagged action maps to the intended existing command for a controlled child; runtime-mode updates obey the ceiling                                                             |
+| Wait race safety  | Live subscription attaches before the snapshot; an event during snapshot load is observed; current terminal/blocked states return immediately                                       |
+| Wait efficiency   | Timeout uses TestClock; cancellation closes the scoped fiber; token/message deltas do not wake; status reads never hydrate transcript detail                                        |
+| Cursor behavior   | Equal cursor waits live; bounded gaps replay only watched transitions; unrelated events catch up silently; ahead/too-stale cursors resynchronize; every response returns a cursor   |
+| Background work   | Foreground completion with live agents is not `completed`; the end of background liveness wakes a default wait                                                                      |
+| Read views        | Final selects only the latest completed assistant message; messages exclude system rows; transcript merges messages/plans/activities stably                                         |
+| Read bounds       | ASCII, multi-byte Unicode, one oversized item, many small items, slim payloads, requested full payloads, and truncation metadata all stay within the byte cap                       |
+| Provider boundary | At least one mocked case per provider instance proves identical command routing; provider-specific failure is surfaced through ordinary state rather than special MCP logic         |
 
 An optional focused integration test may run the real orchestration engine with mocked provider
 services to prove `thread_start -> threads_wait -> thread_read` as one flow. It must wait on domain

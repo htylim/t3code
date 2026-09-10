@@ -63,6 +63,14 @@ const decodeUnknownJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schem
 const encodeUnknownJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 const ThreadControlReadDependencies = Layer.mergeAll(
   Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
+    getProjectSummaries: () =>
+      Effect.succeed([
+        {
+          id: ProjectId.make("project-discovery"),
+          title: "Discovery project",
+          workspaceRoot: "/workspace/discovery",
+        },
+      ]),
     getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
     getThreadShellById: () => Effect.succeed(Option.none()),
     getProjectShellById: () => Effect.succeed(Option.none()),
@@ -544,8 +552,31 @@ it.effect("registers annotated tools and preserves authenticated request context
       expect(registeredNames).toContain("preview_status");
       expect(registeredNames).toContain("preview_snapshot");
       expect(registeredNames).toContain("thread_context");
+      expect(registeredNames).toContain("projects_list");
       expect(registeredNames).not.toContain("thread_respond");
       expect(new Set(registeredNames).size).toBe(registeredNames.length);
+
+      const projects = yield* server
+        .callTool({ name: "projects_list", arguments: {} })
+        .pipe(Effect.provideService(McpInvocationContext.McpInvocationContext, invocation));
+      expect(projects.isError).not.toBe(true);
+      expect(projects.structuredContent).toEqual({
+        environmentId,
+        projects: [
+          {
+            projectId: "project-discovery",
+            title: "Discovery project",
+            workspaceRoot: "/workspace/discovery",
+          },
+        ],
+      });
+      const deniedProjects = yield* server.callTool({ name: "projects_list", arguments: {} }).pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, {
+          ...invocation,
+          capabilities: new Set<McpInvocationContext.McpCapability>(),
+        }),
+      );
+      expect(deniedProjects.isError).toBe(true);
 
       const statusTool = server.tools.find(({ tool }) => tool.name === "preview_status");
       expect(statusTool?.tool.annotations?.readOnlyHint).toBe(true);

@@ -13,6 +13,7 @@ import {
   ThreadControlErrorCode,
   ThreadReadInput,
   ThreadSendResult,
+  ProjectsListInput,
   ThreadsListInput,
   ThreadsWaitInput,
   ThreadUpdateInput,
@@ -21,6 +22,7 @@ import { ThreadControlToolkit } from "./tools.ts";
 
 const readTools = new Set([
   "thread_context",
+  "projects_list",
   "models_list",
   "threads_list",
   "thread_status",
@@ -85,6 +87,7 @@ const statusFixture = {
 it("declares the complete thread-control surface with the specified annotations", () => {
   expect(Object.keys(ThreadControlToolkit.tools)).toEqual([
     "thread_context",
+    "projects_list",
     "models_list",
     "threads_list",
     "thread_status",
@@ -157,6 +160,14 @@ it.effect("publishes every stable public error code", () =>
     "read_failed",
     "internal_error",
   ]),
+);
+
+it.effect("keeps project discovery scoped to the authenticated server", () =>
+  Effect.gen(function* () {
+    const decode = Schema.decodeUnknownEffect(ProjectsListInput, { onExcessProperty: "error" });
+    yield* decode({});
+    yield* decode({ environmentId: "another-server" }).pipe(Effect.flip);
+  }),
 );
 
 it.effect("applies the documented schema defaults and rejects oversized limits", () =>

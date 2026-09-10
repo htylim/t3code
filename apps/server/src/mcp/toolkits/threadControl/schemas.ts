@@ -53,6 +53,7 @@ const uniqueThreadIds = Schema.makeFilter(
 
 export const ThreadControlOperation = Schema.Literals([
   "thread_context",
+  "projects_list",
   "models_list",
   "threads_list",
   "thread_status",
@@ -179,6 +180,19 @@ export const ThreadControlStatus = Schema.Struct({
 });
 
 export const ThreadContextInput = Schema.Record(Schema.String, Schema.Never);
+
+export const ProjectsListInput = Schema.Record(Schema.String, Schema.Never);
+
+export const ProjectsListResult = Schema.Struct({
+  environmentId: EnvironmentId,
+  projects: Schema.Array(
+    Schema.Struct({
+      projectId: ProjectId,
+      title: Schema.String,
+      workspaceRoot: Schema.String,
+    }),
+  ),
+});
 
 export const ThreadContextResult = Schema.Struct({
   environmentId: EnvironmentId,
@@ -443,14 +457,20 @@ export const ThreadReadResult = Schema.Union([
 export const ThreadStartInput = Schema.Struct({
   prompt: described(Prompt, "Initial user prompt for the new thread."),
   projectId: Schema.optional(
-    described(ProjectId, "Calling thread's project ID; other projects are rejected."),
+    described(
+      ProjectId,
+      "Existing project ID from projects_list on this server; defaults to the calling thread's project.",
+    ),
   ),
   title: Schema.optional(described(NonEmptyText, "Explicit title for the new thread.")),
   titleSeed: Schema.optional(
     described(NonEmptyText, "Title-generation seed used when title is omitted."),
   ),
   workspacePath: Schema.optional(
-    described(NonEmptyText, "Calling thread's exact existing workspace or Git worktree path."),
+    described(
+      NonEmptyText,
+      "Existing workspace or Git worktree belonging to the selected project. Defaults to the caller's workspace for the same project, or the destination project's root for another project. Same-project starts require the caller's exact workspace.",
+    ),
   ),
   branch: Schema.optional(
     described(NonEmptyText, "Expected branch of the existing workspace or worktree."),

@@ -26,6 +26,17 @@ on Windows and Linux to start a new thread and immediately open another draft. T
 next draft keeps the workspace mode and base branch you selected. With **New
 worktree**, each background submission creates its own worktree.
 
+### Ask an agent to start a thread
+
+With a provider connected to T3's thread tools, ask the agent to start a task in any project
+registered on the same server. For example: “Start a review thread in the API project.” The agent
+can discover projects by name and workspace path, then create the thread and send its first prompt.
+
+A thread in another project starts at that project's workspace root unless you request an existing
+worktree belonging to it. A thread in the current project uses the agent's current workspace.
+Model and mode selections carry over unless explicitly changed, and the new thread cannot exceed
+the starting agent's permission level. These tools do not create worktrees or target other servers.
+
 ## Pin and reorder threads
 
 Un-settling a thread does not count as new activity. It returns to the active list at the position

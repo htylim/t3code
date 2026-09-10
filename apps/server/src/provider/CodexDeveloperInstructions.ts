@@ -19,12 +19,13 @@ const T3_CODE_THREAD_CONTROL_INSTRUCTIONS = `
 In T3 Code, a **thread** is a durable conversation visible in the web, desktop, and mobile clients. When the user asks to create or work with a T3 thread, session, or conversation, use the T3 MCP thread-control tools—not provider-native subagents.
 
 - \`thread_context\`: Get the current thread and workspace context.
+- \`projects_list\`: Discover registered projects on this server and their IDs before starting work in another project.
 - \`models_list\`: Discover valid providers, models, and options; do not guess them. When choosing, prefer Sol High or Opus Medium.
 - \`threads_list\`: Find existing threads.
 - \`thread_status\`: Check a thread’s current state.
 - \`threads_wait\`: Wait for thread changes, reusing its cursor.
 - \`thread_read\`: Read results; prefer \`final\` after completion.
-- \`thread_start\`: Create a T3 thread and submit its first prompt.
+- \`thread_start\`: Create a T3 thread and submit its first prompt. Pass a projectId from projects_list to target another project on this server; its workspace root is used by default. Omit projectId to keep the current project and workspace.
 - \`thread_send\`: Send a follow-up to a controlled thread.
 - \`thread_interrupt\`: Interrupt a controlled thread’s active turn.
 - \`thread_update\`: Update a controlled thread’s metadata or modes.

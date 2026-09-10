@@ -487,6 +487,17 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  const listProjectSummaryRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: Schema.Struct({ id: ProjectId, title: Schema.String, workspaceRoot: Schema.String }),
+    execute: () => sql`
+      SELECT project_id AS "id", title, workspace_root AS "workspaceRoot"
+      FROM projection_projects
+      WHERE deleted_at IS NULL
+      ORDER BY title COLLATE NOCASE ASC, project_id ASC
+    `,
+  });
+
   const listThreadRows = SqlSchema.findAll({
     Request: Schema.Void,
     Result: ProjectionThreadDbRowSchema,
@@ -2754,6 +2765,16 @@ pending_approval_requests AS (
       ),
     );
 
+  const getProjectSummaries: ProjectionSnapshotQueryShape["getProjectSummaries"] = () =>
+    listProjectSummaryRows(undefined).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getProjectSummaries:query",
+          "ProjectionSnapshotQuery.getProjectSummaries:decodeRows",
+        ),
+      ),
+    );
+
   const getFirstActiveThreadIdByProjectId: ProjectionSnapshotQueryShape["getFirstActiveThreadIdByProjectId"] =
     (projectId) =>
       getFirstActiveThreadIdByProject({ projectId }).pipe(
@@ -3453,6 +3474,7 @@ pending_approval_requests AS (
     getEventReplayStats,
     getActiveProjectByWorkspaceRoot,
     getProjectShellById,
+    getProjectSummaries,
     getFirstActiveThreadIdByProjectId,
     getImportedAgentSessionSources,
     getThreadCheckpointContext,
