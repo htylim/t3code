@@ -171,7 +171,7 @@ function WorkspaceMenuContents(
     ? {
         worktreePath: props.activeWorktreePath,
         dirName: props.activeWorktreePath.split(/[\\/]/).at(-1) ?? props.activeWorktreePath,
-        refName: props.activeBranch ?? "",
+        refName: props.activeBranch,
         isBusy: false,
         isIdle: false,
       }
@@ -197,7 +197,7 @@ function WorkspaceMenuContents(
             onClick={() => {
               if (props.activeWorktreePath)
                 props.onUseWorktree({
-                  branch: localRef?.name ?? null,
+                  branch: localRef?.isDetached ? null : (localRef?.name ?? null),
                   worktreePath: props.projectCwd,
                 });
               else props.onEnvModeChange("local");
@@ -206,7 +206,9 @@ function WorkspaceMenuContents(
             <span className="flex items-center gap-2">
               <FolderIcon className="size-3" />
               <span className="flex-1 truncate">{props.projectCwd.split(/[\\/]/).at(-1)}</span>
-              <span className="text-muted-foreground text-xs">{localRef?.name}</span>
+              <span className="text-muted-foreground text-xs">
+                {localRef?.isDetached ? "(detached)" : localRef?.name}
+              </span>
               <span className="text-muted-foreground text-[10px]">local checkout</span>
             </span>
           </MenuRadioItem>
@@ -503,7 +505,7 @@ function WorkspaceRow(
       <FolderGitIcon className="size-3 shrink-0" />
       <span className="min-w-0 truncate">{row.dirName}</span>
       <span className="min-w-0 truncate text-right text-xs text-muted-foreground">
-        {row.refName}
+        {row.refName ?? "(detached)"}
       </span>
       <span className="min-w-0 text-left">
         {props.current ? (

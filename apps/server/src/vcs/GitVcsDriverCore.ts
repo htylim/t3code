@@ -144,6 +144,7 @@ interface GitRepositoryPaths {
 interface GitRefsSnapshot {
   readonly localBranches: ReadonlyArray<VcsRef>;
   readonly remoteBranches: ReadonlyArray<VcsRef>;
+  readonly detachedWorktrees: ReadonlyArray<VcsRef>;
   readonly hasPrimaryRemote: boolean;
 }
 
@@ -247,18 +248,30 @@ function paginateBranches(input: {
   };
 }
 
-function parseWorktreeBranchPaths(stdout: string): ReadonlyMap<string, string> {
-  const worktreePaths = new Map<string, string>();
+function parseWorktreeRefs(stdout: string) {
+  const refs: Array<VcsRef & { worktreePath: string }> = [];
   let currentPath: string | null = null;
   let currentBranch: string | null = null;
+  let currentHead: string | null = null;
+  let currentDetached = false;
   let currentPrunable = false;
 
   const flush = () => {
-    if (currentPath !== null && currentBranch !== null && !currentPrunable) {
-      worktreePaths.set(currentBranch, currentPath);
+    const name = currentBranch ?? (currentDetached ? currentHead : null);
+    if (currentPath !== null && name !== null && !currentPrunable) {
+      refs.push({
+        name,
+        worktreePath: currentPath,
+        current: false,
+        isRemote: false,
+        isDefault: false,
+        ...(currentDetached ? { isDetached: true } : {}),
+      });
     }
     currentPath = null;
     currentBranch = null;
+    currentHead = null;
+    currentDetached = false;
     currentPrunable = false;
   };
 
@@ -269,13 +282,17 @@ function parseWorktreeBranchPaths(stdout: string): ReadonlyMap<string, string> {
       currentPath = field.slice("worktree ".length);
     } else if (field.startsWith("branch refs/heads/")) {
       currentBranch = field.slice("branch refs/heads/".length);
+    } else if (field.startsWith("HEAD ")) {
+      currentHead = field.slice("HEAD ".length);
+    } else if (field === "detached") {
+      currentDetached = true;
     } else if (field === "prunable" || field.startsWith("prunable ")) {
       currentPrunable = true;
     }
   }
   flush();
 
-  return worktreePaths;
+  return refs;
 }
 
 function splitNullSeparatedPaths(input: string, truncated: boolean): string[] {
@@ -2593,21 +2610,25 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         : null;
     const parsedWorktreeEntries =
       worktreeListResult.exitCode === 0
-        ? [...parseWorktreeBranchPaths(worktreeListResult.stdout)].map(
-            ([branchName, worktreePath]) =>
-              [branchName, path.normalize(path.resolve(worktreePath))] as const,
-          )
+        ? parseWorktreeRefs(worktreeListResult.stdout).map((ref) => ({
+            ...ref,
+            worktreePath: path.normalize(path.resolve(ref.worktreePath)),
+          }))
         : [];
     const existingWorktreeEntries = yield* Effect.filter(
       parsedWorktreeEntries,
-      ([, worktreePath]) =>
-        fileSystem.stat(worktreePath).pipe(
+      (ref) =>
+        fileSystem.stat(ref.worktreePath).pipe(
           Effect.as(true),
           Effect.orElseSucceed(() => false),
         ),
       { concurrency: 16 },
     );
-    const worktreeMap = new Map(existingWorktreeEntries);
+    const worktreeMap = new Map(
+      existingWorktreeEntries
+        .filter((ref) => !ref.isDetached)
+        .map((ref) => [ref.name, ref.worktreePath]),
+    );
     const localBranches: Array<{ readonly ref: VcsRef; readonly lastCommit: number }> = [];
     const remoteBranches: Array<{ readonly ref: VcsRef; readonly lastCommit: number }> = [];
 
@@ -2661,6 +2682,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     return {
       localBranches: localBranches.toSorted(byRecencyThenName).map(({ ref }) => ref),
       remoteBranches: remoteBranches.toSorted(byRecencyThenName).map(({ ref }) => ref),
+      detachedWorktrees: existingWorktreeEntries.filter((ref) => ref.isDetached),
       hasPrimaryRemote: remoteNames.includes("origin"),
     } satisfies GitRefsSnapshot;
   });
@@ -2800,7 +2822,13 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           : ref.name === repositoryPaths.currentBranch,
       }));
       if (input.worktreesOnly) {
-        const worktreeRefs = localBranches.filter((ref) => ref.worktreePath !== null);
+        const worktreeRefs = [
+          ...localBranches.filter((ref) => ref.worktreePath !== null),
+          ...snapshot.detachedWorktrees.map((ref) => ({
+            ...ref,
+            current: ref.worktreePath === repositoryPaths.worktreeRoot,
+          })),
+        ];
         return {
           refs: worktreeRefs,
           isRepo: true,
@@ -3121,8 +3149,8 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       });
     }
     const branch = yield* runGitStdout("GitVcsDriver.renameWorktree.ref", input.path, [
-      "symbolic-ref",
-      "--short",
+      "rev-parse",
+      "--abbrev-ref",
       "HEAD",
     ]);
     yield* executeGit("GitVcsDriver.renameWorktree", input.cwd, args, {

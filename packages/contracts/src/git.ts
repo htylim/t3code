@@ -76,6 +76,8 @@ export type GitRunStackedActionToast = typeof GitRunStackedActionToast.Type;
 
 export const VcsRef = Schema.Struct({
   name: TrimmedNonEmptyStringSchema,
+  // Worktree-only queries use the HEAD commit as the name for detached checkouts.
+  isDetached: Schema.optional(Schema.Boolean),
   isRemote: Schema.optional(Schema.Boolean),
   remoteName: Schema.optional(TrimmedNonEmptyStringSchema),
   current: Schema.Boolean,

@@ -337,7 +337,7 @@ export interface WorktreeThreadState {
 export interface WorktreeRow {
   worktreePath: string;
   dirName: string;
-  refName: string;
+  refName: string | null;
   isBusy: boolean;
   isIdle: boolean;
 }
@@ -364,7 +364,7 @@ export function resolveWorktreeRows(input: {
     rows.set(worktreePath, {
       worktreePath,
       dirName: resolveWorktreeDirectoryName(worktreePath),
-      refName: ref.name,
+      refName: ref.isDetached ? null : ref.name,
       isBusy: threads.some((thread) => thread.archivedAt === null && !isThreadSettled(thread)),
       isIdle: !threads.some((thread) => thread.latestTurn?.state === "running"),
     });

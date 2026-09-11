@@ -1527,6 +1527,69 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
       }),
     );
 
+    it.effect(
+      "lists detached worktrees independently of branches and preserves them on rename",
+      () =>
+        Effect.gen(function* () {
+          const cwd = yield* makeTmpDir();
+          const { initialBranch } = yield* initRepoWithCommit(cwd);
+          const pathService = yield* Path.Path;
+          const fs = yield* FileSystem.FileSystem;
+          const parent = yield* fs.realPath(yield* makeTmpDir("git-worktrees-"));
+          const alpha = pathService.join(parent, "alpha");
+          const beta = pathService.join(parent, "beta");
+          const stale = pathService.join(parent, "stale");
+          const head = yield* git(cwd, ["rev-parse", "HEAD"]);
+          for (const worktreePath of [alpha, beta, stale]) {
+            yield* git(cwd, ["worktree", "add", "--detach", worktreePath, "HEAD"]);
+          }
+          yield* fs.remove(stale, { recursive: true });
+          const driver = yield* GitVcsDriver.GitVcsDriver;
+          const worktrees = yield* driver.listRefs({ cwd: alpha, worktreesOnly: true, limit: 1 });
+          assert.equal(worktrees.totalCount, 3);
+          assert.equal(worktrees.nextCursor, null);
+          assert.sameDeepMembers(
+            worktrees.refs
+              .filter((ref) => ref.isDetached)
+              .map((ref) => ({
+                name: ref.name,
+                path: ref.worktreePath,
+                current: ref.current,
+              })),
+            [
+              { name: head, path: alpha, current: true },
+              { name: head, path: beta, current: false },
+            ],
+          );
+          const branches = yield* driver.listRefs({ cwd: alpha });
+          assert.deepEqual(
+            branches.refs.map((ref) => ref.name),
+            [initialBranch],
+          );
+          assert.equal(branches.refs[0]?.current, false);
+
+          const renamed = yield* driver.renameWorktree({ cwd, path: alpha, newDirName: "renamed" });
+          const refreshed = yield* driver.listRefs({ cwd, worktreesOnly: true });
+          assert.equal(
+            refreshed.refs.some((ref) => ref.worktreePath === alpha),
+            false,
+          );
+          assert.equal(
+            refreshed.refs.find((ref) => ref.worktreePath === renamed.worktree.path)?.isDetached,
+            true,
+          );
+          assert.equal(yield* git(renamed.worktree.path, ["rev-parse", "HEAD"]), head);
+          assert.equal(yield* git(renamed.worktree.path, ["branch", "--show-current"]), "");
+          yield* driver.removeWorktree({ cwd, path: renamed.worktree.path });
+          const remaining = yield* driver.listRefs({ cwd, worktreesOnly: true });
+          assert.equal(remaining.totalCount, 2);
+          assert.equal(
+            remaining.refs.some((ref) => ref.worktreePath === renamed.worktree.path),
+            false,
+          );
+        }),
+    );
+
     it.effect("renames a worktree and refreshes cached refs", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();

@@ -872,6 +872,24 @@ describe("workspace rows", () => {
     expect(rows.every((row) => !row.isBusy && row.isIdle)).toBe(true);
   });
 
+  it("keeps detached worktrees at the same commit distinct without assigning a branch", () => {
+    const rows = resolveWorktreeRows({
+      refs: [
+        { ...ref("deadbeef", "/trees/alpha"), isDetached: true },
+        { ...ref("deadbeef", "/trees/beta"), isDetached: true },
+        ref("feature/named", "/trees/named"),
+      ],
+      threads: [],
+      activeProjectCwd: "/repo",
+      activeWorktreePath: null,
+    });
+    expect(rows.map(({ worktreePath, refName }) => ({ worktreePath, refName }))).toEqual([
+      { worktreePath: "/trees/alpha", refName: null },
+      { worktreePath: "/trees/beta", refName: null },
+      { worktreePath: "/trees/named", refName: "feature/named" },
+    ]);
+  });
+
   it("distinguishes busy idle threads, settled history and archived running turns", () => {
     const rows = resolveWorktreeRows({
       refs: [ref("busy", "/busy"), ref("settled", "/settled"), ref("archived", "/archived")],

@@ -122,8 +122,9 @@ upstream.
 - Upstream baseline: `163d86a78`
 - Change: Web and desktop share a workspace menu listing local worktrees with busy or dirty status.
   Row menus support inline directory rename, path copy, desktop reveal, and confirmed removal.
-  The menu fetches only checked-out local refs, retains selection indicators, and stays open after
-  rename. Removal warnings report no upstream instead of treating default-branch distance as unpushed commits.
+  The menu fetches checked-out local refs and detached worktrees, retains selection indicators, and
+  stays open after rename. Detached worktrees show `(detached)` and remain detached when selected or
+  renamed. Removal warnings report no upstream instead of treating default-branch distance as unpushed commits.
   Rename updates settled and archived thread paths. Running worktrees cannot be removed, and the
   current worktree cannot be renamed or removed.
   The picker retains the previous static label once a thread has messages, an active session, or
@@ -137,7 +138,13 @@ upstream.
   listing, dirty and busy labels, running restrictions, nested menus, right-click, copying, rename
   errors and success, settled and archived path updates, and clean and forced removal. Regression
   checks cover no-upstream warning text, a worktree-only query without pagination, restored radio
-  selection, and rename leaving the menu open.
+  selection, and rename leaving the menu open. Detached-worktree coverage passed with 152 focused
+  Git driver, toolbar, and contract tests, server/web/contracts type checks, and targeted lint and
+  formatting. It covers multiple detached checkouts at one commit, stale paths, current-worktree
+  detection, branch-list isolation, and rename/removal cache refresh without attaching a branch.
+  An isolated dev browser with copied production data verified both `shiphero-api` worktrees,
+  the `(detached)` label, selecting alpha as the current workspace, and returning to the local
+  checkout. Read-only Git checks confirmed alpha stayed detached at its original commit.
 
 ## 2026-09-04 - Merge upstream browser, usage, terminal, and provider changes
 
