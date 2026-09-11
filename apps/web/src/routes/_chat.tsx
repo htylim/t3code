@@ -16,7 +16,12 @@ import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { resolveShortcutCommand } from "../keybindings";
 import { requestThreadRename } from "../threadRenameBus";
-import { handleProjectSwitchShortcut, isProjectSwitchAvailable } from "../projectSwitch.logic";
+import {
+  handleProjectSwitchShortcut,
+  handleShowAllProjectsShortcut,
+  isProjectSwitchAvailable,
+} from "../projectSwitch.logic";
+import { shouldMountDefaultSidebar } from "../components/AppSidebarLayout.logic";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
 import {
@@ -94,6 +99,21 @@ function ChatRouteGlobalShortcuts() {
       }
 
       if (isCommandPaletteOpen()) {
+        return;
+      }
+
+      if (command === "project.showAllProjects") {
+        handleShowAllProjectsShortcut({
+          command,
+          available: shouldMountDefaultSidebar({ legacySidebarEnabled, pathname }),
+          blocked:
+            isTerminalFocused() ||
+            isPreviewFocused() ||
+            document.querySelector(
+              '[role="dialog"], [role="alertdialog"], [data-slot="menu-popup"], [data-slot="select-popup"], [data-slot="popover-popup"], [data-slot="combobox-popup"], [data-slot="autocomplete-popup"]',
+            ) !== null,
+          event,
+        });
         return;
       }
 

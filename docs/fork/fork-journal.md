@@ -19,6 +19,24 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-11 — Clear the project filter from the keyboard
+
+- Upstream baseline: `223ff4490f76`
+- Change: Added **Project: Show All Projects**, defaulting to Shift+Esc outside terminal and preview
+  focus, and a separated **All Projects** action after the Project Switch choices. Both clear only
+  the sidebar project filter and retain the current chat or draft. Shortcut recording now accepts
+  modified Escape while plain Escape cancels recording.
+- Reason: Project Switch provides a quick way to focus on a project; users need an equally direct
+  way to return to all projects.
+- Scope: Shared keybinding catalog/defaults, web and desktop shortcut handling, command palette,
+  Settings, and user guidance. Existing menus and dialogs retain dismissal priority. Mobile,
+  providers, and server orchestration are unchanged.
+- Verification: Passed 134 focused tests, web/contracts/shared type checks, targeted formatting,
+  lint, and diff checks. In an isolated web environment copied from real data, verified configured
+  Project Switch navigation, the All Projects picker and command-palette actions, Shift+Esc with
+  drafts and existing chats, draft-text preservation, repeated clearing, overlay dismissal priority,
+  and modified-Escape shortcut recording with plain-Escape cancellation.
+
 ## 2026-09-10 — Restore Claude discovery of T3 MCP tools
 
 - Upstream baseline: `223ff4490`

@@ -59,6 +59,7 @@ import {
   commandLabel,
   DEFAULT_WHEN_VARIABLE,
   isKnownWhenVariable,
+  isKeybindingRecordingCancel,
   keybindingConflictLabels,
   keybindingFromKeyboardEvent,
   parseWhenExpressionDraft,
@@ -795,7 +796,8 @@ function useKeybindingRowEditor({
   const captureKeybinding = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Tab") return;
     event.preventDefault();
-    if (event.key === "Escape") {
+    event.stopPropagation();
+    if (isKeybindingRecordingCancel(event)) {
       setDraft({ keyDraft: row.key, isRecording: false });
       return;
     }
@@ -1105,7 +1107,8 @@ function useNewKeybindingDraft({
   const captureKeybinding = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Tab") return;
     event.preventDefault();
-    if (event.key === "Escape") {
+    event.stopPropagation();
+    if (isKeybindingRecordingCancel(event)) {
       setDraft({ keyDraft: "", isRecording: false });
       return;
     }

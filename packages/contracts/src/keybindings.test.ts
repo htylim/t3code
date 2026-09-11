@@ -134,6 +134,11 @@ it.effect("parses keybinding rules", () =>
     });
     assert.strictEqual(parsedProjectSwitch.command, "project.switch");
     assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("project.switch"));
+    const parsedShowAllProjects = yield* decode(KeybindingRule, {
+      key: "shift+esc",
+      command: "project.showAllProjects",
+    });
+    assert.strictEqual(parsedShowAllProjects.command, "project.showAllProjects");
     assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("timeline.previousPrompt"));
     assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("timeline.nextPrompt"));
     assert.isTrue(STATIC_KEYBINDING_COMMANDS.includes("timeline.firstPrompt"));

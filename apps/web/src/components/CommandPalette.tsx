@@ -43,6 +43,7 @@ import {
   FileSearchIcon,
   FolderIcon,
   FolderPlusIcon,
+  LayersIcon,
   LinkIcon,
   MessageSquareIcon,
   PaletteIcon,
@@ -95,7 +96,8 @@ import {
   resolveProjectPathForDispatch,
 } from "../lib/projectPaths";
 import { onOpenCommandPalette } from "../commandPaletteBus";
-import { isProjectSwitchAvailable, switchProject } from "../projectSwitch.logic";
+import { isProjectSwitchAvailable, showAllProjects, switchProject } from "../projectSwitch.logic";
+import { shouldMountDefaultSidebar } from "./AppSidebarLayout.logic";
 import {
   requestSidebarProjectFilterScope,
   requestSidebarProjectFilterScopeIfFiltered,
@@ -134,6 +136,7 @@ import {
   buildThreadActionItems,
   enumerateCommandPaletteItems,
   type CommandPaletteActionItem,
+  type CommandPaletteGroup,
   type CommandPaletteOpenIntent,
   type CommandPaletteSubmenuItem,
   type CommandPaletteView,
@@ -1212,6 +1215,29 @@ function OpenCommandPaletteDialog(props: {
     ],
   );
 
+  const showAllProjectsItem = useMemo(
+    () =>
+      ({
+        kind: "action",
+        value: "action:project-show-all",
+        searchTerms: ["all projects", "show all projects", "clear project filter", "sidebar"],
+        title: "All Projects",
+        description: "Clear project filter · Keep current chat",
+        icon: <LayersIcon className={ITEM_ICON_CLASS} />,
+        shortcutCommand: "project.showAllProjects",
+        run: async () => showAllProjects(),
+      }) satisfies CommandPaletteActionItem,
+    [],
+  );
+  const projectSwitchGroups = useMemo(
+    () =>
+      [
+        { value: "project-switch", label: "Projects", items: projectSwitchItems },
+        { value: "project-scope", label: "Sidebar", items: [showAllProjectsItem] },
+      ] satisfies CommandPaletteGroup[],
+    [projectSwitchItems, showAllProjectsItem],
+  );
+
   const allThreadItems = useMemo(
     () =>
       buildThreadActionItems({
@@ -1633,13 +1659,14 @@ function OpenCommandPaletteDialog(props: {
     setQuery("");
     pushPaletteView({
       addonIcon: <FolderIcon className={ADDON_ICON_CLASS} />,
-      groups: [{ value: "project-switch", label: "Projects", items: projectSwitchItems }],
+      groups: projectSwitchGroups,
     });
   }, [
     browseNavigation,
     clearOpenIntent,
     openIntent,
     projectSwitchAvailable,
+    projectSwitchGroups,
     projectSwitchItems,
     pushPaletteView,
   ]);
@@ -1692,10 +1719,14 @@ function OpenCommandPaletteDialog(props: {
         title: "Switch project...",
         icon: <FolderIcon className={ITEM_ICON_CLASS} />,
         addonIcon: <FolderIcon className={ADDON_ICON_CLASS} />,
-        groups: [{ value: "project-switch", label: "Projects", items: projectSwitchItems }],
+        groups: projectSwitchGroups,
         shortcutCommand: "project.switch",
       });
     }
+  }
+
+  if (shouldMountDefaultSidebar({ legacySidebarEnabled, pathname })) {
+    actionItems.push({ ...showAllProjectsItem, title: "Show all projects" });
   }
 
   if (activeThread) {

@@ -62,8 +62,13 @@ a shortcut.
 `chat.newSide` creates a transient blank chat in the current thread's right panel. It defaults to
 `mod+t`. Browsers normally reserve that shortcut, so web users may need to assign another one.
 
-`project.switch` opens the searchable project picker and moves the sidebar filter to the selected
-project. It has no default shortcut.
+`project.switch` opens the searchable project picker, opens the selected project's new-chat draft,
+and filters the sidebar to that project. It has no default shortcut. Choose **All Projects** in the
+picker to clear the project filter while keeping your current chat open.
+
+`project.showAllProjects` clears the sidebar's project filter and keeps the current chat or draft
+open. It defaults to `shift+esc` outside the terminal and preview. Open menus and dialogs handle
+Escape first. Both project actions use the default sidebar on web and desktop.
 
 `thread.settleAndNew` settles the active thread and opens a new thread in the same project. It uses
 `mod+w` when the terminal and right panel are closed.

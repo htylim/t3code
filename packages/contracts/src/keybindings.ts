@@ -63,6 +63,7 @@ export type TimelinePromptKeybindingCommand = (typeof TIMELINE_PROMPT_KEYBINDING
 export const STATIC_KEYBINDING_COMMANDS = [
   "sidebar.toggle",
   "project.switch",
+  "project.showAllProjects",
   "terminal.toggle",
   "terminal.split",
   "terminal.splitVertical",

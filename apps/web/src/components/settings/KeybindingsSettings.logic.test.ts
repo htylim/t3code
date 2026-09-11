@@ -8,6 +8,7 @@ import {
   commandLabel,
   keybindingConflictLabels,
   keybindingFromKeyboardEvent,
+  isKeybindingRecordingCancel,
   parseWhenExpressionDraft,
   shortcutToKeybindingInput,
   unknownWhenVariables,
@@ -16,6 +17,16 @@ import {
 } from "./KeybindingsSettings.logic";
 
 describe("KeybindingsSettings.logic", () => {
+  it("records modified Escape and reserves plain Escape for cancel", () => {
+    const event = { key: "Escape", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false };
+    expect(isKeybindingRecordingCancel(event)).toBe(true);
+    for (const modifier of ["shiftKey", "metaKey", "ctrlKey", "altKey"] as const) {
+      expect(isKeybindingRecordingCancel({ ...event, [modifier]: true })).toBe(false);
+    }
+    expect(keybindingFromKeyboardEvent({ ...event, shiftKey: true }, "MacIntel")).toBe("shift+esc");
+    expect(commandLabel("project.showAllProjects")).toBe("Project: Show All Projects");
+    expect(buildKeybindingCommandOptions([])).toContain("project.showAllProjects");
+  });
   it("builds searchable rows with readable key and when values", () => {
     const rows = buildKeybindingRows(
       [
