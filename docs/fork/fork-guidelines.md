@@ -70,6 +70,14 @@ vp run dev
 `vp run dev` starts the server and web client and prints a one-time pairing URL. Use
 `vp run dev:desktop` for desktop development.
 
+Never use expensive models for live provider tests. Use a low-cost model such as **Claude Sonnet**
+when testing Claude and **Codex Terra** when testing Codex, with low reasoning effort where
+available. Keep test prompts and responses short.
+
+Explicitly select the test model before sending a turn; do not rely on app defaults or inherit an
+expensive model from an existing conversation. This applies to every test surface and to side chats,
+native forks, and MCP child threads as well as main threads.
+
 ## Build the Fork desktop app
 
 Desktop packaging requires Rust and Cargo because it compiles the native resource monitor bundled

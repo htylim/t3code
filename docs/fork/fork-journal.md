@@ -19,6 +19,16 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-12 — Use inexpensive models for provider tests
+
+- Upstream baseline: `b1e223e2b0d87124883b1410ab52dd6a1338e40d`
+- Change: Fork verification instructions prohibit expensive test models and call for models such
+  as Claude Sonnet and Codex Terra, using low effort and short prompts and responses.
+- Reason: Integration tests should verify behavior without unnecessary provider costs.
+- Scope: Live provider testing across all clients, including main threads, side chats, native forks,
+  and MCP children. Test models must be selected explicitly instead of inherited from defaults.
+- Verification: Documentation review, targeted formatting, and `git diff --check`.
+
 ## 2026-09-12 — Integrate upstream ordering and context
 
 - Upstream baseline: `b1e223e2b0d87124883b1410ab52dd6a1338e40d`
