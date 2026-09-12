@@ -30,7 +30,9 @@ upstream.
   capabilities while retaining child ownership and permission ceilings. Side chats use the new
   context, question attachment, dismissal, project default, and stop-shortcut paths. Completed
   the previously unwired mobile `/fork` action and reused Claude's provider-home isolation for
-  native copies. Upstream's configurable permissions setting starts at the fork's Auto default.
+  native copies. Native forking is a required server dependency, installed in the live runtime,
+  so an omitted layer cannot silently fall back to an unavailable implementation. Upstream's
+  configurable permissions setting starts at the fork's Auto default.
 - Reason: Preserve fork workflows through upstream's contracts and services, with no parallel
   ordering system or obsolete composer context nodes. The new license manifest also needs a
   version-specific MIT declaration for Mermaid's khroma dependency, using its shipped license.
@@ -39,8 +41,14 @@ upstream.
 - Verification: Focused provider, MCP HTTP, context-copy, settings migration, projection,
   attachment, shared contract, web, mobile, desktop, and packaging tests passed. Server, web,
   mobile, and desktop typechecks passed; targeted lint had no errors. Frozen installation and
-  web/server builds passed, including generated notices for Mermaid and khroma. No live client
-  or browser verification was run. Upstream reference and patch-file whitespace was retained.
+  web/server builds passed, including generated notices for Mermaid and khroma. An isolated
+  environment copied from real data passed live web and Electron checks for Codex and Claude
+  MCP child threads, native forks with continued history, attachment/context copies, side-chat
+  questions with images, scoped cancellation, manual ordering, settle/reopen, keyboard filtering,
+  settings, and phone/tablet layouts. The live pass exposed the missing native-fork dependency;
+  a WebSocket regression, service/HTTP tests, and server typecheck/build verify its repair.
+  Native mobile execution was unavailable on this host; focused mobile tests passed. Upstream
+  reference and patch-file whitespace was retained.
 
 ## 2026-09-11 — Clear the project filter from the keyboard
 

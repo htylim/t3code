@@ -26,7 +26,7 @@ export function dispatchClientOperation<R = never>(
 ): Effect.Effect<
   { readonly sequence: number },
   OrchestrationDispatchCommandError,
-  OrchestrationEngineService | R
+  OrchestrationEngineService | ThreadForkService | R
 > {
   if (operation.type === "thread.fork") {
     return ThreadForkService.pipe(

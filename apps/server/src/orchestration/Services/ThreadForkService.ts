@@ -14,14 +14,6 @@ export interface ThreadForkServiceShape {
   ) => Effect.Effect<{ readonly sequence: number }, ThreadForkError>;
 }
 
-export class ThreadForkService extends Context.Reference<ThreadForkServiceShape>(
+export class ThreadForkService extends Context.Service<ThreadForkService, ThreadForkServiceShape>()(
   "t3/orchestration/Services/ThreadForkService",
-  {
-    defaultValue: () => ({
-      fork: () =>
-        Effect.fail(
-          new ThreadForkError({ message: "Thread forking is unavailable in this runtime." }),
-        ),
-    }),
-  },
 ) {}

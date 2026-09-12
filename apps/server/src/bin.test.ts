@@ -37,6 +37,7 @@ import * as ServerConfig from "./config.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
+import { ThreadForkService } from "./orchestration/Services/ThreadForkService.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import { layerConfig as SqlitePersistenceLayerLive } from "./persistence/Layers/Sqlite.ts";
@@ -368,6 +369,7 @@ const withLiveProjectCliServer = <A, E, R>(baseDir: string, run: () => Effect.Ef
       disableListenLog: true,
       disableLogger: true,
     }).pipe(
+      Layer.provide(Layer.mock(ThreadForkService)({})),
       Layer.provideMerge(
         EnvironmentAuth.layer.pipe(
           Layer.provideMerge(SqlitePersistenceLayerLive),

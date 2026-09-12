@@ -113,6 +113,7 @@ import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
+import { ThreadForkService } from "./orchestration/Services/ThreadForkService.ts";
 import {
   OrchestrationListenerCallbackError,
   OrchestrationThreadSettleBlockedError,
@@ -529,6 +530,7 @@ const buildAppUnderTest = (options?: {
     >;
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
+    threadForkService?: Partial<ThreadForkService["Service"]>;
     threadDeletionReactor?: Partial<ThreadDeletionReactor["Service"]>;
     analyticsService?: Partial<AnalyticsService.AnalyticsService["Service"]>;
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
@@ -961,6 +963,7 @@ const buildAppUnderTest = (options?: {
             latestSequence: Effect.succeed(0),
             ...options?.layers?.orchestrationEngine,
           }),
+          Layer.mock(ThreadForkService)(options?.layers?.threadForkService ?? {}),
           Layer.mock(ThreadDeletionReactor)({
             start: () => Effect.void,
             drainThrough: () => Effect.void,
@@ -7120,6 +7123,38 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       assert.isAtLeast(response.sequence, 0);
       assert.equal(stat.type, "Directory");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("dispatches websocket thread.fork through the required fork service", () =>
+    Effect.gen(function* () {
+      const operations: Array<Parameters<ThreadForkService["Service"]["fork"]>[0]> = [];
+      yield* buildAppUnderTest({
+        layers: {
+          threadForkService: {
+            fork: (operation) =>
+              Effect.sync(() => {
+                operations.push(operation);
+                return { sequence: 42 };
+              }),
+          },
+        },
+      });
+      const operation = {
+        type: "thread.fork" as const,
+        commandId: CommandId.make("cmd-ws-fork"),
+        sourceThreadId: ThreadId.make("fork-source"),
+        threadId: ThreadId.make("fork-target"),
+        createdAt: "2026-09-12T12:00:00.000Z",
+      };
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const response = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand](operation),
+        ),
+      );
+      assert.deepEqual(response, { sequence: 42 });
+      assert.deepEqual(operations, [{ ...operation, createdAt: DateTime.formatIso(TEST_EPOCH) }]);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
