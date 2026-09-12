@@ -989,7 +989,14 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
           const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
           const acp = yield* makeGrokAcpRuntime({
             grokSettings,
-            ...(options?.environment ? { environment: options.environment } : {}),
+            ...(options?.environment || mcpSession?.agentDeviceEnvironment
+              ? {
+                  environment: McpProviderSession.withAgentDeviceEnvironment(
+                    options?.environment ?? process.env,
+                    mcpSession,
+                  ),
+                }
+              : {}),
             childProcessSpawner,
             cwd,
             runtimeMode: input.runtimeMode,
@@ -2136,7 +2143,11 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
 
     return {
       provider: PROVIDER,
-      capabilities: { sessionModelSwitch: "in-session", sessionFork: "unsupported" },
+      capabilities: {
+        sessionModelSwitch: "in-session",
+        sessionFork: "unsupported",
+        supportsConversationRollback: false,
+      },
       compaction: { type: "slash-command", command: "/compact" },
       startSession,
       sendTurn,

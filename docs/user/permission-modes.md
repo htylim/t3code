@@ -3,10 +3,10 @@
 Permission modes control when an agent needs your approval to act. Choose a mode in the message
 composer; it applies to that thread.
 
-The mode is set per thread, from the mode control in the message composer. Changing it in one
-thread does not change any other thread. A thread created from inside another thread keeps that
-thread's mode; otherwise new threads start in **Auto** unless you pick something else
-before sending.
+Set the default for new threads in **Settings → General → New threads → Permissions**.
+Projects can override the environment default. New threads use this setting rather than the
+mode of the thread you were viewing. The initial default is **Auto**; existing threads
+and modes you choose in a draft keep their permissions.
 
 | Mode                  | Behavior                                                                              |
 | --------------------- | ------------------------------------------------------------------------------------- |

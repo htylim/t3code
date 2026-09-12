@@ -36,6 +36,7 @@ export type ModelPickerJumpKeybindingCommand =
 
 export const THREAD_KEYBINDING_COMMANDS = [
   "thread.rename",
+  "thread.stop",
   "thread.previous",
   "thread.next",
   "thread.copyReference",
@@ -193,7 +194,7 @@ export const ResolvedKeybindingsConfig = ForwardCompatibleArray(ResolvedKeybindi
 );
 export type ResolvedKeybindingsConfig = typeof ResolvedKeybindingsConfig.Type;
 
-export class KeybindingsConfigError extends Schema.TaggedErrorClass<KeybindingsConfigError>()(
+export class KeybindingsConfigError extends Schema.TaggedError<KeybindingsConfigError>()(
   "KeybindingsConfigParseError",
   {
     configPath: Schema.String,

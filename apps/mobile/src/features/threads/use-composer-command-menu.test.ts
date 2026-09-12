@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { ProviderDriverKind } from "@t3tools/contracts";
+vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
 
 vi.mock("../../state/queries", () => ({
   useComposerPathSearch: () => ({ entries: [], isPending: false }),
+  useComposerPullRequestSearch: () => ({ entries: [], isPending: false, error: null }),
 }));
+vi.mock("../../state/use-composer-drafts", () => ({
+  getComposerDraftSnapshot: vi.fn(),
+  setComposerDraftContext: vi.fn(),
+}));
+vi.mock("../../lib/uuid", () => ({ uuidv4: () => "context-id" }));
 vi.mock("../../state/server", () => ({
   serverEnvironment: { refreshProviders: Symbol("refreshProviders") },
 }));
@@ -93,4 +100,26 @@ describe("mobile slash commands", () => {
       }),
     ).toEqual({ text: "/plan ", cursor: 6, interactionMode: null });
   });
+});
+
+it.each([false, true])("offers the native fork action only when eligible: %s", (canFork) => {
+  const items = buildComposerSlashCommandItems({
+    query: "fork",
+    atMessageStart: true,
+    hasThread: true,
+    canFork,
+    allowInteractionMode: false,
+    selectedProviderStatus: null,
+  });
+  expect(items.map((item) => item.label)).toEqual(canFork ? ["/fork"] : []);
+  if (items[0]) {
+    expect(
+      resolveComposerCommandSelection({
+        draftMessage: "/fo",
+        trigger: { rangeStart: 0, rangeEnd: 3 },
+        item: items[0],
+        allowInteractionMode: false,
+      }),
+    ).toEqual({ text: "/fork ", cursor: 6, interactionMode: null });
+  }
 });

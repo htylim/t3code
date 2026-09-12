@@ -314,6 +314,23 @@ const makeThreadForkService = Effect.gen(function* () {
                   role: message.role,
                   text: message.text,
                   ...(attachments.length > 0 ? { attachments } : {}),
+                  ...(message.context
+                    ? {
+                        context: {
+                          ...message.context,
+                          records: message.context.records.map((record) =>
+                            "attachmentId" in record && typeof record.attachmentId === "string"
+                              ? {
+                                  ...record,
+                                  attachmentId:
+                                    attachmentIdReplacements.get(record.attachmentId) ??
+                                    record.attachmentId,
+                                }
+                              : record,
+                          ),
+                        },
+                      }
+                    : {}),
                   createdAt: message.createdAt,
                   updatedAt: message.updatedAt,
                 });

@@ -3,6 +3,7 @@ import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/envir
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   Outlet,
+  redirect,
   createRootRoute,
   type ErrorComponentProps,
   useLocation,
@@ -21,6 +22,7 @@ import { FirstRunGate } from "../components/onboarding/FirstRunGate";
 import { ConnectOnboardingDialog } from "../components/cloud/ConnectOnboardingDialog";
 import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
+import { SnapShotCoordinator } from "../components/desktop/SnapShotCoordinator";
 import { DesktopAppActivationCoordinator } from "../components/desktop/DesktopAppActivationCoordinator";
 import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLaunchNotification";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
@@ -65,6 +67,9 @@ import {
   type KeybindingsUpdateToastController,
 } from "../components/KeybindingsUpdateToast.logic";
 
+import { getDesktopSnapShotBridge } from "../lib/desktopSnapShot";
+import { shouldResumeSnapShotSetupOnStartup } from "../lib/snapShotSetupResume";
+
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
     if (location.pathname === "/pair" && hasHostedPairingRequest(new URL(window.location.href))) {
@@ -84,6 +89,14 @@ export const Route = createRootRoute({
     }
 
     const authGateState = await resolveInitialServerAuthGateState();
+    if (
+      authGateState.status === "authenticated" &&
+      getDesktopSnapShotBridge() &&
+      shouldResumeSnapShotSetupOnStartup() &&
+      location.pathname !== "/settings/snap-shot"
+    ) {
+      throw redirect({ to: "/settings/snap-shot", replace: true });
+    }
     return {
       authGateState,
     };
@@ -125,15 +138,23 @@ function RootRouteView() {
     );
   }
 
-  // The welcome wizard is full-screen like /pair, but keeps toasts so its
-  // connect/import actions can report failures.
+  // Show onboarding over the workspace, keeping automatic thread navigation
+  // and other startup dialogs suspended until setup finishes.
   if (pathname === "/welcome") {
     return (
       <ToastProvider>
-        <DocumentTitleSync />
-        <ContrastAppearanceSync />
-        <FontAppearanceSync />
-        <Outlet />
+        <AnchoredToastProvider>
+          <DocumentTitleSync />
+          <ContrastAppearanceSync />
+          <EnvironmentThemeSync />
+          <GlassAppearanceSync />
+          <FontAppearanceSync />
+          <CommandPalette>
+            <AppSidebarLayout>
+              <Outlet />
+            </AppSidebarLayout>
+          </CommandPalette>
+        </AnchoredToastProvider>
       </ToastProvider>
     );
   }
@@ -176,6 +197,7 @@ function RootRouteView() {
           <RelayClientInstallDialog />
           <ConnectOnboardingDialog />
           <SshPasswordPromptDialog />
+          <SnapShotCoordinator />
           <ConfirmDialogHost />
           <SlowRpcRequestToastCoordinator />
           <HostedStaticEnvironmentBootstrap />
@@ -206,6 +228,11 @@ function EnvironmentThemeSync() {
 
 function ContrastAppearanceSync() {
   const appearanceContrast = useClientSettings((settings) => settings.appearanceContrast);
+  const diffColorScheme = useClientSettings((settings) => settings.diffColorScheme);
+
+  useEffect(() => {
+    document.documentElement.dataset.diffColorScheme = diffColorScheme;
+  }, [diffColorScheme]);
 
   useEffect(() => {
     applyAppearanceContrast(document.documentElement, appearanceContrast);
@@ -218,7 +245,13 @@ function GlassAppearanceSync() {
   const glassOpacity = useClientSettings((settings) => settings.glassOpacity);
 
   useEffect(() => {
-    document.documentElement.style.setProperty("--glass-opacity", `${glassOpacity}%`);
+    const style = document.documentElement.style;
+    style.setProperty("--glass-opacity", `${glassOpacity}%`);
+    if (glassOpacity === 100) {
+      style.setProperty("--glass-blur", "0px");
+    } else {
+      style.removeProperty("--glass-blur");
+    }
   }, [glassOpacity]);
 
   return null;

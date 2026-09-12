@@ -69,7 +69,14 @@ const messageItem = (message: OrchestrationMessage): ReadItem => ({
   createdAt: message.createdAt,
   streaming: message.streaming,
   text: message.text,
-  ...(message.attachments === undefined ? {} : { payload: { attachments: message.attachments } }),
+  ...(message.attachments === undefined && message.context === undefined
+    ? {}
+    : {
+        payload: {
+          ...(message.attachments === undefined ? {} : { attachments: message.attachments }),
+          ...(message.context === undefined ? {} : { context: message.context }),
+        },
+      }),
   truncatedFields: [],
 });
 

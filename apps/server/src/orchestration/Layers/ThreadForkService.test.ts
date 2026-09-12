@@ -1,14 +1,19 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   CommandId,
+  ComposerContextId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
   type OrchestrationCommand,
   type OrchestrationThread,
 } from "@t3tools/contracts";
-import { expect, it, vi } from "vite-plus/test";
+import { expect, it } from "@effect/vitest";
+import { vi } from "vite-plus/test";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -55,6 +60,9 @@ function sourceThread(overrides?: Partial<OrchestrationThread>): OrchestrationTh
     archivedAt: null,
     settledOverride: null,
     settledAt: null,
+    unsettledAt: null,
+    activeOrderKey: null,
+    pullRequests: [],
     snoozedUntil: null,
     snoozedAt: null,
     pinnedAt: null,
@@ -188,8 +196,8 @@ function makeHarness(input?: {
     Layer.provide(Layer.succeed(ProviderService.ProviderService, provider)),
     Layer.provide(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
     Layer.provide(Layer.succeed(OrchestrationCommandReceiptRepository, receipts)),
-    Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "thread-fork-test-" })),
-    Layer.provide(NodeServices.layer),
+    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "thread-fork-test-" })),
+    Layer.provideMerge(NodeServices.layer),
   );
   const operation = {
     type: "thread.fork" as const,
@@ -203,12 +211,23 @@ function makeHarness(input?: {
     capturedCheckpoints,
     forkSession,
     run: () =>
-      Effect.runPromise(
-        ThreadForkService.pipe(
-          Effect.flatMap((service) => service.fork(operation)),
-          Effect.provide(layer),
-        ),
-      ),
+      Effect.gen(function* () {
+        const config = yield* ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        for (const message of input?.thread?.messages ?? []) {
+          for (const attachment of message.attachments ?? []) {
+            const sourcePath = resolveAttachmentPath({
+              attachmentsDir: config.attachmentsDir,
+              attachment,
+            });
+            if (!sourcePath) throw new Error("Invalid fixture attachment");
+            yield* fs.makeDirectory(path.dirname(sourcePath), { recursive: true });
+            yield* fs.writeFile(sourcePath, new Uint8Array(attachment.sizeBytes));
+          }
+        }
+        return yield* (yield* ThreadForkService).fork(operation);
+      }).pipe(Effect.provide(layer)),
   };
 }
 
@@ -238,97 +257,156 @@ it("copy events use deterministic target-owned attachment ids", () => {
   expect(first.startsWith("thread-target-")).toBe(true);
 });
 
-it("fork operation performs the native fork before publishing the target", async () => {
-  const harness = makeHarness();
-  const result = await harness.run();
+it.effect("fork operation performs the native fork before publishing the target", () =>
+  Effect.gen(function* () {
+    const harness = makeHarness();
+    const result = yield* harness.run();
 
-  expect(result).toEqual({ sequence: 42 });
-  expect(harness.forkSession).toHaveBeenCalledOnce();
-  expect(harness.dispatched).toHaveLength(1);
-  const command = harness.dispatched[0];
-  expect(command?.type).toBe("thread.copy.create");
-  if (command?.type !== "thread.copy.create") throw new Error("expected copy command");
-  expect(command.title).toBe("Source (fork)");
-  expect(command.worktreePath).toBe("/tmp/fork-worktree");
-  expect(command.session.threadId).toBe(targetThreadId);
-  expect(command.messages[0]?.id).not.toBe(sourceThread().messages[0]?.id);
-  expect(command.activities[0]?.payload).toEqual({ threadId: targetThreadId, turnId: null });
-});
+    expect(result).toEqual({ sequence: 42 });
+    expect(harness.forkSession).toHaveBeenCalledOnce();
+    expect(harness.dispatched).toHaveLength(1);
+    const command = harness.dispatched[0];
+    expect(command?.type).toBe("thread.copy.create");
+    if (command?.type !== "thread.copy.create") throw new Error("expected copy command");
+    expect(command.title).toBe("Source (fork)");
+    expect(command.worktreePath).toBe("/tmp/fork-worktree");
+    expect(command.session.threadId).toBe(targetThreadId);
+    expect(command.messages[0]?.id).not.toBe(sourceThread().messages[0]?.id);
+    expect(command.activities[0]?.payload).toEqual({ threadId: targetThreadId, turnId: null });
+  }),
+);
 
-it("fork baseline uses a target-namespaced ref and the shared source cwd", async () => {
-  const harness = makeHarness({ gitRepository: true });
-  await harness.run();
+it.effect("fork baseline uses a target-namespaced ref and the shared source cwd", () =>
+  Effect.gen(function* () {
+    const harness = makeHarness({ gitRepository: true });
+    yield* harness.run();
 
-  expect(harness.forkSession).toHaveBeenCalledWith({
-    sourceThreadId,
-    targetThreadId,
-    cwd: "/tmp/fork-worktree",
-  });
-  expect(harness.capturedCheckpoints).toEqual([
-    {
+    expect(harness.forkSession).toHaveBeenCalledWith({
+      sourceThreadId,
+      targetThreadId,
       cwd: "/tmp/fork-worktree",
-      checkpointRef: "refs/t3/checkpoints/dGhyZWFkLXRhcmdldA/turn/0",
-    },
-  ]);
-});
+    });
+    expect(harness.capturedCheckpoints).toEqual([
+      {
+        cwd: "/tmp/fork-worktree",
+        checkpointRef: "refs/t3/checkpoints/dGhyZWFkLXRhcmdldA/turn/0",
+      },
+    ]);
+  }),
+);
 
-it("fork operation rejects starting running and queued-turn sources", async () => {
-  const harness = makeHarness({
-    thread: sourceThread({
-      session: { ...sourceThread().session!, status: "running" },
-    }),
-  });
-  await expect(harness.run()).rejects.toThrow("finish before forking");
-  expect(harness.forkSession).not.toHaveBeenCalled();
-  expect(harness.dispatched).toHaveLength(0);
-});
+it.effect("fork operation rejects starting running and queued-turn sources", () =>
+  Effect.gen(function* () {
+    const harness = makeHarness({
+      thread: sourceThread({
+        session: { ...sourceThread().session!, status: "running" },
+      }),
+    });
+    expect((yield* Effect.flip(harness.run())).message).toContain("finish before forking");
+    expect(harness.forkSession).not.toHaveBeenCalled();
+    expect(harness.dispatched).toHaveLength(0);
+  }),
+);
 
-it("fork operation rejects sources with background work", async () => {
-  const harness = makeHarness({ backgroundLiveness: "monitoring" });
-  await expect(harness.run()).rejects.toThrow("background work to finish before forking");
-  expect(harness.forkSession).not.toHaveBeenCalled();
-  expect(harness.dispatched).toHaveLength(0);
-});
+it.effect("fork operation rejects sources with background work", () =>
+  Effect.gen(function* () {
+    const harness = makeHarness({ backgroundLiveness: "monitoring" });
+    expect((yield* Effect.flip(harness.run())).message).toContain(
+      "background work to finish before forking",
+    );
+    expect(harness.forkSession).not.toHaveBeenCalled();
+    expect(harness.dispatched).toHaveLength(0);
+  }),
+);
 
-it("fork operation publishes no target when the native fork or baseline fails", async () => {
-  const harness = makeHarness({ providerFailure: true });
-  await expect(harness.run()).rejects.toThrow("native fork failed");
-  expect(harness.dispatched).toHaveLength(0);
-});
+it.effect("fork operation publishes no target when the native fork or baseline fails", () =>
+  Effect.gen(function* () {
+    const harness = makeHarness({ providerFailure: true });
+    expect((yield* Effect.flip(harness.run())).message).toContain("native fork failed");
+    expect(harness.dispatched).toHaveLength(0);
+  }),
+);
 
-it("lost success response retries through the existing command receipt without duplicating work", async () => {
-  const harness = makeHarness({ acceptedSequence: 77, targetExists: true });
-  await expect(harness.run()).resolves.toEqual({ sequence: 77 });
-  expect(harness.forkSession).not.toHaveBeenCalled();
-  expect(harness.dispatched).toHaveLength(0);
-});
-
-it("fork operation serializes against mutations on the same source", async () => {
-  await Effect.runPromise(
+it.effect(
+  "lost success response retries through the existing command receipt without duplicating work",
+  () =>
     Effect.gen(function* () {
-      const firstEntered = yield* Deferred.make<void>();
-      const releaseFirst = yield* Deferred.make<void>();
-      const secondEntered = yield* Deferred.make<void>();
-      const first = yield* Effect.forkChild(
-        withThreadMutationLock(
-          sourceThreadId,
-          Deferred.succeed(firstEntered, undefined).pipe(
-            Effect.andThen(Deferred.await(releaseFirst)),
-          ),
-        ),
-        { startImmediately: true },
-      );
-      yield* Deferred.await(firstEntered);
-      const second = yield* Effect.forkChild(
-        withThreadMutationLock(sourceThreadId, Deferred.succeed(secondEntered, undefined)),
-        { startImmediately: true },
-      );
-      yield* Effect.yieldNow;
-      expect(yield* Deferred.isDone(secondEntered)).toBe(false);
-      yield* Deferred.succeed(releaseFirst, undefined);
-      yield* Fiber.join(first);
-      yield* Fiber.join(second);
-      expect(yield* Deferred.isDone(secondEntered)).toBe(true);
+      const harness = makeHarness({ acceptedSequence: 77, targetExists: true });
+      expect(yield* harness.run()).toEqual({ sequence: 77 });
+      expect(harness.forkSession).not.toHaveBeenCalled();
+      expect(harness.dispatched).toHaveLength(0);
     }),
-  );
-});
+);
+
+it.effect("fork operation serializes against mutations on the same source", () =>
+  Effect.gen(function* () {
+    const firstEntered = yield* Deferred.make<void>();
+    const releaseFirst = yield* Deferred.make<void>();
+    const secondEntered = yield* Deferred.make<void>();
+    const first = yield* Effect.forkChild(
+      withThreadMutationLock(
+        sourceThreadId,
+        Deferred.succeed(firstEntered, undefined).pipe(
+          Effect.andThen(Deferred.await(releaseFirst)),
+        ),
+      ),
+      { startImmediately: true },
+    );
+    yield* Deferred.await(firstEntered);
+    const second = yield* Effect.forkChild(
+      withThreadMutationLock(sourceThreadId, Deferred.succeed(secondEntered, undefined)),
+      { startImmediately: true },
+    );
+    yield* Effect.yieldNow;
+    expect(yield* Deferred.isDone(secondEntered)).toBe(false);
+    yield* Deferred.succeed(releaseFirst, undefined);
+    yield* Fiber.join(first);
+    yield* Fiber.join(second);
+    expect(yield* Deferred.isDone(secondEntered)).toBe(true);
+  }),
+);
+
+it.effect("copies context payloads and rebinds image chips to target-owned attachments", () =>
+  Effect.gen(function* () {
+    const source = sourceThread();
+    const message = source.messages[0]!;
+    const attachment = {
+      type: "image" as const,
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "capture.png",
+      mimeType: "image/png",
+      sizeBytes: 3,
+    };
+    const record = {
+      kind: "image" as const,
+      version: 1 as const,
+      contextId: ComposerContextId.make("image-capture"),
+      label: "capture.png",
+      attachmentId: attachment.id,
+      name: attachment.name,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+    };
+    const text = "Inspect [capture.png](t3-context://v1/image/image-capture)";
+    const harness = makeHarness({
+      thread: {
+        ...source,
+        messages: [
+          {
+            ...message,
+            text,
+            attachments: [attachment],
+            context: { version: 1, records: [record] },
+          },
+        ],
+      },
+    });
+    yield* harness.run();
+    const command = harness.dispatched[0];
+    if (command?.type !== "thread.copy.create") throw new Error("expected copy command");
+    const copy = command.messages[0]!;
+    expect(copy.text).toBe(text);
+    expect(copy.attachments?.[0]?.id).not.toBe(attachment.id);
+    expect(copy.context?.records).toEqual([{ ...record, attachmentId: copy.attachments?.[0]?.id }]);
+  }),
+);

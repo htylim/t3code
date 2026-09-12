@@ -19,6 +19,29 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-12 — Integrate upstream ordering and context
+
+- Upstream baseline: `b1e223e2b0d87124883b1410ab52dd6a1338e40d`
+- Change: Adopted upstream's active ordering and settled timestamps, removing the fork's
+  last-user-message sorting. Conversation-reference pickers use upstream ordering too. Kept
+  conversation-reference chips alongside upstream context chips because the latter do not link
+  T3 threads. Native thread copies preserve context and remap attachment bindings; bounded MCP
+  reads expose those records. Thread-control tools coexist with upstream browser, device, and PR
+  capabilities while retaining child ownership and permission ceilings. Side chats use the new
+  context, question attachment, dismissal, project default, and stop-shortcut paths. Completed
+  the previously unwired mobile `/fork` action and reused Claude's provider-home isolation for
+  native copies. Upstream's configurable permissions setting starts at the fork's Auto default.
+- Reason: Preserve fork workflows through upstream's contracts and services, with no parallel
+  ordering system or obsolete composer context nodes. The new license manifest also needs a
+  version-specific MIT declaration for Mermaid's khroma dependency, using its shipped license.
+- Scope: Provider sessions, MCP, orchestration, web and mobile composers, sidebar and panel state,
+  permission defaults, desktop integration, and dependency metadata.
+- Verification: Focused provider, MCP HTTP, context-copy, settings migration, projection,
+  attachment, shared contract, web, mobile, desktop, and packaging tests passed. Server, web,
+  mobile, and desktop typechecks passed; targeted lint had no errors. Frozen installation and
+  web/server builds passed, including generated notices for Mermaid and khroma. No live client
+  or browser verification was run. Upstream reference and patch-file whitespace was retained.
+
 ## 2026-09-11 — Clear the project filter from the keyboard
 
 - Upstream baseline: `223ff4490f76`

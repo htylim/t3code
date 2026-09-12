@@ -1,6 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
+  McpCapabilityUnavailableError,
   PreviewAutomationUnavailableError,
   ProviderInstanceId,
   ThreadId,
@@ -52,4 +53,32 @@ it("orders runtime modes from supervised through full access", () => {
   );
   expect(McpInvocationContext.runtimeModeIsWithinAuthority("full-access", "auto")).toBe(false);
   expect(McpInvocationContext.runtimeModeIsWithinAuthority("auto", "full-access")).toBe(true);
+});
+
+it.effect("reports other missing capabilities with the neutral error", () => {
+  const invocation: McpInvocationContext.McpInvocationScope = {
+    environmentId: EnvironmentId.make("environment-1"),
+    threadId: ThreadId.make("thread-1"),
+    providerSessionId: "provider-session-1",
+    providerInstanceId: ProviderInstanceId.make("codex"),
+    capabilities: new Set(["preview"]),
+    maxRuntimeMode: "auto" as const,
+    controlledThreadIds: new Set<ThreadId>(),
+    issuedAt: 1,
+  };
+
+  return Effect.gen(function* () {
+    const error = yield* McpInvocationContext.requireMcpCapability("pull-requests").pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+      Effect.flip,
+    );
+
+    expect(error).toBeInstanceOf(McpCapabilityUnavailableError);
+    expect(error).toMatchObject({ capability: "pull-requests", threadId: invocation.threadId });
+
+    const scope = yield* McpInvocationContext.requireMcpCapability("preview").pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+    );
+    expect(scope).toBe(invocation);
+  });
 });

@@ -3,7 +3,7 @@ import type {
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/models";
 import type { EnvironmentId, ProjectId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
-import { activeThreadAnchorTimestampMs } from "@t3tools/client-runtime/state/thread-sort";
+import { sortActiveThreadsByOrderKey } from "@t3tools/client-runtime/state/thread-sort";
 
 export const THREAD_REFERENCE_RESULT_LIMIT = 20;
 
@@ -123,12 +123,6 @@ export function collectThreadReferenceMarkdownTokens(text: string): ThreadRefere
   return tokens;
 }
 
-function compareAscending(left: string, right: string): number {
-  if (left < right) return -1;
-  if (left > right) return 1;
-  return 0;
-}
-
 export function buildThreadReferenceItems(
   options: BuildThreadReferenceOptions,
 ): ThreadReferenceItem[] {
@@ -139,26 +133,23 @@ export function buildThreadReferenceItems(
   );
   const query = options.query.trim().toLowerCase();
 
-  return options.threads
-    .filter(
-      (thread) =>
-        thread.environmentId === options.environmentId &&
-        (options.scope === "environment" || thread.projectId === options.projectId) &&
-        thread.archivedAt === null &&
-        thread.id !== options.currentThreadId,
-    )
-    .filter((thread) => {
-      if (query.length === 0) return true;
-      const project = projectsById.get(thread.projectId);
-      return [thread.title, thread.id, project?.title ?? "", thread.branch ?? ""].some((value) =>
-        value.toLowerCase().includes(query),
-      );
-    })
-    .sort(
-      (left, right) =>
-        activeThreadAnchorTimestampMs(right) - activeThreadAnchorTimestampMs(left) ||
-        compareAscending(left.id, right.id),
-    )
+  return sortActiveThreadsByOrderKey(
+    options.threads
+      .filter(
+        (thread) =>
+          thread.environmentId === options.environmentId &&
+          (options.scope === "environment" || thread.projectId === options.projectId) &&
+          thread.archivedAt === null &&
+          thread.id !== options.currentThreadId,
+      )
+      .filter((thread) => {
+        if (query.length === 0) return true;
+        const project = projectsById.get(thread.projectId);
+        return [thread.title, thread.id, project?.title ?? "", thread.branch ?? ""].some((value) =>
+          value.toLowerCase().includes(query),
+        );
+      }),
+  )
     .slice(0, THREAD_REFERENCE_RESULT_LIMIT)
     .map((thread) => {
       const projectLabel = projectsById.get(thread.projectId)?.title ?? thread.projectId;

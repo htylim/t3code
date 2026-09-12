@@ -14,6 +14,7 @@ import * as Path from "effect/Path";
 
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
+import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 
@@ -103,7 +104,7 @@ function resolveDesktopAppStageLabel(input: {
   return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Alpha";
 }
 
-function resolveDesktopAppBranding(input: {
+export function resolveDesktopAppBranding(input: {
   readonly isDevelopment: boolean;
   readonly appVersion: string;
 }): DesktopAppBranding {
@@ -236,11 +237,10 @@ const make = Effect.fn("desktop.environment.make")(function* (
           ? FORK_DESKTOP_APP_ID
           : "com.t3tools.t3code",
     ),
-    linuxDesktopEntryName: isDevelopment
-      ? "t3code-dev.desktop"
-      : isFork
+    linuxDesktopEntryName:
+      !isDevelopment && isFork
         ? "t3code-fork.desktop"
-        : "t3code.desktop",
+        : resolveLinuxDesktopEntryName(isDevelopment),
     linuxWmClass: isDevelopment ? "t3code-dev" : isFork ? "t3code-fork" : "t3code",
     linuxApplicationsDir,
     appImagePath: config.appImagePath,

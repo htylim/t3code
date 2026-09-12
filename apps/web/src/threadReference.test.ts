@@ -53,6 +53,9 @@ function thread(id: string, options: Partial<EnvironmentThreadShell> = {}): Envi
     archivedAt: null,
     settledOverride: null,
     settledAt: null,
+    unsettledAt: null,
+    activeOrderKey: null,
+    pullRequests: [],
     session: null,
     latestUserMessageAt: null,
     hasPendingApprovals: false,
@@ -62,7 +65,7 @@ function thread(id: string, options: Partial<EnvironmentThreadShell> = {}): Envi
   };
 }
 
-describe("thread picker project scope and recency", () => {
+describe("thread picker project scope and upstream order", () => {
   const otherProjectId = ProjectId.make("project-2");
   const threads = [
     thread("renamed", { updatedAt: "2026-09-05T00:00:00.000Z" }),
@@ -88,20 +91,20 @@ describe("thread picker project scope and recency", () => {
     projectId,
   };
 
-  it("shows only the composing project, using user activity and creation instead of metadata updates", () => {
+  it("shows only the composing project using upstream active ordering", () => {
     expect(
       buildThreadReferenceItems({ ...options, scope: "project" }).map(
         (item) => item.threadRef.threadId,
       ),
-    ).toEqual(["recent", "new", "renamed"]);
+    ).toEqual(["new", "recent", "renamed"]);
   });
 
-  it("interleaves all projects by recency in environment scope", () => {
+  it("uses upstream active ordering across projects in environment scope", () => {
     expect(
       buildThreadReferenceItems({ ...options, scope: "environment" }).map(
         (item) => item.threadRef.threadId,
       ),
-    ).toEqual(["other", "recent", "new", "other-older", "renamed"]);
+    ).toEqual(["new", "other", "other-older", "recent", "renamed"]);
   });
 
   it("does not broaden a draft with no selected project, but still allows explicit environment search", () => {
@@ -274,6 +277,6 @@ describe("buildThreadReferenceItems", () => {
 
     expect(items).toHaveLength(THREAD_REFERENCE_RESULT_LIMIT);
     expect(items[0]?.description).toBe("missing-project");
-    expect(items[0]?.threadRef.threadId).toBe("thread-24");
+    expect(items[0]?.threadRef.threadId).toBe("thread-00");
   });
 });

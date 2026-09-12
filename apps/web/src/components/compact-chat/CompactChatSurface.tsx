@@ -21,6 +21,7 @@ import type {
   ServerProvider,
   ThreadId,
   UploadChatAttachment,
+  UserInputAttachments,
 } from "@t3tools/contracts";
 import { applyClaudePromptEffortPrefix, resolvePromptInjectedEffort } from "@t3tools/shared/model";
 import { useAtomValue } from "@effect/atom-react";
@@ -45,6 +46,7 @@ import {
   type ComposerFileAttachment,
   type ComposerImageAttachment,
   useComposerDraftStore,
+  DraftId,
   useComposerThreadDraft,
 } from "~/composerDraftStore";
 import { useEnvironmentSettings } from "~/hooks/useSettings";
@@ -54,6 +56,7 @@ import {
   getUploadedAttachments,
   releaseDraftAttachments,
   startAttachmentUpload,
+  useAttachmentUploadStore,
 } from "~/lib/attachmentUploadQueue";
 import { deriveLatestContextWindowSnapshot } from "~/lib/contextWindow";
 import { getProviderModelCapabilities } from "~/providerModels";
@@ -71,7 +74,7 @@ import {
   deriveWorkLogEntries,
 } from "~/session-logic";
 import { useEnvironment } from "~/state/environments";
-import { useProject, useThread } from "~/state/entities";
+import { useProject, useThread, useThreadShell } from "~/state/entities";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { threadEnvironment, useEnvironmentThread } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -83,7 +86,22 @@ import {
   type PageScrollKey,
 } from "~/components/chat/pageScrollController";
 import { useRightPanelStore } from "~/rightPanelStore";
-import { isBrowserPreviewAttachment } from "~/types";
+import { resolveShortcutCommand } from "~/keybindings";
+import { isCommandPaletteOpen } from "~/commandPaletteBus";
+import { useShallow } from "zustand/react/shallow";
+import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { serializeLegacyContextMessage } from "@t3tools/shared/composerContextLegacySend";
+import { buildMessageContext, terminalContextReference } from "~/lib/composerContextRecords";
+import { filterTerminalContextsWithText } from "~/lib/terminalContext";
+import { removeInlineContextReference } from "~/lib/composerContextReferences";
+import { appAtomRegistry } from "~/rpc/atomRegistry";
+import { environmentServerConfigsAtom } from "~/state/server";
+import {
+  questionAttachmentDraftId,
+  questionAttachmentDraftPrefix,
+  clearQuestionAttachmentDraft,
+  useQuestionAttachmentPreparation,
+} from "~/questionAttachments";
 
 import {
   buildCompactChatApprovalCommand,
@@ -144,10 +162,20 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   const environment = useEnvironment(target.environmentId);
   const threadState = useEnvironmentThread(target.environmentId, target.threadId);
   const thread = useThread(target);
+  const threadShell = useThreadShell(target);
   const project = useProject(
     thread ? scopeProjectRef(thread.environmentId, thread.projectId) : null,
   );
   const settings = useEnvironmentSettings(target.environmentId);
+  const projectSettings = resolveProjectSettings(
+    settings,
+    thread?.projectId ?? null,
+    project ?? undefined,
+  ).settings;
+  const supportsQuestionAttachments =
+    environment?.serverConfig?.environment.capabilities.questionAttachments === true;
+  const supportsPullRequests =
+    environment?.serverConfig?.environment.capabilities.pullRequests === true;
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const composerDraft = useComposerThreadDraft(target);
   const setComposerDraftModelSelection = useComposerDraftStore((state) => state.setModelSelection);
@@ -165,12 +193,15 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
     reportFailure: false,
   });
 
+  const dismissUserInput = useAtomCommand(threadEnvironment.dismissUserInput, {
+    reportFailure: false,
+  });
+  const userInputInFlight = useRef(new Set<ApprovalRequestId>());
   const composerRef = useRef<ChatComposerHandle | null>(null);
   const promptRef = useRef("");
   const composerImagesRef = useRef<ComposerImageAttachment[]>([]);
   const composerFilesRef = useRef<ComposerFileAttachment[]>([]);
   const composerTerminalContextsRef = useRef([]);
-  const composerElementContextsRef = useRef([]);
   const legendListRef = useRef<LegendListRef | null>(null);
   const sendInFlightRef = useRef(false);
   const [sending, setSending] = useState(false);
@@ -234,11 +265,112 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   );
   const activePendingApproval = pendingApprovals[0] ?? null;
   const activePendingUserInput = pendingUserInputs[0] ?? null;
-  const activePendingDraftAnswers = useMemo(
+  const pendingQuestionDraftKeys = useMemo(
     () =>
-      activePendingUserInput ? (pendingInputAnswers[activePendingUserInput.requestId] ?? {}) : {},
-    [activePendingUserInput, pendingInputAnswers],
+      target.threadId
+        ? pendingUserInputs.flatMap((request) =>
+            request.questions.map((question) =>
+              questionAttachmentDraftId(
+                target.environmentId,
+                target.threadId,
+                request.requestId,
+                question.id,
+              ),
+            ),
+          )
+        : [],
+    [target.threadId, target.environmentId, pendingUserInputs],
   );
+  const questionComposerDrafts = useComposerDraftStore(
+    useShallow((state) =>
+      Object.fromEntries(
+        pendingQuestionDraftKeys.map((key) => [key, state.draftsByThreadKey[key]]),
+      ),
+    ),
+  );
+  const questionUploadsBlocked = useAttachmentUploadStore(
+    useShallow((state) =>
+      Object.fromEntries(
+        pendingQuestionDraftKeys.map((key) => {
+          const draft = questionComposerDrafts[key];
+          const attachments = draft ? [...draft.images, ...draft.files] : [];
+          return [
+            key,
+            attachments.some((attachment) => {
+              const upload = state.uploadsByImageId[attachment.id];
+              return upload?.status !== "ready" || upload.environmentId !== target.environmentId;
+            }),
+          ];
+        }),
+      ),
+    ),
+  );
+  const questionPreparations = useQuestionAttachmentPreparation(
+    useShallow((state) =>
+      Object.fromEntries(pendingQuestionDraftKeys.map((key) => [key, state.counts[key] ?? 0])),
+    ),
+  );
+  useEffect(() => {
+    if (threadState.status !== "live" || threadState.data._tag !== "Some") return;
+    const questionThread = threadState.data.value;
+    const { userInputs: currentRequests } = derivePendingRequests(questionThread.activities);
+    const prefix = questionAttachmentDraftPrefix(target.environmentId, questionThread.id);
+    const retained = new Set(
+      currentRequests.flatMap((request) =>
+        request.questions.map((question) =>
+          questionAttachmentDraftId(
+            target.environmentId,
+            questionThread.id,
+            request.requestId,
+            question.id,
+          ),
+        ),
+      ),
+    );
+    const keys = new Set([
+      ...Object.keys(useComposerDraftStore.getState().draftsByThreadKey),
+      ...Object.keys(useQuestionAttachmentPreparation.getState().counts),
+    ]);
+    for (const key of keys) {
+      if (key.startsWith(prefix) && !retained.has(DraftId.make(key)))
+        clearQuestionAttachmentDraft(DraftId.make(key));
+    }
+  }, [target.environmentId, threadState.data, threadState.status]);
+  const activePendingDraftAnswers = useMemo(() => {
+    if (!activePendingUserInput || !target.threadId) return {};
+    return Object.fromEntries(
+      activePendingUserInput.questions.map((question) => {
+        const key = questionAttachmentDraftId(
+          target.environmentId,
+          target.threadId,
+          activePendingUserInput.requestId,
+          question.id,
+        );
+        const draft = questionComposerDrafts[key];
+        const attachments = draft ? [...draft.images, ...draft.files] : [];
+        return [
+          question.id,
+          {
+            ...pendingInputAnswers[activePendingUserInput.requestId]?.[question.id],
+            attachmentCount: attachments.length,
+            attachmentsBlocked:
+              (attachments.length > 0 && !supportsQuestionAttachments) ||
+              (questionPreparations[key] ?? 0) > 0 ||
+              questionUploadsBlocked[key] === true,
+          },
+        ];
+      }),
+    );
+  }, [
+    activePendingUserInput,
+    target.threadId,
+    target.environmentId,
+    questionComposerDrafts,
+    questionUploadsBlocked,
+    supportsQuestionAttachments,
+    questionPreparations,
+    pendingInputAnswers,
+  ]);
   const activePendingQuestionIndex = activePendingUserInput
     ? (pendingInputQuestionIndexes[activePendingUserInput.requestId] ?? 0)
     : 0;
@@ -280,7 +412,8 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
     environment?.connection.phase === "reconnecting";
   const phase = derivePhase(thread?.session ?? null);
   const running = phase === "running";
-  const runtimeMode: RuntimeMode = composerDraft.runtimeMode ?? thread?.runtimeMode ?? "auto";
+  const runtimeMode: RuntimeMode =
+    composerDraft.runtimeMode ?? thread?.runtimeMode ?? projectSettings.defaultRuntimeMode;
   const interactionMode: ProviderInteractionMode = settings.planModeEnabled
     ? (composerDraft.interactionMode ?? thread?.interactionMode ?? "default")
     : "default";
@@ -451,22 +584,71 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
 
   const handleUserInput = useCallback(
     async (requestId: ApprovalRequestId, answers: Record<string, unknown>) => {
-      if (!connected) return;
+      const request = pendingUserInputs.find((request) => request.requestId === requestId);
+      if (!connected || !request || userInputInFlight.current.has(requestId)) return;
+      const attachmentsByQuestionId: Record<string, UserInputAttachments[string]> = {};
+      for (const question of request.questions) {
+        const draftId = questionAttachmentDraftId(
+          target.environmentId,
+          target.threadId,
+          requestId,
+          question.id,
+        );
+        if ((useQuestionAttachmentPreparation.getState().counts[draftId] ?? 0) > 0) return;
+        const draft = useComposerDraftStore.getState().getComposerDraft(draftId);
+        const attachments = draft ? [...draft.images, ...draft.files] : [];
+        if (attachments.length === 0) continue;
+        const uploaded = getUploadedAttachments({
+          environmentId: target.environmentId,
+          images: attachments,
+        });
+        if (!supportsQuestionAttachments || !uploaded) {
+          setError("Wait for attachments to finish uploading, or remove failed uploads.");
+          return;
+        }
+        attachmentsByQuestionId[question.id] = uploaded as UserInputAttachments[string];
+      }
+      userInputInFlight.current.add(requestId);
       setRespondingRequestIds((current) => [...new Set([...current, requestId])]);
       setError(null);
-      const result = await respondToUserInput(
-        buildCompactChatUserInputCommand({ target, requestId, answers }),
-      );
-      const failure = commandFailureMessage(result, "Failed to submit answers.");
-      if (failure) setError(failure);
-      setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
-      return result;
+      try {
+        const result = await respondToUserInput(
+          buildCompactChatUserInputCommand({ target, requestId, answers, attachmentsByQuestionId }),
+        );
+        const failure = commandFailureMessage(result, "Failed to submit answers.");
+        if (failure) setError(failure);
+        return result;
+      } finally {
+        userInputInFlight.current.delete(requestId);
+        setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
+      }
     },
-    [connected, respondToUserInput, target],
+    [connected, pendingUserInputs, respondToUserInput, supportsQuestionAttachments, target],
+  );
+
+  const handleDismissUserInput = useCallback(
+    async (requestId: ApprovalRequestId) => {
+      if (!connected || userInputInFlight.current.has(requestId)) return;
+      userInputInFlight.current.add(requestId);
+      setRespondingRequestIds((current) => [...new Set([...current, requestId])]);
+      try {
+        const result = await dismissUserInput({
+          environmentId: target.environmentId,
+          input: { threadId: target.threadId, requestId },
+        });
+        const failure = commandFailureMessage(result, "Failed to dismiss the question.");
+        if (failure) setError(failure);
+        return result;
+      } finally {
+        userInputInFlight.current.delete(requestId);
+        setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
+      }
+    },
+    [connected, dismissUserInput, target],
   );
 
   const advancePendingUserInput = useCallback(() => {
-    if (!activePendingUserInput || !activePendingProgress) return;
+    if (!activePendingUserInput || !activePendingProgress?.canAdvance) return;
     if (activePendingProgress.isLastQuestion) {
       if (activePendingResolvedAnswers) {
         void handleUserInput(activePendingUserInput.requestId, activePendingResolvedAnswers);
@@ -485,14 +667,23 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   ]);
 
   const handleSend = useCallback(async () => {
-    if (!thread || !connected || sendInFlightRef.current || running) return;
+    if (!thread || !connected || sendInFlightRef.current) return;
     if (activePendingProgress) {
       advancePendingUserInput();
       return;
     }
+    if (running) return;
     const sendContext = composerRef.current?.getSendContext();
     if (!sendContext?.providerAvailable) return;
-    const prompt = promptRef.current.trim();
+    const terminalContexts = filterTerminalContextsWithText(sendContext.terminalContexts);
+    const prompt = sendContext.terminalContexts
+      .filter((context) => !terminalContexts.includes(context))
+      .reduce(
+        (text, context) =>
+          removeInlineContextReference(text, terminalContextReference(context).contextId).prompt,
+        sendContext.prompt,
+      )
+      .trim();
     const composerAttachments = [...sendContext.images, ...sendContext.files];
     if (prompt.length === 0 && composerAttachments.length === 0) return;
 
@@ -534,6 +725,8 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
         : await Promise.all(
             sendContext.images.map(async (image) => ({
               type: "image" as const,
+              id: image.id,
+              ...(image.source ? { source: image.source } : {}),
               name: image.name,
               mimeType: image.mimeType,
               sizeBytes: image.sizeBytes,
@@ -543,12 +736,33 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
       if (!supportsAttachmentUploads && sendContext.files.length > 0) {
         throw new Error("This server cannot upload file attachments.");
       }
+      const context = buildMessageContext({
+        terminalContexts,
+        reviewComments: sendContext.reviewComments,
+        previewAnnotations: sendContext.previewAnnotations,
+        attachments: composerAttachments.map((attachment, index) => ({
+          attachment,
+          attachmentId:
+            (attachments[index] && "id" in attachments[index]
+              ? attachments[index].id
+              : undefined) ?? attachment.id,
+        })),
+      });
+      const supportsInlineMessageContext =
+        appAtomRegistry.get(environmentServerConfigsAtom).get(target.environmentId)?.environment
+          .capabilities.inlineMessageContext === true;
+      const text =
+        context && !supportsInlineMessageContext
+          ? serializeLegacyContextMessage({ text: outgoingText, records: context.records })
+          : outgoingText;
+      if (!composerRef.current?.validateProviderInput(text)) return;
       const result = await startTurn(
         buildCompactChatStartTurnCommand({
           owner,
           target,
           thread,
-          text: outgoingText,
+          text,
+          ...(supportsInlineMessageContext && context ? { context } : {}),
           attachments,
           modelSelection: sendContext.selectedModelSelection,
           runtimeMode,
@@ -637,7 +851,27 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
   }
 
   return (
-    <div data-compact-chat-surface className="relative flex min-h-0 flex-1 flex-col bg-background">
+    <div
+      data-compact-chat-surface
+      className="relative flex min-h-0 flex-1 flex-col bg-background"
+      onKeyDown={(event) => {
+        if (event.defaultPrevented || isCommandPaletteOpen() || !running || !connected) return;
+        const command = resolveShortcutCommand(event.nativeEvent, keybindings, {
+          context: {
+            terminalFocus: false,
+            terminalOpen: false,
+            previewFocus: false,
+            previewOpen: false,
+            modelPickerOpen: composerRef.current?.isModelPickerOpen() ?? false,
+            rightPanelOpen: true,
+          },
+        });
+        if (command !== "thread.stop") return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) void handleInterrupt();
+      }}
+    >
       {visibleError ? (
         <ThreadErrorBanner
           error={visibleError}
@@ -730,6 +964,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   environmentId={target.environmentId}
                   attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                   supportsAttachmentUploads={supportsAttachmentUploads}
+                  supportsQuestionAttachments={supportsQuestionAttachments}
                   maxFileAttachmentBytes={maxFileAttachmentBytes}
                   routeKind="server"
                   routeThreadRef={target}
@@ -737,6 +972,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   activeThreadId={thread.id}
                   activeThreadEnvironmentId={thread.environmentId}
                   activeThread={thread}
+                  activeThreadShell={threadShell}
                   isServerThread
                   isLocalDraftThread={false}
                   forceExpandedOnMobile={false}
@@ -771,7 +1007,8 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   interactionMode={interactionMode}
                   lockedProvider={lockedProvider}
                   providerStatuses={providerStatuses as ServerProvider[]}
-                  activeProjectDefaultModelSelection={project?.defaultModelSelection}
+                  providerCatalogKnown={environment.serverConfig !== null}
+                  activeProjectDefaultModelSelection={projectSettings.defaultModelSelection}
                   activeThreadModelSelection={thread.modelSelection}
                   activeContextWindow={activeContextWindow}
                   compactThreadUnavailable
@@ -783,6 +1020,12 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   terminalOpen={false}
                   gitCwd={thread.worktreePath ?? project?.workspaceRoot ?? null}
                   forkEligibility={SIDE_CHAT_FORK_ELIGIBILITY}
+                  pullRequestProjectId={supportsPullRequests ? thread.projectId : null}
+                  pullRequestRepository={
+                    supportsPullRequests ? (project?.repositoryIdentity?.displayName ?? null) : null
+                  }
+                  onCompactContext={() => {}}
+                  onDismissActivePendingUserInput={handleDismissUserInput}
                   restingControlsHost={null}
                   restingControlsHaveLeadingContext={false}
                   onRestingControlsVisibilityChange={() => {}}
@@ -796,7 +1039,6 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   composerImagesRef={composerImagesRef}
                   composerFilesRef={composerFilesRef}
                   composerTerminalContextsRef={composerTerminalContextsRef}
-                  composerElementContextsRef={composerElementContextsRef}
                   onPageScrollKeyDown={handlePageScrollKeyDown}
                   onPageScrollKeyUp={handlePageScrollKeyUp}
                   onPageScrollRelease={handlePageScrollRelease}
@@ -867,9 +1109,7 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   }}
                   onExpandImage={setExpandedImage}
                   onFileOpen={(attachment) => {
-                    if (isBrowserPreviewAttachment(attachment)) {
-                      useRightPanelStore.getState().openAttachment(owner, attachment);
-                    }
+                    useRightPanelStore.getState().openAttachment(owner, attachment);
                   }}
                 />
               </ComposerSurface.Host>

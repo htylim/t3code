@@ -1,6 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import {
   EventId,
+  ComposerContextId,
   MessageId,
   ProjectId,
   ProviderInstanceId,
@@ -46,6 +47,9 @@ const shell = (overrides: Partial<OrchestrationThreadShell> = {}): Orchestration
   archivedAt: null,
   settledOverride: null,
   settledAt: null,
+  unsettledAt: null,
+  activeOrderKey: null,
+  pullRequests: [],
   snoozedUntil: null,
   snoozedAt: null,
   pinnedAt: null,
@@ -95,6 +99,9 @@ const snapshot = (
     archivedAt: null,
     settledOverride: null,
     settledAt: null,
+    unsettledAt: null,
+    activeOrderKey: null,
+    pullRequests: [],
     snoozedUntil: null,
     snoozedAt: null,
     pinnedAt: null,
@@ -451,4 +458,42 @@ it("omits an item with oversized immutable metadata and keeps older complete ite
   });
   expect(result.returnedBytes).toBe(threadReadCallToolResultBytes(result));
   expect(result.returnedBytes).toBeLessThanOrEqual(result.maxBytes);
+});
+
+it("exposes inline context in message reads and bounds large context payloads", () => {
+  const record = {
+    kind: "terminal" as const,
+    version: 1 as const,
+    contextId: ComposerContextId.make("terminal-build"),
+    label: "build output",
+    terminalId: "terminal-1",
+    terminalLabel: "build",
+    lineStart: 0,
+    lineEnd: 1,
+    text: "Build failed: missing configuration",
+  };
+  const withContext = (text: string): OrchestrationMessage => ({
+    ...message(
+      "user-context",
+      "user",
+      "[build output](t3-context://v1/terminal/terminal-build)",
+      base,
+    ),
+    context: { version: 1, records: [{ ...record, text }] },
+  });
+  const result = buildThreadReadResult(snapshot([withContext(record.text)]), status, {
+    threadId,
+    view: "messages",
+    maxBytes: 65_536,
+  });
+  if (result.view !== "messages") throw new Error("unexpected view");
+  expect(result.messages[0]?.payload).toEqual({ context: { version: 1, records: [record] } });
+  const bounded = buildThreadReadResult(snapshot([withContext("🧪".repeat(20_000))]), status, {
+    threadId,
+    view: "messages",
+    maxBytes: 4_096,
+  });
+  if (bounded.view !== "messages") throw new Error("unexpected view");
+  expect(bounded.messages[0]?.truncatedFields).toContain("payload");
+  expect(threadReadCallToolResultBytes(bounded)).toBeLessThanOrEqual(4_096);
 });

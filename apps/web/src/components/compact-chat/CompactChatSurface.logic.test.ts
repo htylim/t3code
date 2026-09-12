@@ -1,6 +1,7 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   ApprovalRequestId,
+  ComposerContextId,
   EnvironmentId,
   MessageId,
   ProjectId,
@@ -118,6 +119,7 @@ describe("compact Chat target isolation", () => {
     const attachments = [
       {
         type: "image" as const,
+        id: "local-image",
         name: "reference.png",
         mimeType: "image/png",
         sizeBytes: 42,
@@ -125,11 +127,27 @@ describe("compact Chat target isolation", () => {
       },
     ];
 
+    const context = {
+      version: 1 as const,
+      records: [
+        {
+          kind: "image" as const,
+          version: 1 as const,
+          contextId: ComposerContextId.make("image-upload"),
+          label: "image",
+          attachmentId: attachments[0]!.id,
+          name: attachments[0]!.name,
+          mimeType: attachments[0]!.mimeType,
+          sizeBytes: attachments[0]!.sizeBytes,
+        },
+      ],
+    };
     const start = buildCompactChatStartTurnCommand({
       owner,
       target,
       thread,
       text: "Use this image",
+      context,
       attachments,
       modelSelection,
       runtimeMode: "full-access",
@@ -141,6 +159,7 @@ describe("compact Chat target isolation", () => {
     expect(start.environmentId).toBe(target.environmentId);
     expect(start.input.threadId).toBe(target.threadId);
     expect(start.input.message.attachments).toEqual(attachments);
+    expect(start.input.message.context).toEqual(context);
     expect(start.input.modelSelection).toEqual(modelSelection);
     expect(start.input.runtimeMode).toBe("full-access");
     expect(start.input.interactionMode).toBe("plan");

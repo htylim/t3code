@@ -5,6 +5,8 @@ import {
   type KeybindingCommand,
   type MessageId,
   type ModelSelection,
+  type OrchestrationMessageContext,
+  type UserInputAttachments,
   type OrchestrationSession,
   type ProjectId,
   type ProviderApprovalDecision,
@@ -61,6 +63,7 @@ export function buildCompactChatStartTurnCommand(input: {
   readonly target: ScopedThreadRef;
   readonly thread: CompactChatTargetThread;
   readonly text: string;
+  readonly context?: OrchestrationMessageContext;
   readonly attachments?: ReadonlyArray<UploadChatAttachment | ChatAttachment>;
   readonly modelSelection?: ModelSelection;
   readonly runtimeMode?: RuntimeMode;
@@ -76,6 +79,7 @@ export function buildCompactChatStartTurnCommand(input: {
         messageId: input.messageId,
         role: "user" as const,
         text: input.text,
+        ...(input.context ? { context: input.context } : {}),
         attachments: input.attachments ?? [],
       },
       modelSelection: input.modelSelection ?? input.thread.modelSelection,
@@ -124,6 +128,7 @@ export function buildCompactChatUserInputCommand(input: {
   readonly target: ScopedThreadRef;
   readonly requestId: ApprovalRequestId;
   readonly answers: ProviderUserInputAnswers;
+  readonly attachmentsByQuestionId?: UserInputAttachments;
 }) {
   return {
     environmentId: input.target.environmentId,
@@ -131,6 +136,9 @@ export function buildCompactChatUserInputCommand(input: {
       threadId: input.target.threadId,
       requestId: input.requestId,
       answers: input.answers,
+      ...(input.attachmentsByQuestionId
+        ? { attachmentsByQuestionId: input.attachmentsByQuestionId }
+        : {}),
     },
   };
 }

@@ -102,7 +102,7 @@ const ThreadControlErrorContextFields = {
   targetProjectId: Schema.optionalKey(ProjectId),
 } as const;
 
-export class ThreadControlError extends Schema.TaggedErrorClass<ThreadControlError>()(
+export class ThreadControlError extends Schema.TaggedError<ThreadControlError>()(
   "ThreadControlError",
   {
     code: ThreadControlNonPartialErrorCode,
@@ -110,7 +110,7 @@ export class ThreadControlError extends Schema.TaggedErrorClass<ThreadControlErr
   },
 ) {}
 
-export class ThreadControlPartialFailure extends Schema.TaggedErrorClass<ThreadControlPartialFailure>()(
+export class ThreadControlPartialFailure extends Schema.TaggedError<ThreadControlPartialFailure>()(
   "ThreadControlError",
   {
     code: Schema.Literal("partial_failure"),

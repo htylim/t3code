@@ -1,5 +1,6 @@
 import {
   CommandId,
+  ComposerContextId,
   EventId,
   MessageId,
   ProjectId,
@@ -67,6 +68,9 @@ function makeReadModel(input?: { readonly targetExists?: boolean }): Orchestrati
             archivedAt: null,
             settledOverride: null,
             settledAt: null,
+            unsettledAt: null,
+            activeOrderKey: null,
+            pullRequests: [],
             snoozedUntil: null,
             snoozedAt: null,
             pinnedAt: null,
@@ -103,7 +107,22 @@ function makeCopyCommand(): ThreadCopyCreateCommand {
       {
         id: TARGET_IDS.message,
         role: "user",
-        text: "copied message",
+        text: "[diagram](t3-context://v1/image/image-diagram)",
+        context: {
+          version: 1,
+          records: [
+            {
+              kind: "image",
+              version: 1,
+              contextId: ComposerContextId.make("image-diagram"),
+              label: "diagram",
+              attachmentId: TARGET_IDS.attachment,
+              name: "diagram.png",
+              mimeType: "image/png",
+              sizeBytes: 100,
+            },
+          ],
+        },
         attachments: [
           {
             type: "image",
@@ -170,6 +189,10 @@ it.layer(NodeServices.layer)("thread.copy.create decider", (it) => {
         }),
       );
 
+      expect(events.find((event) => event.type === "thread.message-sent")?.payload).toHaveProperty(
+        "context",
+        makeCopyCommand().messages[0]?.context,
+      );
       expect(events.map((event) => event.type)).toEqual([
         "thread.created",
         "thread.unsettled",
