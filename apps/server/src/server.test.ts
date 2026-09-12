@@ -126,6 +126,9 @@ import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationE
 import { OrchestrationEventStore } from "./persistence/Services/OrchestrationEventStore.ts";
 import { PersistenceSqlError } from "./persistence/Errors.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
+import { ProjectionThreadRepository } from "./persistence/Services/ProjectionThreads.ts";
+import { OpenCodeRuntime } from "./provider/opencodeRuntime.ts";
+import { TransientChatCleanupGate } from "./provider/transientChatDeletion/lifecycle.ts";
 import * as ProviderService from "./provider/Services/ProviderService.ts";
 import { ProviderAuthService } from "./provider/Services/ProviderAuthService.ts";
 import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry.ts";
@@ -786,6 +789,13 @@ const buildAppUnderTest = (options?: {
             streamChanges: Stream.empty,
             ...options?.layers?.providerRegistry,
           }),
+          Layer.mock(ProjectionThreadRepository)({ getById: () => Effect.succeed(Option.none()) }),
+          Layer.mock(OpenCodeRuntime)({
+            createOpenCodeSdkClient: () => {
+              throw new Error("OpenCode is not stubbed in this test");
+            },
+          }),
+          TransientChatCleanupGate.layer,
           Layer.mock(ProviderService.ProviderService)({
             uploadFeedback: () => Effect.die("Provider feedback is not stubbed in this test"),
             ...options?.layers?.providerService,
@@ -5475,6 +5485,25 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.deepEqual(result, { importedCount: 0, skippedCount: 1 });
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("returns a typed transient cleanup failure through websocket rpc", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const error = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          Effect.flip(
+            client[WS_METHODS.transientSideChatCleanup]({
+              threadId: ThreadId.make("unknown-transient"),
+            }),
+          ),
+        ),
+      );
+      assert.equal(error._tag, "TransientSideChatCleanupError");
+      if (error._tag === "TransientSideChatCleanupError")
+        assert.equal(error.reason, "invalid-target");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

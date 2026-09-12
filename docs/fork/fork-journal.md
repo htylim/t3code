@@ -950,3 +950,32 @@ upstream.
   `git diff --check`. In an isolated dev app, a wide diagram panned horizontally in both inline and
   expanded views, a tall diagram panned vertically, label text remained selectable, and scrollbar
   presses were not intercepted.
+
+## 2026-09-12 — Provider history deletion for transient side chats
+
+- Upstream baseline: `b1e223e2b0`
+- Change: Transient side-chat closure, replacement, and startup cleanup now call a dedicated
+  server RPC that resolves the native session from the existing provider binding, stops it, and
+  deletes its Codex, Claude, or OpenCode history. Failed cleanup stays in the existing browser
+  registry. Other providers retain T3-only cleanup.
+- Reason: Temporary conversations should not accumulate provider history. Native lineage and
+  unreadable-history checks fail explicitly; there is no cascading or guessed-file deletion.
+- Scope: Isolated provider deletion modules and Claude SDK worker, one RPC contract/handler,
+  the existing transient web/desktop hook, and a small provider admission guard. Pending/completed
+  markers use the existing runtime payload to prevent later resume and support retries, without
+  a database migration. Ordinary thread deletion is unchanged. Native mobile has no transient
+  side-chat hook to change.
+- Verification: Focused provider, lifecycle, provider-service, registry, authorization, and WebSocket
+  tests; scoped server/web/contracts type checks; targeted lint/formatting; server bundle and
+  bundled Claude worker smoke test. Browser E2E used an isolated dev server and provider homes
+  with real Codex Terra, Claude Sonnet, and OpenCode Terra turns. Verified native history removal on close/replacement, blank-chat cleanup, and preservation
+  of the main thread. A Claude child-transcript fixture caused refusal and remained queued; after
+  removing it, page-startup retry deleted the provider history.
+- Provider constraint: Closing Codex during first-session startup can leave an empty rollout.
+  Codex 0.154.0 refuses both reading and deleting that file through its API. Cleanup returns an
+  error and retains the job; retries require the provider history to become readable or be repaired.
+  The native regression test prevents mistaking this state for an absent session.
+- Upstream conflict map: Most behavior lives in new modules. Integration seams are the provider
+  service admission wrappers, WebSocket registration/authorization, shared RPC schema, transient
+  cleanup hook, and Claude worker bundle entry. Revisit the narrow raw Codex descendant query when
+  its generated client exposes that experimental filter.

@@ -83,6 +83,10 @@ import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.ts";
+import {
+  assertTransientChatNotClosing,
+  TransientChatCleanupGate,
+} from "../transientChatDeletion/lifecycle.ts";
 import { type EventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
@@ -489,6 +493,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 
   const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistry;
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+  const transientCleanupGate = yield* TransientChatCleanupGate;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const projectionQuery = yield* Effect.serviceOption(
     ProjectionSnapshotQuery.ProjectionSnapshotQuery,
@@ -1253,6 +1258,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     readonly binding: ProviderSessionDirectory.ProviderRuntimeBinding;
     readonly operation: string;
   }) {
+    yield* assertTransientChatNotClosing(input.binding.threadId, input.binding.runtimePayload);
     const bindingInstanceId = yield* requireBindingInstanceId(input.operation, input.binding);
     yield* Effect.annotateCurrentSpan({
       "provider.operation": "recover-session",
@@ -1350,6 +1356,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         input.operation,
         `Cannot route thread '${input.threadId}' because no persisted provider binding exists.`,
       );
+    }
+    if (input.operation !== "ProviderService.stopSession") {
+      yield* assertTransientChatNotClosing(input.threadId, binding.runtimePayload);
     }
     const instanceId = yield* requireBindingInstanceId(input.operation, binding);
     const adapter = yield* registry.getByInstance(instanceId);
@@ -1464,6 +1473,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           );
         }
         const persistedBinding = Option.getOrUndefined(yield* directory.getBinding(threadId));
+        yield* assertTransientChatNotClosing(threadId, persistedBinding?.runtimePayload);
         if (
           persistedBinding?.provider === resolvedProvider &&
           persistedBinding.providerInstanceId !== resolvedInstanceId &&
@@ -2516,9 +2526,14 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   );
 
   return {
-    startSession,
-    forkSession,
-    sendTurn,
+    startSession: (threadId, input) =>
+      transientCleanupGate.run(threadId, startSession(threadId, input)),
+    forkSession: (input) =>
+      transientCleanupGate.run(
+        input.sourceThreadId,
+        transientCleanupGate.run(input.targetThreadId, forkSession(input)),
+      ),
+    sendTurn: (input) => transientCleanupGate.run(input.threadId, sendTurn(input)),
     compactThread,
     interruptTurn,
     respondToRequest,
@@ -2542,8 +2557,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 export const ProviderServiceLive = Layer.effect(
   ProviderService.ProviderService,
   makeProviderService(),
-);
+).pipe(Layer.provideMerge(TransientChatCleanupGate.layer));
 
 export function makeProviderServiceLive(options?: ProviderServiceLiveOptions) {
-  return Layer.effect(ProviderService.ProviderService, makeProviderService(options));
+  return Layer.effect(ProviderService.ProviderService, makeProviderService(options)).pipe(
+    Layer.provideMerge(TransientChatCleanupGate.layer),
+  );
 }
