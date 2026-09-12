@@ -19,6 +19,26 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-12 - Consolidate selected-text actions in the citation toolbar
+
+- Upstream baseline: `163d86a78`
+- Change: **Ask in new thread** and **Ask in side chat** now appear beside **Cite** in the floating
+  selection toolbar. All three use Cite's single-assistant-message selection rules and 8,000-character
+  limit. Removed the selected-text right-click wrapper, menu helpers, separate selection reader,
+  and side-chat blockquote fallback. New-thread drafts retain their Markdown quote and source-thread
+  reference; side-chat drafts retain their assistant citation. Neither action sends automatically.
+- Reason: Offer one discoverable selection menu and reuse upstream's selection lifecycle.
+- Scope: Web and desktop main timelines, selected-text prompt tests, and user guidance. Compact
+  side-chat timelines, native mobile, provider adapters, wire contracts, and server behavior are unchanged.
+- Verification: Passed 128 focused selection, prompt, and timeline tests, the web typecheck, targeted
+  lint (existing warnings in ChatView and MessagesTimeline), formatting, and whitespace checks.
+  In an isolated browser using a SQLite snapshot of real threads, verified all three actions,
+  Markdown and source references in the new main draft, a citation in an unsent side chat, side-chat
+  closing, Tab navigation, Escape and scroll dismissal, unhandled right-click, and rejection of
+  user-message and cross-message selections. Synthetic 8,000/8,001-character selections verified
+  the length boundary. Desktop viewport-edge placement passed; the browser resize tool timed out
+  before narrow-viewport verification.
+
 ## 2026-09-05 - Scope thread references and support multiword queries
 
 - Upstream baseline: `163d86a78`
@@ -598,12 +618,11 @@ upstream.
   targeted lint and formatting, and `git diff --check`. In an isolated web environment, selected
   an assistant response, opened the context action, and confirmed it created a distinct unsent
   draft with one source-thread chip and both selected lines preserved as Markdown quotes.
-- Upstream conflict map: `selectedTextThreadAction.ts` and
-  `AskInNewThreadSelectionSurface.tsx` own the feature. In `ChatView.tsx`, preserve only the wrapper
-  around the existing messages area and its active thread/project/new-thread inputs. If upstream
-  ships an equivalent selection action, remove the wrapper and fork-owned files rather than
-  merging both implementations. Do not add attachment schemas, message offsets, or server state to
-  retain this behavior.
+- Upstream conflict map: `selectedTextThreadAction.ts` owns prompt construction. The actions now
+  live in `AssistantSelectionToolbar.tsx`, with a callback passed through `MessagesTimeline` from
+  `ChatView.tsx`; the old right-click wrapper was removed on 2026-09-12. Preserve upstream's
+  selection observer and citation capture when updating the toolbar. If upstream ships equivalent
+  thread actions, prefer those instead of maintaining a second implementation.
 
 ## 2026-08-11 — Add compact Chat right-panel surface
 

@@ -1,56 +1,16 @@
-import type { AssistantCitation, ContextMenuItem, ScopedThreadRef } from "@t3tools/contracts";
+import type { AssistantCitation, ScopedThreadRef } from "@t3tools/contracts";
 import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
 
 import type { DraftId } from "./composerDraftStore";
-import { chatMarkdownClipboardPayload } from "./markdown-clipboard";
 import { serializeThreadReferenceMarkdown } from "./threadReference";
 
 export type SelectedTextThreadAction = "ask-in-new-thread" | "ask-in-side-chat";
 
-export const SELECTED_TEXT_THREAD_CONTEXT_MENU_ITEMS = [
-  { id: "ask-in-new-thread", label: "Ask in new thread" },
-  { id: "ask-in-side-chat", label: "Ask in side chat" },
-] as const satisfies readonly ContextMenuItem<SelectedTextThreadAction>[];
-
-function nodeElement(node: Node): Element | null {
-  return node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
-}
-
-function chatMarkdownRoot(node: Node): Element | null {
-  return nodeElement(node)?.closest(".chat-markdown") ?? null;
-}
-
-/**
- * Reads one selection from one rendered chat message. Keeping both endpoints
- * in the same Markdown root prevents timeline chrome or adjacent messages from
- * leaking into the new draft.
- */
-export function readSelectedChatMarkdown(
-  selection: Selection,
-  timelineContainer: Element,
-): string | null {
-  if (selection.isCollapsed || selection.rangeCount === 0) return null;
-
-  let selectedRoot: Element | null = null;
-  for (let index = 0; index < selection.rangeCount; index += 1) {
-    const range = selection.getRangeAt(index);
-    if (range.collapsed) continue;
-    const startRoot = chatMarkdownRoot(range.startContainer);
-    const endRoot = chatMarkdownRoot(range.endContainer);
-    if (
-      startRoot === null ||
-      endRoot !== startRoot ||
-      !timelineContainer.contains(startRoot) ||
-      (selectedRoot !== null && selectedRoot !== startRoot)
-    ) {
-      return null;
-    }
-    selectedRoot = startRoot;
-  }
-
-  if (selectedRoot === null) return null;
-  return chatMarkdownClipboardPayload(selection)?.text.trim() || null;
-}
+export type SelectedTextThreadActionHandler = (
+  action: SelectedTextThreadAction,
+  citation: AssistantCitation,
+  selectedMarkdown: string,
+) => Promise<void>;
 
 function markdownBlockquote(markdown: string): string {
   return markdown
@@ -69,23 +29,8 @@ export function buildAskInNewThreadPrompt(input: {
   return `Regarding this selection from ${source}:\n\n${markdownBlockquote(input.selectedMarkdown)}\n\n`;
 }
 
-export function buildAskInSideChatPrompt(
-  selectedMarkdown: string,
-  assistantCitation?: AssistantCitation,
-): string {
-  return assistantCitation
-    ? `${serializeAssistantCitation(assistantCitation)} `
-    : `${markdownBlockquote(selectedMarkdown)}\n\n`;
-}
-
-export async function showSelectedTextThreadContextMenu(input: {
-  readonly position: { readonly x: number; readonly y: number };
-  readonly showContextMenu: (
-    items: readonly ContextMenuItem<SelectedTextThreadAction>[],
-    position: { readonly x: number; readonly y: number },
-  ) => Promise<SelectedTextThreadAction | null>;
-}): Promise<SelectedTextThreadAction | null> {
-  return input.showContextMenu(SELECTED_TEXT_THREAD_CONTEXT_MENU_ITEMS, input.position);
+export function buildAskInSideChatPrompt(assistantCitation: AssistantCitation): string {
+  return `${serializeAssistantCitation(assistantCitation)} `;
 }
 
 export async function createSelectedTextThreadDraft(input: {
