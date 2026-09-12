@@ -1576,6 +1576,39 @@ it.effect(
 );
 
 routing.layer("ProviderServiceLive routing", (it) => {
+  it.effect(
+    "cleanup markers reject starting and resuming a transient session, but allow stopping",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+        for (const state of ["pending", "complete"]) {
+          const threadId = asThreadId(`transient-cleanup-${state}`);
+          const input = {
+            providerInstanceId: codexInstanceId,
+            threadId,
+            runtimeMode: "full-access" as const,
+            cwd: fixtureCwd(state),
+          };
+          yield* provider.startSession(threadId, input);
+          yield* directory.upsert({
+            threadId,
+            provider: CODEX_DRIVER,
+            providerInstanceId: codexInstanceId,
+            runtimePayload: { transientSideChatCleanup: state },
+          });
+          yield* provider.stopSession({ threadId });
+          routing.codex.startSession.mockClear();
+          const startError = yield* Effect.flip(provider.startSession(threadId, input));
+          assert.instanceOf(startError, ProviderValidationError);
+          const sendError = yield* Effect.flip(
+            provider.sendTurn({ threadId, input: "must not resume" }),
+          );
+          assert.instanceOf(sendError, ProviderValidationError);
+          assert.equal(routing.codex.startSession.mock.calls.length, 0);
+        }
+      }),
+  );
   it.effect.each([CODEX_DRIVER, CLAUDE_AGENT_DRIVER, CURSOR_DRIVER])(
     "rejects missing, file, and saved workspace paths before starting %s",
     (driver) =>

@@ -1,9 +1,10 @@
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { useCallback, useEffect, useRef } from "react";
 
 import { useEnvironments } from "../state/environments";
-import { threadEnvironment } from "../state/threads";
+import { cleanupTransientSideChatCommand } from "../state/transientSideChat";
 import { useAtomCommand } from "../state/use-atom-command";
 import {
   deleteTransientSideChat,
@@ -12,15 +13,17 @@ import {
 } from "../transientSideChatStore";
 
 export function useDeleteTransientSideChat() {
-  const deleteThread = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
+  const deleteThread = useAtomCommand(cleanupTransientSideChatCommand, { reportFailure: false });
 
   return useCallback(
     async (ref: ScopedThreadRef) => {
       const result = await deleteTransientSideChat(ref, deleteThread);
       if (result._tag === "Failure") {
+        const error = squashAtomCommandFailure(result);
         console.warn("Failed to delete transient side chat; cleanup will retry later.", {
           environmentId: ref.environmentId,
           threadId: ref.threadId,
+          error: error instanceof Error ? error.message : String(error),
         });
       }
       return result;

@@ -26,6 +26,7 @@ import {
   ClientSurface,
   ClientWebDeployment,
   CommandId,
+  TransientSideChatCleanupError,
   type DiscoveredLocalServerList,
   EventId,
   type EditorId,
@@ -104,6 +105,7 @@ import {
 } from "./observability/RpcInstrumentation.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderService from "./provider/Services/ProviderService.ts";
+import { makeTransientSideChatCleanup } from "./provider/transientSideChatCleanup.ts";
 import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDirectory.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import { ProviderAuthService } from "./provider/Services/ProviderAuthService.ts";
@@ -542,6 +544,7 @@ const makeWsRpcLayer = (
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
       const providerService = yield* ProviderService.ProviderService;
+      const cleanupTransientSideChat = yield* makeTransientSideChatCleanup();
       const providerSessionDirectory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const providerAuth = yield* ProviderAuthService;
@@ -1317,6 +1320,20 @@ const makeWsRpcLayer = (
           .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
       return WsRpcGroup.of({
+        [WS_METHODS.transientSideChatCleanup]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.transientSideChatCleanup,
+            startup.enqueueCommand(cleanupTransientSideChat(input)).pipe(
+              Effect.catchTag("ServerRuntimeStartupError", (cause) =>
+                Effect.fail(
+                  new TransientSideChatCleanupError({
+                    reason: "provider-error",
+                    message: cause.message || "The server is not ready for cleanup.",
+                  }),
+                ),
+              ),
+            ),
+          ),
         [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.dispatchCommand,
