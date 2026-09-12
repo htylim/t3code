@@ -347,7 +347,12 @@ import {
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
-import { AskInNewThreadSelectionSurface } from "./chat/AskInNewThreadSelectionSurface";
+import {
+  buildAskInNewThreadPrompt,
+  buildAskInSideChatPrompt,
+  createSelectedTextThreadDraft,
+  type SelectedTextThreadActionHandler,
+} from "../selectedTextThreadAction";
 import { createPageScrollController, type PageScrollKey } from "./chat/pageScrollController";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
@@ -6388,6 +6393,49 @@ export default function ChatView(props: ChatViewProps) {
       setComposerDraftPrompt,
     ],
   );
+  const selectedTextThreadActionInFlightRef = useRef(false);
+  const askAboutSelection = useCallback<SelectedTextThreadActionHandler>(
+    async (action, citation, selectedMarkdown) => {
+      if (
+        !isServerThread ||
+        !activeThread ||
+        !activeProjectRef ||
+        selectedTextThreadActionInFlightRef.current
+      )
+        return;
+      selectedTextThreadActionInFlightRef.current = true;
+      try {
+        if (action === "ask-in-side-chat") {
+          await openNewSideChat(buildAskInSideChatPrompt(citation));
+          return;
+        }
+        const prompt = buildAskInNewThreadPrompt({
+          selectedMarkdown,
+          sourceThreadTitle: activeThread.title,
+          sourceThreadRef: citation,
+        });
+        const store = useComposerDraftStore.getState();
+        await createSelectedTextThreadDraft({
+          prompt,
+          createThread: () => handleNewThread(activeProjectRef),
+          findCreatedDraft: () => store.getDraftSessionByProjectRef(activeProjectRef),
+          setPrompt: store.setPrompt,
+        });
+      } catch (cause) {
+        console.error("[selected-text-thread] action failed", cause);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not create thread from selection",
+            description: cause instanceof Error ? cause.message : "An unexpected error occurred.",
+          }),
+        );
+      } finally {
+        selectedTextThreadActionInFlightRef.current = false;
+      }
+    },
+    [activeProjectRef, activeThread, handleNewThread, isServerThread, openNewSideChat],
+  );
   const addChatSurface = useCallback(() => {
     void openNewSideChat();
   }, [openNewSideChat]);
@@ -8998,15 +9046,7 @@ export default function ChatView(props: ChatViewProps) {
               />
             </div>
             {/* Messages Wrapper */}
-            <AskInNewThreadSelectionSurface
-              className="relative flex min-h-0 flex-1 flex-col bg-background"
-              enabled={isServerThread}
-              projectRef={activeProjectRef}
-              sourceThreadRef={routeThreadRef}
-              sourceThreadTitle={activeThread.title}
-              createThread={handleNewThread}
-              createSideThread={openNewSideChat}
-            >
+            <div className="relative flex min-h-0 flex-1 flex-col bg-background">
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
                 citationRequest={paintOnlyDisplayedTimeline ? null : citationRequest}
@@ -9014,6 +9054,9 @@ export default function ChatView(props: ChatViewProps) {
                 {...(!paintOnlyDisplayedTimeline
                   ? {
                       onCiteAssistantText: citeAssistantText,
+                      ...(isServerThread && activeProjectRef
+                        ? { onAskAboutSelection: askAboutSelection }
+                        : {}),
                       agentPanelModel,
                       onOpenAgents: addAgentsSurface,
                       onUseArtifactTemplate: useArtifactTemplate,
@@ -9102,7 +9145,7 @@ export default function ChatView(props: ChatViewProps) {
                   </Button>
                 </div>
               )}
-            </AskInNewThreadSelectionSurface>
+            </div>
 
             {/* Input bar — centered hero while a draft has no messages, docked at the bottom otherwise */}
             <div

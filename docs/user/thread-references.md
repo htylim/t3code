@@ -28,13 +28,15 @@ the reference when you want it to read the target through T3's thread tools.
 
 ## Ask about selected text in a new thread
 
-On web or desktop, select text inside one chat message and right-click it. Choose **Ask in new
-thread** to open a new main-chat draft with the selection quoted and a reference to the source
-thread. Choose **Ask in side chat** to create a transient draft in the right panel with only the
-quoted selection. The side chat already receives the main thread as provider context. Nothing is
-sent automatically, so you can add your question before submitting it.
+On web or desktop, select text within one assistant message. In the floating selection toolbar,
+choose **Cite** to insert a citation in the current composer, **Ask in new thread** to open a new
+main-chat draft with a Markdown quote and source-thread reference, or **Ask in side chat** to
+create a transient draft in the right panel with a citation to the selection. The side chat
+already receives the main thread as provider context. Nothing is sent automatically, so you can
+add your question before submitting it.
 
-Selections that cross message boundaries keep the normal system context menu instead.
+All three actions use the same selection rules: select at most 8,000 characters within one
+assistant message. Selections in user messages or across messages do not offer these actions.
 
 Thread references are available in the web and desktop main and side-chat composers. The native
 iOS and Android composers do not offer the `%` picker in this version.

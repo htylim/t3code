@@ -4,11 +4,9 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { DraftId } from "./composerDraftStore";
 import {
-  SELECTED_TEXT_THREAD_CONTEXT_MENU_ITEMS,
   buildAskInNewThreadPrompt,
   buildAskInSideChatPrompt,
   createSelectedTextThreadDraft,
-  showSelectedTextThreadContextMenu,
 } from "./selectedTextThreadAction";
 
 describe("Ask in new thread prompt", () => {
@@ -29,12 +27,6 @@ describe("Ask in new thread prompt", () => {
 });
 
 describe("Ask in side chat prompt", () => {
-  it("quotes selected Markdown without repeating the main thread reference", () => {
-    expect(buildAskInSideChatPrompt("First line\n\n- Second line")).toBe(
-      "> First line\n>\n> - Second line\n\n",
-    );
-  });
-
   it("uses an assistant citation when the selection came from an assistant message", () => {
     const citation: AssistantCitation = {
       version: 1,
@@ -48,50 +40,10 @@ describe("Ask in side chat prompt", () => {
       suffix: " here",
     };
 
-    const prompt = buildAskInSideChatPrompt("the selected answer", citation);
+    const prompt = buildAskInSideChatPrompt(citation);
 
     expect(collectAssistantCitations(prompt).map((match) => match.citation)).toEqual([citation]);
     expect(prompt).not.toContain("> the selected answer");
-  });
-});
-
-describe("selected-text context menu", () => {
-  it("returns the selected thread action", async () => {
-    const showContextMenu = vi.fn().mockResolvedValue("ask-in-new-thread");
-
-    await expect(
-      showSelectedTextThreadContextMenu({
-        position: { x: 12, y: 24 },
-        showContextMenu,
-      }),
-    ).resolves.toBe("ask-in-new-thread");
-    expect(showContextMenu).toHaveBeenCalledWith(SELECTED_TEXT_THREAD_CONTEXT_MENU_ITEMS, {
-      x: 12,
-      y: 24,
-    });
-
-    showContextMenu.mockResolvedValueOnce("ask-in-side-chat");
-    await expect(
-      showSelectedTextThreadContextMenu({
-        position: { x: 3, y: 4 },
-        showContextMenu,
-      }),
-    ).resolves.toBe("ask-in-side-chat");
-
-    showContextMenu.mockResolvedValueOnce(null);
-    await expect(
-      showSelectedTextThreadContextMenu({
-        position: { x: 1, y: 2 },
-        showContextMenu,
-      }),
-    ).resolves.toBeNull();
-  });
-
-  it("offers both main-thread and side-chat actions", () => {
-    expect(SELECTED_TEXT_THREAD_CONTEXT_MENU_ITEMS).toEqual([
-      { id: "ask-in-new-thread", label: "Ask in new thread" },
-      { id: "ask-in-side-chat", label: "Ask in side chat" },
-    ]);
   });
 });
 
