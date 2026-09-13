@@ -45,16 +45,20 @@ upstream.
 - Change: Codex's private-use `visualize` markers now resolve their JSON `path` through the existing
   file-link renderer. Completed markers show the filename and copy as ordinary Markdown links;
   malformed markers and examples in code or existing links remain literal.
+  Compressed workspace assets retain their content type so linked HTML previews render correctly.
 - Reason: Visualization responses previously exposed raw markers and JSON instead of an accessible
   link to the generated HTML file.
 - Scope: Shared Markdown parsing and copy/native adapters, covering web and desktop main/side chats
   and mobile. Existing environment-scoped file opening, preview, and close behavior applies.
-  Provider adapters, wire contracts, Settings, shortcuts, and user workflows are unchanged.
-- Verification: Passed 261 focused parser, streaming/click, copy, and native Markdown tests;
-  web, mobile, and changed-parser typechecks; targeted lint, formatting, and diff checks.
+  Server asset responses cover local and remote clients. Provider adapters, wire contracts,
+  Settings, and shortcuts are unchanged.
+- Verification: Passed 285 focused parser, streaming/click, copy, native Markdown, and HTTP tests;
+  web, mobile, server, and changed-parser typechecks; targeted lint, formatting, and diff checks.
   The full client-runtime package typecheck reports two existing `ClientOrchestrationCommand`
   references in `operations/commands.test.ts`, also present at the fork baseline.
-  Browser and native simulator verification were not requested.
+  An isolated dev server with a snapshot of real threads verified the original response in main
+  and side chats, copying as a Markdown link, opening HTML inside and outside the workspace,
+  source/rendered preview switching, and closing/reopening the file. Native simulators were not run.
 
 ## 2026-09-12 — Use inexpensive models for provider tests
 

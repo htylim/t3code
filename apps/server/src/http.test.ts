@@ -6,7 +6,8 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import { HttpServerResponse } from "effect/unstable/http";
+import { HttpPlatform, HttpServerResponse } from "effect/unstable/http";
+import * as NodeZlib from "node:zlib";
 import { openMediaFile } from "./assets/MediaFile.ts";
 
 import {
@@ -18,6 +19,32 @@ import {
 } from "./http.ts";
 
 const fileResponseLayer = Layer.mergeAll(NodeHttpPlatform.layer, NodeServices.layer);
+
+describe("compressed workspace assets", () => {
+  it.effect("preserves the HTML content type, sandbox, and document bytes", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const platform = yield* HttpPlatform.HttpPlatform;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-html-compression-" });
+      const filePath = path.join(directory, "visualization.html");
+      const contents = `<html><body>${"<p>Visualization</p>".repeat(100)}</body></html>`;
+      yield* fs.writeFileString(filePath, contents);
+      const original = yield* assetFileResponse({ path: filePath });
+      const compressed = yield* platform.compression.compressResponse(original, "gzip");
+      const response = HttpServerResponse.toWeb(compressed);
+      expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+      expect(response.headers.get("content-security-policy")).toBe(
+        "sandbox allow-scripts allow-forms allow-popups allow-modals",
+      );
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(response.headers.get("content-encoding")).toBe("gzip");
+      expect(response.headers.get("content-length")).toBeNull();
+      const bytes = yield* Effect.promise(() => response.arrayBuffer());
+      expect(NodeZlib.gunzipSync(Buffer.from(bytes)).toString()).toBe(contents);
+    }).pipe(Effect.provide(fileResponseLayer)),
+  );
+});
 
 describe("video asset byte ranges", () => {
   it.effect("uses current descriptor metadata after an in-place truncate or extension", () =>
