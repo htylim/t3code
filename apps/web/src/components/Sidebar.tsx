@@ -76,7 +76,8 @@ import {
 } from "react";
 import { useParams, useRouter } from "@tanstack/react-router";
 
-import { useRightPanelStore } from "../rightPanelStore";
+import { selectVisibleSideChatThreadKey, useRightPanelStore } from "../rightPanelStore";
+import { SideSurfaceThreadIndicator } from "./SideSurfaceThreadIndicator";
 import {
   isAtomCommandInterrupted,
   settlePromise,
@@ -969,6 +970,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // rows. The marker can unpin the thread when the server supports pinning.
   pinningSupported: boolean;
   isPinned: boolean;
+  isVisibleInSideSurface: boolean;
   // Present on rows whose server supports every drop outcome: dnd-kit
   // sortable bag applied to the row root so the whole row drags (the
   // pointer sensor's distance constraint keeps plain clicks working).
@@ -1614,6 +1616,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             </span>
             {draftIndicator}
             {title}
+            {props.isVisibleInSideSurface ? <SideSurfaceThreadIndicator /> : null}
             {pinIndicator}
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
@@ -1772,6 +1775,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               ) : (
                 <span className="flex-1" />
               )}
+              {props.isVisibleInSideSurface ? <SideSurfaceThreadIndicator /> : null}
               {pinIndicator}
               {/* The visible state owns this slot's width: status at rest,
                   actions on hover/keyboard focus or while the popover is open. Keeping
@@ -2235,6 +2239,9 @@ export default function Sidebar() {
   const rightPanelOwnerRef = useMemo(
     () => resolveRightPanelOwnerRef(routeTarget, routeDraftThread),
     [routeDraftThread, routeTarget],
+  );
+  const visibleSideChatThreadKey = useRightPanelStore((state) =>
+    selectVisibleSideChatThreadKey(state.byThreadKey, rightPanelOwnerRef),
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
   const routeTargetRef = useRef(routeTarget);
@@ -4756,6 +4763,7 @@ export default function Sidebar() {
                                 .threadPinning === true
                             }
                             isPinned={thread.pinnedAt != null}
+                            isVisibleInSideSurface={visibleSideChatThreadKey === threadKey}
                             sortable={sortable}
                             dropVerb={
                               dragState?.activeKey === threadKey

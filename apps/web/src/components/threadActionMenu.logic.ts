@@ -67,7 +67,13 @@ export function buildThreadActionMenuItems(
       : []),
     ...(state.canFork ? [{ id: "fork-thread" as const, label: "Fork this thread" }] : []),
     ...(state.canOpenInChatSurface
-      ? [{ id: "open-in-chat-surface" as const, label: "Open in side surface" }]
+      ? [
+          {
+            id: "open-in-chat-surface" as const,
+            label: "Open in side surface",
+            icon: "panel-right",
+          },
+        ]
       : []),
     ...(state.supports.pinning
       ? [

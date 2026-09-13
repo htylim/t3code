@@ -70,6 +70,10 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
     { tag: "path", attrs: { d: "M12 8v6" } },
     { tag: "path", attrs: { d: "M9 11h6" } },
   ],
+  "panel-right": [
+    { tag: "rect", attrs: { width: "18", height: "18", x: "3", y: "3", rx: "2" } },
+    { tag: "path", attrs: { d: "M15 3v18" } },
+  ],
   pin: [
     { tag: "path", attrs: { d: "M12 17v5" } },
     {

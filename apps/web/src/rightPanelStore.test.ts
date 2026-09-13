@@ -1,4 +1,4 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { type EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -10,6 +10,7 @@ import {
   selectActiveRightPanelSurface,
   selectSelectedRightPanelSurface,
   selectThreadRightPanelState,
+  selectVisibleSideChatThreadKey,
   useRightPanelStore,
 } from "./rightPanelStore";
 
@@ -540,6 +541,55 @@ describe("rightPanelStore", () => {
       activeSurfaceId: null,
       surfaces: [],
     });
+  });
+
+  it("shows only the current owner's visible side chat when navigating away and back", () => {
+    const store = useRightPanelStore.getState();
+    store.openChat(refA, refB);
+    const visibleThread = (owner: typeof refA | null) =>
+      selectVisibleSideChatThreadKey(useRightPanelStore.getState().byThreadKey, owner);
+
+    expect(visibleThread(refA)).toBe(scopedThreadKey(refB));
+    expect(visibleThread(refB)).toBeNull();
+    expect(visibleThread(null)).toBeNull();
+    expect(visibleThread(refA)).toBe(scopedThreadKey(refB));
+
+    store.openChat(refC, refA);
+    expect(visibleThread(refC)).toBe(scopedThreadKey(refA));
+    expect(visibleThread(refA)).toBe(scopedThreadKey(refB));
+  });
+
+  it("hides the side-chat indicator for closed panels and other tabs, and restores it on return", () => {
+    const store = useRightPanelStore.getState();
+    store.openChat(refA, refB);
+    const visibleThread = () =>
+      selectVisibleSideChatThreadKey(useRightPanelStore.getState().byThreadKey, refA);
+
+    store.close(refA);
+    expect(visibleThread()).toBeNull();
+    store.show(refA);
+    expect(visibleThread()).toBe(scopedThreadKey(refB));
+    store.open(refA, "files");
+    expect(visibleThread()).toBeNull();
+    store.activateSurface(refA, "chat:env-1:thread-B");
+    expect(visibleThread()).toBe(scopedThreadKey(refB));
+    store.closeSurface(refA, "chat:env-1:thread-B");
+    expect(visibleThread()).toBeNull();
+  });
+
+  it("moves the indicator to the replacement target and distinguishes environments", () => {
+    const store = useRightPanelStore.getState();
+    const sameIdOtherEnvironment = scopeThreadRef(refC.environmentId, refB.threadId);
+    const visibleThread = () =>
+      selectVisibleSideChatThreadKey(useRightPanelStore.getState().byThreadKey, refA);
+
+    store.openChat(refA, refB);
+    expect(visibleThread()).toBe(scopedThreadKey(refB));
+    store.openChat(refA, sameIdOtherEnvironment);
+    expect(visibleThread()).toBe(scopedThreadKey(sameIdOtherEnvironment));
+    expect(visibleThread()).not.toBe(scopedThreadKey(refB));
+    store.openChat(refA, refC);
+    expect(visibleThread()).toBe(scopedThreadKey(refC));
   });
 
   it("marks newly created side chats as transient", () => {

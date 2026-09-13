@@ -968,6 +968,15 @@ export function selectActiveRightPanelSurface(
   return selectSelectedRightPanelSurface(byThreadKey, ref);
 }
 
+/** Only the chat visible beside the current owner gets a sidebar indicator. */
+export function selectVisibleSideChatThreadKey(
+  byThreadKey: Record<string, ThreadRightPanelState>,
+  owner: ScopedThreadRef | null | undefined,
+): string | null {
+  const surface = selectActiveRightPanelSurface(byThreadKey, owner);
+  return surface?.kind === "chat" ? scopedThreadKey(surface) : null;
+}
+
 /** The selected surface even while the panel is hidden, so a layout control can restore it. */
 export function selectSelectedRightPanelSurface(
   byThreadKey: Record<string, ThreadRightPanelState>,
