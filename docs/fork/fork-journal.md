@@ -39,6 +39,23 @@ upstream.
   the length boundary. Desktop viewport-edge placement passed; the browser resize tool timed out
   before narrow-viewport verification.
 
+## 2026-09-13 — Render Codex visualization references as file links
+
+- Upstream baseline: `b1e223e2b0d87124883b1410ab52dd6a1338e40d`
+- Change: Codex's private-use `visualize` markers now resolve their JSON `path` through the existing
+  file-link renderer. Completed markers show the filename and copy as ordinary Markdown links;
+  malformed markers and examples in code or existing links remain literal.
+- Reason: Visualization responses previously exposed raw markers and JSON instead of an accessible
+  link to the generated HTML file.
+- Scope: Shared Markdown parsing and copy/native adapters, covering web and desktop main/side chats
+  and mobile. Existing environment-scoped file opening, preview, and close behavior applies.
+  Provider adapters, wire contracts, Settings, shortcuts, and user workflows are unchanged.
+- Verification: Passed 261 focused parser, streaming/click, copy, and native Markdown tests;
+  web, mobile, and changed-parser typechecks; targeted lint, formatting, and diff checks.
+  The full client-runtime package typecheck reports two existing `ClientOrchestrationCommand`
+  references in `operations/commands.test.ts`, also present at the fork baseline.
+  Browser and native simulator verification were not requested.
+
 ## 2026-09-12 — Use inexpensive models for provider tests
 
 - Upstream baseline: `b1e223e2b0d87124883b1410ab52dd6a1338e40d`

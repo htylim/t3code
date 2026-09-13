@@ -1,10 +1,11 @@
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { act, type ComponentProps, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { getSyntaxHighlighterPromise } from "../lib/syntaxHighlighting";
+import { selectActiveRightPanelSurface, useRightPanelStore } from "../rightPanelStore";
 import { GitHubIcon } from "./Icons";
 import { Button } from "./ui/button";
 import { setMarkdownTaskChecked } from "./files/filePreviewMode";
@@ -625,6 +626,70 @@ describe("ChatMarkdown file option chips", () => {
 
 const ARTIFACT_TEMPLATE_DIRECTIVE =
   '::artifact-template{skill_name="artifact-template-hello-world" skill_directory="/Users/test/.codex/skills/artifact-template-hello-world" display_name="Hello World" artifact_kind="document"}';
+
+describe("ChatMarkdown visualization links", () => {
+  it.each([false, true])(
+    "turns a completed streaming marker into a working file link with parseRawHtml=%s",
+    async (parseRawHtml) => {
+      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+      const threadRef = {
+        environmentId: EnvironmentId.make("visualization-environment"),
+        threadId: ThreadId.make("visualization-thread"),
+      };
+      const path = "/tmp/project/.t3/visualizations/side-surface-icons.html";
+      const marker = `\uE200visualize\uE202${JSON.stringify({ path })}\uE201`;
+      const markdown = (text: string, isStreaming: boolean) => (
+        <ChatMarkdown
+          cwd="/tmp/project"
+          threadRef={threadRef}
+          text={text}
+          isStreaming={isStreaming}
+          parseRawHtml={parseRawHtml}
+        />
+      );
+      let renderer: ReactTestRenderer | undefined;
+      try {
+        await act(async () => {
+          renderer = create(markdown(`Options:\n\n${marker.slice(0, -1)}`, true));
+        });
+        expect(renderer!.root.findAllByType("a")).toHaveLength(0);
+
+        await act(async () => {
+          renderer!.update(markdown(`Options:\n\n${marker}\n\nChoose one.`, true));
+        });
+        const link = renderer!.root.findByType("a");
+        expect(link.props["data-markdown-copy"]).toContain(`[side-surface-icons.html](${path})`);
+        expect(JSON.stringify(renderer!.toJSON())).not.toContain("\uE200visualize");
+
+        await act(async () => {
+          link.props.onClick({
+            preventDefault() {},
+            stopPropagation() {},
+            metaKey: false,
+            ctrlKey: false,
+          });
+        });
+        expect(
+          selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, threadRef),
+        ).toMatchObject({
+          kind: "file",
+          relativePath: ".t3/visualizations/side-surface-icons.html",
+        });
+
+        await act(async () => {
+          renderer!.update(markdown(`Options:\n\n${marker}\n\nChoose one.`, false));
+        });
+        expect(renderer!.root.findByType("a").props.href).toBe(path);
+      } finally {
+        await act(async () => {
+          renderer?.unmount();
+        });
+        useRightPanelStore.setState({ byThreadKey: {}, userActionRevisionByThreadKey: {} });
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+});
 
 describe("ChatMarkdown artifact-template cards", () => {
   it.each([true, false])("renders the Codex result card with parseRawHtml=%s", (parseRawHtml) => {

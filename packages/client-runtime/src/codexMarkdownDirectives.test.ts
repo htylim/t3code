@@ -25,6 +25,8 @@ interface TestNode {
 }
 
 const FILE_CITATION = ':codex-file-citation{path="outputs/report.xlsx" purpose="output"}';
+const VISUALIZATION_PATH = "/workspace/.t3/visualizations/side-surface-icons.html";
+const VISUALIZATION = `\uE200visualize\uE202${JSON.stringify({ path: VISUALIZATION_PATH })}\uE201`;
 const ARTIFACT_TEMPLATE =
   '::artifact-template{skill_name="artifact-template-hello-world" skill_directory="/Users/test/.codex/skills/artifact-template-hello-world" display_name="Hello World" artifact_kind="document"}';
 
@@ -69,6 +71,26 @@ describe("remarkCodexDirectives", () => {
     });
   });
 
+  it("renders a visualization marker as a file link with its original source position", () => {
+    const markdown = `Compare these options:\n\n${VISUALIZATION}\n\nChoose one.`;
+
+    expect(parse(markdown).children?.[1]?.children).toEqual([
+      expect.objectContaining({
+        type: "link",
+        url: VISUALIZATION_PATH,
+        children: [{ type: "text", value: "side-surface-icons.html" }],
+        position: {
+          start: { line: 3, column: 1, offset: markdown.indexOf(VISUALIZATION) },
+          end: {
+            line: 3,
+            column: VISUALIZATION.length + 1,
+            offset: markdown.indexOf(VISUALIZATION) + VISUALIZATION.length,
+          },
+        },
+      }),
+    ]);
+  });
+
   it.each([
     "Meeting at 10:30",
     "Open src/main.ts:42",
@@ -105,6 +127,50 @@ describe("native Markdown adapters", () => {
     expect(renderCodexFileCitationsAsMarkdown(markdown)).toBe(markdown);
   });
 
+  it("renders visualization links alongside file citations", () => {
+    expect(renderCodexFileCitationsAsMarkdown(`See ${VISUALIZATION} and ${FILE_CITATION}.`)).toBe(
+      `See [side-surface-icons.html](<${VISUALIZATION_PATH}>) and [report.xlsx](<outputs/report.xlsx>).`,
+    );
+  });
+
+  it.each([
+    [
+      "/workspace/reports/*draft*_[copy]`<& 100% #1?.html",
+      "[\\*draft\\*\\_\\[copy\\]\\`\\<\\& 100% #1?.html](</workspace/reports/*draft*_[copy]`%3C& 100%25 %231%3F.html>)",
+    ],
+    ["C:\\Users\\test\\diagram.html", "[diagram.html](<C:\\Users\\test\\diagram.html>)"],
+    ['/workspace/quoted"file.html', '[quoted"file.html](</workspace/quoted"file.html>)'],
+  ])("preserves JSON and Markdown characters in visualization paths: %s", (path, expected) => {
+    const marker = `\uE200visualize\uE202${JSON.stringify({ path })}\uE201`;
+    expect(renderCodexFileCitationsAsMarkdown(marker)).toBe(expected);
+  });
+
+  it.each([
+    `\`${VISUALIZATION}\``,
+    `\`\`\`text\n${VISUALIZATION}\n\`\`\``,
+    `    ${VISUALIZATION}`,
+    `[See ${VISUALIZATION}](https://example.com)`,
+    `[${VISUALIZATION}][example]\n\n[example]: https://example.com`,
+    "\uE200visualize\uE202not-json\uE201",
+    "\uE200visualize\uE202null\uE201",
+    "\uE200visualize\uE202[]\uE201",
+    '\uE200visualize\uE202{"path":42}\uE201',
+    '\uE200visualize\uE202{"path":" "}\uE201',
+    '\uE200visualize\uE202{"title":"No path"}\uE201',
+    VISUALIZATION.slice(0, -1),
+    VISUALIZATION.replace("visualize", "visualize-extra"),
+  ])("preserves excluded, invalid, and incomplete visualization markers: %s", (markdown) => {
+    expect(renderCodexFileCitationsAsMarkdown(markdown)).toBe(markdown);
+    expect(renderCodexDirectivesForCopy(markdown)).toBe(markdown);
+  });
+
+  it("does not swallow a complete visualization after an unfinished marker", () => {
+    const unfinished = '\uE200visualize\uE202{"path":"';
+    expect(renderCodexFileCitationsAsMarkdown(`${unfinished} ${VISUALIZATION}`)).toBe(
+      `${unfinished} [side-surface-icons.html](<${VISUALIZATION_PATH}>)`,
+    );
+  });
+
   it("splits artifact cards from surrounding native Markdown", () => {
     expect(splitCodexArtifactTemplateMarkdown(`Before\n\n${ARTIFACT_TEMPLATE}\n\nAfter`)).toEqual([
       { kind: "markdown", markdown: "Before\n\n", sourceOffset: 0 },
@@ -139,6 +205,12 @@ describe("native Markdown adapters", () => {
 });
 
 describe("directive copy adapter", () => {
+  it("copies visualization markers as portable file links", () => {
+    expect(renderCodexDirectivesForCopy(`Options:\n\n${VISUALIZATION}`)).toBe(
+      `Options:\n\n[side-surface-icons.html](<${VISUALIZATION_PATH}>)`,
+    );
+  });
+
   it("copies the Markdown representations shown by citation chips and template cards", () => {
     expect(renderCodexDirectivesForCopy(`Created ${FILE_CITATION}.\n\n${ARTIFACT_TEMPLATE}`)).toBe(
       "Created [report.xlsx](<outputs/report.xlsx>).\n\nHello World (Document template)",

@@ -21,6 +21,21 @@ const DASH = 45;
 const UNDERSCORE = 95;
 const CODEX_FILE_CITATION_NAME = "codex-file-citation";
 const CODEX_ARTIFACT_TEMPLATE_NAME = "artifact-template";
+const CODEX_VISUALIZATION_NAME = "visualize";
+const CODEX_VISUALIZATION_PREFIX = "\uE200visualize\uE202";
+const CODEX_VISUALIZATION_END = 0xe201;
+
+declare module "micromark-util-types" {
+  interface TokenTypeMap {
+    codexVisualization: "codexVisualization";
+  }
+}
+
+declare module "mdast-util-directive" {
+  interface TextDirectiveData {
+    codexVisualizationSource?: string;
+  }
+}
 
 export const CODEX_ARTIFACT_TEMPLATE_HAST_PROPERTIES = [
   "dataCodexArtifactTemplate",
@@ -46,6 +61,7 @@ interface MarkdownAstNode {
   data?: {
     codexArtifactTemplate?: CodexArtifactTemplate;
     codexFileCitationMarkdown?: string;
+    codexVisualizationSource?: string;
     hName?: string;
     hProperties?: Record<string, unknown>;
   };
@@ -120,6 +136,53 @@ function restrictedDirective(construct: Construct, markerCount: number, name: st
   };
 }
 
+// Tokenize the whole marker so Markdown punctuation in its JSON path stays literal.
+const tokenizeVisualization: Tokenizer = (effects, ok, nok) => {
+  let prefixIndex = 0;
+  return prefix;
+
+  function prefix(code: number | null) {
+    if (code !== CODEX_VISUALIZATION_PREFIX.charCodeAt(prefixIndex)) return nok(code);
+    if (prefixIndex === 0) effects.enter("codexVisualization");
+    effects.consume(code);
+    prefixIndex += 1;
+    return prefixIndex === CODEX_VISUALIZATION_PREFIX.length ? payload : prefix;
+  }
+
+  function payload(code: number | null) {
+    if (
+      code === null ||
+      markdownLineEnding(code) ||
+      code === CODEX_VISUALIZATION_PREFIX.charCodeAt(0)
+    ) {
+      return nok(code);
+    }
+    effects.consume(code);
+    if (code === CODEX_VISUALIZATION_END) {
+      effects.exit("codexVisualization");
+      return ok;
+    }
+    return payload;
+  }
+};
+
+function visualizationAttributes(source: string): Readonly<Record<string, string>> {
+  try {
+    const payload: unknown = JSON.parse(source.slice(CODEX_VISUALIZATION_PREFIX.length, -1));
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "path" in payload &&
+      typeof payload.path === "string"
+    ) {
+      return { path: payload.path };
+    }
+  } catch {
+    // Invalid or unfinished output remains literal, just like other Codex directives.
+  }
+  return {};
+}
+
 function codexDirectiveSyntax(): Extension {
   const genericSyntax = directive();
   const textDirective = asConstruct(genericSyntax.text?.[COLON], CODEX_FILE_CITATION_NAME);
@@ -133,6 +196,7 @@ function codexDirectiveSyntax(): Extension {
   return {
     text: {
       [COLON]: restrictedDirective(textDirective, 1, CODEX_FILE_CITATION_NAME),
+      [CODEX_VISUALIZATION_PREFIX.charCodeAt(0)]: { tokenize: tokenizeVisualization },
     },
     flow: {
       [COLON]: restrictedDirective(leafDirective, 2, CODEX_ARTIFACT_TEMPLATE_NAME),
@@ -150,6 +214,7 @@ function sourceForNode(node: MarkdownAstNode, source: string): string {
 }
 
 function sourceForDirective(node: MarkdownAstNode, source: string, marker: ":" | "::"): string {
+  if (node.data?.codexVisualizationSource !== undefined) return node.data.codexVisualizationSource;
   const prefix = `${marker}${node.name ?? ""}`;
   const slicedSource = sourceForNode(node, source);
   if (slicedSource.startsWith(prefix)) return slicedSource;
@@ -227,7 +292,10 @@ function renderArtifactTemplate(node: MarkdownAstNode, source: string): void {
 }
 
 function transformCodexDirectives(node: MarkdownAstNode, source: string, insideLink = false): void {
-  if (node.type === "textDirective" && node.name === CODEX_FILE_CITATION_NAME) {
+  if (
+    node.type === "textDirective" &&
+    (node.name === CODEX_FILE_CITATION_NAME || node.name === CODEX_VISUALIZATION_NAME)
+  ) {
     renderFileCitation(node, source, insideLink);
     return;
   }
@@ -242,13 +310,35 @@ function transformCodexDirectives(node: MarkdownAstNode, source: string, insideL
   }
 }
 
-/** Adds grammar only for the two directives emitted by Codex, then renders them as mdast. */
+/** Parses supported Codex directives and visualization markers into ordinary Markdown nodes. */
 function attachCodexDirectives(this: Processor) {
   const data = this.data();
   const micromarkExtensions = data.micromarkExtensions ?? (data.micromarkExtensions = []);
   const fromMarkdownExtensions = data.fromMarkdownExtensions ?? (data.fromMarkdownExtensions = []);
   micromarkExtensions.push(CODEX_DIRECTIVE_SYNTAX);
   fromMarkdownExtensions.push(CODEX_DIRECTIVE_FROM_MARKDOWN);
+  fromMarkdownExtensions.push({
+    enter: {
+      codexVisualization(token) {
+        const source = this.sliceSerialize(token);
+        this.enter(
+          {
+            type: "textDirective",
+            name: CODEX_VISUALIZATION_NAME,
+            attributes: visualizationAttributes(source),
+            data: { codexVisualizationSource: source },
+            children: [],
+          },
+          token,
+        );
+      },
+    },
+    exit: {
+      codexVisualization(token) {
+        this.exit(token);
+      },
+    },
+  });
 
   return (tree: unknown, file: MarkdownFile) => {
     transformCodexDirectives(tree as MarkdownAstNode, String(file.value));
@@ -306,7 +396,11 @@ function renderDirectiveMatches(
 
 /** Native Markdown renderers use this adapter because they cannot consume a Remark tree. */
 export function renderCodexFileCitationsAsMarkdown(markdown: string): string {
-  if (!markdown.includes(`:${CODEX_FILE_CITATION_NAME}`)) return markdown;
+  if (
+    !markdown.includes(`:${CODEX_FILE_CITATION_NAME}`) &&
+    !markdown.includes(CODEX_VISUALIZATION_PREFIX)
+  )
+    return markdown;
 
   return renderDirectiveMatches(markdown, (match) => match.markdown);
 }
@@ -315,6 +409,7 @@ export function renderCodexFileCitationsAsMarkdown(markdown: string): string {
 export function renderCodexDirectivesForCopy(markdown: string): string {
   if (
     !markdown.includes(`:${CODEX_FILE_CITATION_NAME}`) &&
+    !markdown.includes(CODEX_VISUALIZATION_PREFIX) &&
     !markdown.includes(`::${CODEX_ARTIFACT_TEMPLATE_NAME}`)
   ) {
     return markdown;

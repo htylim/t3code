@@ -1076,13 +1076,14 @@ describe("resolveAssistantMessageCopyState", () => {
         showCopyButton: true,
         text: [
           'Created :codex-file-citation{path="outputs/report.xlsx" purpose="output"}.',
+          '\uE200visualize\uE202{"path":"/tmp/diagram.html"}\uE201',
           "",
           '::artifact-template{skill_name="artifact-template-hello-world" skill_directory="/Users/test/.codex/skills/artifact-template-hello-world" display_name="Hello World" artifact_kind="document"}',
         ].join("\n"),
         streaming: false,
       }),
     ).toEqual({
-      text: "Created [report.xlsx](<outputs/report.xlsx>).\n\nHello World (Document template)",
+      text: "Created [report.xlsx](<outputs/report.xlsx>).\n[diagram.html](</tmp/diagram.html>)\n\nHello World (Document template)",
       visible: true,
     });
   });
