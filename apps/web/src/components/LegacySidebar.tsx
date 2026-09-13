@@ -114,6 +114,8 @@ import { useShortcutModifierState } from "../shortcutModifierState";
 import { ensureLocalApi, readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { confirmSideChatReplacement, openSideChat } from "../sideChatReplacement";
+import { selectVisibleSideChatThreadKey, useRightPanelStore } from "../rightPanelStore";
+import { SideSurfaceThreadIndicator } from "./SideSurfaceThreadIndicator";
 import { useDeleteTransientSideChat } from "./TransientSideChatCleanup";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
@@ -319,6 +321,7 @@ interface SidebarThreadRowProps {
   thread: SidebarThreadSummary;
   orderedProjectThreadKeys: readonly string[];
   isActive: boolean;
+  isVisibleInSideSurface: boolean;
   openPullRequestsInRightPanel: boolean;
   jumpLabel: string | null;
   appSettingsConfirmThreadArchive: boolean;
@@ -796,6 +799,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           )}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {props.isVisibleInSideSurface ? <SideSurfaceThreadIndicator /> : null}
           {discoveredPorts.length > 0 && (
             <Tooltip>
               <TooltipTrigger
@@ -946,6 +950,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
 });
 
 interface SidebarProjectThreadListProps {
+  visibleSideChatThreadKey: string | null;
   projectKey: string;
   projectExpanded: boolean;
   hasOverflowingThreads: boolean;
@@ -1065,6 +1070,7 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
               thread={thread}
               orderedProjectThreadKeys={orderedProjectThreadKeys}
               isActive={activeRouteThreadKey === threadKey}
+              isVisibleInSideSurface={props.visibleSideChatThreadKey === threadKey}
               openPullRequestsInRightPanel={openPullRequestsInRightPanel}
               jumpLabel={threadJumpLabelByKey.get(threadKey) ?? null}
               appSettingsConfirmThreadArchive={appSettingsConfirmThreadArchive}
@@ -1173,6 +1179,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     dragHandleProps,
   } = props;
   const ownerThreadRef = ownerThreadKey ? parseScopedThreadKey(ownerThreadKey) : null;
+  const visibleSideChatThreadKey = useRightPanelStore((state) =>
+    selectVisibleSideChatThreadKey(state.byThreadKey, ownerThreadRef),
+  );
   const deleteTransientSideChat = useDeleteTransientSideChat();
   const environmentMachine = project.allRemoteMembersAreWsl
     ? "linux"
@@ -2269,7 +2278,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             : []),
           ...(forkEligibility.eligible ? [{ id: "fork", label: "Fork this thread" }] : []),
           ...(ownerThreadRef && scopedThreadKey(ownerThreadRef) !== threadKey
-            ? [{ id: "open-in-chat-surface", label: "Open in side surface" }]
+            ? [{ id: "open-in-chat-surface", label: "Open in side surface", icon: "panel-right" }]
             : []),
           { id: "rename", label: "Rename thread" },
           { id: "mark-unread", label: "Mark unread" },
@@ -2526,6 +2535,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       </div>
 
       <SidebarProjectThreadList
+        visibleSideChatThreadKey={visibleSideChatThreadKey}
         projectKey={project.projectKey}
         projectExpanded={projectExpanded}
         hasOverflowingThreads={hasOverflowingThreads}

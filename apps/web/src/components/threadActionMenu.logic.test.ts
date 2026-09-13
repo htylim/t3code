@@ -67,7 +67,7 @@ describe("buildThreadActionMenuItems", () => {
       buildThreadActionMenuItems({ ...baseState, canOpenInChatSurface: true }).find(
         (item) => item.id === "open-in-chat-surface",
       ),
-    ).toMatchObject({ label: "Open in side surface" });
+    ).toMatchObject({ label: "Open in side surface", icon: "panel-right" });
   });
 
   it("flips lifecycle labels with thread state", () => {

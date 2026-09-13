@@ -19,6 +19,24 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-13 — Mark the visible side chat in the sidebar
+
+- Upstream baseline: `b1e223e2b0`
+- Change: Web and desktop sidebar rows show a PanelRight indicator before their other trailing
+  icons when the thread is visible beside the current main thread. Navigating away, hiding the
+  panel, or selecting another surface removes the indicator; returning restores it. Web thread
+  menus use the same icon for **Open in side surface**.
+- Reason: Make it clear which sidebar thread is currently displayed in the side surface without
+  confusing saved panel membership with visibility.
+- Scope: Both web sidebars, the right-panel selector, and the web context-menu icon map. Native
+  desktop menus retain their existing icon policy. Mobile has no side-chat surface; providers,
+  contracts, and server state are unchanged. Target identity includes the environment.
+- Verification: Passed 88 focused panel-state and context-menu tests, the web type check, targeted
+  lint (with existing sidebar warnings), formatting, and `git diff --check`. In an isolated dev
+  client, verified card and slim rows, navigation away and back in both sidebar layouts, panel
+  closing and reopening, Chat/Files tab switching, and both web menu icons. Measured the indicator
+  moving left on hover while remaining before the pin, snooze, and settle controls.
+
 ## 2026-09-12 - Consolidate selected-text actions in the citation toolbar
 
 - Upstream baseline: `163d86a78`
