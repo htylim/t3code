@@ -1,7 +1,9 @@
 import type { AssistantCitation, ScopedThreadRef } from "@t3tools/contracts";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
 
-import type { DraftId } from "./composerDraftStore";
+import { useComposerDraftStore, type DraftId } from "./composerDraftStore";
+import { useRightPanelStore } from "./rightPanelStore";
 import { serializeThreadReferenceMarkdown } from "./threadReference";
 
 export type SelectedTextThreadAction = "ask-in-new-thread" | "ask-in-side-chat";
@@ -31,6 +33,23 @@ export function buildAskInNewThreadPrompt(input: {
 
 export function buildAskInSideChatPrompt(assistantCitation: AssistantCitation): string {
   return `${serializeAssistantCitation(assistantCitation)} `;
+}
+
+/** Selected-text actions add to the owner's transient chat without replacing it. */
+export function reuseSelectedTextSideChatDraft(owner: ScopedThreadRef, prompt: string): boolean {
+  const panelStore = useRightPanelStore.getState();
+  const surface = panelStore.byThreadKey[scopedThreadKey(owner)]?.surfaces.find(
+    (surface) => surface.kind === "chat" && surface.transient === true,
+  );
+  if (surface?.kind !== "chat") return false;
+
+  const target = { environmentId: surface.environmentId, threadId: surface.threadId };
+  const draftStore = useComposerDraftStore.getState();
+  const existingPrompt = draftStore.getComposerDraft(target)?.prompt ?? "";
+  const separator = existingPrompt.length > 0 && !/\s$/.test(existingPrompt) ? " " : "";
+  draftStore.setPrompt(target, `${existingPrompt}${separator}${prompt}`);
+  panelStore.activateSurface(owner, surface.id);
+  return true;
 }
 
 export async function createSelectedTextThreadDraft(input: {

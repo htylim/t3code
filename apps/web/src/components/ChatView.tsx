@@ -351,6 +351,7 @@ import {
   buildAskInNewThreadPrompt,
   buildAskInSideChatPrompt,
   createSelectedTextThreadDraft,
+  reuseSelectedTextSideChatDraft,
   type SelectedTextThreadActionHandler,
 } from "../selectedTextThreadAction";
 import { createPageScrollController, type PageScrollKey } from "./chat/pageScrollController";
@@ -6399,6 +6400,7 @@ export default function ChatView(props: ChatViewProps) {
       if (
         !isServerThread ||
         !activeThread ||
+        !activeThreadRef ||
         !activeProjectRef ||
         selectedTextThreadActionInFlightRef.current
       )
@@ -6406,7 +6408,10 @@ export default function ChatView(props: ChatViewProps) {
       selectedTextThreadActionInFlightRef.current = true;
       try {
         if (action === "ask-in-side-chat") {
-          await openNewSideChat(buildAskInSideChatPrompt(citation));
+          const prompt = buildAskInSideChatPrompt(citation);
+          if (!reuseSelectedTextSideChatDraft(activeThreadRef, prompt)) {
+            await openNewSideChat(prompt);
+          }
           return;
         }
         const prompt = buildAskInNewThreadPrompt({
@@ -6434,7 +6439,14 @@ export default function ChatView(props: ChatViewProps) {
         selectedTextThreadActionInFlightRef.current = false;
       }
     },
-    [activeProjectRef, activeThread, handleNewThread, isServerThread, openNewSideChat],
+    [
+      activeProjectRef,
+      activeThread,
+      activeThreadRef,
+      handleNewThread,
+      isServerThread,
+      openNewSideChat,
+    ],
   );
   const addChatSurface = useCallback(() => {
     void openNewSideChat();

@@ -31,7 +31,8 @@ the reference when you want it to read the target through T3's thread tools.
 On web or desktop, select text within one assistant message. In the floating selection toolbar,
 choose **Cite** to insert a citation in the current composer, **Ask in new thread** to open a new
 main-chat draft with a Markdown quote and source-thread reference, or **Ask in side chat** to
-create a transient draft in the right panel with a citation to the selection. The side chat
+add a citation to the draft in the current transient side chat, or create one in the right panel
+if none exists. Existing draft text is preserved. The side chat
 already receives the main thread as provider context. Nothing is sent automatically, so you can
 add your question before submitting it.
 

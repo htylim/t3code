@@ -19,6 +19,22 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-13 — Reuse transient side chats for selected text
+
+- Upstream baseline: `b1e223e2b0`
+- Change: **Ask in side chat** appends the selected-text citation to an existing transient
+  side-chat draft and reveals that chat without replacement confirmation. Existing draft text
+  is preserved, and nothing is sent automatically.
+- Reason: Follow-up selections belong in the temporary conversation already open beside the thread.
+- Scope: Web and desktop selection actions, scoped by owning thread and environment. Regular side
+  chats and explicit new-side-chat actions retain their replacement behavior. Mobile has no matching
+  selection action; provider adapters, contracts, and connection handling are unchanged.
+- Verification: Focused selection and replacement tests, web typecheck, targeted lint and formatting,
+  and `git diff --check`. An isolated browser with a snapshot of real conversations verified initial
+  creation, repeated selections in the same unsent draft, preservation of typed text, reopening a
+  hidden chat, returning from Files, and cancellation of explicit new-chat replacement. SQLite
+  confirmed no extra threads or sent messages after reuse.
+
 ## 2026-09-13 — Mark the visible side chat in the sidebar
 
 - Upstream baseline: `b1e223e2b0`
