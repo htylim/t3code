@@ -741,7 +741,7 @@ function EditableFileSurface({
     return installFileEditorDismissal({
       root,
       editor,
-      isBlocked: () => hasOpenCommentForm,
+      isBlocked: () => hasOpenCommentForm || editor.getFile() === undefined,
       onDismiss: () => setSelectedRange(null),
     });
   }, [editor, hasOpenCommentForm, setSelectedRange]);
