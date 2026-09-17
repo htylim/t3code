@@ -231,11 +231,8 @@ import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../times
 import { SkillInlineText } from "./SkillInlineText";
 import { deriveAgentSpawnSummary } from "./agentSpawnSummary";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
-import {
-  captureTimelineScrollBookmark,
-  clearTimelineScrollBookmark,
-  resolveTimelineInitialScrollPosition,
-} from "./threadScrollBookmark";
+import { captureTimelineScrollBookmark, clearTimelineScrollBookmark } from "./threadScrollBookmark";
+import { useThreadScrollRestoration } from "./useThreadScrollRestoration";
 import {
   registerTimelinePromptNavigation,
   resolveTimelinePromptNavigationIndex,
@@ -653,14 +650,21 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     supportsConversationRollback,
   ]);
   const rows = useStableRows(rawRows, listIdentityKey);
-  const initialScrollPosition = useMemo(
-    () => resolveTimelineInitialScrollPosition(listIdentityKey, rows),
-    [listIdentityKey, rows],
-  );
   const minimapItems = useMemo(() => deriveTimelineMinimapItems(rows), [rows]);
   const [timelineViewportElement, setTimelineViewportElement] = useState<HTMLDivElement | null>(
     null,
   );
+  const {
+    initialPosition: initialScrollPosition,
+    positioning: restoringScrollPosition,
+    cancel: cancelScrollRestoration,
+  } = useThreadScrollRestoration({
+    threadKey: listIdentityKey,
+    rows,
+    listRef,
+    viewport: timelineViewportElement,
+    citationActive: citationRequest !== null,
+  });
   const {
     target: readyCitationRequest,
     positioning: citationPositioning,
@@ -677,6 +681,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     onExpandTurn: expandCitedTurn,
     onManualNavigation,
   });
+  const restorationAlwaysRender =
+    restoringScrollPosition && initialScrollPosition
+      ? { indices: [initialScrollPosition.index] }
+      : undefined;
+  const alwaysRender = citationAlwaysRender ?? restorationAlwaysRender;
   const [minimapHasPersistentGutter, setMinimapHasPersistentGutter] = useState(false);
   const [minimapHitStripWidth, setMinimapHitStripWidth] = useState(0);
   const listHeaderSizeRef = useRef(0);
@@ -697,6 +706,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       const list = listRef.current;
       if (!list) return Promise.resolve();
 
+      cancelScrollRestoration();
       onManualNavigation();
       return list.scrollToIndex({
         index: item.rowIndex,
@@ -704,7 +714,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         viewOffset: TIMELINE_PROMPT_VIEW_OFFSET,
       });
     },
-    [listRef, onManualNavigation],
+    [cancelScrollRestoration, listRef, onManualNavigation],
   );
   const getVisibleTimelineRowRange = useCallback(() => {
     const state = listRef.current?.getState?.();
@@ -761,6 +771,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   }, [cancelContentOverflowFrame, measureContentOverflow, onContentOverflowChange, rows.length]);
 
   const handleScroll = useCallback(() => {
+    // Thread replacement and restoration can emit the previous viewport's position.
+    if (restoringScrollPosition) return;
     const state = listRef.current?.getState?.();
     const isAtEnd = resolveTimelineIsAtEnd(state);
     if (isAtEnd !== undefined && !citationPositioning) {
@@ -815,6 +827,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     minimapStripMap,
     onIsAtEndChange,
     reportContentOverflow,
+    restoringScrollPosition,
   ]);
 
   useEffect(() => {
@@ -966,13 +979,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               : {})}
             // Legend needs a data refresh to mount new pins without a scroll event.
             {...(readyCitationRequest ? { dataVersion: readyCitationRequest.key } : {})}
-            {...(citationAlwaysRender ? { alwaysRender: citationAlwaysRender } : {})}
+            {...(alwaysRender ? { alwaysRender } : {})}
             onLoad={onCitationListLoad}
             {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
             contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
             maintainScrollAtEnd={
               citationPositioning ||
-              initialScrollPosition ||
+              restoringScrollPosition ||
               anchoredEndSpace ||
               !liveFollowEnabled ||
               disclosureToggleSettling
@@ -980,7 +993,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                 : TIMELINE_MAINTAIN_SCROLL_AT_END
             }
             maintainVisibleContentPosition={
-              citationPositioning ? false : maintainVisibleContentPosition
+              citationPositioning || restoringScrollPosition
+                ? false
+                : maintainVisibleContentPosition
             }
             maintainScrollAtEndThreshold={1}
             onScroll={handleScroll}

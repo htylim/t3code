@@ -886,9 +886,18 @@ upstream.
 - Scope: A fork-owned in-memory bookmark module, narrow LegendList and chat lifecycle seams, focused
   tests, and user documentation. Mobile, server contracts, providers, and database persistence are
   unchanged.
+- Upstream compatibility: The mounted-list thread switching introduced by `211618fd9f` requires
+  explicit restoration after changing the displayed thread. Keep bookmark-aware live-follow state
+  and suppress bookmark writes until positioning completes. Initial-scroll props alone cannot
+  restore a list that stays mounted. Citations and manual navigation supersede restoration.
 - Verification: Passed 21 focused bookmark and timeline tests, the web type check, targeted lint
   and formatting, and `git diff --check`. In an isolated web environment, switched away after
   positioning a message row at `-52.42px`, then returned to the same row at exactly `-52.42px`.
+  The mounted-list repair passed 98 focused tests, including mounted A-to-B-to-A navigation,
+  rapid switching, delayed rows, cancellation, citation priority, and header-size correction;
+  web typecheck and targeted lint also passed. An isolated browser with copied real threads
+  restored A at exactly 400px and B at exactly 887px, preserving each message's screen offset.
+  Rapid switching, an unsent draft, and returning after scrolling to the end also passed.
 
 ## 2026-08-15 — Adopt upstream desktop asset staging
 

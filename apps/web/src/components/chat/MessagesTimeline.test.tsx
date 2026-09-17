@@ -9,11 +9,17 @@ import {
 import { act, createRef, useLayoutEffect, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
-import { captureTimelineScrollBookmark, clearTimelineScrollBookmark } from "./threadScrollBookmark";
+import {
+  captureTimelineScrollBookmark,
+  clearTimelineScrollBookmark,
+  resolveTimelineInitialScrollPosition,
+} from "./threadScrollBookmark";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import type { LegendListRef, MaintainScrollAtEndOptions } from "@legendapp/list/react";
 import { shouldUseRestingComposerLayout } from "../composerFooterLayout";
 import { useComposerFocusState } from "./useComposerFocusState";
+
+const timelineListTestState = vi.hoisted(() => ({ renderRows: true }));
 
 vi.mock("@legendapp/list/react", async () => {
   const legendListTestId = "legend-list";
@@ -34,6 +40,7 @@ vi.mock("@legendapp/list/react", async () => {
     initialScrollAtEnd?: boolean;
     initialScrollIndex?: { index: number; viewOffset?: number };
     className?: string;
+    onScroll?: () => void;
     maintainScrollAtEnd?: boolean | MaintainScrollAtEndOptions;
     maintainVisibleContentPosition?:
       | boolean
@@ -50,6 +57,7 @@ vi.mock("@legendapp/list/react", async () => {
     return (
       <div
         data-testid={legendListTestId}
+        onScroll={props.onScroll}
         data-anchor-index={props.anchoredEndSpace?.anchorIndex}
         data-anchor-max-size={props.anchoredEndSpace?.anchorMaxSize}
         data-anchor-offset={props.anchoredEndSpace?.anchorOffset}
@@ -108,7 +116,9 @@ vi.mock("@legendapp/list/react", async () => {
       >
         {props.ListHeaderComponent}
         {props.data.map((item) => (
-          <div key={props.keyExtractor(item)}>{props.renderItem({ item })}</div>
+          <div key={props.keyExtractor(item)}>
+            {timelineListTestState.renderRows ? props.renderItem({ item }) : null}
+          </div>
         ))}
         {props.ListFooterComponent}
       </div>
@@ -189,6 +199,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   clearTimelineScrollBookmark("environment-local:thread-1");
+  clearTimelineScrollBookmark("environment-local:thread-2");
 });
 
 const ACTIVE_THREAD_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
@@ -284,6 +295,136 @@ function buildSnapShotTimelineEntry(previewUrl?: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it("restores a reading position across mounted thread switches without saving transitional scrolls", async () => {
+    // Message content is unrelated to list navigation and requires a browser DOM.
+    timelineListTestState.renderRows = false;
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    const props = buildProps();
+    let renderer: ReactTestRenderer | undefined;
+    let scrollTop = 200;
+    let pendingScroll: { apply: () => void; finish: () => void } | undefined;
+
+    /** Model LegendList waiting for the replacement rows to finish measurement. */
+    const queueScroll = (readOffset: () => number) => {
+      pendingScroll?.finish();
+      return new Promise<void>((finish) => {
+        pendingScroll = {
+          apply: () => {
+            scrollTop = readOffset();
+          },
+          finish,
+        };
+      });
+    };
+    props.listRef.current = {
+      getState: () => ({
+        start: 0,
+        end: 2,
+        scroll: scrollTop,
+        scrollLength: 100,
+        isAtEnd: scrollTop === 200,
+        positionAtIndex: (index: number) => index * 100,
+        sizeAtIndex: () => 100,
+      }),
+      getScrollableNode: () => null,
+      scrollToIndex: ({ index, viewOffset = 0 }: { index: number; viewOffset?: number }) =>
+        queueScroll(() => index * 100 - viewOffset),
+      scrollToEnd: () => queueScroll(() => 200),
+      scrollToOffset: (options: { offset: number }) => queueScroll(() => options.offset),
+    } as unknown as LegendListRef;
+    const entries = [0, 1, 2].map((index) => {
+      const entry = buildAssistantTimelineEntry(`Message ${index}`);
+      return {
+        ...entry,
+        id: `entry-${index}`,
+        message: { ...entry.message, id: MessageId.make(`message-${index}`) },
+      };
+    });
+    /** Emit the list's scroll event without recreating the timeline. */
+    const reportScroll = () =>
+      renderer!.root.findByProps({ "data-testid": "legend-list" }).props.onScroll();
+    /** Complete only the currently active list operation, as LegendList does. */
+    const settleScroll = async () => {
+      await act(() => {
+        const pending = pendingScroll;
+        pendingScroll = undefined;
+        pending?.apply();
+        reportScroll();
+        pending?.finish();
+      });
+      await act(reportScroll);
+    };
+    /** Replace the displayed thread while retaining the same React list instance. */
+    const showThread = async (threadKey: string) => {
+      await act(() => {
+        renderer!.update(
+          <MessagesTimeline {...props} routeThreadKey={threadKey} timelineEntries={entries} />,
+        );
+      });
+    };
+    try {
+      await act(() => {
+        renderer = create(<MessagesTimeline {...props} timelineEntries={entries} />);
+      });
+      const mountedList = renderer!.root.findByProps({ "data-testid": "legend-list" });
+      await act(() => {
+        scrollTop = 125;
+        reportScroll();
+      });
+      expect(resolveTimelineInitialScrollPosition(props.routeThreadKey, entries)).toEqual({
+        index: 1,
+        viewOffset: -25,
+      });
+
+      await showThread("environment-local:thread-2");
+      await act(reportScroll);
+      // B must not inherit A's position while its list measurements are changing.
+      expect(
+        resolveTimelineInitialScrollPosition("environment-local:thread-2", entries),
+      ).toBeNull();
+      await settleScroll();
+      expect(scrollTop).toBe(200);
+
+      await showThread(props.routeThreadKey);
+      await act(reportScroll);
+      // A's saved position survives the transient bottom event from B.
+      expect(resolveTimelineInitialScrollPosition(props.routeThreadKey, entries)).toEqual({
+        index: 1,
+        viewOffset: -25,
+      });
+      await settleScroll();
+      expect(scrollTop).toBe(125);
+      expect(renderer!.root.findByProps({ "data-testid": "legend-list" })).toBe(mountedList);
+
+      // Rapid navigation must supersede a still-pending restore of A.
+      await showThread("environment-local:thread-2");
+      await settleScroll();
+      await showThread(props.routeThreadKey);
+      await showThread("environment-local:thread-2");
+      await settleScroll();
+      expect(scrollTop).toBe(200);
+      await showThread(props.routeThreadKey);
+      await settleScroll();
+      expect(scrollTop).toBe(125);
+
+      // Reaching the live edge clears A's position for the next visit.
+      await act(() => {
+        scrollTop = 200;
+        reportScroll();
+      });
+      await showThread("environment-local:thread-2");
+      await settleScroll();
+      await showThread(props.routeThreadKey);
+      await settleScroll();
+      expect(scrollTop).toBe(200);
+    } finally {
+      await act(() => renderer?.unmount());
+      timelineListTestState.renderRows = true;
+    }
+  });
+
   it("restores a saved row position instead of opening at the end", () => {
     captureTimelineScrollBookmark("environment-local:thread-1", [{ id: "entry-1" }], {
       start: 0,
