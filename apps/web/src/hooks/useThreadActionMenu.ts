@@ -1,3 +1,4 @@
+import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
   type AtomCommandResult,
@@ -142,6 +143,9 @@ export function useThreadActionMenu(input: {
         const items = buildThreadActionMenuItems({
           branch: thread.branch ?? null,
           canFork: readThreadForkEligibility(threadRef, 0).eligible,
+          // The chat header has no project-scoped thread list behind the
+          // menu, so the "Filter by project" affordance is sidebar-only.
+          projectFilter: null,
           isPinned: thread.pinnedAt != null,
           isSettled: supports.settlement && thread.settledOverride === "settled",
           isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
@@ -155,7 +159,10 @@ export function useThreadActionMenu(input: {
         if (clicked._tag === "Failure" || clicked.value === null) return;
         const action: ThreadActionMenuId = clicked.value;
         if (action.startsWith("snooze:")) {
-          const preset = snoozePresets.find((candidate) => `snooze:${candidate.id}` === action);
+          const preset =
+            action === "snooze:custom"
+              ? await requestCustomSnooze()
+              : snoozePresets.find((candidate) => `snooze:${candidate.id}` === action);
           if (!preset) return;
           const result = await snoozeThread(threadRef, preset.snoozedUntil);
           if (result._tag === "Failure") {

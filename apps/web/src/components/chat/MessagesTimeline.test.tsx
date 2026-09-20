@@ -8,18 +8,18 @@ import {
 } from "@t3tools/contracts";
 import { act, createRef, useLayoutEffect, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
-import {
-  captureTimelineScrollBookmark,
-  clearTimelineScrollBookmark,
-  resolveTimelineInitialScrollPosition,
-} from "./threadScrollBookmark";
+import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import { readTimelinePosition } from "./timelineScrollAnchoring";
 import { create, type ReactTestRenderer } from "react-test-renderer";
+import { beforeEach } from "vite-plus/test";
 import type { LegendListRef, MaintainScrollAtEndOptions } from "@legendapp/list/react";
 import { shouldUseRestingComposerLayout } from "../composerFooterLayout";
 import { useComposerFocusState } from "./useComposerFocusState";
 
-const timelineListTestState = vi.hoisted(() => ({ renderRows: true }));
+const timelineListTestState = vi.hoisted(() => ({
+  renderRows: true,
+  data: [] as Array<{ id: string }>,
+}));
 
 vi.mock("@legendapp/list/react", async () => {
   const legendListTestId = "legend-list";
@@ -51,6 +51,7 @@ vi.mock("@legendapp/list/react", async () => {
         };
     ref?: Ref<LegendListRef>;
   }) => {
+    timelineListTestState.data = props.data;
     if (props.anchoredEndSpace) {
       props.anchoredEndSpace.onReady?.({ anchorIndex: props.anchoredEndSpace.anchorIndex });
     }
@@ -162,7 +163,9 @@ function matchMedia() {
 let MessagesTimeline: typeof import("./MessagesTimeline").MessagesTimeline;
 let resolvePreviewAnnotationImage: typeof import("./MessagesTimeline").resolvePreviewAnnotationImage;
 
-beforeAll(async () => {
+const ElementStub = class ElementStub {};
+
+function stubDomGlobals() {
   const classList = {
     add: () => {},
     remove: () => {},
@@ -170,6 +173,7 @@ beforeAll(async () => {
     contains: () => false,
   };
 
+  vi.stubGlobal("Element", ElementStub);
   vi.stubGlobal("localStorage", {
     getItem: () => null,
     setItem: () => {},
@@ -177,6 +181,7 @@ beforeAll(async () => {
     clear: () => {},
   });
   vi.stubGlobal("window", {
+    Element: ElementStub,
     matchMedia,
     addEventListener: () => {},
     removeEventListener: () => {},
@@ -193,14 +198,16 @@ beforeAll(async () => {
       offsetHeight: 0,
     },
   });
+}
 
+beforeAll(async () => {
+  stubDomGlobals();
   ({ MessagesTimeline, resolvePreviewAnnotationImage } = await import("./MessagesTimeline"));
 }, 30_000);
 
-afterEach(() => {
-  clearTimelineScrollBookmark("environment-local:thread-1");
-  clearTimelineScrollBookmark("environment-local:thread-2");
-});
+// The scroll-settling test clears every global stub; mounted timeline rows
+// still touch `window` through the tooltip's focus handling.
+beforeEach(stubDomGlobals);
 
 const ACTIVE_THREAD_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
 const MESSAGE_CREATED_AT = "2026-03-17T19:12:28.000Z";
@@ -299,9 +306,14 @@ describe("MessagesTimeline", () => {
     // Message content is unrelated to list navigation and requires a browser DOM.
     timelineListTestState.renderRows = false;
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    vi.stubGlobal("requestAnimationFrame", () => 0);
-    vi.stubGlobal("cancelAnimationFrame", () => {});
-    const props = buildProps();
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrameId = 0;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.set(++nextFrameId, callback);
+      return nextFrameId;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
+    const props = { ...buildProps(), routeThreadKey: "restore-regression:thread-1" };
     let renderer: ReactTestRenderer | undefined;
     let scrollTop = 200;
     let pendingScroll: { apply: () => void; finish: () => void } | undefined;
@@ -318,8 +330,24 @@ describe("MessagesTimeline", () => {
         };
       });
     };
+    const viewport = {
+      get scrollTop() {
+        return scrollTop;
+      },
+      scrollHeight: 300,
+      clientHeight: 100,
+      getBoundingClientRect: () => ({ top: 0 }),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      ownerDocument: { addEventListener: () => {}, removeEventListener: () => {} },
+    };
     props.listRef.current = {
       getState: () => ({
+        data: timelineListTestState.data,
+        indexByKey: (id: string) => timelineListTestState.data.findIndex((row) => row.id === id),
+        elementAtIndex: (index: number) => ({
+          getBoundingClientRect: () => ({ top: index * 100 - scrollTop }),
+        }),
         start: 0,
         end: 2,
         scroll: scrollTop,
@@ -328,7 +356,7 @@ describe("MessagesTimeline", () => {
         positionAtIndex: (index: number) => index * 100,
         sizeAtIndex: () => 100,
       }),
-      getScrollableNode: () => null,
+      getScrollableNode: () => viewport,
       scrollToIndex: ({ index, viewOffset = 0 }: { index: number; viewOffset?: number }) =>
         queueScroll(() => index * 100 - viewOffset),
       scrollToEnd: () => queueScroll(() => 200),
@@ -354,6 +382,13 @@ describe("MessagesTimeline", () => {
         reportScroll();
         pending?.finish();
       });
+      for (let frame = 0; frame < 3; frame++) {
+        await act(() => {
+          const callbacks = [...frames.values()];
+          frames.clear();
+          for (const callback of callbacks) callback(0);
+        });
+      }
       await act(reportScroll);
     };
     /** Replace the displayed thread while retaining the same React list instance. */
@@ -373,36 +408,36 @@ describe("MessagesTimeline", () => {
         scrollTop = 125;
         reportScroll();
       });
-      expect(resolveTimelineInitialScrollPosition(props.routeThreadKey, entries)).toEqual({
-        index: 1,
-        viewOffset: -25,
+      expect(readTimelinePosition(props.routeThreadKey)).toMatchObject({
+        offsetWithinRow: 25,
+        scrollOffset: 125,
+        atEnd: false,
       });
 
-      await showThread("environment-local:thread-2");
+      await showThread("restore-regression:thread-2");
       await act(reportScroll);
       // B must not inherit A's position while its list measurements are changing.
-      expect(
-        resolveTimelineInitialScrollPosition("environment-local:thread-2", entries),
-      ).toBeNull();
+      expect(readTimelinePosition("restore-regression:thread-2")).toBeUndefined();
       await settleScroll();
       expect(scrollTop).toBe(200);
 
       await showThread(props.routeThreadKey);
       await act(reportScroll);
       // A's saved position survives the transient bottom event from B.
-      expect(resolveTimelineInitialScrollPosition(props.routeThreadKey, entries)).toEqual({
-        index: 1,
-        viewOffset: -25,
+      expect(readTimelinePosition(props.routeThreadKey)).toMatchObject({
+        offsetWithinRow: 25,
+        scrollOffset: 125,
+        atEnd: false,
       });
       await settleScroll();
       expect(scrollTop).toBe(125);
       expect(renderer!.root.findByProps({ "data-testid": "legend-list" })).toBe(mountedList);
 
       // Rapid navigation must supersede a still-pending restore of A.
-      await showThread("environment-local:thread-2");
+      await showThread("restore-regression:thread-2");
       await settleScroll();
       await showThread(props.routeThreadKey);
-      await showThread("environment-local:thread-2");
+      await showThread("restore-regression:thread-2");
       await settleScroll();
       expect(scrollTop).toBe(200);
       await showThread(props.routeThreadKey);
@@ -414,7 +449,7 @@ describe("MessagesTimeline", () => {
         scrollTop = 200;
         reportScroll();
       });
-      await showThread("environment-local:thread-2");
+      await showThread("restore-regression:thread-2");
       await settleScroll();
       await showThread(props.routeThreadKey);
       await settleScroll();
@@ -425,26 +460,6 @@ describe("MessagesTimeline", () => {
     }
   });
 
-  it("restores a saved row position instead of opening at the end", () => {
-    captureTimelineScrollBookmark("environment-local:thread-1", [{ id: "entry-1" }], {
-      start: 0,
-      scroll: 24,
-      positionAtIndex: () => 0,
-      sizeAtIndex: () => 100,
-    });
-
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        timelineEntries={[buildUserTimelineEntry("Saved position")]}
-      />,
-    );
-
-    expect(markup).toContain('data-initial-scroll-at-end="false"');
-    expect(markup).toContain('data-initial-scroll-index="0"');
-    expect(markup).toContain('data-initial-scroll-view-offset="-24"');
-    expect(markup).not.toContain('data-maintain-scroll-at-end="enabled"');
-  });
   it("renders previous and next controls with the minimap", () => {
     const first = buildUserTimelineEntry("First turn");
     const secondBase = buildUserTimelineEntry("Second turn");
@@ -519,8 +534,6 @@ describe("MessagesTimeline", () => {
             />,
           );
         });
-        const toggle = renderer!.root.findByProps({ "aria-expanded": false });
-        await act(() => toggle.props.onClick());
         const questionToggle = renderer!.root.find(
           (node) =>
             node.props["aria-label"]?.startsWith("Question answer submitted:") &&
@@ -871,7 +884,6 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("t3code — Tests");
     expect(markup).toContain('src="data:image/png;base64,aWNvbg=="');
     expect(markup).toContain("h-28 w-52 max-w-full");
-    expect(markup).not.toContain("col-span-2");
     expect(onAnchorReady).toHaveBeenCalledOnce();
     expect(onAnchorReady).toHaveBeenCalledWith(firstEntry.message.id, 0);
   });
@@ -965,7 +977,6 @@ describe("MessagesTimeline", () => {
 
     expect(markup).toContain("<video");
     expect(markup).toContain('aria-label="demo.mp4"');
-    expect(markup).toContain('controls=""');
     expect(markup).not.toContain("Expand demo.mp4");
   });
 
@@ -1073,6 +1084,93 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain('aria-label="Download voice-memo.ogg"');
     expect(markup).not.toContain('alt="voice-memo.ogg"');
     expect(markup).not.toContain("<a href=");
+  });
+
+  it("glides to the end while a turn is running and snaps otherwise", () => {
+    const entries = [buildUserTimelineEntry("Hello")];
+    const working = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} isWorking timelineEntries={entries} />,
+    );
+    expect(working).toContain('data-maintain-scroll-at-end-animated="true"');
+
+    const idle = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={entries} />,
+    );
+    expect(idle).toContain('data-maintain-scroll-at-end-animated="false"');
+  });
+
+  it("snaps to the end while a thread switch settles, even mid-turn", async () => {
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 0;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.set(++nextFrame, callback);
+      return nextFrame;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (frame: number) => frames.delete(frame));
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const flushFrame = () =>
+      act(() => {
+        const callbacks = [...frames.values()];
+        frames.clear();
+        callbacks.forEach((callback) => callback(0));
+      });
+    // A work entry renders without the DOM globals that message rows need
+    // under react-test-renderer.
+    const entries = [
+      {
+        id: "entry-settle-work",
+        kind: "work" as const,
+        createdAt: MESSAGE_CREATED_AT,
+        entry: {
+          id: "work-settle",
+          createdAt: MESSAGE_CREATED_AT,
+          toolCallId: "call-settle",
+          label: "Run lint",
+          tone: "tool" as const,
+          itemType: "command_execution" as const,
+          command: "pnpm lint",
+          toolLifecycleStatus: "completed" as const,
+        },
+      },
+    ];
+    const animatedAttr = (renderer: ReactTestRenderer) =>
+      renderer.root.findByProps({ "data-testid": "legend-list" }).props[
+        "data-maintain-scroll-at-end-animated"
+      ];
+    let renderer!: ReactTestRenderer;
+    try {
+      act(() => {
+        renderer = create(
+          <MessagesTimeline
+            {...buildProps()}
+            isWorking
+            routeThreadKey="env-1:thread-a"
+            timelineEntries={entries}
+          />,
+        );
+      });
+      expect(animatedAttr(renderer)).toBe(true);
+
+      act(() => {
+        renderer.update(
+          <MessagesTimeline
+            {...buildProps()}
+            isWorking
+            routeThreadKey="env-1:thread-b"
+            timelineEntries={entries}
+          />,
+        );
+      });
+      expect(animatedAttr(renderer)).toBe(false);
+
+      // Two frames later the switch has settled and gliding resumes.
+      flushFrame();
+      flushFrame();
+      expect(animatedAttr(renderer)).toBe(true);
+    } finally {
+      act(() => renderer?.unmount());
+      vi.unstubAllGlobals();
+    }
   });
 
   it("keeps reserved end space when tool work starts while reading history", () => {
@@ -1732,6 +1830,98 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("Running pnpm");
     expect(markup).not.toContain("tool call failed");
   });
+
+  it.each(
+    (
+      [
+        [
+          "**Viewing image first** with *care*, ~~old~~ `code` and [context](https://example.com)",
+          "Viewing image first with care, old code and context",
+          1,
+        ],
+        ["first paragraph\n\nsecond paragraph", "first paragraph second paragraph", 0],
+        ["- first\n- second", "first second", 0],
+        ["first  \nsecond", "first second", 0],
+        ["![image description](image.png)", "image description", 0],
+        ["![](image.png)", "Thought", 0],
+        ["---", "Thought", 0],
+      ] as const
+    ).flatMap(([markdown, expected, strongCount]) =>
+      [false, true].map((streaming) => ({
+        markdown,
+        expected,
+        strongCount,
+        streaming,
+      })),
+    ),
+  )(
+    "shows a plain thought preview for $markdown, streaming=$streaming",
+    async ({ markdown, expected, strongCount, streaming }) => {
+      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+      vi.stubGlobal("requestAnimationFrame", () => 0);
+      vi.stubGlobal("cancelAnimationFrame", () => {});
+      const turnId = TurnId.make("turn-thought");
+      const thought = buildAssistantTimelineEntry(markdown);
+      let renderer: ReactTestRenderer | undefined;
+      try {
+        await act(() => {
+          renderer = create(
+            <MessagesTimeline
+              {...buildProps()}
+              isWorking
+              runningTurnId={turnId}
+              timelineEntries={[
+                {
+                  id: "work-entry",
+                  kind: "work",
+                  createdAt: MESSAGE_CREATED_AT,
+                  entry: {
+                    id: "work",
+                    createdAt: MESSAGE_CREATED_AT,
+                    turnId,
+                    label: "Read image",
+                    tone: "tool",
+                    itemType: "command_execution",
+                    command: "cat image.png",
+                    toolLifecycleStatus: "completed",
+                  },
+                },
+                {
+                  ...thought,
+                  message: { ...thought.message, role: "reasoning", turnId, streaming },
+                },
+              ]}
+            />,
+          );
+        });
+        await act(() => renderer!.root.findByProps({ "aria-expanded": false }).props.onClick());
+        const text = renderer!.root.findByProps({
+          className: "relative min-w-0 flex-1 truncate text-secondary-label",
+        });
+        const preview = text.parent!;
+        expect(
+          text
+            .findAll(() => true)
+            .flatMap((node) => node.children)
+            .filter((child) => typeof child === "string")
+            .join(""),
+        ).toBe(
+          (streaming && expected === "Thought" ? "Thinking" : expected).repeat(streaming ? 2 : 1),
+        );
+        expect(
+          preview.findAll((node) =>
+            ["strong", "em", "del", "code", "a"].includes(String(node.type)),
+          ),
+        ).toHaveLength(0);
+        await act(() => preview.props.onClick());
+        expect(renderer!.root.findAllByType("strong")).toHaveLength(strongCount);
+        await act(() => preview.props.onClick());
+        expect(renderer!.root.findAllByType("strong")).toHaveLength(0);
+      } finally {
+        await act(() => renderer?.unmount());
+      }
+    },
+  );
 
   it("renders initial thinking as the shared live activity row", () => {
     const turnId = TurnId.make("turn-live");

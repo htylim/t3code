@@ -35,6 +35,35 @@ describe("KeybindingsSettings.logic", () => {
     expect(commandLabel("project.showAllProjects")).toBe("Project: Show All Projects");
     expect(buildKeybindingCommandOptions([])).toContain("project.showAllProjects");
   });
+  it("lists composer, provider, and pull request commands with editable defaults", () => {
+    const rows = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, "");
+    for (const command of [
+      "composer.host",
+      "composer.effort",
+      "composer.mode",
+      "composer.workspace",
+      "composer.branch",
+      "composer.previousWorktree",
+      "modelPicker.previousProvider",
+      "modelPicker.nextProvider",
+      "thread.copyReference",
+      "pullRequest.copyNumber",
+    ]) {
+      expect(rows.find((row) => row.command === command)).toMatchObject({
+        source: "Default",
+        conflicts: [],
+      });
+    }
+  });
+  it.each(["pu", "pull request", "copy link", "thread id"])(
+    "finds the copy link shortcut with %s",
+    (query) => {
+      const rows = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, query);
+      expect(rows).toContainEqual(
+        expect.objectContaining({ command: "thread.copyReference", key: "mod+shift+c" }),
+      );
+    },
+  );
   it("builds searchable rows with readable key and when values", () => {
     const rows = buildKeybindingRows(
       [
@@ -206,6 +235,8 @@ describe("KeybindingsSettings.logic", () => {
         "terminalFocus",
         "terminalOpen",
         "rightPanelOpen",
+        "isWeb",
+        "isDesktop",
         "modelPickerOpen",
         "true",
         "false",

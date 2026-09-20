@@ -10,6 +10,7 @@ export type ThreadActionMenuId =
   | "new-thread-on-branch"
   | "fork-thread"
   | "open-in-chat-surface"
+  | "filter-by-project"
   | "project-settings"
   | "pin"
   | "unpin"
@@ -32,6 +33,15 @@ export interface ThreadActionMenuState {
   readonly branch: string | null;
   readonly canFork: boolean;
   readonly canOpenInChatSurface?: boolean;
+  /**
+   * Project scoping for the thread list. Null on surfaces with no scoped
+   * list behind the menu (the chat header), where the item must not show.
+   */
+  readonly projectFilter: {
+    readonly label: string;
+    /** True when the list is already scoped to this thread's project. */
+    readonly isActive: boolean;
+  } | null;
   readonly isPinned: boolean;
   readonly isSettled: boolean;
   readonly isSnoozed: boolean;
@@ -49,8 +59,9 @@ export interface ThreadActionMenuState {
 }
 
 /**
- * Shared source for per-thread actions. Callers may opt into surface-specific
- * entries, such as opening another sidebar thread in the compact Chat panel.
+ * Single source for the per-thread action menu: the sidebar row's right-click
+ * menu and the chat header menu share labels, ordering, and capability gating.
+ * Each surface supplies state for the actions it supports.
  */
 export function buildThreadActionMenuItems(
   state: ThreadActionMenuState,
@@ -101,10 +112,13 @@ export function buildThreadActionMenuItems(
                 label: "Snooze",
                 icon: "clock",
                 disabled: !state.canSnoozeNow,
-                children: state.snoozePresets.map((preset) => ({
-                  id: `snooze:${preset.id}` as const,
-                  label: `${preset.label} (${preset.whenLabel})`,
-                })),
+                children: [
+                  ...state.snoozePresets.map((preset) => ({
+                    id: `snooze:${preset.id}` as const,
+                    label: `${preset.label} (${preset.whenLabel})`,
+                  })),
+                  { id: "snooze:custom" as const, label: "Custom…", separatorBefore: true },
+                ],
               },
         ]
       : []),
@@ -120,6 +134,17 @@ export function buildThreadActionMenuItems(
         ]
       : []),
     { id: "mark-unread", label: "Mark unread", icon: "mail-open" },
+    ...(state.projectFilter
+      ? [
+          {
+            id: "filter-by-project" as const,
+            label: state.projectFilter.isActive
+              ? "Show all projects"
+              : `Filter by ${state.projectFilter.label}`,
+            icon: "folder-tree",
+          },
+        ]
+      : []),
     {
       id: "copy",
       label: "Copy",

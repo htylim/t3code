@@ -981,7 +981,11 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   isConnecting={isConnecting}
                   isSendBusy={sending}
                   sendBusyLabel="Sending"
-                  sendDisabledReason={null}
+                  sendDisabledReason={
+                    running
+                      ? "Wait for this side-chat turn to finish before sending another message."
+                      : null
+                  }
                   isPreparingWorktree={false}
                   bannerItems={[]}
                   environmentUnavailable={environmentUnavailable}
@@ -1020,6 +1024,9 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
                   terminalOpen={false}
                   gitCwd={thread.worktreePath ?? project?.workspaceRoot ?? null}
                   forkEligibility={SIDE_CHAT_FORK_ELIGIBILITY}
+                  multipleModelSelections={null}
+                  supportsMultipleModels={false}
+                  onMultipleModelSelectionsChange={() => {}}
                   pullRequestProjectId={supportsPullRequests ? thread.projectId : null}
                   pullRequestRepository={
                     supportsPullRequests ? (project?.repositoryIdentity?.displayName ?? null) : null

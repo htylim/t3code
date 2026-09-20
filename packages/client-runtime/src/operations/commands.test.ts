@@ -5,6 +5,7 @@ import {
   ProjectId,
   ThreadId,
   type ClientOrchestrationOperation,
+  type ClientOrchestrationCommand,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";

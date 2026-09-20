@@ -627,6 +627,10 @@ export const make = Effect.gen(function* () {
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const baseDir = path.resolve(serverConfig.baseDir);
   const worktreesDir = path.resolve(serverConfig.worktreesDir);
+  // Compare resolved targets with a resolved root, including macOS /var aliases.
+  const realWorktreesDir = yield* fileSystem
+    .realPath(worktreesDir)
+    .pipe(Effect.orElseSucceed(() => worktreesDir));
   // Windows filesystems are case-insensitive, so path prefix checks there
   // must case fold.
   const foldWorktreeCase = (yield* HostProcessPlatform) === "win32";
@@ -656,7 +660,8 @@ export const make = Effect.gen(function* () {
     normalizeForWorktreeMatch(candidatePath, foldWorktreeCase).startsWith(
       normalizeForWorktreeMatch(baseDir, foldWorktreeCase),
     ) ||
-    isT3ManagedWorktree(candidatePath, worktreesDir, foldWorktreeCase);
+    isT3ManagedWorktree(candidatePath, worktreesDir, foldWorktreeCase) ||
+    isT3ManagedWorktree(candidatePath, realWorktreesDir, foldWorktreeCase);
 
   const listDirectory = (directory: string) =>
     fileSystem.readDirectory(directory).pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));

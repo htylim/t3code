@@ -106,9 +106,9 @@ function renderTabs(
   return renderToStaticMarkup(
     <RightPanelTabs
       mode="inline"
-      surfaces={second ? [previewSurface, secondSurface] : [previewSurface]}
+      surfaces={options.empty ? [] : second ? [previewSurface, secondSurface] : [previewSurface]}
       environmentId={null}
-      activeSurfaceId={previewSurface.id}
+      activeSurfaceId={options.empty ? null : previewSurface.id}
       pendingSurfaceIds={new Set()}
       previewSessions={sessions}
       desktopByTabId={{

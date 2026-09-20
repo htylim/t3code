@@ -32,7 +32,7 @@ import {
   type PreviousWorktreeSeed,
   type WorktreeRow,
 } from "./BranchToolbar.logic";
-import { composerFloatingLayerProps } from "./chat/composerEventScope";
+import { useComposerMenuProps } from "./chat/composerEventScope";
 import { revealInFileExplorerLabelForOs } from "./preview/fileExplorerLabel";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -59,6 +59,7 @@ export interface WorkspaceMenuProps {
   activeWorktreePath: string | null;
   activeBranch: string | null;
   envLocked: boolean;
+  forceNewWorktree?: boolean;
   canUseWorktree: boolean;
   effectiveEnvMode: EnvMode;
   onEnvModeChange: (mode: EnvMode) => void;
@@ -69,13 +70,14 @@ export interface WorkspaceMenuProps {
 
 /** Shares the workspace popup between the wide and narrow composer controls. */
 export function WorkspaceMenu(props: WorkspaceMenuProps) {
+  const composerFloatingLayerProps = useComposerMenuProps();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const triggerContent = props.trigger ?? (
     <>
       {props.activeWorktreePath ? (
         <FolderGitIcon className="size-3" />
-      ) : props.effectiveEnvMode === "worktree" && !props.envLocked ? (
+      ) : props.effectiveEnvMode === "worktree" && (!props.envLocked || props.forceNewWorktree) ? (
         <FolderGit2Icon className="size-3" />
       ) : (
         <FolderIcon className="size-3" />
@@ -85,11 +87,13 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
         className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
       >
         <span data-composer-label-motion className="block truncate">
-          {props.envLocked
-            ? resolveLockedWorkspaceLabel(props.activeWorktreePath)
-            : props.effectiveEnvMode === "worktree" && !props.activeWorktreePath
-              ? "New worktree"
-              : resolveCurrentWorkspaceLabel(props.activeWorktreePath)}
+          {props.forceNewWorktree
+            ? "New worktree"
+            : props.envLocked
+              ? resolveLockedWorkspaceLabel(props.activeWorktreePath)
+              : props.effectiveEnvMode === "worktree" && !props.activeWorktreePath
+                ? "New worktree"
+                : resolveCurrentWorkspaceLabel(props.activeWorktreePath)}
         </span>
       </span>
     </>
@@ -116,6 +120,7 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
       <MenuTrigger
         render={<Button variant="ghost" size="xs" />}
         aria-label="Workspace"
+        data-composer-shortcut="composer.workspace"
         className="min-w-0 shrink font-normal text-muted-foreground/70 text-xs!"
         data-composer-context-control
       >
@@ -301,6 +306,7 @@ function WorkspaceRow(
   },
 ) {
   const { row } = props;
+  const composerFloatingLayerProps = useComposerMenuProps();
   const [actionsOpen, setActionsOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState(row.dirName);

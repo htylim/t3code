@@ -1064,3 +1064,28 @@ upstream.
   service admission wrappers, WebSocket registration/authorization, shared RPC schema, transient
   cleanup hook, and Claude worker bundle entry. Revisit the narrow raw Codex descendant query when
   its generated client exposes that experimental filter.
+
+## 2026-09-20: Integrate upstream 0.0.42
+
+- Upstream baseline: `7445aa733ada`, following `b1e223e2b0`. Integrates 336 upstream commits
+  on `integration/upstream-2026-09-20`, starting from fork commit `d204ea91f238`.
+- Removed downstream drift: upstream now owns reading-position restoration and compressed
+  asset content types. Removed the fork bookmark cache and restoration hook, retaining the
+  mounted thread-switch regression against upstream's DOM-aware implementation.
+- Retained drift: side chats, selected-text actions, transient provider-history cleanup,
+  native thread forks, thread-control MCP tools, Mermaid, workspace management, custom
+  shortcuts, the Auto runtime fallback, and the Fork desktop identity.
+- Adaptations: thread-reference chips use Tiptap in both composer modes. Claude history and
+  transient deletion workers support the bundled CLI and its hidden executable commands.
+  Workspace selection honors upstream's required separate worktrees for multiple models.
+  Native forks reject queued work. Side chats remain single-model and accept messages after
+  their current turn finishes.
+- Build fixes: added MIT notices from the installed fastdom and strictdom READMEs. Fixed
+  upstream's managed-worktree exclusion for macOS realpath aliases, as exposed by its existing
+  symlink regression. Regenerated the lockfile with the fork's Mermaid dependency retained.
+- Verification: more than 3,000 focused regression tests passed across the affected fork and
+  integration paths, including the HTTP compression regression. Scoped web, desktop, mobile,
+  server, contracts, and client-runtime type checks passed. Targeted lint reported no errors.
+  Production web and server bundles passed; the bundled Claude history and transient-deletion
+  commands passed smoke tests with a disposable provider home. No live provider turns, browser
+  checks, native mobile builds, desktop installers, publication, or live-data changes were run.

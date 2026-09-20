@@ -127,7 +127,7 @@ it.layer(layer)("Transient provider deletion entry point", (it) => {
       const f = yield* fixture();
       const before = yield* f.fs.readFileString(f.transcript);
       const workerPath = yield* f.path.fromFileUrl(
-        new URL("../claudeHistoryWorker.ts", import.meta.url),
+        new URL("../claude-history-worker.ts", import.meta.url),
       );
       const result = yield* spawnAndCollect(
         process.execPath,

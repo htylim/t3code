@@ -1,3 +1,4 @@
+import { HostProcessIsExecutable } from "@t3tools/shared/hostProcess";
 import type { ClaudeSettings, CodexSettings, OpenCodeSettings } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
@@ -88,19 +89,28 @@ export const deleteTransientChatProviderThread = Effect.fn("deleteTransientChatP
       }
       case "claudeAgent": {
         const environment = yield* makeClaudeEnvironment(input.config, input.environment);
-        const workerPath = yield* path.fromFileUrl(
-          new URL(
-            import.meta.url.endsWith(".ts")
-              ? "../transientChatProviderThreadDeleteWorker.ts"
-              : "./transientChatProviderThreadDeleteWorker.mjs",
-            import.meta.url,
-          ),
-        );
+        const workerArguments = (yield* HostProcessIsExecutable)
+          ? ["__transient-chat-delete"]
+          : [
+              yield* path.fromFileUrl(
+                new URL(
+                  import.meta.url.endsWith(".ts")
+                    ? "../transientChatProviderThreadDeleteWorker.ts"
+                    : "./transientChatProviderThreadDeleteWorker.mjs",
+                  import.meta.url,
+                ),
+              ),
+            ];
         const result = yield* spawnAndCollect(
           process.execPath,
           ChildProcess.make(
             process.execPath,
-            [workerPath, input.providerSessionId, input.cwd, String(input.allowMissing === true)],
+            [
+              ...workerArguments,
+              input.providerSessionId,
+              input.cwd,
+              String(input.allowMissing === true),
+            ],
             {
               env: { ...environment, ELECTRON_RUN_AS_NODE: "1" },
             },

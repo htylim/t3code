@@ -18,6 +18,7 @@ import {
   failEnvironmentNotFound,
   requireEnvironmentScope,
 } from "../auth/http.ts";
+import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
 import { OrchestrationEngineService } from "./Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./Services/ProjectionSnapshotQuery.ts";
 
@@ -29,6 +30,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
     const orchestrationEngine = yield* OrchestrationEngineService;
+    const projectCloneTracker = yield* ProjectCloneTracker.ProjectCloneTracker;
 
     return handlers
       .handle(
@@ -89,7 +91,10 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           if (Option.isNone(snapshot)) {
             return yield* failEnvironmentNotFound("thread_not_found");
           }
-          return projectThreadDetailSnapshot(snapshot.value);
+          return projectThreadDetailSnapshot(
+            snapshot.value,
+            args.payload.reasoningMessages === "true",
+          );
         }),
       )
       .handle(
@@ -97,10 +102,18 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
         Effect.fn("environment.orchestration.dispatch")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
           yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
+          yield* ProjectCloneTracker.rejectCommandsDuringClone(
+            projectCloneTracker,
+            args.payload,
+          ).pipe(
+            Effect.catch((cause) =>
+              failEnvironmentInternal("orchestration_dispatch_failed", cause),
+            ),
+          );
           const normalizedOperation = yield* normalizeDispatchCommand(args.payload).pipe(
             Effect.catch(() => failEnvironmentInvalidRequest("invalid_command")),
           );
-          return yield* dispatchHttpClientOperation(normalizedOperation, {
+          const result = yield* dispatchHttpClientOperation(normalizedOperation, {
             dispatchCommand: (command) =>
               orchestrationEngine.dispatch(command).pipe(
                 Effect.tapError(() => cleanupFailedUploadedAttachments(args.payload, command)),
@@ -117,6 +130,14 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
               failEnvironmentInternal("orchestration_dispatch_failed", cause),
             ),
           );
+          if (normalizedOperation.type === "project.delete") {
+            yield* ProjectCloneTracker.discardCloneForDeletedProject(
+              projectCloneTracker,
+              normalizedOperation,
+            );
+          }
+
+          return result;
         }),
       );
   }),
