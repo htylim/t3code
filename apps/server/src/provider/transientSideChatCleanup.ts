@@ -17,6 +17,7 @@ import { OrchestrationEngineService } from "../orchestration/Services/Orchestrat
 import { ProjectionThreadRepository } from "../persistence/Services/ProjectionThreads.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { ProviderValidationError } from "./Errors.ts";
+import { deriveProviderInstanceConfigMap } from "./Layers/ProviderInstanceRegistryHydration.ts";
 import { mergeProviderInstanceEnvironment } from "./ProviderInstanceEnvironment.ts";
 import { ProviderService } from "./Services/ProviderService.ts";
 import { ProviderSessionDirectory } from "./Services/ProviderSessionDirectory.ts";
@@ -77,7 +78,8 @@ export const makeTransientSideChatCleanup = Effect.fn("makeTransientSideChatClea
             return { providerHistory: "already-absent" as const };
           }
           const instanceId = binding?.providerInstanceId ?? thread.modelSelection.instanceId;
-          const instance = (yield* settings.getSettings).providerInstances[instanceId];
+          // Resolve legacy built-in settings exactly as the live provider registry does.
+          const instance = deriveProviderInstanceConfigMap(yield* settings.getSettings)[instanceId];
           if (!instance || (binding && instance.driver !== binding.provider)) {
             return yield* invalid(
               "The original provider instance is unavailable or has changed driver.",

@@ -137,7 +137,7 @@ export interface ComposerPromptEditorProps {
   ) => void;
   onVisibleSelectionChange?: () => void;
   onCommandKeyDown?: (
-    key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
+    key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab" | "Escape",
     event: KeyboardEvent,
     isTaskItem?: boolean,
   ) => boolean;
@@ -789,6 +789,19 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
       ),
       editable: !disabled,
       editorProps: {
+        handleDOMEvents: {
+          /** Dismiss composer suggestions before allowing global Escape shortcuts. */
+          keydown: (_view, event) => {
+            if (event.key !== "Escape" || event.isComposing) return false;
+            if (onCommandKeyDownRef.current?.("Escape", event)) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+            // ProseMirror otherwise prevents every Escape, including Shift+Escape.
+            // DOM handlers can skip that fallback without consuming the browser event.
+            return true;
+          },
+        },
         attributes: {
           class: cn(
             "composer-tiptap block max-h-50 min-h-17.5 w-full overflow-y-auto whitespace-pre-wrap wrap-break-word bg-transparent leading-relaxed text-foreground focus:outline-none",

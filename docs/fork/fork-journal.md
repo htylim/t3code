@@ -1089,3 +1089,19 @@ upstream.
   Production web and server bundles passed; the bundled Claude history and transient-deletion
   commands passed smoke tests with a disposable provider home. No live provider turns, browser
   checks, native mobile builds, desktop installers, publication, or live-data changes were run.
+
+## 2026-09-20: Repair regressions found in live integration testing
+
+- Upstream baseline: `7445aa733ada`.
+- Cleanup now resolves built-in provider settings through upstream's instance hydration helper.
+  Looking only in explicit `providerInstances` rejected ordinary Codex and Claude side chats
+  before deleting either the T3 thread or provider history. Explicit instance settings still win.
+- The Tiptap composer handles Escape before ProseMirror's unconditional Escape suppression.
+  Open composer suggestions dismiss first; otherwise global shortcuts, including Shift+Escape
+  to clear the project filter, receive the event without losing the draft.
+- Verification: the three new built-in-provider cleanup regressions failed before the fix and
+  passed afterward. The focused cleanup and shortcut suites passed 294 tests. Server and web
+  typechecks, targeted lint, and production bundles passed. Isolated live Codex Terra and Claude
+  Sonnet checks verified native forks, MCP access, side-chat cleanup, selection reuse, workspace
+  management, thread references, and the affected shortcuts. Browser screenshot capture failed;
+  native device access was disabled. Desktop installers and live user data were not touched.

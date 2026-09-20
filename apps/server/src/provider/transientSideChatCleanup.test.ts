@@ -34,14 +34,20 @@ const nativeId = "11111111-1111-4111-8111-111111111111";
 const instanceId = ProviderInstanceId.make("test-instance");
 const runtime = OpenCodeRuntimeLive.pipe(Layer.provideMerge(NodeServices.layer));
 
-const fixture = Effect.fn("fixture")(function* (driver = "codex", started = true) {
+/** Builds a cleanup target with explicit or legacy provider settings. */
+const fixture = Effect.fn("fixture")(function* (
+  driver = "codex",
+  started = true,
+  legacySettings = false,
+) {
+  const fixtureInstanceId = legacySettings ? ProviderInstanceId.make(driver) : instanceId;
   const gate = yield* makeTransientChatCleanupGate;
   const provider = ProviderDriverKind.make(driver);
   let thread: ProjectionThread = {
     threadId,
     projectId: ProjectId.make("project"),
     title: "Side chat",
-    modelSelection: { instanceId, model: "test" },
+    modelSelection: { instanceId: fixtureInstanceId, model: "test" },
     runtimeMode: "auto",
     interactionMode: "default",
     branch: null,
@@ -72,7 +78,7 @@ const fixture = Effect.fn("fixture")(function* (driver = "codex", started = true
     ? {
         threadId,
         provider,
-        providerInstanceId: instanceId,
+        providerInstanceId: fixtureInstanceId,
         status: "running",
         resumeCursor: cursor,
         runtimePayload: { cwd: "/project" },
@@ -116,14 +122,15 @@ const fixture = Effect.fn("fixture")(function* (driver = "codex", started = true
       }),
   };
   const repository = { getById: () => Effect.sync(() => Option.some(thread)) };
-  const settingsLayer = ServerSettings.layerTest({
-    providerInstances: {
-      [instanceId]: {
-        driver: provider,
-        config: { homePath: "/provider-home" },
-        environment: [{ name: "TEST_INSTANCE", value: "selected" }],
-      },
+  const explicitInstances = {
+    [fixtureInstanceId]: {
+      driver: provider,
+      config: { homePath: "/provider-home" },
+      environment: [{ name: "TEST_INSTANCE", value: "selected" }],
     },
+  };
+  const settingsLayer = ServerSettings.layerTest({
+    providerInstances: legacySettings ? {} : explicitInstances,
   });
   const layers = Layer.mergeAll(
     runtime,
@@ -192,6 +199,19 @@ for (const provider of ["codex", "claudeAgent", "opencode"] as const) {
       const afterRestart = yield* f.create();
       assert.deepEqual(yield* afterRestart({ threadId }), { providerHistory: "already-absent" });
       assert.equal(f.nativeCalls.length, 1);
+    }),
+  );
+}
+
+for (const provider of ["codex", "claudeAgent", "opencode"] as const) {
+  it.effect(`cleans the built-in ${provider} instance without an explicit settings entry`, () =>
+    Effect.gen(function* () {
+      const f = yield* fixture(provider, true, true);
+      const cleanup = yield* f.create();
+      assert.deepEqual(yield* cleanup({ threadId }), { providerHistory: "deleted" });
+      assert.equal(f.nativeCalls[0]?.provider, provider);
+      assert.equal(f.nativeCalls[0]?.cwd, "/project");
+      assert.deepEqual(f.calls, ["t3-delete", "stop", "provider-delete"]);
     }),
   );
 }
