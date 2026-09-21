@@ -19,6 +19,19 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-21 - Restore the fork command picker action
+
+- Upstream baseline: `7445aa733ada`.
+- Change: Restore the explicit `/fork` selection handler before the plan-mode guard in the web
+  composer. Enter and clicking now submit the fork command when plan mode is disabled.
+- Reason: The September 3 upstream merge dropped this downstream handler, leaving `/fork` listed
+  but routed through the plan-mode action.
+- Scope: Web and desktop command-picker selection. Provider support and mobile behavior are unchanged.
+- Verification: Reproduced both stuck-picker interactions before the fix in an isolated browser.
+  After the fix, Claude Sonnet passed Enter and click checks, and Codex Terra passed Enter.
+  Both providers preserved history and answered a follow-up in the fork. Passed 138 focused tests,
+  web typecheck, targeted lint with existing warnings, and formatting checks.
+
 ## 2026-09-13 — Reuse transient side chats for selected text
 
 - Upstream baseline: `b1e223e2b0`

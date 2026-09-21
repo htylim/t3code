@@ -3653,6 +3653,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           }
           return;
         }
+        if (item.command === "fork") {
+          const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "/fork", {
+            expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
+          });
+          if (applied) {
+            setComposerHighlightedItemId(null);
+            onSend();
+          }
+          return;
+        }
         if (!planModeUiEnabled) return;
         void handleInteractionModeChange(item.command === "plan" ? "plan" : "default");
         const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
@@ -3747,6 +3757,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       composerDraftTarget,
       handleInteractionModeChange,
       planModeUiEnabled,
+      onSend,
       onUsageLimitsCommand,
       resolveActiveComposerTrigger,
     ],
