@@ -113,6 +113,8 @@ import {
 interface CompactChatSurfaceProps {
   owner: ScopedThreadRef;
   target: ScopedThreadRef;
+  /** Changes when a selection action has updated this target's draft. */
+  focusRequestId: number;
 }
 
 const SIDE_CHAT_FORK_ELIGIBILITY = {
@@ -157,7 +159,7 @@ function CompactState(props: { icon: typeof MessageSquareIcon; title: string; de
   );
 }
 
-export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
+export function CompactChatSurface({ owner, target, focusRequestId }: CompactChatSurfaceProps) {
   const { resolvedTheme } = useTheme();
   const environment = useEnvironment(target.environmentId);
   const threadState = useEnvironmentThread(target.environmentId, target.threadId);
@@ -486,8 +488,11 @@ export function CompactChatSurface({ owner, target }: CompactChatSurfaceProps) {
 
   useEffect(() => {
     if (!thread?.id) return;
-    scheduleComposerFocus();
-  }, [scheduleComposerFocus, thread?.id]);
+    // Wait for the citation update to reach the editor before placing the caret.
+    const frame = window.requestAnimationFrame(() => composerRef.current?.focusAtEnd());
+    return () => window.cancelAnimationFrame(frame);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Each selection request must refocus the same target thread.
+  }, [focusRequestId, thread?.id]);
 
   const handleRuntimeModeChange = useCallback(
     (mode: RuntimeMode) => {

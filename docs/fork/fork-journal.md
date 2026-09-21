@@ -19,6 +19,19 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-21 - Focus side-chat drafts after selected-text actions
+
+- Upstream baseline: `7445aa733ada`.
+- Change: Each **Ask in side chat** action requests focus for its target composer after the
+  citation reaches the editor, with the caret after its trailing space. Existing drafts remain intact.
+- Reason: Reusing an open side chat appended the citation without rerunning its initial focus effect.
+- Scope: Web and desktop selection actions and the compact chat composer. Focus requests identify
+  the target environment and thread; provider adapters and native mobile are unchanged.
+- Verification: Reproduced focus remaining on the page body before the fix. An isolated browser
+  verified new, visible, and hidden side chats, repeated selections, preservation of existing drafts,
+  a single space after the citation, and typing into the side composer without clicking it.
+  Passed 29 focused tests and the web typecheck. Targeted lint retained only existing warnings.
+
 ## 2026-09-21 - Restore the fork command picker action
 
 - Upstream baseline: `7445aa733ada`.

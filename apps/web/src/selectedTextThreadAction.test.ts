@@ -47,6 +47,7 @@ describe("Ask in side chat prompt", () => {
 
     expect(collectAssistantCitations(prompt).map((match) => match.citation)).toEqual([citation]);
     expect(prompt).not.toContain("> the selected answer");
+    expect(prompt.endsWith(") ")).toBe(true);
   });
 });
 
@@ -62,7 +63,7 @@ describe("reuse selected-text side chat draft", () => {
     useComposerDraftStore.setState({ draftsByThreadKey: {} });
   });
 
-  it.each(["", "My question", "My question\n\n"])(
+  it.each(["", "My question", "My question ", "My question\n\n"])(
     "reuses the transient target and preserves existing draft text %j",
     (existingPrompt) => {
       const panels = useRightPanelStore.getState();
@@ -83,7 +84,7 @@ describe("reuse selected-text side chat draft", () => {
       };
       const prompt = buildAskInSideChatPrompt(citation);
 
-      expect(reuseSelectedTextSideChatDraft(owner, prompt)).toBe(true);
+      expect(reuseSelectedTextSideChatDraft(owner, prompt)).toEqual(target);
       const updatedPrompt = drafts.getComposerDraft(target)!.prompt;
       expect(updatedPrompt).toBe(
         `${existingPrompt}${existingPrompt === "My question" ? " " : ""}${prompt}`,
@@ -104,7 +105,7 @@ describe("reuse selected-text side chat draft", () => {
     panels.open(owner, "files");
     panels.close(owner);
 
-    expect(reuseSelectedTextSideChatDraft(owner, "Selection ")).toBe(true);
+    expect(reuseSelectedTextSideChatDraft(owner, "Selection ")).toEqual(target);
     expect(useRightPanelStore.getState().byThreadKey[scopedThreadKey(owner)]).toMatchObject({
       isOpen: true,
       activeSurfaceId: `chat:${target.environmentId}:${target.threadId}`,
@@ -116,7 +117,7 @@ describe("reuse selected-text side chat draft", () => {
     useComposerDraftStore.getState().setPrompt(target, "Regular draft");
     const panel = useRightPanelStore.getState().byThreadKey[scopedThreadKey(owner)];
 
-    expect(reuseSelectedTextSideChatDraft(owner, "Selection ")).toBe(false);
+    expect(reuseSelectedTextSideChatDraft(owner, "Selection ")).toBeNull();
     expect(useComposerDraftStore.getState().getComposerDraft(target)!.prompt).toBe("Regular draft");
     expect(useRightPanelStore.getState().byThreadKey[scopedThreadKey(owner)]).toBe(panel);
   });
@@ -129,15 +130,15 @@ describe("reuse selected-text side chat draft", () => {
         { ...owner, environmentId: EnvironmentId.make("environment-2") },
         "Selection ",
       ),
-    ).toBe(false);
+    ).toBeNull();
     expect(
       reuseSelectedTextSideChatDraft({ ...owner, threadId: ThreadId.make("other-owner") }, "Text"),
-    ).toBe(false);
+    ).toBeNull();
     expect(useComposerDraftStore.getState().getComposerDraft(target)).toBeNull();
   });
 
   it("falls back to creation when there is no side chat", () => {
-    expect(reuseSelectedTextSideChatDraft(owner, "Selection ")).toBe(false);
+    expect(reuseSelectedTextSideChatDraft(owner, "Selection ")).toBeNull();
     expect(useComposerDraftStore.getState().draftsByThreadKey).toEqual({});
   });
 });

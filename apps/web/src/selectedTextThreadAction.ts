@@ -35,13 +35,16 @@ export function buildAskInSideChatPrompt(assistantCitation: AssistantCitation): 
   return `${serializeAssistantCitation(assistantCitation)} `;
 }
 
-/** Selected-text actions add to the owner's transient chat without replacing it. */
-export function reuseSelectedTextSideChatDraft(owner: ScopedThreadRef, prompt: string): boolean {
+/** Append to the owner's transient draft and return the target composer to focus. */
+export function reuseSelectedTextSideChatDraft(
+  owner: ScopedThreadRef,
+  prompt: string,
+): ScopedThreadRef | null {
   const panelStore = useRightPanelStore.getState();
   const surface = panelStore.byThreadKey[scopedThreadKey(owner)]?.surfaces.find(
     (surface) => surface.kind === "chat" && surface.transient === true,
   );
-  if (surface?.kind !== "chat") return false;
+  if (surface?.kind !== "chat") return null;
 
   const target = { environmentId: surface.environmentId, threadId: surface.threadId };
   const draftStore = useComposerDraftStore.getState();
@@ -49,7 +52,7 @@ export function reuseSelectedTextSideChatDraft(owner: ScopedThreadRef, prompt: s
   const separator = existingPrompt.length > 0 && !/\s$/.test(existingPrompt) ? " " : "";
   draftStore.setPrompt(target, `${existingPrompt}${separator}${prompt}`);
   panelStore.activateSurface(owner, surface.id);
-  return true;
+  return target;
 }
 
 export async function createSelectedTextThreadDraft(input: {

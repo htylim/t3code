@@ -1839,6 +1839,10 @@ export default function ChatView(props: ChatViewProps) {
   multipleModelSelectionsRef.current = multipleModelSelections;
   const uncertainMultipleSubmissionsRef = fanoutState.uncertainSubmissions;
   const sideChatCreateInFlightRef = useRef(false);
+  const [sideChatComposerFocusRequest, setSideChatComposerFocusRequest] = useState<{
+    target: ScopedThreadRef;
+    requestId: number;
+  } | null>(null);
   const settleAndNewInFlightRef = useRef(false);
   const environmentUnavailableSendToastSlotRef = useRef(0);
   const feedbackUploadsInFlightRef = useRef(new Set<string>());
@@ -6760,6 +6764,7 @@ export default function ChatView(props: ChatViewProps) {
       if (replacedTransient) {
         void deleteTransientSideChat(replacedTransient);
       }
+      return target;
     },
     [
       activeThread,
@@ -6789,8 +6794,14 @@ export default function ChatView(props: ChatViewProps) {
       try {
         if (action === "ask-in-side-chat") {
           const prompt = buildAskInSideChatPrompt(citation);
-          if (!reuseSelectedTextSideChatDraft(activeThreadRef, prompt)) {
-            await openNewSideChat(prompt);
+          const target =
+            reuseSelectedTextSideChatDraft(activeThreadRef, prompt) ??
+            (await openNewSideChat(prompt));
+          if (target) {
+            setSideChatComposerFocusRequest((previous) => ({
+              target,
+              requestId: (previous?.requestId ?? 0) + 1,
+            }));
           }
           return;
         }
@@ -9928,6 +9939,13 @@ export default function ChatView(props: ChatViewProps) {
       <CompactChatSurface
         key={renderedRightPanelSurface.id}
         owner={activeThreadRef}
+        focusRequestId={
+          sideChatComposerFocusRequest?.target.environmentId ===
+            renderedRightPanelSurface.environmentId &&
+          sideChatComposerFocusRequest.target.threadId === renderedRightPanelSurface.threadId
+            ? sideChatComposerFocusRequest.requestId
+            : 0
+        }
         target={scopeThreadRef(
           renderedRightPanelSurface.environmentId,
           renderedRightPanelSurface.threadId,
