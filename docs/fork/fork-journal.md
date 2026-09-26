@@ -19,6 +19,21 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-26 - Reveal the hidden sidebar on hover
+
+- Upstream baseline: `7445aa733ada`.
+- Change: Holding the mouse at the left edge reveals the collapsed sidebar as a temporary
+  overlay. Leaving closes it after a short grace period; Escape dismisses it. The sidebar toggle
+  still pins it open, and hover does not change the main view's width or the saved pinned state.
+- Reason: Access thread navigation without giving up horizontal space in the main view.
+- Scope: Web and desktop, both sidebar layouts and Settings. Touch drawers, native mobile,
+  provider adapters, contracts, and connection handling are unchanged.
+- Verification: Passed 17 focused tests, web typecheck, targeted lint with an existing warning,
+  formatting, and whitespace checks. An isolated browser verified hover intent, leave delay,
+  Escape dismissal, pinning, Settings, both sidebar layouts, and menus extending beyond the panel.
+  The main view remained 1,536 pixels wide while the preview opened. Browser resizing timed out,
+  so narrow-screen behavior and the native desktop shell were not visually verified.
+
 ## 2026-09-21 - Focus side-chat drafts after selected-text actions
 
 - Upstream baseline: `7445aa733ada`.

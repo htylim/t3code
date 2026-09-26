@@ -3,6 +3,12 @@
 Use a new thread for a separate task. Choose **New worktree** when its code changes
 need a separate branch and working directory.
 
+On web and desktop, hide the sidebar to give the main view more space. Hold the mouse at the
+left edge to reveal it temporarily over the main view. It hides after the pointer leaves;
+editing, keyboard focus, and open sidebar menus keep it available. Press Escape to dismiss
+the temporary sidebar, or use the sidebar toggle to pin it open again. The toggle and its
+keyboard shortcut remain available without a mouse.
+
 To require confirmation before unpinning, enable **Settings → General → Unpin confirmation**. The
 confirmation applies to the sidebar controls, thread menus, and the `mod+shift+p` shortcut.
 

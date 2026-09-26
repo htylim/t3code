@@ -15,10 +15,11 @@ import {
 } from "~/components/ui/sheet";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useResizeDrag } from "~/hooks/useResizeDrag";
-import { useIsMobile } from "~/hooks/useMediaQuery";
+import { useIsMobile, useMediaQuery } from "~/hooks/useMediaQuery";
 import { getLocalStorageItem, setLocalStorageItem } from "~/hooks/useLocalStorage";
 import { resolveSidebarState, type ResponsiveSidebarState } from "./sidebarState";
 import * as Schema from "effect/Schema";
+import { useSidebarPeek } from "./useSidebarPeek";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -175,10 +176,12 @@ function SidebarProvider({
   );
 }
 
+/** Renders the responsive sidebar, optionally allowing a temporary desktop overlay while collapsed. */
 function Sidebar({
   side = "left",
   variant = "sidebar",
   collapsible = "offcanvas",
+  peekOnHover = false,
   resizable = false,
   className,
   children,
@@ -187,9 +190,19 @@ function Sidebar({
   side?: "left" | "right";
   variant?: "sidebar" | "floating" | "inset";
   collapsible?: "offcanvas" | "icon" | "none";
+  peekOnHover?: boolean;
   resizable?: boolean | SidebarResizableOptions;
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+  const canHover = useMediaQuery("(any-hover: hover) and (any-pointer: fine)");
+  const { peekOpen, panelRef, onPointerMoveCapture } = useSidebarPeek(
+    peekOnHover &&
+      canHover &&
+      !isMobile &&
+      side === "left" &&
+      collapsible === "offcanvas" &&
+      state === "collapsed",
+  );
   const resolvedResizable = React.useMemo<SidebarResolvedResizableOptions | null>(() => {
     if (isMobile || collapsible === "none" || !resizable) {
       return null;
@@ -273,6 +286,7 @@ function Sidebar({
         data-slot="sidebar"
         data-state={state}
         data-variant={variant}
+        data-peek={peekOpen ? "true" : undefined}
       >
         {/* This is what handles the sidebar gap on desktop */}
         <div
@@ -292,16 +306,20 @@ function Sidebar({
             "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) md:flex",
             "[[data-panel-animations=true]_&]:transition-[left,right,width] [[data-panel-animations=true]_&]:[transition-duration:var(--panel-animation-duration)] [[data-panel-animations=true]_&]:ease-out",
             side === "left"
-              ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
+              ? "left-0 group-data-[collapsible=offcanvas]:not-group-data-[peek=true]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
             // Adjust the padding for floating and inset variants.
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
               : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
             className,
+            peekOpen && "z-40 shadow-xl",
           )}
           data-slot="sidebar-container"
           {...props}
+          ref={panelRef}
+          inert={collapsible === "offcanvas" && state === "collapsed" && !peekOpen}
+          onPointerMoveCapture={onPointerMoveCapture}
         >
           <div
             className="flex h-full w-full flex-col bg-sidebar surface-grain group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow-sm/5"
