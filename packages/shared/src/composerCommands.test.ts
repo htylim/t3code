@@ -31,6 +31,8 @@ function thread(overrides: Partial<OrchestrationThreadShell> = {}): Orchestratio
     archivedAt: null,
     settledOverride: null,
     settledAt: null,
+    autoSettleDisabledAt: null,
+    pullRequests: [],
     session: {
       threadId: SOURCE_ID,
       status: "ready",

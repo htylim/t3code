@@ -44,7 +44,8 @@ import { buildInitialGrokProviderSnapshot } from "./GrokProvider.ts";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { AntigravityInstallation } from "../AntigravityInstallation.ts";
 import * as ModelManifest from "../ModelManifest.ts";
-import * as CodexResetCredit from "./codexResetCredit.ts";
+import { applyProviderCompatibility } from "../providerCompatibility.ts";
+import * as ResetCreditCoordinator from "./resetCreditCoordinator.ts";
 import * as OpenCodeRuntime from "../opencodeRuntime.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderInstanceRegistryHydrationLive } from "./ProviderInstanceRegistryHydration.ts";
@@ -105,13 +106,20 @@ process.env.T3CODE_CURSOR_ENABLED = "1";
 
 const encoder = new TextEncoder();
 const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
+const withBundledCompatibility = (snapshot: ServerProvider) =>
+  applyProviderCompatibility(
+    snapshot,
+    undefined,
+    ModelManifest.BUNDLED_MODEL_MANIFEST.compatibility,
+  );
 
+// Provider metadata checks use a bundled manifest and stubbed HTTP.
 const TestHttpClientLive = Layer.succeed(
   HttpClient.HttpClient,
   HttpClient.make((request) =>
     Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({ version: "0.0.0" }))),
   ),
-);
+).pipe(Layer.provideMerge(ModelManifest.layerTest));
 
 const BackgroundPolicyAlwaysRunLayer = Layer.mock(BackgroundPolicy.BackgroundPolicy)({
   reportClientActivity: () => Effect.void,
@@ -1782,7 +1790,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             );
             assert.deepStrictEqual(
               recoveredProviders.find((provider) => provider.instanceId === codexInstanceId),
-              codexProvider,
+              withBundledCompatibility(codexProvider),
             );
 
             yield* Ref.set(catalogSnapshot, changedCatalogProvider);
@@ -1794,7 +1802,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             );
             assert.deepStrictEqual(
               changedProviders.find((provider) => provider.instanceId === codexInstanceId),
-              codexProvider,
+              withBundledCompatibility(codexProvider),
             );
           }).pipe(Effect.provide(runtimeServices));
 
@@ -1908,11 +1916,14 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             yield* Fiber.join(persisted);
             const cachedProvider = yield* readProviderStatusCache(filePath);
 
-            assert.deepStrictEqual(cachedProvider, {
-              ...refreshedProvider,
-              models: [...initialProvider.models],
-              supportsThreadFork: false,
-            });
+            assert.deepStrictEqual(
+              cachedProvider,
+              withBundledCompatibility({
+                ...refreshedProvider,
+                models: [...initialProvider.models],
+                supportsThreadFork: false,
+              }),
+            );
           }).pipe(Effect.provide(runtimeServices));
         }),
       );
@@ -2124,10 +2135,14 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           yield* Effect.gen(function* () {
             const registry = yield* ProviderRegistry.ProviderRegistry;
 
-            assert.deepStrictEqual(yield* registry.getProviders, [cachedProvider]);
-            assert.deepStrictEqual(yield* registry.refresh(codexDriver), [cachedProvider]);
+            assert.deepStrictEqual(yield* registry.getProviders, [
+              withBundledCompatibility(cachedProvider),
+            ]);
+            assert.deepStrictEqual(yield* registry.refresh(codexDriver), [
+              withBundledCompatibility(cachedProvider),
+            ]);
             assert.deepStrictEqual(yield* registry.refreshInstance(codexInstanceId), [
-              cachedProvider,
+              withBundledCompatibility(cachedProvider),
             ]);
           }).pipe(Effect.provide(runtimeServices));
         }),
@@ -2235,7 +2250,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
 
           yield* Effect.gen(function* () {
             const registry = yield* ProviderRegistry.ProviderRegistry;
-            assert.deepStrictEqual(yield* registry.getProviders, [codexProvider]);
+            assert.deepStrictEqual(yield* registry.getProviders, [
+              withBundledCompatibility(codexProvider),
+            ]);
 
             yield* Ref.set(failNextList, true);
             yield* PubSub.publish(changes, undefined);
@@ -2334,7 +2351,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
             ),
             Layer.provideMerge(ModelManifest.layerTest),
-            Layer.provideMerge(CodexResetCredit.layerTest),
+            Layer.provideMerge(ResetCreditCoordinator.layerTest),
             Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
             Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
             // NO spawner mock — `ChildProcessSpawner` is supplied by the
@@ -2433,7 +2450,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
             ),
             Layer.provideMerge(ModelManifest.layerTest),
-            Layer.provideMerge(CodexResetCredit.layerTest),
+            Layer.provideMerge(ResetCreditCoordinator.layerTest),
             Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
             Layer.updateService(ChildProcessSpawner.ChildProcessSpawner, (spawner) =>
               ChildProcessSpawner.make((command) => {
@@ -2549,7 +2566,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
             ),
             Layer.provideMerge(ModelManifest.layerTest),
-            Layer.provideMerge(CodexResetCredit.layerTest),
+            Layer.provideMerge(ResetCreditCoordinator.layerTest),
             Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
             Layer.provideMerge(NodeServices.layer),
             Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
@@ -2611,8 +2628,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 ),
               ),
               Layer.provideMerge(ModelManifest.layerTest),
-              Layer.provideMerge(CodexResetCredit.layerTest),
-              Layer.provideMerge(CodexResetCredit.layerTest),
+              Layer.provideMerge(ResetCreditCoordinator.layerTest),
               Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
               Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
               Layer.provideMerge(
@@ -2759,6 +2775,42 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   stderr: "",
                   code: 0,
                 };
+              throw new Error(`Unexpected args: ${joined}`);
+            }),
+          ),
+        ),
+      );
+
+      it.effect("reads banked resets only for subscription logins", () =>
+        Effect.gen(function* () {
+          const check = (overrides: Partial<TestClaudeCapabilities>) =>
+            checkClaudeProviderStatus(
+              defaultClaudeSettings,
+              () =>
+                Effect.succeed({
+                  email: undefined,
+                  subscriptionType: undefined,
+                  tokenSource: undefined,
+                  apiProvider: undefined,
+                  slashCommands: [],
+                  usage: { rate_limits_available: true, rate_limits: {} },
+                  ...overrides,
+                }),
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              () => Effect.succeed({ availableCount: 2 }),
+            );
+          const subscription = yield* check({ subscriptionType: "max" });
+          const bedrock = yield* check({ apiProvider: "bedrock" });
+          assert.deepStrictEqual(subscription.usageLimits?.resetCredits, { availableCount: 2 });
+          assert.strictEqual(bedrock.usageLimits?.resetCredits, undefined);
+        }).pipe(
+          Effect.provide(
+            mockSpawnerLayer((args) => {
+              const joined = args.join(" ");
+              if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
               throw new Error(`Unexpected args: ${joined}`);
             }),
           ),

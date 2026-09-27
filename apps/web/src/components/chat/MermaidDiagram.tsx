@@ -284,7 +284,7 @@ function MermaidZoomControls({
               type="button"
               variant="ghost"
               size="xs"
-              className="min-w-10 px-1 font-mono text-[0.625rem]"
+              className="min-w-10"
               aria-label="Fit Mermaid diagram"
               onClick={() => setZoom(100)}
             />
@@ -372,12 +372,12 @@ export const MermaidDiagram = memo(function MermaidDiagram({
 
   return (
     <div
-      className="my-[0.65rem] overflow-hidden rounded-[var(--radius)] border border-border/70 bg-secondary dark:border-transparent dark:bg-input/32"
+      className="my-[0.65rem] overflow-hidden rounded-md border border-border/70 bg-secondary dark:border-transparent dark:bg-input/32"
       data-markdown-copy={markdownCopy}
       data-mermaid-diagram=""
     >
       <div className="flex items-center justify-between gap-2 px-2 py-1.5 select-none">
-        <span className="px-1 font-mono text-[0.6875rem] text-muted-foreground">Mermaid</span>
+        <span className="px-1 font-mono text-2xs text-muted-foreground">Mermaid</span>
         <span className="flex items-center gap-0.5" role="toolbar" aria-label="Diagram actions">
           <MermaidZoomControls zoom={zoom} setZoom={setZoom} />
           <Tooltip>
@@ -419,10 +419,10 @@ export const MermaidDiagram = memo(function MermaidDiagram({
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogPopup
           bottomStickOnMobile={false}
-          className="flex h-[min(92vh,64rem)] w-[min(94vw,90rem)] max-w-none flex-col overflow-hidden p-0"
+          className="flex h-[min(92vh,64rem)] w-[min(94vw,90rem)] max-w-none flex-col overflow-hidden"
         >
-          <DialogHeader className="shrink-0 flex-row items-center justify-between gap-2 border-b border-border/70 py-3 pr-14 pl-5">
-            <DialogTitle className="text-base">Mermaid diagram</DialogTitle>
+          <DialogHeader className="shrink-0 flex-row items-center justify-between">
+            <DialogTitle>Mermaid diagram</DialogTitle>
             <MermaidZoomControls zoom={zoom} setZoom={setZoom} />
           </DialogHeader>
           {expanded ? <MermaidViewport svg={renderState.svg} expanded zoom={zoom} /> : null}

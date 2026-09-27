@@ -9,6 +9,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildDocJson,
   collapsedToFlat,
+  ComposerCodeExtension,
   ComposerTaskItemExtension,
   flatToCollapsed,
   flatToMarkdown,
@@ -40,12 +41,14 @@ const schema = getSchemaByResolvedExtensions(
       dropcursor: false,
       gapcursor: false,
       trailingNode: false,
+      code: false,
     }),
     stubAtom("composer-thread-reference", {
       threadRef: { default: null },
       label: { default: "" },
       source: { default: "" },
     }),
+    ComposerCodeExtension,
     stubAtom("composer-mention", { path: { default: "" }, source: { default: "" } }),
     stubAtom("composer-skill", {
       skillName: { default: "" },
@@ -71,6 +74,8 @@ const schema = getSchemaByResolvedExtensions(
 function roundTrip(value: string) {
   const json = buildDocJson(value, (name) => ({ label: name, description: null }));
   const doc = ProseMirrorNode.fromJSON(schema, json);
+  // `insertContent` validates every node against the schema; `fromJSON` does not.
+  doc.check();
   return serializeEditorDoc(doc);
 }
 
@@ -160,6 +165,10 @@ describe("composer rich text document model", () => {
     "hello **bold** world",
     "a *italic* word and `code` here",
     "struck ~~out~~ now",
+    "**`x`**",
+    "*`x`*",
+    "~~`x`~~",
+    "**a `code` c**",
     "***bold italic*** keeps nesting",
     "line one\nline two",
     "trailing newline\n",

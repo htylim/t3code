@@ -492,6 +492,24 @@ describe("resolveEffectiveEnvMode", () => {
       }),
     ).toBe("worktree");
   });
+
+  it("keeps a server thread in worktree mode while its worktree is still being created", () => {
+    expect(
+      resolveEffectiveEnvMode({
+        activeWorktreePath: null,
+        hasServerThread: true,
+        draftThreadEnvMode: undefined,
+        preparingWorktree: true,
+      }),
+    ).toBe("worktree");
+    expect(
+      resolveEffectiveEnvMode({
+        activeWorktreePath: null,
+        hasServerThread: true,
+        draftThreadEnvMode: undefined,
+      }),
+    ).toBe("local");
+  });
 });
 
 describe("resolveEnvModeLabel", () => {
@@ -517,17 +535,23 @@ describe("worktree directory labels", () => {
     ["C:\\repo\\worktrees\\feature-b\\", "feature-b"],
   ])("uses the final directory in %s", (worktreePath, expectedName) => {
     expect(resolveCurrentWorkspaceLabel(worktreePath)).toBe(expectedName);
-    expect(resolveLockedWorkspaceLabel(worktreePath)).toBe(expectedName);
+    expect(resolveLockedWorkspaceLabel(worktreePath, "worktree")).toBe(expectedName);
   });
 });
 
 describe("resolveLockedWorkspaceLabel", () => {
   it("keeps the checkout label when locked", () => {
-    expect(resolveLockedWorkspaceLabel(null)).toBe("Current checkout");
+    expect(resolveLockedWorkspaceLabel(null, "local")).toBe("Current checkout");
   });
 
   it("keeps the worktree name when locked", () => {
-    expect(resolveLockedWorkspaceLabel("/repo/.t3/worktrees/feature-a")).toBe("feature-a");
+    expect(resolveLockedWorkspaceLabel("/repo/.t3/worktrees/feature-a", "worktree")).toBe(
+      "feature-a",
+    );
+  });
+
+  it("labels a worktree being created", () => {
+    expect(resolveLockedWorkspaceLabel(null, "worktree")).toBe("New worktree");
   });
 });
 

@@ -167,7 +167,6 @@ export function AssistantSelectionToolbar({
         variant="ghost"
         disabled={tooLong}
         aria-label={tooLong ? "Selection is too long to cite" : "Cite selection in composer"}
-        className="rounded-full px-2.5"
         onClick={cite}
       >
         <QuoteIcon aria-hidden="true" className="size-3.5" />
@@ -180,7 +179,6 @@ export function AssistantSelectionToolbar({
             size="xs"
             variant="ghost"
             disabled={tooLong}
-            className="rounded-full px-2.5"
             onClick={() => ask("ask-in-new-thread")}
           >
             <MessageSquarePlusIcon aria-hidden="true" className="size-3.5" />
@@ -191,7 +189,6 @@ export function AssistantSelectionToolbar({
             size="xs"
             variant="ghost"
             disabled={tooLong}
-            className="rounded-full px-2.5"
             onClick={() => ask("ask-in-side-chat")}
           >
             <PanelRightIcon aria-hidden="true" className="size-3.5" />

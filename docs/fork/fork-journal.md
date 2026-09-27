@@ -19,6 +19,29 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-27 - Integrate upstream through de251fc297
+
+- Upstream baseline: `de251fc297`, following `7445aa733ada`. Integrates 279 upstream commits
+  on `integration/upstream-2026-09-27`, starting from fork commit `e79f64f52a`.
+- Retained drift: native thread forks, MCP thread control, side chats and transient provider-history
+  cleanup, selected-text actions, thread references, workspace management, Mermaid, visualization
+  links, sidebar hover reveal, custom shortcuts, the Auto fallback, and Fork desktop packaging.
+- Adaptations: thread-reference chips use upstream's `ContextChip` and share editor selection
+  styling. Composer suggestions use upstream dismissal state while retaining persistent thread-query
+  dismissal and global Escape shortcuts. Workspace names remain visible, and worktrees still being
+  created receive the upstream setup label. Fork controls now use upstream UI variants.
+- Provider integration: Codex thread-control guidance now travels in a separate `additionalContext`
+  entry, scoped to the session credential and restored after compaction. Native forks retain their
+  queue guard alongside upstream's background queue drain. New copies use the normal auto-settle
+  default. Claude history helpers remain shared by rollback and native forks with isolated homes.
+- Verification: 3,196 focused tests passed across 109 files. An additional compaction regression
+  and the final provider/projector subset passed 86 tests. Scoped web, server, desktop, mobile,
+  contracts, shared, and client-runtime typechecks passed. Targeted lint reported no errors.
+  Web and server production bundles passed, including license generation. Bundled Claude history
+  and transient-deletion commands passed smoke checks against a disposable provider home.
+  Browser checks, live provider turns, native mobile builds, desktop installers, publication,
+  and live-data changes were not performed.
+
 ## 2026-09-26 - Reveal the hidden sidebar on hover
 
 - Upstream baseline: `7445aa733ada`.

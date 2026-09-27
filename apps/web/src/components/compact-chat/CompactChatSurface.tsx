@@ -935,7 +935,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
           >
             <Button
               aria-label="Scroll to end"
-              className="pointer-events-auto gap-1.5 rounded-full px-3 text-muted-foreground hover:text-foreground"
+              className="pointer-events-auto"
               size="xs"
               variant="glass"
               onClick={() => {

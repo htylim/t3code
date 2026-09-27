@@ -3,12 +3,8 @@ import { Node } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
 import { MessagesSquareIcon } from "lucide-react";
 import { serializeThreadReferenceUri } from "../threadReference";
-import {
-  COMPOSER_INLINE_CHIP_CLASS_NAME,
-  COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME,
-  COMPOSER_INLINE_CHIP_ICON_CLASS_NAME,
-  COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME,
-} from "./composerInlineChip";
+import { CHIP_NODE_SELECTION_CLASS_NAME } from "./composerInlineChip";
+import { ContextChip, ContextChipLabel } from "./ContextChip";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 /** Keeps a thread reference atomic while preserving its canonical Markdown source. */
@@ -39,25 +35,22 @@ export const ComposerThreadReferenceExtension = Node.create({
 /** Displays a thread reference without navigating away from the draft. */
 function ComposerThreadReferenceView({ node }: NodeViewProps) {
   const chip = (
-    <span
-      className={COMPOSER_INLINE_CHIP_CLASS_NAME}
+    <ContextChip
+      kind="neutral"
       contentEditable={false}
       spellCheck={false}
       data-composer-thread-reference-chip="true"
     >
-      <MessagesSquareIcon className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME} aria-hidden="true" />
-      <span className={COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME}>{node.attrs.label as string}</span>
-    </span>
+      <MessagesSquareIcon aria-hidden="true" />
+      <ContextChipLabel>{node.attrs.label as string}</ContextChipLabel>
+    </ContextChip>
   );
 
   return (
-    <NodeViewWrapper as="span" className={COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME}>
+    <NodeViewWrapper as="span" className={CHIP_NODE_SELECTION_CLASS_NAME}>
       <Tooltip>
         <TooltipTrigger render={chip} />
-        <TooltipPopup
-          side="top"
-          className="max-w-120 whitespace-normal leading-tight wrap-anywhere"
-        >
+        <TooltipPopup side="top" variant="code">
           {serializeThreadReferenceUri(node.attrs.threadRef as ScopedThreadRef)}
         </TooltipPopup>
       </Tooltip>

@@ -8,6 +8,7 @@ import {
   renderCodexFileCitationsAsMarkdown,
   splitCodexArtifactTemplateMarkdown,
 } from "./codexMarkdownDirectives.js";
+import { parseMarkdownFileLink } from "./markdownLinks.js";
 
 interface TestNode {
   readonly type: string;
@@ -111,6 +112,24 @@ describe("remarkCodexDirectives", () => {
   });
 });
 
+describe.each([
+  { name: "renderCodexDirectivesForCopy", render: renderCodexDirectivesForCopy },
+  { name: "renderCodexFileCitationsAsMarkdown", render: renderCodexFileCitationsAsMarkdown },
+])("$name file citation round trips", ({ render }) => {
+  it.each([
+    "C:\\Users\\test\\[draft]\\report.md",
+    "\\\\server\\share\\report.md",
+    "outputs/report.md",
+    "/tmp/report%5C.md",
+  ])("preserves the literal path and line: %s", (path) => {
+    const markdown = render(`:codex-file-citation{path="${path}" line_range_start="7"}`);
+    const link = parseOrdinaryMarkdown(markdown).children?.[0]?.children?.[0];
+
+    expect(link?.type).toBe("link");
+    expect(parseMarkdownFileLink(link?.url ?? "")).toEqual({ path, line: 7 });
+  });
+});
+
 describe("native Markdown adapters", () => {
   it("uses the same parser to render file citations as portable links", () => {
     expect(renderCodexFileCitationsAsMarkdown(`Created ${FILE_CITATION}.`)).toBe(
@@ -138,7 +157,7 @@ describe("native Markdown adapters", () => {
       "/workspace/reports/*draft*_[copy]`<& 100% #1?.html",
       "[\\*draft\\*\\_\\[copy\\]\\`\\<\\& 100% #1?.html](</workspace/reports/*draft*_[copy]`%3C& 100%25 %231%3F.html>)",
     ],
-    ["C:\\Users\\test\\diagram.html", "[diagram.html](<C:\\Users\\test\\diagram.html>)"],
+    ["C:\\Users\\test\\diagram.html", "[diagram.html](<C:%5CUsers%5Ctest%5Cdiagram.html>)"],
     ['/workspace/quoted"file.html', '[quoted"file.html](</workspace/quoted"file.html>)'],
   ])("preserves JSON and Markdown characters in visualization paths: %s", (path, expected) => {
     const marker = `\uE200visualize\uE202${JSON.stringify({ path })}\uE201`;

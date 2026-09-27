@@ -1,10 +1,18 @@
 import { isThreadSettled } from "@t3tools/client-runtime/state/thread-sort";
-import type { EnvironmentId, EnvironmentMachineKind, VcsRef, ProjectId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  EnvironmentMachineKind,
+  VcsRef,
+  ProjectId,
+  WorktreeSubmodules,
+} from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
+import { sanitizeNewRefName } from "@t3tools/shared/git";
 import { toSortableTimestamp } from "../lib/threadSort";
 export {
   dedupeRemoteBranchesWithLocalMatches,
   deriveLocalBranchNameFromRemoteRef,
+  sanitizeNewRefName,
 } from "@t3tools/shared/git";
 
 export interface EnvironmentOption {
@@ -87,6 +95,12 @@ export function resolveEnvModeLabel(mode: EnvMode): string {
   return mode === "worktree" ? "New worktree" : "Current checkout";
 }
 
+export const WORKTREE_SUBMODULES_LABELS: Record<WorktreeSubmodules, string> = {
+  recursive: "Recursive",
+  "top-level": "Top level only",
+  none: "Skip",
+};
+
 /** Returns the directory name shown for a worktree on either host platform. */
 export function resolveWorktreeDirectoryName(worktreePath: string): string {
   return (
@@ -105,7 +119,11 @@ export function resolveCurrentWorkspaceLabel(activeWorktreePath: string | null):
 }
 
 /** Keeps the workspace name visible after the picker locks. */
-export function resolveLockedWorkspaceLabel(activeWorktreePath: string | null): string {
+export function resolveLockedWorkspaceLabel(
+  activeWorktreePath: string | null,
+  effectiveEnvMode: EnvMode,
+): string {
+  if (!activeWorktreePath && effectiveEnvMode === "worktree") return "New worktree";
   return resolveCurrentWorkspaceLabel(activeWorktreePath);
 }
 
@@ -160,15 +178,20 @@ export function resolveEffectiveEnvMode(input: {
   activeWorktreePath: string | null;
   hasServerThread: boolean;
   draftThreadEnvMode: EnvMode | undefined;
+  /**
+   * The server is still creating this thread's worktree. The thread exists
+   * from the start of that setup but gets its worktree path only at the end.
+   */
+  preparingWorktree?: boolean;
 }): EnvMode {
-  const { activeWorktreePath, hasServerThread, draftThreadEnvMode } = input;
+  const { activeWorktreePath, hasServerThread, draftThreadEnvMode, preparingWorktree } = input;
   if (!hasServerThread) {
     if (activeWorktreePath) {
       return "local";
     }
     return draftThreadEnvMode === "worktree" ? "worktree" : "local";
   }
-  return activeWorktreePath ? "worktree" : "local";
+  return activeWorktreePath || preparingWorktree ? "worktree" : "local";
 }
 
 export function resolveDraftEnvModeAfterBranchChange(input: {
@@ -276,19 +299,6 @@ export function resolveBranchSelectionTarget(input: {
     nextWorktreePath,
     reuseExistingWorktree: false,
   };
-}
-
-// Git rejects ASCII space and the ASCII control characters (tab, newline and
-// friends) in ref names, so the picker's "Create new ref" entry can only fail
-// for a typed name like "new branch". Replacing runs of those with a dash makes
-// the name usable without reimplementing check-ref-format: names invalid for
-// other reasons still surface the git error. Only the whitespace git actually
-// rejects is replaced — git accepts U+00A0 and friends, and rewriting those
-// would silently create a ref the user never asked for. Case and existing
-// dashes are left alone, since ref names are case sensitive and consecutive
-// dashes are valid.
-export function sanitizeNewRefName(rawName: string): string {
-  return rawName.trim().replace(/[ \t\n\r\f\v]+/g, "-");
 }
 
 export function shouldIncludeBranchPickerItem(input: {

@@ -5,7 +5,7 @@ import * as Path from "effect/Path";
 import {
   type ClientOrchestrationOperation,
   type UserInputAttachments,
-  PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
+  getProviderAttachmentLimitError,
   type IsoDateTime,
   type OrchestrationCommand,
   OrchestrationDispatchCommandError,
@@ -149,13 +149,9 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationOperation) 
       canonicalCommand.type === "thread.turn.start"
         ? canonicalCommand.message.attachments
         : Object.values(canonicalCommand.attachmentsByQuestionId ?? {}).flat();
-    if (
-      canonicalCommand.type === "thread.user-input.respond" &&
-      attachments.length > PROVIDER_SEND_TURN_MAX_ATTACHMENTS
-    ) {
-      return yield* new OrchestrationDispatchCommandError({
-        message: `You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} files per question response.`,
-      });
+    const attachmentLimitError = getProviderAttachmentLimitError(attachments);
+    if (attachmentLimitError) {
+      return yield* new OrchestrationDispatchCommandError({ message: attachmentLimitError });
     }
     if (canonicalCommand.type === "thread.turn.start") {
       const clientAttachmentIds = new Set<string>();
@@ -170,11 +166,12 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationOperation) 
       }
     }
     const claimedAttachmentPaths: string[] = [];
+    const attachmentsWithDecodedSizes = [...attachments];
     // Context records bind to attachments by the id the client knew; they follow the rename.
     const finalAttachmentIdByClientId = new Map<string, string>();
     const normalizedAttachments = yield* Effect.forEach(
       attachments,
-      (attachment) =>
+      (attachment, index) =>
         Effect.gen(function* () {
           if (!("dataUrl" in attachment)) {
             const claim = planAttachmentClaim({
@@ -266,6 +263,11 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationOperation) 
             sizeBytes: bytes.byteLength,
             ...(attachment.source ? { source: attachment.source } : {}),
           };
+          attachmentsWithDecodedSizes[index] = persistedAttachment;
+          const decodedLimitError = getProviderAttachmentLimitError(attachmentsWithDecodedSizes);
+          if (decodedLimitError) {
+            return yield* new OrchestrationDispatchCommandError({ message: decodedLimitError });
+          }
 
           const attachmentPath = resolveAttachmentPath({
             attachmentsDir: serverConfig.attachmentsDir,
@@ -293,6 +295,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationOperation) 
                 }),
             ),
           );
+          claimedAttachmentPaths.push(attachmentPath);
           if (attachment.id !== undefined) {
             finalAttachmentIdByClientId.set(attachment.id, attachmentId);
           }

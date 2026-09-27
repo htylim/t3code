@@ -35,6 +35,7 @@ import {
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { revealInFileExplorerLabelForOs } from "./preview/fileExplorerLabel";
 import { Button } from "./ui/button";
+import { ComposerControl } from "./chat/ComposerControl";
 import { Input } from "./ui/input";
 import {
   Menu,
@@ -90,7 +91,7 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
           {props.forceNewWorktree
             ? "New worktree"
             : props.envLocked
-              ? resolveLockedWorkspaceLabel(props.activeWorktreePath)
+              ? resolveLockedWorkspaceLabel(props.activeWorktreePath, props.effectiveEnvMode)
               : props.effectiveEnvMode === "worktree" && !props.activeWorktreePath
                 ? "New worktree"
                 : resolveCurrentWorkspaceLabel(props.activeWorktreePath)}
@@ -102,7 +103,7 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
   if (props.envLocked) {
     return (
       <span
-        className="inline-flex h-7 min-w-0 items-center gap-1 border border-transparent px-[calc(--spacing(2)-1px)] font-normal text-muted-foreground/70 text-xs sm:h-6"
+        className="inline-flex h-7 min-w-0 items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
         data-composer-context-control
       >
         {triggerContent}
@@ -118,10 +119,10 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
       }}
     >
       <MenuTrigger
-        render={<Button variant="ghost" size="xs" />}
+        render={<ComposerControl size="xs" />}
         aria-label="Workspace"
         data-composer-shortcut="composer.workspace"
-        className="min-w-0 shrink font-normal text-muted-foreground/70 text-xs!"
+        className="min-w-0 shrink"
         data-composer-context-control
       >
         {triggerContent}
@@ -214,7 +215,7 @@ function WorkspaceMenuContents(
               <span className="text-muted-foreground text-xs">
                 {localRef?.isDetached ? "(detached)" : localRef?.name}
               </span>
-              <span className="text-muted-foreground text-[10px]">local checkout</span>
+              <span className="text-muted-foreground text-3xs">local checkout</span>
             </span>
           </MenuRadioItem>
           <MenuRadioItem
@@ -288,7 +289,7 @@ function WorktreeRowStatus({
       status.aheadCount > 0 ||
       (!status.hasUpstream && (status.aheadOfDefaultCount ?? 0) > 0));
   return (
-    <span className="text-[10px] text-muted-foreground">
+    <span className="text-3xs text-muted-foreground">
       {resolveWorktreeStatusWord({ isBusy, isDirty })}
     </span>
   );
@@ -459,7 +460,6 @@ function WorkspaceRow(
                 value={newName}
                 readOnly={pending}
                 aria-invalid={!!error}
-                className={error ? "border-destructive" : ""}
                 onChange={(event) => {
                   setNewName(event.target.value);
                   setError(null);
@@ -487,7 +487,7 @@ function WorkspaceRow(
   return (
     <MenuItem
       closeOnClick={false}
-      className={`group/worktree grid items-center gap-2 ${
+      className={`group/worktree grid items-center ${
         props.current
           ? "grid-cols-[0.75rem_minmax(0,1fr)_minmax(0,8rem)_2.5rem_1.25rem]"
           : "grid-cols-[0.75rem_minmax(0,1fr)_minmax(0,8rem)_1.5rem_1.25rem]"
@@ -515,7 +515,7 @@ function WorkspaceRow(
       </span>
       <span className="min-w-0 text-left">
         {props.current ? (
-          <span className="text-[10px] text-muted-foreground">current</span>
+          <span className="text-3xs text-muted-foreground">current</span>
         ) : (
           <WorktreeRowStatus isBusy={row.isBusy} status={statusQuery.data} />
         )}
@@ -523,7 +523,7 @@ function WorkspaceRow(
       <Menu open={actionsOpen} onOpenChange={setActionsOpen}>
         <MenuTrigger
           aria-label={`Actions for ${row.dirName}`}
-          className="w-5 rounded text-center text-[10px] opacity-25 group-hover/worktree:opacity-100 data-popup-open:bg-accent data-popup-open:opacity-100"
+          render={<Button size="icon-micro" variant="ghost-muted" />}
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}
           onMouseUp={(event) => event.stopPropagation()}
