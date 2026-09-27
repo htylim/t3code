@@ -19,6 +19,24 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-09-27 - Repair regressions found in live fork verification
+
+- Upstream baseline: `de251fc297`.
+- Worktree removal now refreshes the target's Git status after non-force removal fails. The force
+  confirmation previously used the closed menu's stale snapshot and could report zero dirty files.
+- Shift+Escape ignores closed popups retained in the DOM. Upstream's mounted header menu otherwise
+  blocked clearing the project filter even when no menu was open. Open popups still consume Escape.
+- Verification: reproduced both failures and verified their fixes in an isolated dev client. Passed
+  335 focused workspace, shortcut, mobile fork, Markdown, Mermaid, prompt-navigation, and cleanup
+  tests, web typecheck, and targeted lint. Live Codex Terra, Claude Sonnet, and OpenCode Terra passed
+  native forks, history follow-ups, and transient provider-history deletion. Browser checks covered
+  selection actions, side-chat reuse and focus, both sidebar layouts, thread references, project
+  filtering, worktree rename and removal safeguards, Mermaid, HTML links, and reading positions.
+  Codex passed cross-project MCP child creation, waiting, reading, updating, sending, and interruption;
+  Claude discovered thread-control tools and read its side chat's owner. Native device access was
+  disabled and browser resizing timed out. Native shells and real remote/tunnel connections were
+  not exercised. The installed app and live database were not changed.
+
 ## 2026-09-27 - Integrate upstream through de251fc297
 
 - Upstream baseline: `de251fc297`, following `7445aa733ada`. Integrates 279 upstream commits

@@ -409,7 +409,13 @@ function WorkspaceRow(
         });
         return;
       }
-      const status = statusQuery.data;
+      // The menu has closed, so its row subscription may hold an old snapshot.
+      // Force removal needs the files and unpushed commits that exist now.
+      const refreshedStatus = await refreshStatus({
+        environmentId: props.environmentId,
+        input: { cwd: row.worktreePath },
+      });
+      const status = refreshedStatus._tag === "Success" ? refreshedStatus.value : null;
       const details = [
         status
           ? `${status.workingTree.files.length} uncommitted files`

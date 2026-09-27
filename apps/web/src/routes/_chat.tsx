@@ -116,8 +116,9 @@ function ChatRouteGlobalShortcuts() {
           blocked:
             isTerminalFocused() ||
             isPreviewFocused() ||
+            // The responsive header keeps its closed menu mounted.
             document.querySelector(
-              '[role="dialog"], [role="alertdialog"], [data-slot="menu-popup"], [data-slot="select-popup"], [data-slot="popover-popup"], [data-slot="combobox-popup"], [data-slot="autocomplete-popup"]',
+              ':is([role="dialog"], [role="alertdialog"], [data-slot="menu-popup"], [data-slot="select-popup"], [data-slot="popover-popup"], [data-slot="combobox-popup"], [data-slot="autocomplete-popup"]):not([data-closed])',
             ) !== null,
           event,
         });
