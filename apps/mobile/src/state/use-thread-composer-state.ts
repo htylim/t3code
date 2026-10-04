@@ -1,6 +1,5 @@
 import type { ComposerTextPaste } from "../native/T3ComposerEditor.types";
 import { useAtomValue } from "@effect/atom-react";
-import { StackActions, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
 
@@ -14,29 +13,17 @@ import {
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
-  ThreadId,
+  type ThreadId,
 } from "@t3tools/contracts";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import { clampFileAttachmentUploadBytes } from "@t3tools/client-runtime/state/attachments";
 import { nextPastedTextFileName, pastedTextDisposition } from "@t3tools/client-runtime/text-paste";
-import {
-  retainThreadForkAttempt,
-  type ThreadForkAttempt,
-} from "@t3tools/client-runtime/operations";
-import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
 import {
   parseCodexFeedbackCommand,
   submitCodexFeedback,
   type CodexFeedbackSubmission,
 } from "@t3tools/client-runtime/state/threads";
 import { deriveActiveWorkStartedAt } from "@t3tools/shared/orchestrationTiming";
-import {
-  parseStandaloneComposerCommand,
-  resolveThreadForkEligibility,
-} from "@t3tools/shared/composerCommands";
 import { upgradeLegacyContextMessage } from "@t3tools/shared/composerContextLegacy";
 import { composerContextSendBlockReason, reidentifyComposerContext } from "../lib/composerContext";
 import { uuidv4 } from "../lib/uuid";
@@ -82,8 +69,8 @@ import { useSelectedThreadDetail } from "../state/use-thread-detail";
 import { useThreadSelection } from "../state/use-thread-selection";
 import { enqueueThreadOutboxMessage } from "./thread-outbox";
 import { dispatchingQueuedMessageIdAtom, useThreadOutboxMessages } from "./use-thread-outbox";
-import { useAtomCommand } from "./use-atom-command";
 import { threadEnvironment } from "./threads";
+import { useAtomCommand } from "./use-atom-command";
 import {
   composerAttachmentUploadBlockReason,
   composerAttachmentUploadsAtom,
@@ -146,11 +133,6 @@ export function useThreadComposerState() {
   const composerDrafts = useAtomValue(composerDraftsAtom);
   const acknowledgedMessages = useAtomValue(acknowledgedThreadMessagesAtom);
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
-  const forkThread = useAtomCommand(threadEnvironment.fork, { reportFailure: false });
-  const navigation = useNavigation();
-  const forkAttemptRef = useRef(new Map<string, ThreadForkAttempt>());
-  const forkInFlightRef = useRef(false);
-  const [isForking, setIsForking] = useState(false);
   const dispatchingQueuedMessageId = useAtomValue(dispatchingQueuedMessageIdAtom);
   const [feedbackSubmissionsByThreadKey, setFeedbackSubmissionsByThreadKey] = useState<
     Record<string, ReadonlyArray<CodexFeedbackSubmission>>
@@ -342,7 +324,7 @@ export function useThreadComposerState() {
   }, [selectedThreadDetail, selectedThreadSessionActivity, selectedThreadShell]);
 
   const onSendMessage = useCallback(async () => {
-    if (!selectedThreadShell || forkInFlightRef.current) {
+    if (!selectedThreadShell) {
       return null;
     }
     // The server has not created this thread yet. Queuing a follow-up against
@@ -401,73 +383,6 @@ export function useThreadComposerState() {
         "Set up Antigravity on web or desktop, or choose another model.",
       );
       return null;
-    }
-    if (
-      parseStandaloneComposerCommand({
-        text,
-        attachmentCount: attachments.length,
-        contextCount: draft.context?.records.length ?? 0,
-      }) === "fork"
-    ) {
-      const eligibility = resolveThreadForkEligibility({
-        routeKind: "server",
-        thread: selectedThreadShell,
-        environmentSupportsThreadFork: serverConfig?.environment.capabilities.threadFork === true,
-        providers: serverConfig?.providers ?? [],
-        queuedTurnCount: selectedThreadQueuedMessages.length,
-      });
-      if (!eligibility.eligible || selectedEnvironmentRuntime?.connectionState !== "connected") {
-        Alert.alert(
-          "Cannot fork this thread",
-          eligibility.eligible ? "Reconnect this environment before forking." : eligibility.message,
-        );
-        return null;
-      }
-      const attempt = retainThreadForkAttempt({
-        retained: forkAttemptRef.current.get(threadKey),
-        sourceThreadId: selectedThreadShell.id,
-        createThreadId: () => ThreadId.make(uuidv4()),
-        createCommandId: () => CommandId.make(uuidv4()),
-        now: () => new Date().toISOString(),
-      });
-      forkAttemptRef.current.set(threadKey, attempt);
-      forkInFlightRef.current = true;
-      setIsForking(true);
-      try {
-        const result = await forkThread({
-          environmentId: selectedThreadShell.environmentId,
-          input: attempt,
-        });
-        if (result._tag === "Failure") {
-          if (!isAtomCommandInterrupted(result)) {
-            const error = squashAtomCommandFailure(result);
-            Alert.alert(
-              "Could not fork thread",
-              error instanceof Error ? error.message : "The thread could not be forked.",
-            );
-          }
-          return null;
-        }
-        const currentDraft = getComposerDraftSnapshot(threadKey);
-        if (
-          currentDraft.text.trim() === text &&
-          currentDraft.attachments.length === 0 &&
-          !currentDraft.context?.records.length
-        ) {
-          clearComposerDraftContent(threadKey);
-        }
-        forkAttemptRef.current.delete(threadKey);
-        navigation.dispatch(
-          StackActions.push("Thread", {
-            environmentId: selectedThreadShell.environmentId,
-            threadId: attempt.threadId,
-          }),
-        );
-        return null;
-      } finally {
-        forkInFlightRef.current = false;
-        setIsForking(false);
-      }
     }
     const provider = serverConfig?.providers.find(
       (entry) => entry.instanceId === modelSelection.instanceId,
@@ -563,13 +478,10 @@ export function useThreadComposerState() {
     );
     return messageId;
   }, [
-    forkThread,
-    navigation,
     selectedEnvironmentRuntime?.connectionState,
     selectedEnvironmentRuntime?.serverConfig,
     selectedThreadCreation,
     selectedThreadDetail,
-    selectedThreadQueuedMessages.length,
     selectedThreadShell,
     uploadThreadFeedback,
   ]);
@@ -897,7 +809,6 @@ export function useThreadComposerState() {
     modelSelection,
     runtimeMode,
     interactionMode,
-    isForking,
     onChangeDraftMessage,
     onPickDraftMedia,
     onPickDraftFiles,

@@ -8,7 +8,6 @@ import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled"
  */
 export type ThreadActionMenuId =
   | "new-thread-on-branch"
-  | "fork-thread"
   | "open-in-chat-surface"
   | "filter-by-project"
   | "project-settings"
@@ -34,7 +33,6 @@ export type ThreadActionMenuId =
 
 export interface ThreadActionMenuState {
   readonly branch: string | null;
-  readonly canFork: boolean;
   readonly canOpenInChatSurface?: boolean;
   /**
    * Project scoping for the thread list. Null on surfaces with no scoped
@@ -83,7 +81,6 @@ export function buildThreadActionMenuItems(
           },
         ]
       : []),
-    ...(state.canFork ? [{ id: "fork-thread" as const, label: "Fork this thread" }] : []),
     ...(state.canOpenInChatSurface
       ? [
           {

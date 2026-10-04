@@ -2,14 +2,12 @@ import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
-  OrchestrationDispatchCommandError,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
 import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
-import { dispatchClientOperation } from "./ClientOperationDispatcher.ts";
 import { cleanupFailedUploadedAttachments, normalizeDispatchCommand } from "./Normalizer.ts";
 import {
   annotateEnvironmentRequest,
@@ -21,8 +19,6 @@ import {
 import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
 import { OrchestrationEngineService } from "./Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./Services/ProjectionSnapshotQuery.ts";
-
-export const dispatchHttpClientOperation = dispatchClientOperation;
 
 export const orchestrationHttpApiLayer = HttpApiBuilder.group(
   EnvironmentHttpApi,
@@ -110,33 +106,21 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
               failEnvironmentInternal("orchestration_dispatch_failed", cause),
             ),
           );
-          const normalizedOperation = yield* normalizeDispatchCommand(args.payload).pipe(
+          const normalizedCommand = yield* normalizeDispatchCommand(args.payload).pipe(
             Effect.catch(() => failEnvironmentInvalidRequest("invalid_command")),
           );
-          const result = yield* dispatchHttpClientOperation(normalizedOperation, {
-            dispatchCommand: (command) =>
-              orchestrationEngine.dispatch(command).pipe(
-                Effect.tapError(() => cleanupFailedUploadedAttachments(args.payload, command)),
-                Effect.mapError(
-                  (cause) =>
-                    new OrchestrationDispatchCommandError({
-                      message: "Failed to dispatch orchestration command",
-                      cause,
-                    }),
-                ),
-              ),
-          }).pipe(
+          const result = yield* orchestrationEngine.dispatch(normalizedCommand).pipe(
+            Effect.tapError(() =>
+              cleanupFailedUploadedAttachments(args.payload, normalizedCommand),
+            ),
             Effect.catch((cause) =>
               failEnvironmentInternal("orchestration_dispatch_failed", cause),
             ),
           );
-          if (normalizedOperation.type === "project.delete") {
-            yield* ProjectCloneTracker.discardCloneForDeletedProject(
-              projectCloneTracker,
-              normalizedOperation,
-            );
-          }
-
+          yield* ProjectCloneTracker.discardCloneForDeletedProject(
+            projectCloneTracker,
+            normalizedCommand,
+          );
           return result;
         }),
       );

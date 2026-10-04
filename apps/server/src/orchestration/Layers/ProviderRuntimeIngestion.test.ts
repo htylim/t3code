@@ -124,7 +124,6 @@ function createProviderServiceHarness() {
   const unsupported = () => Effect.die(new Error("Unsupported provider call in test")) as never;
   const service: ProviderServiceShape = {
     startSession: () => unsupported(),
-    forkSession: () => unsupported(),
     sendTurn: () => unsupported(),
     compactThread: () => unsupported(),
     interruptTurn: () => unsupported(),
@@ -132,8 +131,7 @@ function createProviderServiceHarness() {
     respondToUserInput: () => unsupported(),
     stopSession: () => unsupported(),
     listSessions: () => Effect.succeed([...runtimeSessions]),
-    getCapabilities: () =>
-      Effect.succeed({ sessionModelSwitch: "in-session", sessionFork: "unsupported" }),
+    getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
     assertConversationRollbackSupported: () => unsupported(),
     getInstanceInfo: (instanceId) => {
       const driverKind = ProviderDriverKind.make(String(instanceId));

@@ -3,14 +3,13 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import {
-  type ClientOrchestrationOperation,
+  type ClientOrchestrationCommand,
   type UserInputAttachments,
   getProviderAttachmentLimitError,
   type IsoDateTime,
   type OrchestrationCommand,
   OrchestrationDispatchCommandError,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-  type ThreadForkOperation,
 } from "@t3tools/contracts";
 
 import {
@@ -25,9 +24,9 @@ import { parseBase64DataUrl } from "../imageMime.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 
 export const canonicalizeClientCommandTimestamps = (
-  command: ClientOrchestrationOperation,
+  command: ClientOrchestrationCommand,
   receivedAt: IsoDateTime,
-): ClientOrchestrationOperation => {
+): ClientOrchestrationCommand => {
   const canonicalCommand =
     "createdAt" in command
       ? {
@@ -52,8 +51,6 @@ export const canonicalizeClientCommandTimestamps = (
   };
 };
 
-export type NormalizedClientOrchestrationOperation = OrchestrationCommand | ThreadForkOperation;
-
 const removeClaimedAttachmentPaths = Effect.fn("Normalizer.removeClaimedAttachmentPaths")(
   function* (attachmentPaths: ReadonlyArray<string>) {
     if (attachmentPaths.length === 0) {
@@ -77,7 +74,7 @@ const removeClaimedAttachmentPaths = Effect.fn("Normalizer.removeClaimedAttachme
   },
 );
 
-export const normalizeDispatchCommand = (command: ClientOrchestrationOperation) =>
+export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
   Effect.gen(function* () {
     const receivedAt = DateTime.formatIso(yield* DateTime.now);
     const canonicalCommand = canonicalizeClientCommandTimestamps(command, receivedAt);
@@ -85,10 +82,6 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationOperation) 
     const path = yield* Path.Path;
     const serverConfig = yield* ServerConfig;
     const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
-
-    if (canonicalCommand.type === "thread.fork") {
-      return canonicalCommand satisfies ThreadForkOperation;
-    }
 
     const normalizeProjectWorkspaceRoot = (workspaceRoot: string) =>
       workspacePaths.normalizeWorkspaceRoot(workspaceRoot).pipe(
@@ -352,7 +345,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationOperation) 
 
 export const cleanupFailedUploadedAttachments = Effect.fn(
   "Normalizer.cleanupFailedUploadedAttachments",
-)(function* (command: ClientOrchestrationOperation, normalizedCommand: OrchestrationCommand) {
+)(function* (command: ClientOrchestrationCommand, normalizedCommand: OrchestrationCommand) {
   const originalAttachments =
     command.type === "thread.turn.start"
       ? command.message.attachments

@@ -1254,14 +1254,6 @@ export const makeAntigravityAdapter = Effect.fn("makeAntigravityAdapter")(functi
 
   const stopSession: Adapter["stopSession"] = (threadId) =>
     withThreadLock(threadId, Effect.flatMap(requireSession(threadId), stopContext));
-  const forkSession: Adapter["forkSession"] = () =>
-    Effect.fail(
-      new ProviderAdapterValidationError({
-        provider: PROVIDER,
-        operation: "forkSession",
-        issue: "Antigravity does not support native session forks.",
-      }),
-    );
   const stopAll: Adapter["stopAll"] = () =>
     Effect.forEach([...sessions.values()], stopContext, { discard: true });
   yield* Effect.addFinalizer(() =>
@@ -1277,14 +1269,9 @@ export const makeAntigravityAdapter = Effect.fn("makeAntigravityAdapter")(functi
 
   return {
     provider: PROVIDER,
-    capabilities: {
-      sessionModelSwitch: "in-session",
-      sessionFork: "unsupported",
-      supportsConversationRollback: false,
-    },
+    capabilities: { sessionModelSwitch: "in-session", supportsConversationRollback: false },
     compaction: { type: "slash-command", command: "/compact" },
     startSession,
-    forkSession,
     sendTurn,
     interruptTurn,
     respondToRequest,

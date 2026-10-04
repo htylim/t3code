@@ -32,7 +32,7 @@ import {
 } from "./baseSchemas.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import {
-  ClientOrchestrationOperation,
+  ClientOrchestrationCommand,
   DispatchResult,
   OrchestrationReadModel,
   OrchestrationShellSnapshot,
@@ -532,7 +532,7 @@ export class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestr
   .add(
     HttpApiEndpoint.post("dispatch", "/api/orchestration/dispatch", {
       headers: OptionalBearerHeaders,
-      payload: ClientOrchestrationOperation,
+      payload: ClientOrchestrationCommand,
       success: DispatchResult,
       error: EnvironmentOrchestrationDispatchErrors,
     }).middleware(EnvironmentAuthenticatedAuth),

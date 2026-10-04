@@ -10,25 +10,6 @@ For browser work, first call \`preview_status\`. If no automation-capable previe
 
 Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Use an alternative browser system only when the T3 preview tools are absent, the user explicitly requests another browser, or \`preview_open\` returns an explicit unsupported/unavailable error. A failed T3 preview tool call should be inspected and retried with corrected arguments when the error is actionable.`;
 
-const T3_CODE_THREAD_CONTROL_INSTRUCTIONS = `
-
-## T3 Code thread control
-
-In T3 Code, a **thread** is a durable conversation visible in the web, desktop, and mobile clients. When the user asks to create or work with a T3 thread, session, or conversation, use the T3 MCP thread-control tools—not provider-native subagents.
-
-- \`thread_context\`: Get the current thread and workspace context.
-- \`projects_list\`: Discover registered projects on this server and their IDs before starting work in another project.
-- \`models_list\`: Discover valid providers, models, and options; do not guess them. When choosing, prefer Sol High or Opus Medium.
-- \`threads_list\`: Find existing threads.
-- \`thread_status\`: Check a thread’s current state.
-- \`threads_wait\`: Wait for thread changes, reusing its cursor.
-- \`thread_read\`: Read results; prefer \`final\` after completion.
-- \`thread_start\`: Create a T3 thread and submit its first prompt. Pass a projectId from projects_list to target another project on this server; its workspace root is used by default. Omit projectId to keep the current project and workspace.
-- \`thread_send\`: Send a follow-up to a controlled thread.
-- \`thread_interrupt\`: Interrupt a controlled thread’s active turn.
-- \`thread_update\`: Update a controlled thread’s metadata or modes.
-`;
-
 const T3_CODE_DEVICE_TOOL_INSTRUCTIONS = `## T3 Code devices
 
 The \`t3-code\` MCP server also exposes \`device_*\` tools for iOS Simulators and Android Emulators on this environment. For mobile verification, call \`device_list\`, then \`device_open\` so the user can watch the device in their Device panel; its result explains how to drive the device. Driving happens through the \`agent-device\` CLI, which is on PATH. Keep the host config and session flags returned by \`device_open\` on every command so concurrent devices stay independent: prefer \`agent-device snapshot -i\` refs over coordinates, and use \`device_screenshot\` when you need to see the screen. Prefer these tools and \`agent-device\` for opening and driving devices. Platform tools such as \`xcrun simctl\` and \`adb\` remain available for anything they do not cover, such as builds, logs, or port forwarding. If \`device_list\` reports a platform as unavailable, say so.`;
@@ -36,15 +17,12 @@ The \`t3-code\` MCP server also exposes \`device_*\` tools for iOS Simulators an
 export interface T3CodeToolAvailability {
   readonly browser: boolean;
   readonly device: boolean;
-  readonly threadControl?: boolean;
 }
 
 const normalizeAvailability = (
   availability: boolean | T3CodeToolAvailability,
 ): T3CodeToolAvailability =>
-  typeof availability === "boolean"
-    ? { browser: availability, device: false, threadControl: availability }
-    : availability;
+  typeof availability === "boolean" ? { browser: availability, device: false } : availability;
 
 /**
  * Each block is omitted entirely when its tools aren't attached. Describing
@@ -245,13 +223,5 @@ export function buildCodexAdditionalContext(
       value: buildRuntimeInstructions({ harness: "Codex", ...runtime }),
     },
     ...(tools ? { t3_code_tools: { kind: "application", value: tools } } : {}),
-    ...(normalizeAvailability(toolsAvailable).threadControl
-      ? {
-          t3_code_thread_control: {
-            kind: "application",
-            value: T3_CODE_THREAD_CONTROL_INSTRUCTIONS,
-          },
-        }
-      : {}),
   };
 }

@@ -107,14 +107,5 @@ file-bearing messages, and an image-only server can fail the entire environment'
 replaying one such event. Rollouts and downgrades must account for persisted history as well as
 current client support.
 
-## Native thread forks
-
-Codex, Claude, and OpenCode can fork a completed thread into a new provider session. The
-[fork service](../../apps/server/src/orchestration/Layers/ThreadForkService.ts) copies the visible
-completed transcript into target-owned records, creates a fresh checkpoint baseline, and asks the
-provider adapter for a native fork. The source and target continue in the same workspace without a
-durable parent relationship. Providers without native support reject the operation before creating
-the target thread.
-
 Model classification has its own [manifest constraints](./model-manifest.md). Assistant-reference
 handling is documented under [citations](./assistant-citations.md).

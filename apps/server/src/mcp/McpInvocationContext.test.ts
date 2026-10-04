@@ -17,8 +17,6 @@ it.effect("reports the scoped credential context when preview capability is unav
     providerSessionId: "provider-session-1",
     providerInstanceId: ProviderInstanceId.make("codex"),
     capabilities: new Set(),
-    maxRuntimeMode: "approval-required",
-    controlledThreadIds: new Set(),
     issuedAt: 1,
   };
 
@@ -41,21 +39,6 @@ it.effect("reports the scoped credential context when preview capability is unav
   });
 });
 
-it("orders runtime modes from supervised through full access", () => {
-  expect(
-    McpInvocationContext.runtimeModeIsWithinAuthority("approval-required", "approval-required"),
-  ).toBe(true);
-  expect(
-    McpInvocationContext.runtimeModeIsWithinAuthority("auto-accept-edits", "approval-required"),
-  ).toBe(false);
-  expect(McpInvocationContext.runtimeModeIsWithinAuthority("auto-accept-edits", "auto")).toBe(true);
-  expect(McpInvocationContext.runtimeModeIsWithinAuthority("auto", "auto-accept-edits")).toBe(
-    false,
-  );
-  expect(McpInvocationContext.runtimeModeIsWithinAuthority("full-access", "auto")).toBe(false);
-  expect(McpInvocationContext.runtimeModeIsWithinAuthority("auto", "full-access")).toBe(true);
-});
-
 it.effect("reports other missing capabilities with the neutral error", () => {
   const invocation: McpInvocationContext.McpInvocationScope = {
     environmentId: EnvironmentId.make("environment-1"),
@@ -63,8 +46,6 @@ it.effect("reports other missing capabilities with the neutral error", () => {
     providerSessionId: "provider-session-1",
     providerInstanceId: ProviderInstanceId.make("codex"),
     capabilities: new Set(["preview"]),
-    maxRuntimeMode: "auto" as const,
-    controlledThreadIds: new Set<ThreadId>(),
     issuedAt: 1,
   };
 

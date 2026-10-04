@@ -113,7 +113,6 @@ const startupDependencies = Layer.mergeAll(
   Layer.mock(GitVcsDriver.GitVcsDriver)({}),
   Layer.succeed(ProviderService.ProviderService, {
     startSession: () => Effect.die("unused"),
-    forkSession: () => Effect.die("unused"),
     sendTurn: () => Effect.die("unused"),
     compactThread: () => Effect.die("unused"),
     interruptTurn: () => Effect.die("unused"),
@@ -451,7 +450,6 @@ it.effect.each(["opt-in desktop restart", "marked remote update"] as const)(
             getCapabilities: () =>
               Effect.succeed({
                 sessionModelSwitch: "in-session",
-                sessionFork: "unsupported",
                 promptlessTurnContinuation: true,
               }),
             sendTurn: (input) =>

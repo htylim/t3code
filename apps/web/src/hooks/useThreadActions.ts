@@ -4,10 +4,6 @@ import {
   scopeThreadRef,
   scopedThreadKey,
 } from "@t3tools/client-runtime/environment";
-import {
-  retainThreadForkAttempt,
-  type ThreadForkAttempt,
-} from "@t3tools/client-runtime/operations";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { canSnooze, threadWokeAt } from "@t3tools/client-runtime/state/thread-settled";
 import { EnvironmentId, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
@@ -19,7 +15,6 @@ import { useRouter } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef } from "react";
 
 import { getFallbackThreadIdAfterDelete, pinOrderKeyBetween } from "../components/Sidebar.logic";
-import { waitForStartedServerThread } from "../components/ChatView.logic";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { terminalEnvironment } from "../state/terminal";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -39,7 +34,6 @@ import {
   readEnvironmentSupportsSnooze,
   readEnvironmentThreadRefs,
   readProject,
-  readThreadForkEligibility,
   readThreadShell,
   readThreadShells,
 } from "../state/entities";
@@ -52,7 +46,6 @@ import { useClientSettings } from "./useSettings";
 import * as ThreadUndo from "./threadUndo";
 import { showThreadUndoNotice } from "./showThreadUndoNotice";
 import { useAtomCommand } from "../state/use-atom-command";
-import { newCommandId, newThreadId } from "../lib/utils";
 
 export class ThreadArchiveBlockedError extends Schema.TaggedError<ThreadArchiveBlockedError>()(
   "ThreadArchiveBlockedError",
@@ -148,77 +141,6 @@ export class ThreadPinReorderUnsupportedError extends Schema.TaggedError<ThreadP
   override get message(): string {
     return "This environment's server does not support reordering pinned threads yet. Update the server to reorder pins.";
   }
-}
-
-export class ThreadForkUnsupportedError extends Schema.TaggedError<ThreadForkUnsupportedError>()(
-  "ThreadForkUnsupportedError",
-  { environmentId: EnvironmentId, threadId: ThreadId },
-) {
-  override get message(): string {
-    return "This thread's provider or environment does not support thread forking.";
-  }
-}
-
-export class ThreadForkBlockedError extends Schema.TaggedError<ThreadForkBlockedError>()(
-  "ThreadForkBlockedError",
-  { environmentId: EnvironmentId, threadId: ThreadId },
-) {
-  override get message(): string {
-    return "Wait for the current thread work to finish before forking it.";
-  }
-}
-
-export function useForkThreadAction() {
-  const forkThreadMutation = useAtomCommand(threadEnvironment.fork, { reportFailure: false });
-  const forkAttemptBySourceRef = useRef(new Map<string, ThreadForkAttempt>());
-  const router = useRouter();
-
-  return useCallback(
-    async (target: ScopedThreadRef, queuedTurnCount = 0) => {
-      const eligibility = readThreadForkEligibility(target, queuedTurnCount);
-      if (!eligibility.eligible) {
-        const error =
-          eligibility.reason === "work-in-flight" || eligibility.reason === "pending-request"
-            ? new ThreadForkBlockedError({
-                environmentId: target.environmentId,
-                threadId: target.threadId,
-              })
-            : new ThreadForkUnsupportedError({
-                environmentId: target.environmentId,
-                threadId: target.threadId,
-              });
-        return AsyncResult.failure(Cause.fail(error));
-      }
-
-      const sourceKey = scopedThreadKey(target);
-      const attempt = retainThreadForkAttempt({
-        retained: forkAttemptBySourceRef.current.get(sourceKey),
-        sourceThreadId: target.threadId,
-        createThreadId: newThreadId,
-        createCommandId: newCommandId,
-        now: () => new Date().toISOString(),
-      });
-      forkAttemptBySourceRef.current.set(sourceKey, attempt);
-      const result = await forkThreadMutation({
-        environmentId: target.environmentId,
-        input: attempt,
-      });
-      if (result._tag === "Failure") return result;
-
-      const targetRef = scopeThreadRef(target.environmentId, attempt.threadId);
-      await waitForStartedServerThread(targetRef, 5_000);
-      const navigationResult = await settlePromise(() =>
-        router.navigate({
-          to: "/$environmentId/$threadId",
-          params: buildThreadRouteParams(targetRef),
-        }),
-      );
-      if (navigationResult._tag === "Failure") return navigationResult;
-      forkAttemptBySourceRef.current.delete(sourceKey);
-      return AsyncResult.success(attempt.threadId);
-    },
-    [forkThreadMutation, router],
-  );
 }
 
 export class ThreadActiveReorderUnsupportedError extends Schema.TaggedError<ThreadActiveReorderUnsupportedError>()(
@@ -329,7 +251,6 @@ export function useThreadActions() {
   // the projects list) and would otherwise cascade new references into every
   // sidebar row via archiveThread → attemptArchiveThread.
   const handleNewThreadRef = useRef(handleNewThread);
-  const forkThread = useForkThreadAction();
   handleNewThreadRef.current = handleNewThread;
 
   const resolveThreadTarget = useCallback((target: ScopedThreadRef) => {
@@ -990,7 +911,6 @@ export function useThreadActions() {
       unpinThread,
       confirmAndUnpinThread,
       reorderPinnedThread,
-      forkThread,
       reorderActiveThread,
       setThreadAutoSettle,
     }),
@@ -999,7 +919,6 @@ export function useThreadActions() {
       confirmAndDeleteThread,
       confirmAndUnpinThread,
       deleteThread,
-      forkThread,
       pinThread,
       reorderPinnedThread,
       reorderActiveThread,

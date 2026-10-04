@@ -133,7 +133,6 @@ import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
-  readThreadForkEligibility,
   readThreadShell,
   useAllEnvironmentProjectSnapshotsReady,
   useProjects,
@@ -2203,7 +2202,6 @@ export default function Sidebar() {
     setThreadAutoSettle,
     archiveThread,
     deleteThread,
-    forkThread,
   } = useThreadActions();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
@@ -4118,7 +4116,6 @@ export default function Sidebar() {
           api.contextMenu.show(
             buildThreadActionMenuItems({
               branch: thread.branch ?? null,
-              canFork: readThreadForkEligibility(threadRef, 0).eligible,
               canOpenInChatSurface:
                 rightPanelOwnerRef !== null && scopedThreadKey(rightPanelOwnerRef) !== threadKey,
               projectFilter: threadProjectGroup
@@ -4188,20 +4185,6 @@ export default function Sidebar() {
                 stackedThreadToast({
                   type: "error",
                   title: "Could not create thread",
-                  description: error instanceof Error ? error.message : "An error occurred.",
-                }),
-              );
-            }
-            return;
-          }
-          case "fork-thread": {
-            const result = await forkThread(threadRef);
-            if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-              const error = squashAtomCommandFailure(result);
-              toastManager.add(
-                stackedThreadToast({
-                  type: "error",
-                  title: "Failed to fork thread",
                   description: error instanceof Error ? error.message : "An error occurred.",
                 }),
               );
@@ -4379,7 +4362,6 @@ export default function Sidebar() {
       copyThreadIdToClipboard,
       deleteTransientSideChat,
       deleteThread,
-      forkThread,
       handleMultiSelectContextMenu,
       markThreadUnread,
       openProjectSettings,

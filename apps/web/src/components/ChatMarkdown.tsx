@@ -108,8 +108,6 @@ import { MediaActions, type MediaActionSource } from "./media/MediaActions";
 import { resolveProtocolRelativeMediaUrl } from "./media/mediaContent";
 import { FileTagChipContent } from "./chat/FileTagChip";
 import { MermaidDiagram } from "./chat/MermaidDiagram";
-import { ThreadReferenceLink } from "./chat/ThreadReferenceLink";
-import { parseThreadReferenceUri, serializeThreadReferenceMarkdown } from "../threadReference";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import {
   revealInFileExplorerLabelForKind,
@@ -372,6 +370,7 @@ function findTaskListMarkerOffset(markdown: string, listItemStart: number): numb
   if (!match?.[1]) return null;
   return listItemStart + firstLine.indexOf(match[1]);
 }
+
 /**
  * The default `1.25rem` marker gutter (`.chat-markdown ol`) fits one-character
  * markers. Wider markers can extend past it and get clipped by a collapsed
@@ -467,19 +466,15 @@ function rehypePreserveImageSourceMeta() {
   };
 }
 
-export const CHAT_MARKDOWN_SANITIZE_SCHEMA: Parameters<typeof rehypeSanitize>[0] = {
+const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
     "*": (defaultSchema.attributes?.["*"] ?? []).filter((attribute) => attribute !== "title"),
-    a: [
-      ...(defaultSchema.attributes?.a ?? []),
-      "dataThreadReferenceHref",
-      "dataPullRequestAutolink",
-    ],
     code: [...(defaultSchema.attributes?.code ?? []), "dataCodeMeta", "dataInlineCode"],
     blockquote: [...(defaultSchema.attributes?.blockquote ?? []), "dataAlert"],
     div: [...(defaultSchema.attributes?.div ?? []), ...CODEX_ARTIFACT_TEMPLATE_HAST_PROPERTIES],
+    a: [...(defaultSchema.attributes?.a ?? []), "dataPullRequestAutolink"],
     img: [
       ...(defaultSchema.attributes?.img ?? []),
       "dataLocalSrc",
@@ -489,10 +484,10 @@ export const CHAT_MARKDOWN_SANITIZE_SCHEMA: Parameters<typeof rehypeSanitize>[0]
   },
   protocols: {
     ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href ?? []), "file", "t3-citation", "t3-context", "t3code"],
+    href: [...(defaultSchema.protocols?.href ?? []), "file", "t3-citation", "t3-context"],
     src: [...(defaultSchema.protocols?.src ?? []), "file", "t3-context"],
   },
-};
+} satisfies Parameters<typeof rehypeSanitize>[0];
 
 const CHAT_MARKDOWN_REMARK_PLUGINS = [
   remarkGfm,
@@ -516,7 +511,6 @@ const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS = [
 const CHAT_MARKDOWN_REHYPE_PLUGINS = [
   rehypeRaw,
   rehypePreserveImageSourceMeta,
-  rehypeTagThreadReferenceLinks,
   [rehypeSanitize, CHAT_MARKDOWN_SANITIZE_SCHEMA],
 ] satisfies NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
 
@@ -621,13 +615,6 @@ type MarkdownAstNode = {
   children?: MarkdownAstNode[];
 };
 
-export type MarkdownHastNode = {
-  type?: string;
-  tagName?: string;
-  properties?: Record<string, unknown>;
-  children?: MarkdownHastNode[];
-};
-
 function remarkPreserveCodeMeta() {
   return (tree: MarkdownAstNode) => {
     const visit = (node: MarkdownAstNode) => {
@@ -638,34 +625,6 @@ function remarkPreserveCodeMeta() {
             ...node.data?.hProperties,
             dataCodeMeta: node.meta.trim(),
           },
-        };
-      }
-      node.children?.forEach(visit);
-    };
-
-    visit(tree);
-  };
-}
-
-export function rehypeTagThreadReferenceLinks(): (tree: MarkdownHastNode) => void {
-  return (tree: MarkdownHastNode) => {
-    const visit = (node: MarkdownHastNode) => {
-      const href = node.properties?.href;
-      if (node.type === "element" && node.tagName === "a" && node.properties) {
-        const properties = { ...node.properties };
-        Reflect.deleteProperty(properties, "dataThreadReferenceHref");
-        Reflect.deleteProperty(properties, "data-thread-reference-href");
-        node.properties = properties;
-      }
-      if (
-        node.type === "element" &&
-        node.tagName === "a" &&
-        typeof href === "string" &&
-        /^t3code:/i.test(href)
-      ) {
-        node.properties = {
-          ...node.properties,
-          dataThreadReferenceHref: href,
         };
       }
       node.children?.forEach(visit);
@@ -1331,30 +1290,6 @@ function normalizeMarkdownLinkHrefKey(href: string): string {
   return WINDOWS_DRIVE_PATH_REGEX.test(rewrittenHref)
     ? rewrittenHref.replaceAll("\\", "/")
     : rewrittenHref;
-}
-
-export type ChatMarkdownThreadReference =
-  | { readonly kind: "thread"; readonly threadRef: ScopedThreadRef; readonly href: string }
-  | { readonly kind: "invalid" };
-
-export function resolveChatMarkdownThreadReference(
-  href: string | undefined,
-  sourceHref: unknown,
-): ChatMarkdownThreadReference | null {
-  const candidate =
-    typeof sourceHref === "string"
-      ? normalizeMarkdownLinkHrefKey(sourceHref)
-      : href
-        ? normalizeMarkdownLinkHrefKey(href)
-        : "";
-  if (!/^t3code:/i.test(candidate)) return null;
-  const threadRef = parseThreadReferenceUri(candidate);
-  return threadRef ? { kind: "thread", threadRef, href: candidate } : { kind: "invalid" };
-}
-
-export function chatMarkdownUrlTransform(href: string): string {
-  if (parseThreadReferenceUri(href)) return href;
-  return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
 }
 
 const MARKDOWN_LINK_FAVICON_CLASS_NAME = "block size-full shrink-0 select-none";
@@ -2511,7 +2446,6 @@ function useChatMarkdownState({
   }, [inlineCodeFileLinkMetaByText, markdownFileLinkMetaByHref]);
   const markdownUrlTransform = useCallback((href: string) => {
     if (parseAssistantCitationHref(href)) return href;
-    if (parseThreadReferenceUri(href)) return href;
     if (parseComposerContextHref(href)) return href;
     if (isWindowsDrivePathHref(href)) return href;
     return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
@@ -2960,21 +2894,6 @@ const CHAT_MARKDOWN_COMPONENTS = {
     } = use(ChatMarkdownRendererContext);
     const citation = href ? parseAssistantCitationHref(href) : null;
     if (citation) return <AssistantCitationChip citation={citation} />;
-    const threadReference = resolveChatMarkdownThreadReference(
-      href,
-      node?.properties?.dataThreadReferenceHref ?? node?.properties?.href,
-    );
-    if (threadReference?.kind === "invalid") return <>{children}</>;
-    if (threadReference?.kind === "thread") {
-      const label = plainHastText(node) ?? threadReference.href;
-      return (
-        <ThreadReferenceLink
-          threadRef={threadReference.threadRef}
-          label={label}
-          copyMarkdown={serializeThreadReferenceMarkdown(label, threadReference.threadRef)}
-        />
-      );
-    }
     const contextReference = href ? parseComposerContextHref(href) : null;
     if (contextReference) {
       const label = hastPlainTextDeep(node) || contextReference.contextId;
@@ -3358,15 +3277,6 @@ const CHAT_MARKDOWN_COMPONENTS = {
 
     const language = extractFenceLanguage(codeBlock.className);
     const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
-    if (language === "mermaid" && !isStreaming) {
-      return (
-        <MermaidDiagram
-          source={codeBlock.code}
-          theme={resolvedTheme}
-          fallback={<pre {...props}>{children}</pre>}
-        />
-      );
-    }
     return (
       <MarkdownCodeBlock
         code={codeBlock.code}
@@ -3446,6 +3356,15 @@ function ChatMarkdown({
         className,
       )}
       // Gates the fade-in for blocks that arrive while the response streams.
+    if (language === "mermaid" && !isStreaming) {
+      return (
+        <MermaidDiagram
+          source={codeBlock.code}
+          theme={resolvedTheme}
+          fallback={<pre {...props}>{children}</pre>}
+        />
+      );
+    }
       data-streaming={componentState.isStreaming ? "" : undefined}
       onCopy={handleCopy}
     >

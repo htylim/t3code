@@ -19,7 +19,6 @@ import {
   ProviderRespondToUserInputInput,
   RuntimeRequestId,
   ProviderSendTurnInput,
-  ProviderSessionForkInput,
   type ChatImageAttachment,
   type SnapShotAccessibility,
   type SnapShotAccessibilityNode,
@@ -34,9 +33,7 @@ import {
   type ProviderDriverKind,
   type ProviderRuntimeEvent,
   type ProviderSession,
-  type RuntimeMode,
   type ServerSettings as ServerSettingsValue,
-  DEFAULT_RUNTIME_MODE,
 } from "@t3tools/contracts";
 import { expandAssistantCitationsForProvider } from "@t3tools/shared/assistantCitations";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
@@ -75,7 +72,6 @@ import {
 import {
   type ProviderAdapterError,
   ProviderAdapterRequestError,
-  ProviderOperationUnsupportedError,
   ProviderValidationError,
   ProviderWorkspaceMissingError,
 } from "../Errors.ts";
@@ -262,8 +258,6 @@ export interface ProviderServiceLiveOptions {
    * ceiling and browser capability selected for a provider session.
    */
   readonly issueMcpCredential?: typeof McpSessionRegistry.issueActiveMcpCredential;
-  /** Same seam as `issueMcpCredential`, for observing session cleanup. */
-  readonly revokeMcpCredential?: typeof McpSessionRegistry.revokeActiveMcpThread;
 }
 
 interface TurnAnalyticsMetadata {
@@ -506,8 +500,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const projectionQuery = yield* Effect.serviceOption(
     ProjectionSnapshotQuery.ProjectionSnapshotQuery,
   );
-  const revokeMcpCredential =
-    options?.revokeMcpCredential ?? McpSessionRegistry.revokeActiveMcpThread;
   const issueMcpCredential =
     options?.issueMcpCredential ?? McpSessionRegistry.issueActiveMcpCredential;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -932,10 +924,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const agentAccessCapabilities = Effect.fn("ProviderService.agentAccessCapabilities")(function* (
     threadId: ThreadId,
   ) {
-    const capabilities = new Set<McpInvocationContext.McpCapability>([
-      "pull-requests",
-      "thread-control",
-    ]);
+    const capabilities = new Set<McpInvocationContext.McpCapability>(["pull-requests"]);
     const access = yield* agentAccessSettings(threadId);
     if (access.browser) capabilities.add("preview");
     if (access.device) capabilities.add("device");
@@ -969,17 +958,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     } satisfies Record<string, string>;
   });
 
-  const prepareMcpSession = (
-    threadId: ThreadId,
-    providerInstanceId: ProviderInstanceId,
-    runtimeMode: RuntimeMode,
-  ) =>
+  const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
     Effect.gen(function* () {
       const capabilities = yield* agentAccessCapabilities(threadId);
       const credential = yield* issueMcpCredential({
         threadId,
         providerInstanceId,
-        runtimeMode,
         capabilities,
       });
       if (credential) {
@@ -996,7 +980,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       return credential;
     });
   const clearMcpSession = (threadId: ThreadId) =>
-    revokeMcpCredential(threadId).pipe(
+    McpSessionRegistry.revokeActiveMcpThread(threadId).pipe(
       Effect.tap(() => Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),
     );
 
@@ -1308,11 +1292,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const persistedCwd = readPersistedCwd(input.binding.runtimePayload);
       const persistedModelSelection = readPersistedModelSelection(input.binding.runtimePayload);
 
-      yield* prepareMcpSession(
-        input.binding.threadId,
-        bindingInstanceId,
-        input.binding.runtimeMode ?? DEFAULT_RUNTIME_MODE,
-      );
+      yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
       const resumed = yield* adapter
         .startSession({
           threadId: input.binding.threadId,
@@ -1321,7 +1301,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           ...(persistedCwd ? { cwd: persistedCwd } : {}),
           ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
           ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
-          runtimeMode: input.binding.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+          runtimeMode: input.binding.runtimeMode ?? "full-access",
         })
         .pipe(Effect.onError(() => clearMcpSession(input.binding.threadId)));
       if (resumed.provider !== adapter.provider) {
@@ -1547,7 +1527,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         }
         const adapter = yield* registry.getByInstance(resolvedInstanceId);
         yield* clearTurnAnalyticsSession(resolvedInstanceId, threadId);
-        yield* prepareMcpSession(threadId, resolvedInstanceId, input.runtimeMode);
+        yield* prepareMcpSession(threadId, resolvedInstanceId);
         const session = yield* adapter
           .startSession({
             ...input,
@@ -1610,98 +1590,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
             }),
         }),
       );
-    },
-  );
-
-  const forkSession: ProviderServiceMethod<"forkSession"> = Effect.fn("forkSession")(
-    function* (rawInput) {
-      const input = yield* decodeInputOrValidationError({
-        operation: "ProviderService.forkSession",
-        schema: ProviderSessionForkInput,
-        payload: rawInput,
-      });
-      if (input.sourceThreadId === input.targetThreadId) {
-        return yield* toValidationError(
-          "ProviderService.forkSession",
-          "Source and target thread ids must be different.",
-        );
-      }
-
-      const sourceBinding = Option.getOrUndefined(
-        yield* directory.getBinding(input.sourceThreadId),
-      );
-      if (!sourceBinding) {
-        return yield* toValidationError(
-          "ProviderService.forkSession",
-          `Cannot fork thread '${input.sourceThreadId}' because no persisted provider binding exists.`,
-        );
-      }
-      const sourceInstanceId = yield* requireBindingInstanceId(
-        "ProviderService.forkSession",
-        sourceBinding,
-      );
-      const source = yield* recoverSessionForThread({
-        binding: sourceBinding,
-        operation: "ProviderService.forkSession",
-      });
-      if (source.adapter.capabilities.sessionFork !== "native") {
-        return yield* new ProviderOperationUnsupportedError({
-          provider: source.adapter.provider,
-          operation: "session/fork",
-        });
-      }
-
-      const existingTargetBinding = Option.getOrUndefined(
-        yield* directory.getBinding(input.targetThreadId),
-      );
-      if (existingTargetBinding) {
-        const targetInstanceId = yield* requireBindingInstanceId(
-          "ProviderService.forkSession",
-          existingTargetBinding,
-        );
-        if (
-          targetInstanceId !== sourceInstanceId ||
-          existingTargetBinding.provider !== sourceBinding.provider
-        ) {
-          return yield* toValidationError(
-            "ProviderService.forkSession",
-            `Target thread '${input.targetThreadId}' is already bound to a different provider instance.`,
-          );
-        }
-        const recoveredTarget = yield* recoverSessionForThread({
-          binding: existingTargetBinding,
-          operation: "ProviderService.forkSession",
-        });
-        return {
-          ...recoveredTarget.session,
-          providerInstanceId: targetInstanceId,
-        };
-      }
-
-      const forked = yield* source.adapter.forkSession({
-        sourceThreadId: input.sourceThreadId,
-        targetThreadId: input.targetThreadId,
-        cwd: input.cwd,
-      });
-      const createdAt = yield* nowIso;
-      const targetSession: ProviderSession = {
-        provider: source.adapter.provider,
-        providerInstanceId: sourceInstanceId,
-        status: "ready",
-        runtimeMode: source.session.runtimeMode,
-        cwd: input.cwd,
-        ...(source.session.model ? { model: source.session.model } : {}),
-        threadId: input.targetThreadId,
-        resumeCursor: forked.resumeCursor,
-        createdAt,
-        updatedAt: createdAt,
-      };
-      yield* upsertSessionBinding(targetSession, input.targetThreadId, {
-        modelSelection: readPersistedModelSelection(sourceBinding.runtimePayload),
-        lastRuntimeEvent: "provider.forkSession",
-        lastRuntimeEventAt: createdAt,
-      });
-      return targetSession;
     },
   );
 
@@ -2559,11 +2447,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   return {
     startSession: (threadId, input) =>
       transientCleanupGate.run(threadId, startSession(threadId, input)),
-    forkSession: (input) =>
-      transientCleanupGate.run(
-        input.sourceThreadId,
-        transientCleanupGate.run(input.targetThreadId, forkSession(input)),
-      ),
     sendTurn: (input) => transientCleanupGate.run(input.threadId, sendTurn(input)),
     compactThread,
     interruptTurn,

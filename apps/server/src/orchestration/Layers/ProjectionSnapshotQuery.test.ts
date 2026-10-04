@@ -111,27 +111,6 @@ const projectionSnapshotLayer = it.layer(
 );
 
 projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
-  it.effect("lists only active project summaries, including projects without threads", () =>
-    Effect.gen(function* () {
-      const snapshotQuery = yield* ProjectionSnapshotQuery;
-      const sql = yield* SqlClient.SqlClient;
-      yield* sql`DELETE FROM projection_projects`;
-      yield* sql`
-        INSERT INTO projection_projects (project_id, title, workspace_root, scripts_json, created_at, updated_at, deleted_at)
-        VALUES
-          ('summary-b', 'Same name', '/missing/b', '[]', '2026-09-10T00:00:00.000Z', '2026-09-10T00:00:00.000Z', NULL),
-          ('summary-a', 'Same name', '/missing/a', '[]', '2026-09-10T00:00:00.000Z', '2026-09-10T00:00:00.000Z', NULL),
-          ('summary-deleted', 'Deleted', '/missing/deleted', '[]', '2026-09-10T00:00:00.000Z', '2026-09-10T00:00:00.000Z', '2026-09-10T00:00:00.000Z')
-      `;
-      assert.deepEqual(yield* snapshotQuery.getProjectSummaries(), [
-        { id: asProjectId("summary-a"), title: "Same name", workspaceRoot: "/missing/a" },
-        { id: asProjectId("summary-b"), title: "Same name", workspaceRoot: "/missing/b" },
-      ]);
-      yield* sql`DELETE FROM projection_projects`;
-      assert.deepEqual(yield* snapshotQuery.getProjectSummaries(), []);
-    }),
-  );
-
   it.effect("hydrates read model from projection tables and computes snapshot sequence", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
@@ -2417,72 +2396,6 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         (yield* snapshotQuery.searchThreads({ query: "user needle" })).matches,
         [],
       );
-    }),
-  );
-
-  it.effect("reads one authoritative fork snapshot without hydrating unrelated threads", () =>
-    Effect.gen(function* () {
-      const snapshotQuery = yield* ProjectionSnapshotQuery;
-      const sql = yield* SqlClient.SqlClient;
-      const getThreadForkSnapshot = snapshotQuery.getThreadForkSnapshot;
-      assert.isDefined(getThreadForkSnapshot);
-
-      yield* sql`DELETE FROM projection_thread_messages`;
-      yield* sql`DELETE FROM projection_thread_activities`;
-      yield* sql`DELETE FROM projection_thread_sessions`;
-      yield* sql`DELETE FROM projection_threads`;
-      yield* sql`DELETE FROM projection_projects`;
-      yield* sql`
-        INSERT INTO projection_projects (
-          project_id, title, workspace_root, default_model_selection_json, scripts_json,
-          created_at, updated_at, deleted_at
-        ) VALUES (
-          'project-fork', 'Fork project', '/tmp/fork-project', NULL, '[]',
-          '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z', NULL
-        )
-      `;
-      yield* sql`
-        INSERT INTO projection_threads (
-          thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode,
-          branch, worktree_path, latest_turn_id, latest_user_message_at,
-          pending_approval_count, pending_user_input_count, has_actionable_proposed_plan,
-          created_at, updated_at, archived_at, deleted_at
-        ) VALUES
-          (
-            'thread-fork-source', 'project-fork', 'Source',
-            '{"instanceId":"codex","model":"gpt-5.4"}', 'full-access', 'default',
-            'feature/fork', '/tmp/fork-worktree', NULL, '2026-08-01T00:00:01.000Z',
-            1, 0, 0, '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:01.000Z', NULL, NULL
-          ),
-          (
-            'thread-fork-target', 'project-fork', 'Deleted collision',
-            '{"instanceId":"codex","model":"gpt-5.4"}', 'full-access', 'default',
-            NULL, NULL, NULL, NULL, 0, 0, 0,
-            '2026-08-01T00:00:02.000Z', '2026-08-01T00:00:02.000Z', NULL,
-            '2026-08-01T00:00:03.000Z'
-          )
-      `;
-      yield* sql`
-        INSERT INTO projection_thread_messages (
-          message_id, thread_id, turn_id, role, text, attachments_json, is_streaming,
-          created_at, updated_at
-        ) VALUES (
-          'message-fork-source', 'thread-fork-source', NULL, 'user', 'copy me', NULL, 0,
-          '2026-08-01T00:00:01.000Z', '2026-08-01T00:00:01.000Z'
-        )
-      `;
-
-      const snapshot = yield* getThreadForkSnapshot(
-        ThreadId.make("thread-fork-source"),
-        ThreadId.make("thread-fork-target"),
-      );
-      assert.isTrue(Option.isSome(snapshot));
-      if (Option.isNone(snapshot)) return;
-      assert.equal(snapshot.value.workspaceRoot, "/tmp/fork-project");
-      assert.equal(snapshot.value.targetExists, true);
-      assert.equal(snapshot.value.hasPendingApprovals, true);
-      assert.equal(snapshot.value.backgroundLiveness, null);
-      assert.equal(snapshot.value.thread.messages[0]?.text, "copy me");
     }),
   );
 });

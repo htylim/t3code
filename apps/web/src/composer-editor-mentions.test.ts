@@ -6,7 +6,6 @@ import {
   selectionTouchesMentionBoundary,
   splitPromptIntoComposerSegments,
 } from "./composer-editor-mentions";
-import { serializeThreadReferenceMarkdown } from "./threadReference";
 import { formatTerminalContextReference } from "./lib/terminalContext";
 
 const terminalReference = formatTerminalContextReference({
@@ -360,19 +359,4 @@ describe("selectionTouchesMentionBoundary", () => {
       ),
     ).toBe(true);
   });
-});
-
-it("keeps conversation references and upstream context chips distinct in one prompt", () => {
-  const threadRef = {
-    environmentId: EnvironmentId.make("local"),
-    threadId: ThreadId.make("related"),
-  };
-  const threadLink = serializeThreadReferenceMarkdown("Related thread", threadRef);
-  const segments = splitPromptIntoComposerSegments(
-    `Compare ${threadLink} with ${terminalReference}`,
-  );
-  expect(segments.filter((segment) => segment.type !== "text")).toEqual([
-    { type: "thread", threadRef, label: "Related thread", source: threadLink },
-    terminalSegment,
-  ]);
 });

@@ -13,14 +13,11 @@ import {
   composerStateAtPromptEnd,
   composerSubmissionIntentForEnter,
   detectComposerTrigger,
-  createComposerTriggerDetector,
   expandCollapsedComposerCursor,
-  executeWebForkSubmission,
   formatAssistantCitationForComposer,
   isCollapsedCursorAdjacentToInlineToken,
   parseStandaloneComposerSlashCommand,
   replaceTextRange,
-  resolveComposerSubmissionAction,
 } from "./composer-logic";
 import { carryDisplacedCustomAnswerIntoPrompt } from "./pendingUserInput";
 import { formatTerminalContextReference } from "./lib/terminalContext";
@@ -250,60 +247,6 @@ describe("detectComposerTrigger", () => {
     },
   );
 
-  it("detects bare and queried thread triggers at token boundaries", () => {
-    expect(detectComposerTrigger("Compare %", "Compare %".length)).toEqual({
-      kind: "thread",
-      threadScope: "project",
-      query: "",
-      rangeStart: "Compare ".length,
-      rangeEnd: "Compare %".length,
-    });
-    expect(detectComposerTrigger("Compare %release", "Compare %release".length)).toEqual({
-      kind: "thread",
-      threadScope: "project",
-      query: "release",
-      rangeStart: "Compare ".length,
-      rangeEnd: "Compare %release".length,
-    });
-  });
-
-  it("does not treat a percentage embedded in another token as a thread trigger", () => {
-    expect(detectComposerTrigger("Use 100%", "Use 100%".length)).toBeNull();
-    expect(detectComposerTrigger("value%other", "value%other".length)).toBeNull();
-  });
-
-  it.each(["%review ", "%review changes", "%%review changes", "%review\nchanges"])(
-    "keeps a thread query open across whitespace: %s",
-    (text) => {
-      const markerLength = text.startsWith("%%") ? 2 : 1;
-      expect(detectComposerTrigger(text, text.length)).toEqual({
-        kind: "thread",
-        threadScope: markerLength === 2 ? "environment" : "project",
-        query: text.slice(markerLength),
-        rangeStart: 0,
-        rangeEnd: text.length,
-      });
-    },
-  );
-
-  it("replaces the whole multiword query, including both percent signs", () => {
-    const text = "Compare %%review changes with this";
-    const cursor = "Compare %%review changes".length;
-    const trigger = detectComposerTrigger(text, cursor)!;
-    const replacement = "[Review changes](t3code://threads/local/thread-1)";
-    const result = replaceTextRange(text, trigger.rangeStart, trigger.rangeEnd, replacement);
-    expect(result.text).toBe(`Compare ${replacement} with this`);
-    expect(detectComposerTrigger(result.text, result.cursor + 1)).toBeNull();
-  });
-
-  it("does not reopen a query from inside or before a selected chip", () => {
-    const text = "%old [Review %changes](t3code://threads/local/thread-1) ";
-    expect(detectComposerTrigger(text, text.length)).toBeNull();
-    expect(detectComposerTrigger(text, text.indexOf("changes") + 3)).toBeNull();
-    const fresh = `${text}%new query`;
-    expect(detectComposerTrigger(fresh, fresh.length)?.query).toBe("new query");
-  });
-
   it("detects a pull request number at a token boundary", () => {
     const text = "Compare this with #8737";
 
@@ -391,61 +334,6 @@ describe("detectComposerTrigger", () => {
     expect(trigger).not.toBeNull();
     expect(trigger?.kind).toBe("path");
     expect(trigger?.query).toBe("");
-  });
-});
-
-describe("thread picker dismissal", () => {
-  it("keeps an escaped query closed while typing or moving the caret, and allows a fresh trigger", () => {
-    const detector = createComposerTriggerDetector();
-    const text = "Compare %review";
-    expect(detector.detect(text, text.length)?.query).toBe("review");
-    expect(detector.dismiss(text, text.length)).toBe(true);
-    const continued = `${text} changes`;
-    expect(detector.detect(continued, continued.length)).toBeNull();
-    expect(detector.detect(continued, text.length)).toBeNull();
-    const fresh = `${continued} %%another review`;
-    expect(detector.detect(fresh, fresh.length)).toMatchObject({
-      query: "another review",
-      threadScope: "environment",
-    });
-    expect(detector.dismiss(fresh, fresh.length)).toBe(true);
-    expect(detector.detect(fresh, text.length)).toBeNull();
-  });
-
-  it("tracks a dismissed trigger when text before it is inserted or removed", () => {
-    const detector = createComposerTriggerDetector();
-    detector.dismiss("Compare %review", 15);
-    const prefixed = "Please compare %review";
-    // Insert without replacing the dismissed marker.
-    const inserted = "Please Compare %review";
-    expect(detector.detect(inserted, inserted.length)).toBeNull();
-    expect(detector.detect(prefixed, prefixed.length)).toBeNull();
-    expect(detector.detect("%review", 7)).toBeNull();
-    expect(detector.detect("%review changes", 15)).toBeNull();
-    detector.detect("", 0);
-    expect(detector.detect("%new", 4)?.query).toBe("new");
-  });
-
-  it("preserves other trigger kinds after Escape and resets for a different draft", () => {
-    const detector = createComposerTriggerDetector();
-    detector.dismiss("%review", 7);
-    expect(detector.detect("%review @src", 12)?.kind).toBe("path");
-    expect(detector.detect("%review $skill", 14)?.kind).toBe("skill");
-    detector.reset();
-    expect(detector.detect("%review", 7)?.kind).toBe("thread");
-  });
-
-  it("allows a fresh trigger before an escaped query without reopening the escaped query", () => {
-    const detector = createComposerTriggerDetector();
-    detector.dismiss("Compare %review", 15);
-    const inserted = "%%new Compare %review";
-    expect(detector.detect(inserted, 5)).toMatchObject({
-      query: "new",
-      threadScope: "environment",
-    });
-    expect(detector.detect(inserted, inserted.length)).toBeNull();
-    const selected = "[New](t3code://threads/local/thread-1) Compare %review";
-    expect(detector.detect(selected, selected.length)).toBeNull();
   });
 });
 
@@ -539,34 +427,6 @@ describe("replaceTextRange", () => {
       text: "hello ",
       cursor: 6,
     });
-  });
-
-  it("replaces an active thread query with raw Markdown and one trailing space", () => {
-    const text = "Compare %release with this";
-    const trigger = detectComposerTrigger(text, "Compare %release".length);
-    expect(trigger?.kind).toBe("thread");
-    const rangeEnd = text[trigger!.rangeEnd] === " " ? trigger!.rangeEnd + 1 : trigger!.rangeEnd;
-
-    expect(
-      replaceTextRange(
-        text,
-        trigger!.rangeStart,
-        rangeEnd,
-        "[Release notes](t3code://threads/local/thread-1) ",
-      ),
-    ).toEqual({
-      text: "Compare [Release notes](t3code://threads/local/thread-1) with this",
-      cursor: "Compare [Release notes](t3code://threads/local/thread-1) ".length,
-    });
-  });
-
-  it("maps a thread reference between its chip and Markdown lengths", () => {
-    const text = "[Referenced](t3code://threads/local/thread-1) ";
-
-    expect(collapseExpandedComposerCursor(text, text.length)).toBe(2);
-    expect(collapseExpandedComposerCursor(text, text.length - 2)).toBe(1);
-    expect(expandCollapsedComposerCursor(text, 1)).toBe(text.length - 1);
-    expect(expandCollapsedComposerCursor(text, 2)).toBe(text.length);
   });
 });
 
@@ -874,62 +734,5 @@ describe("parseStandaloneComposerSlashCommand", () => {
 
   it("ignores slash commands with extra message text", () => {
     expect(parseStandaloneComposerSlashCommand("/plan explain this")).toBeNull();
-  });
-
-  it("web exact /fork bypasses provider turn submission", () => {
-    expect(
-      resolveComposerSubmissionAction({
-        text: " /fork ",
-        attachmentCount: 0,
-        contextCount: 0,
-        planFollowUpAvailable: true,
-      }),
-    ).toBe("fork");
-  });
-
-  it("web routes ordinary text through an available plan follow-up", () => {
-    expect(
-      resolveComposerSubmissionAction({
-        text: "Refine the testing steps",
-        attachmentCount: 0,
-        contextCount: 0,
-        planFollowUpAvailable: true,
-      }),
-    ).toBe("plan-follow-up");
-  });
-
-  it("web /fork with extra context follows provider turn submission", () => {
-    expect(
-      resolveComposerSubmissionAction({ text: "/fork", attachmentCount: 1, contextCount: 0 }),
-    ).toBe("message");
-  });
-
-  it("web navigates to the canonical target after command acceptance", async () => {
-    const events: string[] = [];
-    const succeeded = await executeWebForkSubmission({
-      fork: async () => {
-        events.push("dispatch", "navigate:target");
-        return { ok: true };
-      },
-      clearCommand: () => events.push("clear"),
-      reportError: () => events.push("error"),
-    });
-    expect(succeeded).toBe(true);
-    expect(events).toEqual(["dispatch", "navigate:target", "clear"]);
-  });
-
-  it("web clears the exact command on success and preserves it and the target id on failure", async () => {
-    let draft = "/fork";
-    const targetId = "target-retained";
-    const succeeded = await executeWebForkSubmission({
-      fork: async () => ({ ok: false, message: targetId }),
-      clearCommand: () => {
-        draft = "";
-      },
-      reportError: (message) => expect(message).toBe(targetId),
-    });
-    expect(succeeded).toBe(false);
-    expect(draft).toBe("/fork");
-    expect(targetId).toBe("target-retained");
   });
 });

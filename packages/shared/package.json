@@ -211,10 +211,6 @@
       "types": "./src/composerTrigger.ts",
       "import": "./src/composerTrigger.ts"
     },
-    "./composerCommands": {
-      "types": "./src/composerCommands.ts",
-      "import": "./src/composerCommands.ts"
-    },
     "./composerInlineTokens": {
       "types": "./src/composerInlineTokens.ts",
       "import": "./src/composerInlineTokens.ts"

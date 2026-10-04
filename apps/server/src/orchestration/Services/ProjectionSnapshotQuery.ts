@@ -64,14 +64,6 @@ export interface ProjectionFullThreadDiffContext {
   readonly toCheckpointRef: CheckpointRef | null;
 }
 
-export interface ProjectionThreadForkSnapshot {
-  readonly thread: OrchestrationThread;
-  readonly workspaceRoot: string;
-  readonly targetExists: boolean;
-  readonly hasPendingApprovals: boolean;
-  readonly hasPendingUserInput: boolean;
-  readonly backgroundLiveness: OrchestrationThreadShell["backgroundLiveness"];
-}
 /** The thread fields pull request sync reads, for a thread with at least one link. */
 export type ProjectionThreadPullRequests = Pick<
   OrchestrationThreadShell,
@@ -91,12 +83,6 @@ export interface ProjectionThreadDetailQuery {
  * ProjectionSnapshotQueryShape - Service API for read-model snapshots.
  */
 export interface ProjectionSnapshotQueryShape {
-  /** List registered projects without reading thread state or inspecting repositories. */
-  readonly getProjectSummaries: () => Effect.Effect<
-    ReadonlyArray<Pick<OrchestrationProjectShell, "id" | "title" | "workspaceRoot">>,
-    ProjectionRepositoryError
-  >;
-
   /** Read the latest request or resolution without loading the thread history. */
   readonly getUserInputActivity: (input: {
     readonly threadId: ThreadId;
@@ -318,12 +304,6 @@ export interface ProjectionSnapshotQueryShape {
     threadId: ThreadId,
     window?: OrchestrationThreadDetailWindow,
   ) => Effect.Effect<Option.Option<OrchestrationThreadDetailSnapshot>, ProjectionRepositoryError>;
-
-  /** Read all authoritative source state needed by one fork in a single transaction. */
-  readonly getThreadForkSnapshot?: (
-    sourceThreadId: ThreadId,
-    targetThreadId: ThreadId,
-  ) => Effect.Effect<Option.Option<ProjectionThreadForkSnapshot>, ProjectionRepositoryError>;
 }
 
 /**

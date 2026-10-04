@@ -121,7 +121,7 @@ const turnStartKeyForEvent = (event: ProviderIntentEvent): string =>
 
 const HANDLED_TURN_START_KEY_MAX = 10_000;
 const HANDLED_TURN_START_KEY_TTL = Duration.minutes(30);
-const DEFAULT_RUNTIME_MODE: RuntimeMode = "auto";
+const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
 
 function providerErrorLabel(value: string | undefined): string {
   const normalized = value?.trim();

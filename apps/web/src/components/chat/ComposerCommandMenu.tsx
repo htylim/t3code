@@ -6,7 +6,6 @@ import {
 import {
   type ProjectEntry,
   type ProviderDriverKind,
-  type ScopedThreadRef,
   type PullRequestContextMetadata,
   type ServerProviderSkill,
   type ServerProviderSlashCommand,
@@ -16,7 +15,6 @@ import {
   FolderIcon,
   PackageIcon,
   SettingsIcon,
-  MessagesSquareIcon,
   UserRoundIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -25,7 +23,7 @@ import { memo, useLayoutEffect, useRef } from "react";
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
-import { Command, CommandGroup, CommandGroupLabel, CommandItem, CommandList } from "../ui/command";
+import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { ComposerBanner } from "./ComposerBanner";
 import { resolvePullRequestState } from "../pullRequest/pullRequestPresentation";
@@ -59,13 +57,6 @@ export type ComposerCommandItem =
       type: "skill";
       provider: ProviderDriverKind;
       skill: ServerProviderSkill;
-      label: string;
-      description: string;
-    }
-  | {
-      id: string;
-      type: "thread";
-      threadRef: ScopedThreadRef;
       label: string;
       description: string;
     }
@@ -115,9 +106,6 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
         {props.items.length > 0 ? (
           <CommandList className="max-h-72 min-h-0 scroll-pb-6">
             <CommandGroup>
-              {props.triggerKind === "thread" ? (
-                <CommandGroupLabel>Threads</CommandGroupLabel>
-              ) : null}
               {props.items.map((item) => (
                 <ComposerCommandMenuItem
                   key={item.id}
@@ -145,9 +133,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                     ? "No skills found. Try / to browse provider commands."
                     : props.triggerKind === "path"
                       ? "No matching files or folders."
-                      : props.triggerKind === "thread"
-                        ? "No matching threads."
-                        : "No matching command."))}
+                      : "No matching command."))}
             </p>
           </div>
         )}
@@ -192,8 +178,6 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           kind={props.item.pathKind}
           theme={props.resolvedTheme}
         />
-      ) : props.item.type === "thread" ? (
-        <MessagesSquareIcon className="size-4 shrink-0 text-icon-muted" />
       ) : null}
       {pullRequestPresentation ? (
         <pullRequestPresentation.Icon

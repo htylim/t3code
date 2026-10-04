@@ -11,9 +11,9 @@
 import * as NodeUtil from "node:util";
 import {
   type CanUseTool,
-  forkSession as forkClaudeSdkSession,
   query,
   getSessionMessages,
+  forkSession,
   type Options as ClaudeQueryOptions,
   type PermissionMode,
   type PermissionResult,
@@ -58,7 +58,6 @@ import {
   ThreadId,
   TurnId,
   type UserInputQuestion,
-  DEFAULT_RUNTIME_MODE,
 } from "@t3tools/contracts";
 import {
   applyClaudePromptEffortPrefix,
@@ -472,7 +471,7 @@ export interface ClaudeAdapterLiveOptions {
     readonly options: ClaudeQueryOptions;
   }) => ClaudeQueryRuntime;
   readonly getSessionMessages?: typeof getSessionMessages;
-  readonly forkSession?: typeof forkClaudeSdkSession;
+  readonly forkSession?: typeof forkSession;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
   readonly modelCatalog?: Effect.Effect<ClaudeModelCatalog>;
@@ -2105,56 +2104,6 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         prompt: input.prompt,
         options: input.options,
       }) as ClaudeQueryRuntime);
-  const isExecutable = yield* HostProcessIsExecutable;
-  const runScopedHistoryCommand = async (
-    method: "getSessionMessages" | "forkSession",
-    historySessionId: string,
-    args: object,
-  ) => {
-    const historyWorkerArguments = isExecutable
-      ? ["__claude-history"]
-      : [
-          await Effect.runPromise(
-            path.fromFileUrl(
-              new URL(
-                import.meta.url.endsWith(".ts")
-                  ? "../../claude-history-worker.ts"
-                  : "./claude-history-worker.mjs",
-                import.meta.url,
-              ),
-            ),
-          ),
-        ];
-    // SDK history helpers read process.env. Isolate the provider's home instead
-    // of changing the server's environment while other providers are running.
-    const result = await Effect.runPromise(
-      spawnAndCollect(
-        process.execPath,
-        ChildProcess.make(
-          process.execPath,
-          [...historyWorkerArguments, method, historySessionId, encodeHistoryArgs(args)],
-          { env: { ...claudeEnvironment, ELECTRON_RUN_AS_NODE: "1" } },
-        ),
-      ).pipe(
-        Effect.timeout("30 seconds"),
-        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-      ),
-    );
-    if (result.code !== 0) throw new Error(result.stderr || "Claude history command failed.");
-    return result.stdout;
-  };
-  const forkNativeSession = async (
-    sessionId: string,
-    forkOptions: Parameters<typeof forkClaudeSdkSession>[1],
-  ) => {
-    if (options?.forkSession) return options.forkSession(sessionId, forkOptions);
-    if (claudeEnvironment.CLAUDE_CONFIG_DIR === process.env.CLAUDE_CONFIG_DIR) {
-      return forkClaudeSdkSession(sessionId, forkOptions);
-    }
-    return decodeHistoryFork(
-      await runScopedHistoryCommand("forkSession", sessionId, forkOptions ?? {}),
-    );
-  };
 
   const sessions = new Map<ThreadId, ClaudeSessionContext>();
   const runtimeEventQueue = yield* Queue.unbounded<ProviderRuntimeEvent>();
@@ -4741,7 +4690,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           } satisfies PermissionResult;
         }
 
-        const runtimeMode = input.runtimeMode ?? DEFAULT_RUNTIME_MODE;
+        const runtimeMode = input.runtimeMode ?? "full-access";
         if (runtimeMode === "full-access") {
           return {
             behavior: "allow",
@@ -5372,6 +5321,46 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           detail: "Claude session id is unavailable.",
         });
       }
+      // The single-executable has no sibling script and no Node to run one
+      // with, so it hosts the worker as a hidden subcommand of itself.
+      const historyWorkerArguments = (yield* HostProcessIsExecutable)
+        ? ["__claude-history"]
+        : [
+            yield* path
+              .fromFileUrl(
+                new URL(
+                  import.meta.url.endsWith(".ts")
+                    ? "../../claude-history-worker.ts"
+                    : "./claude-history-worker.mjs",
+                  import.meta.url,
+                ),
+              )
+              .pipe(Effect.mapError((cause) => toRequestError(threadId, "thread/rollback", cause))),
+          ];
+      const runScopedHistoryCommand = async (
+        method: "getSessionMessages" | "forkSession",
+        args: object,
+        historySessionId = sessionId,
+      ) => {
+        // SDK history helpers read process.env. Isolate the provider's home instead
+        // of changing the server's environment while other providers are running.
+        // @effect-diagnostics-next-line runEffectInsideEffect:off - SDK callback runs outside the fiber; the spawn is self-contained
+        const result = await Effect.runPromise(
+          spawnAndCollect(
+            process.execPath,
+            ChildProcess.make(
+              process.execPath,
+              [...historyWorkerArguments, method, historySessionId, encodeHistoryArgs(args)],
+              { env: { ...claudeEnvironment, ELECTRON_RUN_AS_NODE: "1" } },
+            ),
+          ).pipe(
+            Effect.timeout("30 seconds"),
+            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          ),
+        );
+        if (result.code !== 0) throw new Error(result.stderr || "Claude history command failed.");
+        return result.stdout;
+      };
       const readHistory = (historySessionId: string) =>
         Effect.tryPromise({
           try: async () => {
@@ -5385,7 +5374,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
               return getSessionMessages(historySessionId, readOptions);
             }
             return decodeSessionMessages(
-              await runScopedHistoryCommand("getSessionMessages", historySessionId, readOptions),
+              await runScopedHistoryCommand("getSessionMessages", readOptions, historySessionId),
             );
           },
           catch: (cause) => toRequestError(threadId, "thread/rollback", cause),
@@ -5439,7 +5428,11 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
                 ...(context.session.cwd ? { dir: context.session.cwd } : {}),
                 upToMessageId: rollbackAt,
               };
-              return forkNativeSession(sessionId, forkOptions);
+              if (options?.forkSession) return options.forkSession(sessionId, forkOptions);
+              if (claudeEnvironment.CLAUDE_CONFIG_DIR === process.env.CLAUDE_CONFIG_DIR) {
+                return forkSession(sessionId, forkOptions);
+              }
+              return decodeHistoryFork(await runScopedHistoryCommand("forkSession", forkOptions));
             },
             catch: (cause) => toRequestError(threadId, "thread/rollback", cause),
           })
@@ -5477,40 +5470,6 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       const restarted = yield* requireSession(threadId);
       restarted.turns.push(...retainedTurns);
       return yield* snapshotThread(restarted);
-    },
-  );
-
-  const forkSession: ClaudeAdapterShape["forkSession"] = Effect.fn("forkSession")(
-    function* (input) {
-      const context = yield* requireSession(input.sourceThreadId);
-      const sourceSessionId = context.resumeSessionId;
-      if (!sourceSessionId || !isUuid(sourceSessionId)) {
-        return yield* new ProviderAdapterValidationError({
-          provider: PROVIDER,
-          operation: "forkSession",
-          issue: `Thread '${input.sourceThreadId}' has no valid durable Claude session id.`,
-        });
-      }
-      const durableTurnCount =
-        readClaudeResumeState(context.session.resumeCursor)?.turnCount ?? context.turns.length;
-      const forked = yield* Effect.tryPromise({
-        try: () => forkNativeSession(sourceSessionId, { dir: input.cwd }),
-        catch: (cause) =>
-          new ProviderAdapterRequestError({
-            provider: PROVIDER,
-            method: "session/fork",
-            detail: "Claude SDK session fork failed.",
-            cause,
-          }),
-      });
-      return {
-        resumeCursor: {
-          threadId: input.targetThreadId,
-          resume: forked.sessionId,
-          turnCount: durableTurnCount,
-          turnStartMessageIds: [...context.turnStartMessageIds],
-        },
-      };
     },
   );
 
@@ -5598,7 +5557,6 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     provider: PROVIDER,
     capabilities: {
       sessionModelSwitch: "in-session",
-      sessionFork: "native",
     },
     compaction: { type: "slash-command", command: "/compact" },
     startSession,
@@ -5606,7 +5564,6 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     interruptTurn,
     readThread,
     rollbackThread,
-    forkSession,
     respondToRequest,
     respondToUserInput,
     stopSession,

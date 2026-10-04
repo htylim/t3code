@@ -1235,15 +1235,6 @@ export function makeCursorAdapter(
         });
       });
 
-    const forkSession: CursorAdapterShape["forkSession"] = () =>
-      Effect.fail(
-        new ProviderAdapterValidationError({
-          provider: PROVIDER,
-          operation: "forkSession",
-          issue: "Cursor does not advertise native session fork support.",
-        }),
-      );
-
     const stopSession: CursorAdapterShape["stopSession"] = (threadId) =>
       withThreadLock(
         threadId,
@@ -1279,18 +1270,13 @@ export function makeCursorAdapter(
 
     return {
       provider: PROVIDER,
-      capabilities: {
-        sessionModelSwitch: "in-session",
-        sessionFork: "unsupported",
-        supportsConversationRollback: false,
-      },
+      capabilities: { sessionModelSwitch: "in-session", supportsConversationRollback: false },
       compaction: { type: "slash-command", command: "/compress" },
       startSession,
       sendTurn,
       interruptTurn,
       readThread,
       rollbackThread,
-      forkSession,
       respondToRequest,
       respondToUserInput,
       stopSession,

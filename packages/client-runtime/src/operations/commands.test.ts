@@ -4,7 +4,6 @@ import {
   ORCHESTRATION_WS_METHODS,
   ProjectId,
   ThreadId,
-  type ClientOrchestrationOperation,
   type ClientOrchestrationCommand,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
@@ -25,8 +24,6 @@ import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import {
   archiveThread,
   createProject,
-  forkThread,
-  retainThreadForkAttempt,
   revertThreadCheckpoint,
   reorderActiveThread,
   settleThread,
@@ -50,10 +47,10 @@ const TARGET = new PrimaryConnectionTarget({
 });
 
 const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(function* (
-  dispatched: ClientOrchestrationOperation[],
+  dispatched: ClientOrchestrationCommand[],
 ) {
   const client = {
-    [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command: ClientOrchestrationOperation) =>
+    [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command: ClientOrchestrationCommand) =>
       Effect.sync(() => {
         dispatched.push(command);
         return { sequence: dispatched.length };
@@ -79,55 +76,9 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
 });
 
 describe("environment commands", () => {
-  it.effect("replays the complete fork identity across retries", () =>
-    Effect.gen(function* () {
-      const dispatched: ClientOrchestrationOperation[] = [];
-      const supervisor = yield* makeSupervisor(dispatched);
-      const attempt = retainThreadForkAttempt({
-        retained: undefined,
-        sourceThreadId: ThreadId.make("source"),
-        createThreadId: () => ThreadId.make("target"),
-        createCommandId: () => CommandId.make("fork-command"),
-        now: () => "2026-08-07T00:00:00.000Z",
-      });
-      const retry = retainThreadForkAttempt({
-        retained: attempt,
-        sourceThreadId: ThreadId.make("source"),
-        createThreadId: () => ThreadId.make("wrong-target"),
-        createCommandId: () => CommandId.make("wrong-command"),
-        now: () => "2026-08-08T00:00:00.000Z",
-      });
-
-      yield* forkThread(attempt).pipe(
-        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
-      );
-      yield* forkThread(retry).pipe(
-        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
-      );
-
-      expect(retry).toBe(attempt);
-      expect(dispatched).toEqual([
-        {
-          type: "thread.fork",
-          sourceThreadId: "source",
-          threadId: "target",
-          commandId: "fork-command",
-          createdAt: "2026-08-07T00:00:00.000Z",
-        },
-        {
-          type: "thread.fork",
-          sourceThreadId: "source",
-          threadId: "target",
-          commandId: "fork-command",
-          createdAt: "2026-08-07T00:00:00.000Z",
-        },
-      ]);
-    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
-  );
-
   it.effect("adds generated command metadata", () =>
     Effect.gen(function* () {
-      const dispatched: ClientOrchestrationOperation[] = [];
+      const dispatched: ClientOrchestrationCommand[] = [];
       const supervisor = yield* makeSupervisor(dispatched);
 
       const result = yield* createProject({
@@ -174,7 +125,7 @@ describe("environment commands", () => {
 
   it.effect("preserves caller metadata for idempotent queued commands", () =>
     Effect.gen(function* () {
-      const dispatched: ClientOrchestrationOperation[] = [];
+      const dispatched: ClientOrchestrationCommand[] = [];
       const supervisor = yield* makeSupervisor(dispatched);
 
       yield* stopThreadSession({
@@ -196,7 +147,7 @@ describe("environment commands", () => {
 
   it.effect("does not add timestamps to commands without createdAt", () =>
     Effect.gen(function* () {
-      const dispatched: ClientOrchestrationOperation[] = [];
+      const dispatched: ClientOrchestrationCommand[] = [];
       const supervisor = yield* makeSupervisor(dispatched);
 
       yield* archiveThread({
@@ -216,7 +167,7 @@ describe("environment commands", () => {
 
   it.effect("dispatches settle and unsettle commands without timestamps", () =>
     Effect.gen(function* () {
-      const dispatched: ClientOrchestrationOperation[] = [];
+      const dispatched: ClientOrchestrationCommand[] = [];
       const supervisor = yield* makeSupervisor(dispatched);
 
       yield* settleThread({
@@ -240,29 +191,6 @@ describe("environment commands", () => {
           commandId: "unsettle-command",
           threadId: "thread-1",
           reason: "user",
-        },
-      ]);
-    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
-  );
-
-  it.effect("client-runtime dispatches source and client-generated target ids", () =>
-    Effect.gen(function* () {
-      const dispatched: ClientOrchestrationOperation[] = [];
-      const supervisor = yield* makeSupervisor(dispatched);
-
-      const result = yield* forkThread({
-        sourceThreadId: ThreadId.make("source"),
-        createdAt: "2026-08-06T00:00:00.000Z",
-      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
-
-      expect(result.threadId).toBe("00000000-0000-4000-8000-000000000000");
-      expect(dispatched).toEqual([
-        {
-          type: "thread.fork",
-          sourceThreadId: "source",
-          threadId: "00000000-0000-4000-8000-000000000000",
-          commandId: "00000000-0000-4000-8000-000000000000",
-          createdAt: "2026-08-06T00:00:00.000Z",
         },
       ]);
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),

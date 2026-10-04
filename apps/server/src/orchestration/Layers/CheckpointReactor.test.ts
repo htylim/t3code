@@ -118,7 +118,6 @@ function createProviderServiceHarness(
       : Effect.succeed([] as ReadonlyArray<ProviderSession>);
   const service: ProviderServiceShape = {
     startSession: () => unsupported(),
-    forkSession: () => unsupported(),
     sendTurn: () => unsupported(),
     compactThread: () => unsupported(),
     interruptTurn: () => unsupported(),
@@ -126,8 +125,7 @@ function createProviderServiceHarness(
     respondToUserInput: () => unsupported(),
     stopSession: () => unsupported(),
     listSessions,
-    getCapabilities: () =>
-      Effect.succeed({ sessionModelSwitch: "in-session", sessionFork: "unsupported" }),
+    getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
     assertConversationRollbackSupported,
     getInstanceInfo: (instanceId) =>
       Effect.succeed({

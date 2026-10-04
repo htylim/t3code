@@ -73,57 +73,6 @@ const decodeOrchestrationEvent = Schema.decodeUnknownEffect(OrchestrationEvent);
 const decodeThreadMetaUpdatedPayload = Schema.decodeUnknownEffect(ThreadMetaUpdatedPayload);
 const decodeClientOrchestrationOperation = Schema.decodeUnknownEffect(ClientOrchestrationOperation);
 const decodeDispatchCommandError = Schema.decodeUnknownEffect(OrchestrationDispatchCommandError);
-const decodeDispatchCommandInput = Schema.decodeUnknownEffect(
-  OrchestrationRpcSchemas.dispatchCommand.input,
-);
-
-it.effect("decodes the thread.fork operation with source and target ids", () =>
-  Effect.gen(function* () {
-    const parsed = yield* decodeClientOrchestrationOperation({
-      type: "thread.fork",
-      sourceThreadId: "thread-source",
-      threadId: "thread-target",
-      commandId: "cmd-fork",
-      createdAt: "2026-08-06T00:00:00.000Z",
-    });
-
-    assert.strictEqual(parsed.type, "thread.fork");
-    if (parsed.type === "thread.fork") {
-      assert.strictEqual(parsed.sourceThreadId, "thread-source");
-      assert.strictEqual(parsed.threadId, "thread-target");
-    }
-  }),
-);
-
-it.effect("rejects thread.fork payloads with the same source and target id", () =>
-  Effect.gen(function* () {
-    const result = yield* Effect.exit(
-      decodeClientOrchestrationOperation({
-        type: "thread.fork",
-        sourceThreadId: "thread-same",
-        threadId: "thread-same",
-        commandId: "cmd-fork",
-        createdAt: "2026-08-06T00:00:00.000Z",
-      }),
-    );
-
-    assert.strictEqual(result._tag, "Failure");
-  }),
-);
-
-it.effect("accepts thread.fork through the existing WebSocket dispatch payload", () =>
-  Effect.gen(function* () {
-    const parsed = yield* decodeDispatchCommandInput({
-      type: "thread.fork",
-      sourceThreadId: "thread-source",
-      threadId: "thread-target",
-      commandId: "cmd-ws-fork",
-      createdAt: "2026-08-06T00:00:00.000Z",
-    });
-
-    assert.strictEqual(parsed.type, "thread.fork");
-  }),
-);
 const decodeSnapShotAccessibility = Schema.decodeUnknownEffect(SnapShotAccessibility);
 
 it.effect("decodes a dispatch error after its bootstrap thread was deleted", () =>
@@ -317,8 +266,7 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
       createdAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.modelSelection, undefined);
-    assert.strictEqual(DEFAULT_RUNTIME_MODE, "auto");
-    assert.strictEqual(parsed.runtimeMode, "auto");
+    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
   }),
 );

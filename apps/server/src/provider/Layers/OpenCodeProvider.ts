@@ -32,7 +32,6 @@ import * as OpenCodeServerOwner from "../OpenCodeServerOwner.ts";
 const OPENCODE_PRESENTATION = {
   displayName: "OpenCode",
   showInteractionModeToggle: false,
-  supportsThreadFork: true,
 } as const;
 const OPENCODE_VERSION_PROBE_TIMEOUT = "4 seconds";
 

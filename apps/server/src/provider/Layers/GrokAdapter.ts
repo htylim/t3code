@@ -2155,15 +2155,6 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
         });
       });
 
-    const forkSession: GrokAdapterShape["forkSession"] = () =>
-      Effect.fail(
-        new ProviderAdapterValidationError({
-          provider: PROVIDER,
-          operation: "forkSession",
-          issue: "Grok does not advertise native session fork support.",
-        }),
-      );
-
     const stopSession: GrokAdapterShape["stopSession"] = (threadId) =>
       withThreadLock(
         threadId,
@@ -2196,18 +2187,13 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
 
     return {
       provider: PROVIDER,
-      capabilities: {
-        sessionModelSwitch: "in-session",
-        sessionFork: "unsupported",
-        supportsConversationRollback: false,
-      },
+      capabilities: { sessionModelSwitch: "in-session", supportsConversationRollback: false },
       compaction: { type: "slash-command", command: "/compact" },
       startSession,
       sendTurn,
       interruptTurn,
       readThread,
       rollbackThread,
-      forkSession,
       respondToRequest,
       respondToUserInput,
       stopSession,

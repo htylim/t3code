@@ -70,7 +70,6 @@ import {
   createModelSelection,
   resolvePromptInjectedEffort,
 } from "@t3tools/shared/model";
-import { resolveThreadForkEligibility } from "@t3tools/shared/composerCommands";
 import {
   projectScriptCwd,
   projectScriptRuntimeEnv,
@@ -123,10 +122,8 @@ import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
   collapseExpandedComposerCursor,
-  executeWebForkSubmission,
   type ComposerSubmissionIntent,
   parseStandaloneComposerSlashCommand,
-  resolveComposerSubmissionAction,
 } from "../composer-logic";
 import {
   createMessageAttachmentPreviewProjector,
@@ -178,7 +175,6 @@ import {
 } from "../types";
 import { useTheme } from "../hooks/useTheme";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
-import { useForkThreadAction } from "../hooks/useThreadActions";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { subscribeSnapShotComposerFocus } from "../lib/desktopSnapShot";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
@@ -1569,7 +1565,6 @@ export default function ChatView(props: ChatViewProps) {
   const revertThreadCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
     reportFailure: false,
   });
-  const forkThread = useForkThreadAction();
   const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
   const closePreview = useAtomCommand(previewEnvironment.close, "preview close");
   const { environments } = useEnvironments();
@@ -1757,7 +1752,6 @@ export default function ChatView(props: ChatViewProps) {
     Record<string, LocalThreadErrorEntry>
   >({});
   const [isConnecting, _setIsConnecting] = useState(false);
-  const [isForking, setIsForking] = useState(false);
   const isRevertingCheckpoint = useComposerDraftStore((store) =>
     store.rewindingThreadKeys.has(routeThreadKey),
   );
@@ -6061,18 +6055,6 @@ export default function ChatView(props: ChatViewProps) {
   const pullRequestSurfaceAvailable = supportsPullRequests && linkedThreadPullRequest !== null;
   const supportsSettlement = serverConfig?.environment.capabilities.threadSettlement === true;
   const supportsSnooze = serverConfig?.environment.capabilities.threadSnooze === true;
-  const queuedMessages = useQueuedMessages(activeThreadKey ?? "");
-  const forkEligibility = useMemo(
-    () =>
-      resolveThreadForkEligibility({
-        routeKind,
-        thread: activeThreadShell,
-        environmentSupportsThreadFork: serverConfig?.environment.capabilities.threadFork === true,
-        providers: serverConfig?.providers ?? [],
-        queuedTurnCount: queuedMessages.length + (isSendBusy || isForking ? 1 : 0),
-      }),
-    [activeThreadShell, isForking, isSendBusy, queuedMessages.length, routeKind, serverConfig],
-  );
   const supportsPinning = serverConfig?.environment.capabilities.threadPinning === true;
   const activeThreadPinned = supportsPinning && activeThreadShell?.pinnedAt != null;
   const nowMinute = useNowMinute();
@@ -7490,6 +7472,7 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
 
+  const queuedMessages = useQueuedMessages(activeThreadKey ?? "");
   // The composer's model and modes, as a queued message keeps them for its send.
   const readComposerSendSettings = (
     sendCtx: ReturnType<ChatComposerHandle["getSendContext"]>,
@@ -7622,7 +7605,6 @@ export default function ChatView(props: ChatViewProps) {
     if (
       !activeThread ||
       isSendBusy ||
-      isForking ||
       isConnecting ||
       isRevertingCheckpoint ||
       !clientSettingsHydrated ||
@@ -7761,77 +7743,6 @@ export default function ChatView(props: ChatViewProps) {
       terminalContexts: composerTerminalContexts,
       elementContextCount: composerPreviewAnnotations.length + composerReviewComments.length,
     });
-    const resolvedSubmissionAction = resolveComposerSubmissionAction({
-      text: trimmed,
-      attachmentCount: composerImages.length + composerFiles.length,
-      contextCount:
-        sendableComposerTerminalContexts.length +
-        composerPreviewAnnotations.length +
-        composerReviewComments.length,
-      planFollowUpAvailable:
-        !directAnnotation && showPlanFollowUpPrompt && activeProposedPlan !== null,
-    });
-    const submissionAction =
-      resolvedSubmissionAction === "interaction-mode" && !settings.planModeEnabled
-        ? "message"
-        : resolvedSubmissionAction;
-    if (activePendingProgress) {
-      if (submissionAction === "fork") {
-        setThreadError(
-          activeThread.id,
-          "Resolve the pending approval or question before forking this thread.",
-        );
-        return;
-      }
-      if (directAnnotation) {
-        notifyDirectAnnotationAttached();
-        return;
-      }
-      onAdvanceActivePendingUserInput();
-      return;
-    }
-    if (submissionAction === "fork") {
-      if (multipleModelSelections !== null) {
-        setThreadError(
-          activeThread.id,
-          "Fork a thread outside the message queue with one model selected.",
-        );
-        return;
-      }
-      if (!forkEligibility.eligible) {
-        setThreadError(activeThread.id, forkEligibility.message);
-        return;
-      }
-      if (!activeThreadRef) {
-        setThreadError(activeThread.id, "Send the first message before forking this draft thread.");
-        return;
-      }
-      setIsForking(true);
-      setThreadError(activeThread.id, null);
-      await executeWebForkSubmission({
-        fork: async () => {
-          const result = await forkThread(activeThreadRef);
-          if (result._tag === "Success") return { ok: true };
-          const error = squashAtomCommandFailure(result);
-          return {
-            ok: false,
-            message: isAtomCommandInterrupted(result)
-              ? "Thread fork was interrupted."
-              : error instanceof Error
-                ? error.message
-                : "Failed to fork this thread.",
-          };
-        },
-        clearCommand: () => {
-          promptRef.current = "";
-          clearComposerDraftContent(composerDraftTarget);
-          composerRef.current?.resetCursorState();
-        },
-        reportError: (message) => setThreadError(activeThread.id, message),
-      });
-      setIsForking(false);
-      return;
-    }
     const feedbackCommand =
       ctxSelectedProvider === "codex" &&
       composerImages.length === 0 &&
@@ -7963,11 +7874,7 @@ export default function ChatView(props: ChatViewProps) {
       composerReviewComments.length === 0
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
-    if (
-      submissionAction === "interaction-mode" &&
-      (standaloneSlashCommand === "plan" || standaloneSlashCommand === "default") &&
-      multipleModelSelections === null
-    ) {
+    if (standaloneSlashCommand && multipleModelSelections === null) {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
       clearComposerDraftContent(composerDraftTarget);
@@ -10356,7 +10263,6 @@ export default function ChatView(props: ChatViewProps) {
                             onMultipleModelSelectionsChange={setMultipleModelSelections}
                             composerRef={composerRef}
                             composerDraftTarget={composerDraftTarget}
-                            projectId={activeProject?.id ?? null}
                             environmentId={environmentId}
                             attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                             supportsAttachmentUploads={supportsAttachmentUploads}
@@ -10365,7 +10271,6 @@ export default function ChatView(props: ChatViewProps) {
                             routeKind={routeKind}
                             routeThreadRef={routeThreadRef}
                             draftId={draftId}
-                            forkEligibility={forkEligibility}
                             activeThreadId={activeThreadId}
                             activeThreadEnvironmentId={activeThread?.environmentId}
                             activeThread={activeThread}
@@ -10377,8 +10282,7 @@ export default function ChatView(props: ChatViewProps) {
                             projectSelectionRequired={isLocalDraftThread && activeProject === null}
                             phase={phase}
                             isConnecting={isConnecting}
-                            isSendBusy={isSendBusy || isForking}
-                            sendBusyLabel={isForking ? "Forking" : "Sending"}
+                            isSendBusy={isSendBusy}
                             isRevertingCheckpoint={isRevertingCheckpoint}
                             sendDisabledReason={
                               isRevertingCheckpoint

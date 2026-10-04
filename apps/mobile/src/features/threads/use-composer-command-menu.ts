@@ -53,7 +53,6 @@ export function buildComposerSlashCommandItems(input: {
   readonly query: string;
   readonly atMessageStart: boolean;
   readonly hasThread: boolean;
-  readonly canFork?: boolean;
   readonly hasCompactableConversation?: boolean;
   /** Whether T3 itself offers /usage-limits for the selected provider. */
   readonly offersUsageLimits?: boolean;
@@ -89,19 +88,8 @@ export function buildComposerSlashCommandItems(input: {
       description: "Switch to default mode",
     },
   ] satisfies ComposerCommandItem[];
-  if (input.canFork && input.hasThread && input.atMessageStart) {
-    builtIn.push({
-      id: "cmd:fork",
-      type: "slash-command",
-      command: "fork",
-      label: "/fork",
-      description: "Fork this thread at its current provider head",
-    });
-  }
   const items: ComposerCommandItem[] = builtIn.filter(
-    (item) =>
-      item.command.includes(query) &&
-      (item.command === "model" || item.command === "fork" || allowInteractionMode),
+    (item) => item.command.includes(query) && (item.command === "model" || allowInteractionMode),
   );
 
   // Providers expand commands only at the start of a message. T3 commands
@@ -181,7 +169,6 @@ export function useComposerCommandMenu({
   pullRequestRepository = null,
   selectedProviderStatus,
   hasThread,
-  canFork = false,
   hasCompactableConversation,
   offersUsageLimits = false,
   enabled = true,
@@ -197,7 +184,6 @@ export function useComposerCommandMenu({
   readonly pullRequestRepository?: string | null;
   readonly selectedProviderStatus: ServerProvider | null;
   readonly hasThread: boolean;
-  readonly canFork?: boolean;
   readonly hasCompactableConversation: boolean;
   /** Whether T3 itself offers /usage-limits for the selected provider. */
   readonly offersUsageLimits?: boolean;
@@ -350,7 +336,6 @@ export function useComposerCommandMenu({
         query: q,
         atMessageStart: trigger.rangeStart === 0,
         hasThread,
-        canFork,
         hasCompactableConversation,
         offersUsageLimits,
         allowInteractionMode: onUpdateInteractionMode !== undefined,
@@ -478,7 +463,6 @@ export function useComposerCommandMenu({
     return [];
   }, [
     hasThread,
-    canFork,
     hasCompactableConversation,
     onUpdateInteractionMode,
     pathSearch.entries,

@@ -101,25 +101,3 @@ describe("mobile slash commands", () => {
     ).toEqual({ text: "/plan ", cursor: 6, interactionMode: null });
   });
 });
-
-it.each([false, true])("offers the native fork action only when eligible: %s", (canFork) => {
-  const items = buildComposerSlashCommandItems({
-    query: "fork",
-    atMessageStart: true,
-    hasThread: true,
-    canFork,
-    allowInteractionMode: false,
-    selectedProviderStatus: null,
-  });
-  expect(items.map((item) => item.label)).toEqual(canFork ? ["/fork"] : []);
-  if (items[0]) {
-    expect(
-      resolveComposerCommandSelection({
-        draftMessage: "/fo",
-        trigger: { rangeStart: 0, rangeEnd: 3 },
-        item: items[0],
-        allowInteractionMode: false,
-      }),
-    ).toEqual({ text: "/fork ", cursor: 6, interactionMode: null });
-  }
-});

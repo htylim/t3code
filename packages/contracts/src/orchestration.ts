@@ -132,7 +132,7 @@ export const RuntimeMode = Schema.Literals([
   "full-access",
 ]);
 export type RuntimeMode = typeof RuntimeMode.Type;
-export const DEFAULT_RUNTIME_MODE: RuntimeMode = "auto";
+export const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
 export const ProviderInteractionMode = Schema.Literals(["default", "plan"]);
 export type ProviderInteractionMode = typeof ProviderInteractionMode.Type;
 export const DEFAULT_PROVIDER_INTERACTION_MODE: ProviderInteractionMode = "default";
@@ -1498,30 +1498,6 @@ export const ClientOrchestrationCommand = Schema.Union([
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
 
-export const ThreadForkOperation = Schema.Struct({
-  type: Schema.Literal("thread.fork"),
-  sourceThreadId: ThreadId,
-  threadId: ThreadId,
-  commandId: CommandId,
-  createdAt: IsoDateTime,
-}).check(
-  Schema.makeFilter((operation) =>
-    operation.sourceThreadId !== operation.threadId
-      ? undefined
-      : {
-          path: ["threadId"],
-          issue: "The fork target thread id must differ from the source thread id.",
-        },
-  ),
-);
-export type ThreadForkOperation = typeof ThreadForkOperation.Type;
-
-export const ClientOrchestrationOperation = Schema.Union([
-  ClientOrchestrationCommand,
-  ThreadForkOperation,
-]);
-export type ClientOrchestrationOperation = typeof ClientOrchestrationOperation.Type;
-
 const ThreadSessionSetCommand = Schema.Struct({
   type: Schema.Literal("thread.session.set"),
   commandId: CommandId,
@@ -1663,61 +1639,6 @@ const ThreadTitleRegenerationCompleteCommand = Schema.Struct({
   title: Schema.optional(TrimmedNonEmptyString),
 });
 
-const ThreadCopyMessage = Schema.Struct({
-  context: Schema.optional(OrchestrationMessageContext),
-  id: MessageId,
-  role: OrchestrationMessageRole,
-  text: Schema.String,
-  attachments: Schema.optional(Schema.Array(ChatAttachment)),
-  createdAt: IsoDateTime,
-  updatedAt: IsoDateTime,
-});
-export type ThreadCopyMessage = typeof ThreadCopyMessage.Type;
-
-const ThreadCopyActivity = Schema.Struct({
-  id: EventId,
-  tone: OrchestrationThreadActivityTone,
-  kind: TrimmedNonEmptyString,
-  summary: TrimmedNonEmptyString,
-  payload: Schema.Unknown,
-  createdAt: IsoDateTime,
-});
-export type ThreadCopyActivity = typeof ThreadCopyActivity.Type;
-
-export const ThreadCopyCreateCommand = Schema.Struct({
-  type: Schema.Literal("thread.copy.create"),
-  commandId: CommandId,
-  threadId: ThreadId,
-  projectId: ProjectId,
-  title: TrimmedNonEmptyString,
-  modelSelection: ModelSelection,
-  runtimeMode: RuntimeMode,
-  interactionMode: ProviderInteractionMode,
-  branch: Schema.NullOr(TrimmedNonEmptyString),
-  worktreePath: Schema.NullOr(TrimmedNonEmptyString),
-  messages: Schema.Array(ThreadCopyMessage),
-  activities: Schema.Array(ThreadCopyActivity),
-  session: OrchestrationSession,
-  createdAt: IsoDateTime,
-}).check(
-  Schema.makeFilter((command) => {
-    const issues: Array<Schema.FilterIssue> = [];
-    if (command.session.threadId !== command.threadId) {
-      issues.push({
-        path: ["session", "threadId"],
-        issue: "The copied session must belong to the target thread.",
-      });
-    }
-    if (command.session.status !== "ready") {
-      issues.push({
-        path: ["session", "status"],
-        issue: "The copied session must be ready.",
-      });
-    }
-    return issues;
-  }),
-);
-export type ThreadCopyCreateCommand = typeof ThreadCopyCreateCommand.Type;
 const ThreadPullRequestSyncCommand = Schema.Struct({
   type: Schema.Literal("thread.pull-request.sync"),
   commandId: CommandId,
@@ -1745,7 +1666,6 @@ const ThreadPullRequestLinkSyncCommand = Schema.Struct({
 });
 
 const InternalOrchestrationCommand = Schema.Union([
-  ThreadCopyCreateCommand,
   ThreadAutoSettleCommand,
   ThreadPullRequestSyncCommand,
   ThreadPullRequestLinkSyncCommand,
@@ -2454,7 +2374,7 @@ export class OrchestrationGetWorkflowScriptError extends Schema.TaggedError<Orch
 
 export const OrchestrationRpcSchemas = {
   dispatchCommand: {
-    input: ClientOrchestrationOperation,
+    input: ClientOrchestrationCommand,
     output: DispatchResult,
   },
   getWorkflowScript: {

@@ -1,6 +1,4 @@
 import { getSchemaByResolvedExtensions, Node, resolveExtensions } from "@tiptap/core";
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { serializeThreadReferenceMarkdown } from "./threadReference";
 import StarterKit from "@tiptap/starter-kit";
 import { TaskList } from "@tiptap/extension-task-list";
 import { Node as ProseMirrorNode } from "@tiptap/pm/model";
@@ -42,11 +40,6 @@ const schema = getSchemaByResolvedExtensions(
       gapcursor: false,
       trailingNode: false,
       code: false,
-    }),
-    stubAtom("composer-thread-reference", {
-      threadRef: { default: null },
-      label: { default: "" },
-      source: { default: "" },
     }),
     ComposerCodeExtension,
     stubAtom("composer-mention", { path: { default: "" }, source: { default: "" } }),
@@ -99,11 +92,6 @@ const plainSchema = getSchemaByResolvedExtensions(
       strike: false,
       code: false,
     }),
-    stubAtom("composer-thread-reference", {
-      threadRef: { default: null },
-      label: { default: "" },
-      source: { default: "" },
-    }),
     stubAtom("composer-mention", { path: { default: "" }, source: { default: "" } }),
     stubAtom("composer-skill", {
       skillName: { default: "" },
@@ -135,19 +123,6 @@ function roundTripPlain(value: string) {
 }
 
 describe("composer rich text document model", () => {
-  it.each([roundTrip, roundTripPlain])(
-    "preserves thread references and their single-character cursor span",
-    (convert) => {
-      const reference = serializeThreadReferenceMarkdown("Fix [copy] \\ now", {
-        environmentId: EnvironmentId.make("remote/environment"),
-        threadId: ThreadId.make("thread-1"),
-      });
-      const prompt = `Before ${reference} after`;
-      const serialized = convert(prompt);
-      expect(serialized.value).toBe(prompt);
-      expect(flatToMarkdown(serialized, collapsedToFlat(serialized, 8))).toBe(7 + reference.length);
-    },
-  );
   it.each(["€", "£", "¥", "₹", "₩", "₿", "𑿝"])(
     "canonicalizes %s skill aliases while preserving amounts",
     (prefix) => {

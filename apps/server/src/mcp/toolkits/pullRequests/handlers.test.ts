@@ -43,8 +43,6 @@ const invocation = (
   providerSessionId: "provider-session-1",
   providerInstanceId: ProviderInstanceId.make("codex"),
   capabilities: new Set(capabilities),
-  maxRuntimeMode: "auto" as const,
-  controlledThreadIds: new Set<ThreadId>(),
   issuedAt: 1,
 });
 

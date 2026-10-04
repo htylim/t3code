@@ -191,7 +191,6 @@ describe("ProviderSessionReaper", () => {
 
     const providerService: ProviderServiceShape = {
       startSession: () => unsupported(),
-      forkSession: () => unsupported(),
       sendTurn: () => unsupported(),
       compactThread: () => unsupported(),
       interruptTurn: () => unsupported(),
@@ -199,8 +198,7 @@ describe("ProviderSessionReaper", () => {
       respondToUserInput: () => unsupported(),
       stopSession,
       listSessions: () => Effect.succeed([]),
-      getCapabilities: () =>
-        Effect.succeed({ sessionModelSwitch: "in-session", sessionFork: "unsupported" }),
+      getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
       assertConversationRollbackSupported: () => unsupported(),
       getInstanceInfo: (instanceId) => {
         const driverKind = ProviderDriverKind.make(String(instanceId));
@@ -248,7 +246,6 @@ describe("ProviderSessionReaper", () => {
           getCounts: () => Effect.die("unused"),
           getEventReplayStats: () => Effect.die("unused"),
           getActiveProjectByWorkspaceRoot: () => Effect.die("unused"),
-          getProjectSummaries: () => Effect.die("unused"),
           getProjectShells: () => Effect.die("unused"),
           getProjectShellById: () => Effect.die("unused"),
           getFirstActiveThreadIdByProjectId: () => Effect.die("unused"),

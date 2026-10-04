@@ -41,10 +41,6 @@ describe("ExecutionEnvironmentDescriptor", () => {
     ).toBe(true);
   });
 
-  it("treats an absent environment threadFork capability as unsupported", () => {
-    expect(decodeDescriptor(descriptor).capabilities.threadFork ?? false).toBe(false);
-  });
-
   it("treats a missing attachment upload capability as unsupported", () => {
     expect(decodeDescriptor(descriptor).capabilities.attachmentUploads).toBeUndefined();
   });

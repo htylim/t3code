@@ -77,7 +77,6 @@ import {
   type ProjectionSnapshotCounts,
   type ProjectionThreadCheckpointContext,
   type ProjectionThreadDetailQuery,
-  type ProjectionThreadForkSnapshot,
   type ProjectionThreadPullRequests,
   type ProjectionSnapshotQueryShape,
 } from "../Services/ProjectionSnapshotQuery.ts";
@@ -558,17 +557,6 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           AND ${filter?.projectIds === undefined ? sql`1 = 1` : sql.in("project_id", filter.projectIds)}
         ORDER BY created_at ASC, project_id ASC
       `,
-  });
-
-  const listProjectSummaryRows = SqlSchema.findAll({
-    Request: Schema.Void,
-    Result: Schema.Struct({ id: ProjectId, title: Schema.String, workspaceRoot: Schema.String }),
-    execute: () => sql`
-      SELECT project_id AS "id", title, workspace_root AS "workspaceRoot"
-      FROM projection_projects
-      WHERE deleted_at IS NULL
-      ORDER BY title COLLATE NOCASE ASC, project_id ASC
-    `,
   });
 
   const listThreadRows = SqlSchema.findAll({
@@ -1339,18 +1327,6 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         WHERE thread_id = ${threadId}
           AND deleted_at IS NULL
           AND archived_at IS NULL
-        LIMIT 1
-      `,
-  });
-
-  const getAnyThreadIdById = SqlSchema.findOneOption({
-    Request: ThreadIdLookupInput,
-    Result: ProjectionThreadIdLookupRowSchema,
-    execute: ({ threadId }) =>
-      sql`
-        SELECT thread_id AS "threadId"
-        FROM projection_threads
-        WHERE thread_id = ${threadId}
         LIMIT 1
       `,
   });
@@ -3176,16 +3152,6 @@ pending_approval_requests AS (
       ),
     );
 
-  const getProjectSummaries: ProjectionSnapshotQueryShape["getProjectSummaries"] = () =>
-    listProjectSummaryRows(undefined).pipe(
-      Effect.mapError(
-        toPersistenceSqlOrDecodeError(
-          "ProjectionSnapshotQuery.getProjectSummaries:query",
-          "ProjectionSnapshotQuery.getProjectSummaries:decodeRows",
-        ),
-      ),
-    );
-
   const getFirstActiveThreadIdByProjectId: ProjectionSnapshotQueryShape["getFirstActiveThreadIdByProjectId"] =
     (projectId) =>
       getFirstActiveThreadIdByProject({ projectId }).pipe(
@@ -3870,48 +3836,6 @@ pending_approval_requests AS (
         ),
       );
 
-  const getThreadForkSnapshot: ProjectionSnapshotQueryShape["getThreadForkSnapshot"] = (
-    sourceThreadId,
-    targetThreadId,
-  ) =>
-    sql
-      .withTransaction(
-        Effect.gen(function* () {
-          const [sourceRow, targetRow, thread] = yield* Effect.all([
-            getActiveThreadRowById({ threadId: sourceThreadId }),
-            getAnyThreadIdById({ threadId: targetThreadId }),
-            getThreadDetailById(sourceThreadId),
-          ]);
-          if (Option.isNone(sourceRow) || Option.isNone(thread)) {
-            return Option.none<ProjectionThreadForkSnapshot>();
-          }
-          const projectRow = yield* getActiveProjectRowById({
-            projectId: sourceRow.value.projectId,
-          });
-          if (Option.isNone(projectRow)) {
-            return Option.none<ProjectionThreadForkSnapshot>();
-          }
-          return Option.some({
-            thread: thread.value,
-            workspaceRoot: projectRow.value.workspaceRoot,
-            targetExists: Option.isSome(targetRow),
-            hasPendingApprovals: sourceRow.value.pendingApprovalCount > 0,
-            hasPendingUserInput: sourceRow.value.pendingUserInputCount > 0,
-            backgroundLiveness:
-              threadBackgroundLiveness.getThreadBackgroundLiveness(sourceThreadId),
-          });
-        }),
-      )
-      .pipe(
-        Effect.mapError((error) =>
-          isPersistenceError(error)
-            ? error
-            : toPersistenceSqlError("ProjectionSnapshotQuery.getThreadForkSnapshot:transaction")(
-                error,
-              ),
-        ),
-      );
-
   return {
     getCommandReadModel,
     getUserInputActivity,
@@ -3927,7 +3851,6 @@ pending_approval_requests AS (
     getEventReplayStats,
     getActiveProjectByWorkspaceRoot,
     getProjectShellById,
-    getProjectSummaries,
     getProjectShells,
     getFirstActiveThreadIdByProjectId,
     getImportedAgentSessionSources,
@@ -3938,7 +3861,6 @@ pending_approval_requests AS (
     getTurnStartMessage,
     getThreadDetailById,
     getThreadDetailSnapshot,
-    getThreadForkSnapshot,
   } satisfies ProjectionSnapshotQueryShape;
 });
 

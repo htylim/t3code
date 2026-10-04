@@ -18,12 +18,9 @@ import * as CodexErrors from "effect-codex-app-server/errors";
 import {
   ClaudeSettings,
   CodexSettings,
-  CursorSettings,
   DEFAULT_SERVER_SETTINGS,
   ProviderDriverKind,
   ProviderInstanceId,
-  GrokSettings,
-  OpenCodeSettings,
   ServerSettings,
   type ServerProvider,
   type ServerProviderSlashCommand,
@@ -37,10 +34,7 @@ import { createModelCapabilities } from "@t3tools/shared/model";
 import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 
 import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from "./CodexProvider.ts";
-import { checkClaudeProviderStatus, makePendingClaudeProvider } from "./ClaudeProvider.ts";
-import { makePendingOpenCodeProvider } from "./OpenCodeProvider.ts";
-import { buildInitialCursorProviderSnapshot } from "./CursorProvider.ts";
-import { buildInitialGrokProviderSnapshot } from "./GrokProvider.ts";
+import { checkClaudeProviderStatus } from "./ClaudeProvider.ts";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { AntigravityInstallation } from "../AntigravityInstallation.ts";
 import * as ModelManifest from "../ModelManifest.ts";
@@ -76,29 +70,6 @@ const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 const disabledCodexSettings: CodexSettings = Schema.decodeSync(CodexSettings)({
   enabled: false,
 });
-const disabledOpenCodeSettings = Schema.decodeSync(OpenCodeSettings)({ enabled: false });
-const disabledClaudeSettings = Schema.decodeSync(ClaudeSettings)({ enabled: false });
-const disabledCursorSettings = Schema.decodeSync(CursorSettings)({ enabled: false });
-const disabledGrokSettings = Schema.decodeSync(GrokSettings)({ enabled: false });
-
-it.effect("provider snapshots advertise fork only for Codex OpenCode and Claude", () =>
-  Effect.gen(function* () {
-    const [codex, openCode, claude, cursor, grok] = yield* Effect.all([
-      checkCodexProviderStatus(disabledCodexSettings, () => Effect.die("unused probe")),
-      makePendingOpenCodeProvider(disabledOpenCodeSettings),
-      makePendingClaudeProvider(disabledClaudeSettings),
-      buildInitialCursorProviderSnapshot(disabledCursorSettings),
-      buildInitialGrokProviderSnapshot(disabledGrokSettings),
-    ]);
-
-    assert.deepStrictEqual(
-      [codex, openCode, claude, cursor, grok].map(
-        (provider) => provider.supportsThreadFork ?? false,
-      ),
-      [true, true, true, false, false],
-    );
-  }).pipe(Effect.provide(mockSpawnerLayer(() => ({ stdout: "", stderr: "", code: 0 })))),
-);
 
 process.env.T3CODE_CURSOR_ENABLED = "1";
 
@@ -1921,7 +1892,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               withBundledCompatibility({
                 ...refreshedProvider,
                 models: [...initialProvider.models],
-                supportsThreadFork: false,
               }),
             );
           }).pipe(Effect.provide(runtimeServices));

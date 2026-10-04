@@ -5,9 +5,6 @@ import {
   collectComposerInlineTokens,
   type ComposerInlineToken,
 } from "@t3tools/shared/composerInlineTokens";
-import type { ScopedThreadRef } from "@t3tools/contracts";
-
-import { collectThreadReferenceMarkdownTokens } from "./threadReference";
 
 export type ComposerPromptSegment =
   | {
@@ -27,12 +24,6 @@ export type ComposerPromptSegment =
   | {
       type: "citation";
       citation: AssistantCitation;
-      source: string;
-    }
-  | {
-      type: "thread";
-      threadRef: ScopedThreadRef;
-      label: string;
       source: string;
     }
   | {
@@ -87,17 +78,11 @@ function forEachMentionMatch(
 export function collectComposerPromptInlineTokens(text: string) {
   const tokens = collectComposerInlineTokens(text);
   const citations = collectAssistantCitations(text);
-  const threadReferences = collectThreadReferenceMarkdownTokens(text).map((match) => ({
-    ...match,
-    type: "thread" as const,
-  }));
   const references = collectComposerContextReferences(text);
-  if (citations.length === 0 && references.length === 0 && threadReferences.length === 0)
-    return tokens;
+  if (citations.length === 0 && references.length === 0) return tokens;
 
   // An unfinished @ mention can otherwise consume the start of a link label.
   const links = [
-    ...threadReferences,
     ...citations.map((match) => ({ ...match, type: "citation" as const })),
     ...references.map((match) => ({ ...match, type: "context-reference" as const })),
   ];
@@ -106,7 +91,7 @@ export function collectComposerPromptInlineTokens(text: string) {
       (token) => !links.some((link) => token.start < link.end && token.end > link.start),
     ),
     ...links,
-  ].sort((left, right) => left.start - right.start || right.end - left.end);
+  ].sort((left, right) => left.start - right.start);
 }
 
 function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegment[] {
@@ -142,15 +127,8 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
         path: match.value,
         source: match.source,
       });
-    } else if (match.type === "skill") {
-      segments.push({ type: "skill", name: match.value, source: match.source });
     } else {
-      segments.push({
-        type: "thread",
-        threadRef: match.threadRef,
-        label: match.label,
-        source: match.source,
-      });
+      segments.push({ type: "skill", name: match.value, source: match.source });
     }
 
     cursor = match.end;

@@ -90,7 +90,6 @@ import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import type { RemoteClientConnectionState } from "../../lib/connection";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { ComposerCommandPopover } from "./ComposerCommandPopover";
-import { resolveThreadForkEligibility } from "@t3tools/shared/composerCommands";
 import { useComposerCommandMenu } from "./use-composer-command-menu";
 import {
   ComposerDictationCancelAction,
@@ -135,7 +134,6 @@ export interface ThreadComposerProps {
   readonly hasCompactableConversation: boolean;
   readonly serverConfig: T3ServerConfig | null;
   readonly queueCount: number;
-  readonly isForking: boolean;
   readonly environmentId: EnvironmentId;
   readonly projectCwd: string | null;
   /** Why sending is blocked right now (shown as the send button's label), or null. */
@@ -315,9 +313,8 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     });
   // Every send goes through the outbox; the label says whether it leaves now
   // or waits (for the connection, an earlier queued message, or an upload).
-  const sendLabel = props.isForking
-    ? "Forking"
-    : props.connectionState !== "connected" || props.queueCount > 0 || attachmentsUploading
+  const sendLabel =
+    props.connectionState !== "connected" || props.queueCount > 0 || attachmentsUploading
       ? "Queue"
       : "Send";
   const currentModelSelection = props.selectedThread.modelSelection;
@@ -382,14 +379,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     pullRequestRepository: project?.repositoryIdentity?.displayName ?? null,
     selectedProviderStatus,
     hasThread: true,
-    canFork: resolveThreadForkEligibility({
-      routeKind: "server",
-      thread: props.selectedThread,
-      environmentSupportsThreadFork:
-        props.serverConfig?.environment.capabilities.threadFork === true,
-      providers: props.serverConfig?.providers ?? [],
-      queuedTurnCount: props.queueCount,
-    }).eligible,
     hasCompactableConversation: props.hasCompactableConversation,
     onChangeDraftMessage: props.onChangeDraftMessage,
     onUpdateInteractionMode:
@@ -430,7 +419,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     (pendingPastedTextAttachmentCount > 0 ? "Attaching pasted text" : null) ??
     attachmentBlockReason;
   const canSend =
-    !props.isForking &&
     hasContent &&
     !contextImports[composerOwnerKey] &&
     !voiceInput.blocksSubmission &&

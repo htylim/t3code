@@ -25,7 +25,6 @@ import {
   readEnvironmentSupportsSettlement,
   readEnvironmentSupportsSnooze,
   readEnvironmentSupportsTitleRegeneration,
-  readThreadForkEligibility,
   readThreadShell,
   useProjects,
 } from "../state/entities";
@@ -93,7 +92,6 @@ export function useThreadActionMenu(input: {
     setThreadAutoSettle,
     archiveThread,
     deleteThread,
-    forkThread,
   } = useThreadActions();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
@@ -145,7 +143,6 @@ export function useThreadActionMenu(input: {
         const snoozePresets = resolveSnoozePresets(now, timestampFormat);
         const items = buildThreadActionMenuItems({
           branch: thread.branch ?? null,
-          canFork: readThreadForkEligibility(threadRef, 0).eligible,
           // The chat header has no project-scoped thread list behind the
           // menu, so the "Filter by project" affordance is sidebar-only.
           projectFilter: null,
@@ -216,9 +213,6 @@ export function useThreadActionMenu(input: {
             }
             return;
           }
-          case "fork-thread":
-            await reportFailure("Failed to fork thread", () => forkThread(threadRef));
-            return;
           case "settle":
             await reportFailure("Failed to settle thread", () => settleThread(threadRef));
             return;
@@ -340,7 +334,6 @@ export function useThreadActionMenu(input: {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
-      forkThread,
       handleNewThread,
       logicalProjectKeyByPhysicalKey,
       markThreadUnread,

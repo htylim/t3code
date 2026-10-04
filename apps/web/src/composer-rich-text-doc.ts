@@ -120,12 +120,6 @@ function atomJsonForSegment(
       },
     };
   }
-  if (segment.type === "thread") {
-    return {
-      type: "composer-thread-reference",
-      attrs: { threadRef: segment.threadRef, label: segment.label, source: segment.source },
-    };
-  }
   if (segment.type === "citation") {
     return {
       type: "composer-citation",
@@ -309,7 +303,6 @@ function readAtomSource(node: ProseMirrorNode): string {
   switch (node.type.name) {
     case "composer-mention":
     case "composer-citation":
-    case "composer-thread-reference":
     case "composer-context-reference":
       return typeof attrs.source === "string" ? attrs.source : "";
     case "composer-skill": {

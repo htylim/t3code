@@ -35,7 +35,7 @@ const CURSOR_DRIVER = ProviderDriverKind.make("cursor");
 
 const fakeCodexAdapter: CodexAdapter.CodexAdapterShape = {
   provider: CODEX_DRIVER,
-  capabilities: { sessionModelSwitch: "in-session", sessionFork: "native" },
+  capabilities: { sessionModelSwitch: "in-session" },
   startSession: vi.fn(),
   sendTurn: vi.fn(),
   interruptTurn: vi.fn(),
@@ -46,7 +46,6 @@ const fakeCodexAdapter: CodexAdapter.CodexAdapterShape = {
   hasSession: vi.fn(),
   readThread: vi.fn(),
   rollbackThread: vi.fn(),
-  forkSession: vi.fn(),
   uploadFeedback: vi.fn(),
   stopAll: vi.fn(),
   streamEvents: Stream.empty,
@@ -54,7 +53,7 @@ const fakeCodexAdapter: CodexAdapter.CodexAdapterShape = {
 
 const fakeClaudeAdapter: ClaudeAdapter.ClaudeAdapterShape = {
   provider: CLAUDE_AGENT_DRIVER,
-  capabilities: { sessionModelSwitch: "in-session", sessionFork: "native" },
+  capabilities: { sessionModelSwitch: "in-session" },
   startSession: vi.fn(),
   sendTurn: vi.fn(),
   interruptTurn: vi.fn(),
@@ -65,14 +64,13 @@ const fakeClaudeAdapter: ClaudeAdapter.ClaudeAdapterShape = {
   hasSession: vi.fn(),
   readThread: vi.fn(),
   rollbackThread: vi.fn(),
-  forkSession: vi.fn(),
   stopAll: vi.fn(),
   streamEvents: Stream.empty,
 };
 
 const fakeOpenCodeAdapter: OpenCodeAdapter.OpenCodeAdapterShape = {
   provider: OPENCODE_DRIVER,
-  capabilities: { sessionModelSwitch: "in-session", sessionFork: "native" },
+  capabilities: { sessionModelSwitch: "in-session" },
   startSession: vi.fn(),
   sendTurn: vi.fn(),
   interruptTurn: vi.fn(),
@@ -83,14 +81,13 @@ const fakeOpenCodeAdapter: OpenCodeAdapter.OpenCodeAdapterShape = {
   hasSession: vi.fn(),
   readThread: vi.fn(),
   rollbackThread: vi.fn(),
-  forkSession: vi.fn(),
   stopAll: vi.fn(),
   streamEvents: Stream.empty,
 };
 
 const fakeCursorAdapter: CursorAdapter.CursorAdapterShape = {
   provider: CURSOR_DRIVER,
-  capabilities: { sessionModelSwitch: "in-session", sessionFork: "unsupported" },
+  capabilities: { sessionModelSwitch: "in-session" },
   startSession: vi.fn(),
   sendTurn: vi.fn(),
   interruptTurn: vi.fn(),
@@ -101,7 +98,6 @@ const fakeCursorAdapter: CursorAdapter.CursorAdapterShape = {
   hasSession: vi.fn(),
   readThread: vi.fn(),
   rollbackThread: vi.fn(),
-  forkSession: vi.fn(),
   stopAll: vi.fn(),
   streamEvents: Stream.empty,
 };

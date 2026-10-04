@@ -106,11 +106,6 @@ function openRequests(thread: Pick<OrchestrationThread, "activities">) {
   return requests;
 }
 
-/** Native session copies must not inherit an unresolved provider request. */
-export function hasOpenBlockingRequest(thread: Pick<OrchestrationThread, "activities">): boolean {
-  return openRequests(thread).size > 0;
-}
-
 /** Apply the shared shell-level rule to the detailed command read model. */
 function hasQueuedTurnStartForThread(
   thread: Pick<OrchestrationThread, "messages" | "latestTurn" | "session">,
@@ -413,122 +408,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: command.createdAt,
         },
       };
-    }
-
-    case "thread.copy.create": {
-      yield* requireProject({
-        readModel,
-        command,
-        projectId: command.projectId,
-      });
-      yield* requireThreadAbsent({
-        readModel,
-        command,
-        threadId: command.threadId,
-      });
-      if (command.session.threadId !== command.threadId || command.session.status !== "ready") {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: `Copied session for thread '${command.threadId}' must be ready and target-owned.`,
-        });
-      }
-
-      const events: Array<PlannedOrchestrationEvent> = [
-        {
-          ...(yield* withEventBase({
-            aggregateKind: "thread",
-            aggregateId: command.threadId,
-            occurredAt: command.createdAt,
-            commandId: command.commandId,
-          })),
-          type: "thread.created",
-          payload: {
-            threadId: command.threadId,
-            projectId: command.projectId,
-            title: command.title,
-            modelSelection: command.modelSelection,
-            runtimeMode: command.runtimeMode,
-            interactionMode: command.interactionMode,
-            branch: command.branch,
-            worktreePath: command.worktreePath,
-            createdAt: command.createdAt,
-            updatedAt: command.createdAt,
-          },
-        },
-        {
-          ...(yield* withEventBase({
-            aggregateKind: "thread",
-            aggregateId: command.threadId,
-            occurredAt: command.createdAt,
-            commandId: command.commandId,
-          })),
-          type: "thread.unsettled",
-          payload: {
-            threadId: command.threadId,
-            reason: "user",
-            updatedAt: command.createdAt,
-          },
-        },
-      ];
-
-      for (const message of command.messages) {
-        events.push({
-          ...(yield* withEventBase({
-            aggregateKind: "thread",
-            aggregateId: command.threadId,
-            occurredAt: message.createdAt,
-            commandId: command.commandId,
-          })),
-          type: "thread.message-sent",
-          payload: {
-            threadId: command.threadId,
-            messageId: message.id,
-            role: message.role,
-            text: message.text,
-            ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
-            ...(message.context !== undefined ? { context: message.context } : {}),
-            turnId: null,
-            streaming: false,
-            createdAt: message.createdAt,
-            updatedAt: message.updatedAt,
-          },
-        });
-      }
-
-      for (const activity of command.activities) {
-        events.push({
-          ...(yield* withEventBase({
-            aggregateKind: "thread",
-            aggregateId: command.threadId,
-            occurredAt: activity.createdAt,
-            commandId: command.commandId,
-          })),
-          type: "thread.activity-appended",
-          payload: {
-            threadId: command.threadId,
-            activity: {
-              ...activity,
-              turnId: null,
-            },
-          },
-        });
-      }
-
-      events.push({
-        ...(yield* withEventBase({
-          aggregateKind: "thread",
-          aggregateId: command.threadId,
-          occurredAt: command.createdAt,
-          commandId: command.commandId,
-        })),
-        type: "thread.session-set",
-        payload: {
-          threadId: command.threadId,
-          session: command.session,
-        },
-      });
-
-      return events;
     }
 
     case "thread.delete": {

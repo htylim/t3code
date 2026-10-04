@@ -101,7 +101,6 @@ import {
   cleanupFailedUploadedAttachments,
   normalizeDispatchCommand,
 } from "./orchestration/Normalizer.ts";
-import { dispatchClientOperation } from "./orchestration/ClientOperationDispatcher.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
@@ -1923,22 +1922,14 @@ const makeWsRpcLayer = (
                     ),
                   )
                 : false;
-              const result = yield* dispatchClientOperation(normalizedCommand, {
-                dispatchCommand: (normalized) =>
-                  dispatchNormalizedCommand(normalized).pipe(
-                    Effect.tapError(() => cleanupFailedUploadedAttachments(command, normalized)),
-                  ),
-              });
-              if (normalizedCommand.type !== "thread.fork") {
-                yield* recordClientCommandAnalytics(normalizedCommand);
-              }
-              if (normalizedCommand.type === "project.delete") {
-                yield* ProjectCloneTracker.discardCloneForDeletedProject(
-                  projectCloneTracker,
-                  normalizedCommand,
-                );
-              }
-
+              const result = yield* dispatchNormalizedCommand(normalizedCommand).pipe(
+                Effect.tapError(() => cleanupFailedUploadedAttachments(command, normalizedCommand)),
+              );
+              yield* recordClientCommandAnalytics(normalizedCommand);
+              yield* ProjectCloneTracker.discardCloneForDeletedProject(
+                projectCloneTracker,
+                normalizedCommand,
+              );
               if (archiveCommand) {
                 if (shouldStopSessionAfterCommand) {
                   yield* Effect.gen(function* () {
@@ -1951,7 +1942,6 @@ const makeWsRpcLayer = (
                       createdAt: yield* nowIso,
                     });
 
-                    if (stopCommand.type === "thread.fork") return;
                     yield* dispatchNormalizedCommand(stopCommand);
                   }).pipe(
                     Effect.catchCause((cause) =>
@@ -3018,7 +3008,6 @@ const makeWsRpcLayer = (
                     createWorkspaceRootIfMissing: true,
                     createdAt: project.createdAt,
                   });
-                  if (normalizedCommand.type === "thread.fork") return;
                   yield* dispatchNormalizedCommand(normalizedCommand);
                   yield* recordClientCommandAnalytics(normalizedCommand);
                 }).pipe(Effect.provideContext(normalizerContext)),
@@ -3035,7 +3024,6 @@ const makeWsRpcLayer = (
                         commandId: yield* serverCommandId("project-clone-done"),
                         projectId: project.projectId,
                       });
-                      if (command.type === "thread.fork") return;
                       yield* dispatchNormalizedCommand(command);
                     }),
                   ),

@@ -78,11 +78,7 @@ function configuredMcpToolAvailability(
   if (!hasConfiguredMcpServer(appServerArgs)) return { browser: false, device: false };
   // Callers predating the capability set attached the browser toolkit only.
   if (mcpCapabilities === undefined) return { browser: true, device: false };
-  return {
-    browser: mcpCapabilities.has("preview"),
-    device: mcpCapabilities.has("device"),
-    threadControl: mcpCapabilities.has("thread-control"),
-  };
+  return { browser: mcpCapabilities.has("preview"), device: mcpCapabilities.has("device") };
 }
 
 export const CodexResumeCursorSchema = Schema.Struct({
@@ -227,7 +223,6 @@ export interface CodexSessionRuntimeShape {
   readonly rollbackThread: (
     numTurns: number,
   ) => Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
-  readonly forkThread: (cwd: string) => Effect.Effect<CodexResumeCursor, CodexSessionRuntimeError>;
   readonly uploadFeedback: (
     reason?: string,
   ) => Effect.Effect<EffectCodexSchema.V2FeedbackUploadResponse, CodexSessionRuntimeError>;
@@ -538,13 +533,13 @@ function runtimeModeToThreadConfig(input: RuntimeMode): {
         approvalsReviewer: "user",
       };
     case "auto":
-    default:
       return {
         approvalPolicy: "on-request",
         sandbox: "workspace-write",
         approvalsReviewer: "auto_review",
       };
     case "full-access":
+    default:
       return {
         approvalPolicy: "never",
         sandbox: "danger-full-access",
@@ -580,11 +575,11 @@ function runtimeModeToTurnSandboxPolicy(
       };
     case "auto-accept-edits":
     case "auto":
-    default:
       return {
         type: "workspaceWrite",
       };
     case "full-access":
+    default:
       return {
         type: "dangerFullAccess",
       };
@@ -736,28 +731,6 @@ interface CodexThreadOpenClient {
     CodexErrors.CodexAppServerError
   >;
 }
-
-interface CodexThreadForkClient {
-  readonly request: (
-    method: "thread/fork",
-    payload: CodexRpc.ClientRequestParamsByMethod["thread/fork"],
-  ) => Effect.Effect<
-    CodexRpc.ClientRequestResponsesByMethod["thread/fork"],
-    CodexErrors.CodexAppServerError
-  >;
-}
-
-export const forkCodexThread = (input: {
-  readonly client: CodexThreadForkClient;
-  readonly sourceThreadId: string;
-  readonly cwd: string;
-}): Effect.Effect<CodexResumeCursor, CodexErrors.CodexAppServerError> =>
-  input.client
-    .request("thread/fork", {
-      threadId: input.sourceThreadId,
-      cwd: input.cwd,
-    })
-    .pipe(Effect.map((response) => ({ threadId: response.thread.id })));
 
 export const openCodexThread = (input: {
   readonly client: CodexThreadOpenClient;
@@ -2694,15 +2667,6 @@ export const makeCodexSessionRuntime = (
             activeTurnId: undefined,
           });
           return snapshot;
-        }),
-      forkThread: (cwd) =>
-        Effect.gen(function* () {
-          const providerThreadId = yield* readProviderThreadId;
-          return yield* forkCodexThread({
-            client,
-            sourceThreadId: providerThreadId,
-            cwd,
-          });
         }),
       uploadFeedback: (reason) =>
         Effect.gen(function* () {

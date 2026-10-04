@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  detectComposerTrigger,
-  parseStandaloneComposerSlashCommand,
-  serializeComposerFileLink,
-} from "./composerTrigger.ts";
+import { detectComposerTrigger, serializeComposerFileLink } from "./composerTrigger.ts";
 
 describe("detectComposerTrigger", () => {
   it.each(["$", "€", "£", "¥", "₹", "₩", "₿", "𑿝"])(
@@ -44,15 +40,5 @@ describe("serializeComposerFileLink", () => {
     expect(serializeComposerFileLink("@scope/package.json")).toBe(
       "[package.json](@scope/package.json)",
     );
-  });
-});
-
-describe("standalone composer commands", () => {
-  it("parses standalone /fork case-insensitively with surrounding whitespace", () => {
-    expect(parseStandaloneComposerSlashCommand("  /FoRk  ")).toBe("fork");
-  });
-
-  it("does not intercept /fork with arguments", () => {
-    expect(parseStandaloneComposerSlashCommand("/fork keep explaining")).toBeNull();
   });
 });

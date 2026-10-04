@@ -104,7 +104,6 @@ const claudeAgentInstanceId = ProviderInstanceId.make("claudeAgent");
 const CODEX_DRIVER = ProviderDriverKind.make("codex");
 const CLAUDE_AGENT_DRIVER = ProviderDriverKind.make("claudeAgent");
 const CURSOR_DRIVER = ProviderDriverKind.make("cursor");
-const GROK_DRIVER = ProviderDriverKind.make("grok");
 
 const assistantQuoteText = 'Keep the shared parser for "résumé".\nPreserve line breaks.';
 const assistantCitation = {
@@ -258,28 +257,6 @@ function makeFakeCodexAdapter(
       Effect.succeed({ threadId, turns: [] }),
   );
 
-  const forkSession = vi.fn(
-    (input: {
-      readonly sourceThreadId: ThreadId;
-      readonly targetThreadId: ThreadId;
-      readonly cwd: string;
-    }): Effect.Effect<{ readonly resumeCursor: unknown }, ProviderAdapterError> => {
-      if (!sessions.has(input.sourceThreadId)) {
-        return Effect.fail(
-          new ProviderAdapterSessionNotFoundError({
-            provider,
-            threadId: input.sourceThreadId,
-          }),
-        );
-      }
-      return Effect.succeed({
-        resumeCursor: {
-          opaque: `fork-${String(input.sourceThreadId)}-${String(input.targetThreadId)}`,
-        },
-      });
-    },
-  );
-
   const uploadFeedback = vi.fn(
     (
       input: ProviderUploadFeedbackInput,
@@ -297,8 +274,6 @@ function makeFakeCodexAdapter(
     provider,
     capabilities: {
       sessionModelSwitch: "in-session",
-      sessionFork:
-        provider === CODEX_DRIVER || provider === CLAUDE_AGENT_DRIVER ? "native" : "unsupported",
       ...(supportsConversationRollback !== undefined ? { supportsConversationRollback } : {}),
       ...(provider === CODEX_DRIVER ? { promptlessTurnContinuation: true } : {}),
     },
@@ -319,7 +294,6 @@ function makeFakeCodexAdapter(
     hasSession,
     readThread,
     rollbackThread,
-    forkSession,
     ...(provider === CODEX_DRIVER ? { uploadFeedback } : {}),
     stopAll,
     get streamEvents() {
@@ -357,7 +331,6 @@ function makeFakeCodexAdapter(
     hasSession,
     readThread,
     rollbackThread,
-    forkSession,
     uploadFeedback,
     stopAll,
   };
@@ -451,14 +424,12 @@ function makeProviderServiceLayer(
   const codex = makeFakeCodexAdapter(CODEX_DRIVER, input.supportsConversationRollback);
   const claude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
   const cursor = makeFakeCodexAdapter(CURSOR_DRIVER);
-  const grok = makeFakeCodexAdapter(GROK_DRIVER);
   const registry =
     input.registry ??
     makeAdapterRegistryMock({
       [ProviderDriverKind.make("codex")]: codex.adapter,
       [ProviderDriverKind.make("claudeAgent")]: claude.adapter,
       [ProviderDriverKind.make("cursor")]: cursor.adapter,
-      [ProviderDriverKind.make("grok")]: grok.adapter,
     });
 
   const providerAdapterLayer = Layer.succeed(
@@ -500,7 +471,6 @@ function makeProviderServiceLayer(
     codex,
     claude,
     cursor,
-    grok,
     layer,
   };
 }
@@ -5192,7 +5162,6 @@ describe("agent browser access", () => {
         getCounts: () => Effect.die("unused"),
         getEventReplayStats: () => Effect.die("unused"),
         getActiveProjectByWorkspaceRoot: () => Effect.die("unused"),
-        getProjectSummaries: () => Effect.die("unused"),
         getProjectShells: () => Effect.die("unused"),
         getProjectShellById: () => Effect.die("unused"),
         getFirstActiveThreadIdByProjectId: () => Effect.die("unused"),
@@ -5292,7 +5261,7 @@ describe("agent browser access", () => {
 
       const issued = yield* startSessionWith(false, threadId);
 
-      assert.deepEqual(issued, [{ threadId, capabilities: ["pull-requests", "thread-control"] }]);
+      assert.deepEqual(issued, [{ threadId, capabilities: ["pull-requests"] }]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
@@ -5303,7 +5272,7 @@ describe("agent browser access", () => {
       const issued = yield* startSessionWith(true, threadId);
 
       assert.deepEqual(issued, [
-        { threadId, capabilities: ["device", "preview", "pull-requests", "thread-control"] },
+        { threadId, capabilities: ["device", "preview", "pull-requests"] },
       ]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -5314,9 +5283,7 @@ describe("agent browser access", () => {
 
       const issued = yield* startSessionWith({ browser: false, device: true }, threadId);
 
-      assert.deepEqual(issued, [
-        { threadId, capabilities: ["device", "pull-requests", "thread-control"] },
-      ]);
+      assert.deepEqual(issued, [{ threadId, capabilities: ["device", "pull-requests"] }]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
@@ -5324,7 +5291,7 @@ describe("agent browser access", () => {
     Effect.gen(function* () {
       const threadId = asThreadId("thread-project-browser-off");
       const issued = yield* startSessionWith({ browser: true, device: false }, threadId, false);
-      assert.deepEqual(issued, [{ threadId, capabilities: ["pull-requests", "thread-control"] }]);
+      assert.deepEqual(issued, [{ threadId, capabilities: ["pull-requests"] }]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
@@ -5332,9 +5299,7 @@ describe("agent browser access", () => {
     Effect.gen(function* () {
       const threadId = asThreadId("thread-project-browser-off-device-on");
       const issued = yield* startSessionWith(true, threadId, false);
-      assert.deepEqual(issued, [
-        { threadId, capabilities: ["device", "pull-requests", "thread-control"] },
-      ]);
+      assert.deepEqual(issued, [{ threadId, capabilities: ["device", "pull-requests"] }]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
@@ -5342,9 +5307,7 @@ describe("agent browser access", () => {
     Effect.gen(function* () {
       const threadId = asThreadId("thread-project-browser-on");
       const issued = yield* startSessionWith({ browser: false, device: false }, threadId, true);
-      assert.deepEqual(issued, [
-        { threadId, capabilities: ["preview", "pull-requests", "thread-control"] },
-      ]);
+      assert.deepEqual(issued, [{ threadId, capabilities: ["preview", "pull-requests"] }]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
@@ -5354,9 +5317,7 @@ describe("agent browser access", () => {
       const issued = yield* startSessionWith({ browser: false, device: false }, threadId, {
         device: true,
       });
-      assert.deepEqual(issued, [
-        { threadId, capabilities: ["device", "pull-requests", "thread-control"] },
-      ]);
+      assert.deepEqual(issued, [{ threadId, capabilities: ["device", "pull-requests"] }]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
@@ -5371,9 +5332,7 @@ describe("agent browser access", () => {
         { device: false },
         { withoutOrchestration: true },
       );
-      assert.deepEqual(issued, [
-        { threadId, capabilities: ["preview", "pull-requests", "thread-control"] },
-      ]);
+      assert.deepEqual(issued, [{ threadId, capabilities: ["preview", "pull-requests"] }]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 });

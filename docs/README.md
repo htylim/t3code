@@ -18,8 +18,6 @@
 - [Product usage data](./user/telemetry.md)
 - [Remote access](./user/remote-access.md)
 - [Updating T3 Code](./user/updating.md)
-- [Forking a thread](./user/thread-forking.md)
-- [Referencing another thread](./user/thread-references.md)
 - [Mermaid diagrams](./user/mermaid-diagrams.md)
 - [Running in the background](./user/background-service.md)
 - Provider guides: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md) · [OpenCode](./user/providers-opencode.md) · [Antigravity](./user/providers-antigravity.md)

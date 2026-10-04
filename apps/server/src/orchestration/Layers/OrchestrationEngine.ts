@@ -49,7 +49,6 @@ import {
   OrchestrationEngineService,
   type OrchestrationEngineShape,
 } from "../Services/OrchestrationEngine.ts";
-import { withProjectMutationLock, withThreadMutationLock } from "../ThreadMutationLock.ts";
 const isOrchestrationCommandPreviouslyRejectedError = Schema.is(
   OrchestrationCommandPreviouslyRejectedError,
 );
@@ -436,7 +435,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
       aggregateId: threadId,
     });
 
-  const dispatchUnlocked: OrchestrationEngineShape["dispatch"] = (command, options) =>
+  const dispatch: OrchestrationEngineShape["dispatch"] = (command, options) =>
     Effect.gen(function* () {
       const result = yield* Deferred.make<{ sequence: number }, OrchestrationDispatchError>();
       yield* Queue.offer(commandQueue, {
@@ -447,17 +446,6 @@ const makeOrchestrationEngine = Effect.gen(function* () {
       });
       return yield* Deferred.await(result);
     });
-
-  const dispatch: OrchestrationEngineShape["dispatch"] = (command, options) => {
-    switch (command.type) {
-      case "project.create":
-      case "project.meta.update":
-      case "project.delete":
-        return withProjectMutationLock(dispatchUnlocked(command, options));
-      default:
-        return withThreadMutationLock(command.threadId, dispatchUnlocked(command, options));
-    }
-  };
 
   return {
     readEvents,

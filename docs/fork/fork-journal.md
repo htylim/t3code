@@ -19,6 +19,17 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-04 - Retire implementations replaced by Orchestration V2
+
+- Upstream baseline: `de251fc297`, preparing to integrate `8ed276c246`.
+- Removed the fork's complete MCP thread-control, native thread-forking, conversation-reference,
+  and hardcoded Auto-default implementations. Advanced controls, `/fork`, sidebar fork actions,
+  and `%`/`%%` picker behavior are intentionally retired even where upstream differs.
+- Preserved side chats, transient provider-history cleanup, selected-text actions, side-chat owner
+  context, rendering, worktree management, navigation shortcuts, and Fork desktop packaging.
+- Verification: removal diff passes `git diff --check`. Cross-thread callers intentionally await
+  adaptation to upstream during the merge; this intermediate commit is not a releasable build.
+
 ## 2026-09-27 - Repair regressions found in live fork verification
 
 - Upstream baseline: `de251fc297`.

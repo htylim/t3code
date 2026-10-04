@@ -23,8 +23,6 @@ const invocation = (capabilities: ReadonlyArray<McpInvocationContext.McpCapabili
   providerSessionId: "provider-session-device-test",
   providerInstanceId: ProviderInstanceId.make("codex"),
   capabilities: new Set(capabilities),
-  maxRuntimeMode: "auto" as const,
-  controlledThreadIds: new Set<ThreadId>(),
   issuedAt: 1,
 });
 const client = McpSchema.McpServerClient.of({

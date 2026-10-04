@@ -4,8 +4,7 @@ export type ComposerTriggerKind =
   | "slash-command"
   | "slash-model"
   | "skill";
-export type { ComposerSlashCommand } from "./composerCommands.ts";
-export { parseStandaloneComposerSlashCommand } from "./composerCommands.ts";
+export type ComposerSlashCommand = "model" | "plan" | "default";
 
 export interface ComposerTrigger {
   kind: ComposerTriggerKind;
