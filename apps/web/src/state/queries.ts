@@ -13,6 +13,8 @@ import type {
   EnvironmentId,
   ProjectContentMatch,
   ProjectEntryKind,
+  ThreadId,
+  TurnItemId,
   VcsListRefsResult,
   VcsRef,
 } from "@t3tools/contracts";
@@ -73,6 +75,8 @@ export function useThreadSearch(
   query: string,
 ): {
   readonly matches: ReadonlyArray<EnvironmentThreadSearchMatch>;
+  /** The settled query `matches` came from; it only changes when results do. */
+  readonly query: string;
   readonly isPending: boolean;
 } {
   const normalizedQuery = query.trim();
@@ -98,6 +102,7 @@ export function useThreadSearch(
               threadId: match.threadId,
             }),
         ),
+    query: settledQuery ?? "",
     isPending: canSearch && (isDebouncing || result.isLoading),
   };
 }
@@ -357,4 +362,23 @@ export function useCheckpointDiff(
     turnTarget === null ? null : orchestrationEnvironment.turnDiff(turnTarget),
   );
   return fullThreadTarget === null ? turn : fullThread;
+}
+
+/** Full input and output of one timeline item, fetched only while its row is open. */
+export function useTurnItemDetail(
+  target: {
+    readonly environmentId: EnvironmentId;
+    readonly threadId: ThreadId;
+    readonly itemId: TurnItemId;
+    readonly revision: string;
+  } | null,
+) {
+  return useEnvironmentQuery(
+    target === null
+      ? null
+      : orchestrationEnvironment.turnItem({
+          environmentId: target.environmentId,
+          input: { threadId: target.threadId, itemId: target.itemId, revision: target.revision },
+        }),
+  );
 }

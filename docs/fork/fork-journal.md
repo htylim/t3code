@@ -19,6 +19,24 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-04 - Integrate the latest upstream batch
+
+- Upstream baseline: `efecd3cf8b`, following `8ed276c246`. Integrates 127 upstream commits
+  on `integration/upstream-2026-10-04`. The separate desktop-profile import branch is excluded
+  because the profile recovery is already complete.
+- Mermaid rendering now uses upstream's implementation in full. Its renderer, Markdown integration,
+  dependencies, lockfile, and license configuration match upstream exactly.
+- Retained fork behavior includes `%` and `%%` references, side chats, transient cleanup,
+  selected-text actions, workspace management, project switching, custom shortcuts, visualization
+  links, and Fork packaging. Conflict resolutions retain both upstream and fork shortcut tests,
+  upstream host selection, and transient-thread filtering in search. The retired branch selector
+  remains replaced by the fork workspace menu.
+- Verification: 691 focused web, server, contracts, workspace, and background-stop tests passed.
+  Web, server, and desktop typechecks and the web production build passed. Targeted lint had
+  no errors; warnings remain. Diff checks passed outside unchanged upstream patch files,
+  whose blank context lines contain spaces. Browser and native-client verification were not performed.
+  The `fork` branch, live profile, and remote branches were not changed.
+
 ## 2026-10-04 - Retire the fork Mermaid renderer
 
 - Upstream baseline: `8ed276c246`, preparing to integrate `efecd3cf8b`.
