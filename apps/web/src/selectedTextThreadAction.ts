@@ -4,7 +4,8 @@ import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
 
 import { useComposerDraftStore, type DraftId } from "./composerDraftStore";
 import { useRightPanelStore } from "./rightPanelStore";
-import { serializeThreadReferenceMarkdown } from "./threadReference";
+import { formatInlineContextReference } from "./lib/composerContextReferences";
+import { threadContextRecord, threadContextReference } from "./lib/composerContextRecords";
 
 export type SelectedTextThreadAction = "ask-in-new-thread" | "ask-in-side-chat";
 
@@ -27,7 +28,9 @@ export function buildAskInNewThreadPrompt(input: {
   readonly sourceThreadTitle: string;
   readonly sourceThreadRef: ScopedThreadRef;
 }): string {
-  const source = serializeThreadReferenceMarkdown(input.sourceThreadTitle, input.sourceThreadRef);
+  const source = formatInlineContextReference(
+    threadContextReference(threadContextRecord(input.sourceThreadRef, input.sourceThreadTitle)),
+  );
   return `Regarding this selection from ${source}:\n\n${markdownBlockquote(input.selectedMarkdown)}\n\n`;
 }
 

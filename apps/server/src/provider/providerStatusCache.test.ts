@@ -39,7 +39,6 @@ const makeProvider = (
   models: [],
   slashCommands: [],
   skills: [],
-  supportsThreadFork: false,
   ...overrides,
 });
 

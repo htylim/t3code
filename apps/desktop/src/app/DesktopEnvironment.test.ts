@@ -177,7 +177,6 @@ describe("DesktopEnvironment", () => {
 
       assert.equal(environment.isDevelopment, false);
       assert.equal(environment.stateDir, "/Users/alice/.t3/userdata");
-      assert.equal(environment.userDataDirName, "t3code");
       assert.deepEqual(environment.branding, {
         baseName: "T3 Code",
         stageLabel: "Fork",

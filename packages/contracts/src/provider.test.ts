@@ -121,16 +121,6 @@ describe("ProviderSessionStartInput", () => {
 });
 
 describe("ProviderSendTurnInput", () => {
-  it("accepts typed side-chat context", () => {
-    const parsed = decodeProviderSendTurnInput({
-      threadId: "thread-side",
-      input: "What did we decide?",
-      sideChatContext: { mainThreadId: "thread-main" },
-    });
-
-    expect(parsed.sideChatContext).toEqual({ mainThreadId: "thread-main" });
-  });
-
   it("accepts 100 attachments and rejects 101", () => {
     const attachments = Array.from({ length: 100 }, (_, index) => ({
       type: "image",

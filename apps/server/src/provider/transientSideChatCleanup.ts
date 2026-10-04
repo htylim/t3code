@@ -5,174 +5,209 @@ import {
   CodexSettings,
   OpenCodeSettings,
   CommandId,
+  ProviderInstanceId,
   TransientSideChatCleanupError,
   type TransientSideChatCleanupInput,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { ThreadDeletionReactor } from "../orchestration/Services/ThreadDeletionReactor.ts";
-import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionThreadRepository } from "../persistence/Services/ProjectionThreads.ts";
+import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
+import { ProviderSessionManagerV2 } from "../orchestration-v2/ProviderSessionManager.ts";
+import { ProviderSessionRuntimeRepository } from "../persistence/ProviderSessionRuntime.ts";
+import { ProjectService } from "../project/ProjectService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
-import { ProviderValidationError } from "./Errors.ts";
 import { deriveProviderInstanceConfigMap } from "./Layers/ProviderInstanceRegistryHydration.ts";
 import { mergeProviderInstanceEnvironment } from "./ProviderInstanceEnvironment.ts";
-import { ProviderService } from "./Services/ProviderService.ts";
-import { ProviderSessionDirectory } from "./Services/ProviderSessionDirectory.ts";
-import { TransientChatCleanupGate } from "./transientChatDeletion/lifecycle.ts";
+import { transientChatCleanupGate } from "./transientChatDeletion/lifecycle.ts";
 import { TransientChatProviderThreadDeleteError } from "./transientChatDeletion/errors.ts";
 import { deleteTransientChatProviderThread } from "./transientChatProviderThreadDelete.ts";
 
+const CleanupTarget = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  driver: Schema.String,
+  nativeId: Schema.String,
+  cwd: Schema.String,
+  configFingerprint: Schema.String,
+});
+const CleanupState = Schema.Struct({
+  transientSideChatCleanup: Schema.Literals(["pending", "complete"]),
+  targets: Schema.Array(CleanupTarget),
+});
+const decodeCleanupState = Schema.decodeUnknownOption(CleanupState);
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const decodeCodex = Schema.decodeUnknownEffect(CodexSettings);
 const decodeClaude = Schema.decodeUnknownEffect(ClaudeSettings);
 const decodeOpenCode = Schema.decodeUnknownEffect(OpenCodeSettings);
-const decodeCodexCursor = Schema.decodeUnknownEffect(Schema.Struct({ threadId: Schema.String }));
-const decodeClaudeCursor = Schema.decodeUnknownEffect(Schema.Struct({ resume: Schema.String }));
-const decodeOpenCodeCursor = Schema.decodeUnknownEffect(
-  Schema.Struct({ sessionId: Schema.String }),
-);
-const decodeRuntime = Schema.decodeUnknownEffect(Schema.Struct({ cwd: Schema.String }));
-const decodeCleanupState = Schema.decodeUnknownOption(
-  Schema.Struct({
-    transientSideChatCleanup: Schema.Literals(["pending", "complete"]),
-    transientSideChatCleanupConfig: Schema.optionalKey(Schema.String),
-    transientSideChatCleanupNoSession: Schema.optionalKey(Schema.Boolean),
-  }),
-);
-const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
-const isCleanupError = Schema.is(TransientSideChatCleanupError);
-const isProviderDeleteError = Schema.is(TransientChatProviderThreadDeleteError);
-const isValidationError = Schema.is(ProviderValidationError);
 
-const invalid = (message: string) =>
-  new TransientSideChatCleanupError({ reason: "invalid-target", message });
+/** Reject a cleanup target without changing provider history. */
+function invalidTarget(message: string) {
+  return new TransientSideChatCleanupError({ reason: "invalid-target", message });
+}
 
-/** Only the transient cleanup RPC calls this; ordinary thread.delete keeps its existing behavior. */
+/** Fingerprint settings so a retry cannot delete from a different provider account or home. */
+function fingerprint(instance: unknown): string {
+  return NodeCrypto.createHash("sha256").update(encodeJson(instance)).digest("hex");
+}
+
+/** Delete through V2, then remove only the native histories captured before deletion. */
 export const makeTransientSideChatCleanup = Effect.fn("makeTransientSideChatCleanup")(function* (
   deleteProviderThread: typeof deleteTransientChatProviderThread = deleteTransientChatProviderThread,
 ) {
-  const engine = yield* OrchestrationEngineService;
-  const deletionReactor = yield* ThreadDeletionReactor;
-  const threads = yield* ProjectionThreadRepository;
-  const directory = yield* ProviderSessionDirectory;
+  const threads = yield* ThreadManagementService;
+  const providers = yield* ProviderSessionManagerV2;
+  const runtimes = yield* ProviderSessionRuntimeRepository;
+  const projects = yield* ProjectService;
   const settings = yield* ServerSettingsService;
-  const providers = yield* ProviderService;
-  const gate = yield* TransientChatCleanupGate;
   const providerContext =
     yield* Effect.context<Effect.Services<ReturnType<typeof deleteTransientChatProviderThread>>>();
-  const deleteNative = (input: Parameters<typeof deleteTransientChatProviderThread>[0]) =>
-    deleteProviderThread(input).pipe(Effect.provide(providerContext));
 
   return Effect.fn("cleanupTransientSideChat")(
     function* ({ threadId }: typeof TransientSideChatCleanupInput.Type) {
-      return yield* gate.cleanup(
+      return yield* transientChatCleanupGate.cleanup(
         threadId,
         Effect.gen(function* () {
-          const thread = Option.getOrUndefined(yield* threads.getById({ threadId }));
-          if (!thread) return yield* invalid("The transient T3 thread was not found.");
-          const binding = Option.getOrUndefined(yield* directory.getBinding(threadId));
-          const prior = Option.getOrUndefined(decodeCleanupState(binding?.runtimePayload));
-          if (prior?.transientSideChatCleanup === "complete" && thread.deletedAt !== null) {
+          const projection = yield* threads.getThreadProjection(threadId);
+          const storedRuntime = Option.getOrUndefined(yield* runtimes.getByThreadId({ threadId }));
+          const prior = Option.getOrUndefined(decodeCleanupState(storedRuntime?.runtimePayload));
+          if (
+            prior?.transientSideChatCleanup === "complete" &&
+            projection.thread.deletedAt !== null
+          ) {
             return { providerHistory: "already-absent" as const };
           }
-          const instanceId = binding?.providerInstanceId ?? thread.modelSelection.instanceId;
-          // Resolve legacy built-in settings exactly as the live provider registry does.
-          const instance = deriveProviderInstanceConfigMap(yield* settings.getSettings)[instanceId];
-          if (!instance || (binding && instance.driver !== binding.provider)) {
-            return yield* invalid(
-              "The original provider instance is unavailable or has changed driver.",
-            );
+          const instances = deriveProviderInstanceConfigMap(yield* settings.getSettings);
+          const project = Option.getOrUndefined(
+            yield* projects.getById(projection.thread.projectId, { includeDeleted: true }),
+          );
+          if (!project) return yield* invalidTarget("The transient chat project was not found.");
+          const targets =
+            prior?.targets ??
+            projection.providerThreads.flatMap((providerThread) => {
+              const nativeId = providerThread.nativeThreadRef?.nativeId;
+              if (nativeId == null) return [];
+              const instance = instances[providerThread.providerInstanceId];
+              const session = projection.providerSessions.find(
+                (candidate) => candidate.id === providerThread.providerSessionId,
+              );
+              return [
+                {
+                  instanceId: providerThread.providerInstanceId,
+                  driver: providerThread.driver,
+                  nativeId,
+                  cwd: session?.cwd ?? projection.thread.worktreePath ?? project.workspaceRoot,
+                  configFingerprint: fingerprint(instance ?? null),
+                },
+              ];
+            });
+          for (const target of targets) {
+            const instance = instances[target.instanceId];
+            if (
+              !instance ||
+              instance.driver !== target.driver ||
+              fingerprint(instance) !== target.configFingerprint
+            ) {
+              return yield* invalidTarget(
+                "The original provider configuration is unavailable or changed. Restore it before retrying cleanup.",
+              );
+            }
           }
-          const configFingerprint = NodeCrypto.createHash("sha256")
-            .update(encodeJson(instance))
-            .digest("hex");
-          if (
-            prior?.transientSideChatCleanupConfig &&
-            prior.transientSideChatCleanupConfig !== configFingerprint
-          ) {
-            return yield* invalid(
-              "The provider configuration changed during cleanup. Restore it before retrying.",
-            );
-          }
-          // The marker also covers never-started chats. A late admission must not
-          // recreate a provider session after this request returns or the server restarts.
-          yield* directory.upsert({
+          // The existing runtime repository retains feature-owned retry state. V2's
+          // deleted thread prevents admission after a restart; no V1 services are used.
+          const marker = {
             threadId,
-            provider: instance.driver,
-            providerInstanceId: instanceId,
-            ...(binding ? {} : { status: "stopped", runtimeMode: thread.runtimeMode }),
-            runtimePayload: {
-              transientSideChatCleanup: "pending",
-              transientSideChatCleanupConfig: configFingerprint,
-              ...(!binding ? { transientSideChatCleanupNoSession: true } : {}),
-            },
-          });
-          if (thread.deletedAt === null) {
-            yield* engine.dispatch({
+            providerName: targets[0]?.driver ?? "none",
+            providerInstanceId:
+              targets[0]?.instanceId ?? projection.thread.modelSelection.instanceId,
+            adapterKey: "transient-side-chat-cleanup",
+            runtimeMode: projection.thread.runtimeMode,
+            status: "stopped" as const,
+            lastSeenAt: DateTime.formatIso(yield* DateTime.now),
+            resumeCursor: null,
+            runtimePayload: { transientSideChatCleanup: "pending", targets },
+          };
+          yield* runtimes.upsert(marker);
+          if (projection.thread.deletedAt === null) {
+            yield* threads.dispatch({
               type: "thread.delete",
               threadId,
               commandId: CommandId.make(`transient-side-chat-cleanup:${threadId}`),
             });
           }
-
-          yield* deletionReactor.drainThrough(yield* engine.latestSequence);
-
+          // Ordinary V2 detach is best-effort. Explicitly await interruption and
+          // unload/close before deleting files, without closing shared Codex runtimes.
+          for (const session of projection.providerSessions) {
+            const runtime = Option.getOrUndefined(yield* providers.get(session.id));
+            if (runtime) {
+              const providerThreads = projection.providerThreads.filter(
+                (thread) => thread.providerSessionId === session.id,
+              );
+              for (const providerThread of providerThreads) {
+                for (const turn of projection.providerTurns) {
+                  if (turn.providerThreadId === providerThread.id && turn.status === "running") {
+                    yield* runtime.interruptTurn({ providerThread, providerTurnId: turn.id });
+                  }
+                }
+                if (runtime.unloadThread) yield* runtime.unloadThread({ providerThread });
+              }
+              if (!runtime.unloadThread) yield* providers.close(session.id);
+            }
+            yield* providers.detach({
+              providerSessionId: session.id,
+              threadId,
+              revokeMcpCredential: true,
+            });
+          }
           let providerHistory: "deleted" | "already-absent" | "not-started" | "unsupported" =
             "not-started";
-          // The ordinary deletion reactor is best-effort. Await a stop whose
-          // failure propagates before touching provider history.
-          if (binding && !prior?.transientSideChatCleanupNoSession) {
-            yield* providers.stopSession({ threadId });
-            const stopped = Option.getOrUndefined(yield* directory.getBinding(threadId));
-            if (!stopped)
-              return yield* invalid("The provider session binding disappeared during cleanup.");
-            if (!["codex", "claudeAgent", "opencode"].includes(instance.driver)) {
-              providerHistory = "unsupported";
-            } else {
-              const { cwd } = yield* decodeRuntime(stopped.runtimePayload);
-              const common = {
-                cwd,
-                environment: mergeProviderInstanceEnvironment(instance.environment),
-                allowMissing: true,
-              };
-              switch (instance.driver) {
-                case "codex":
-                  providerHistory = yield* deleteNative({
-                    ...common,
-                    provider: "codex",
-                    providerSessionId: (yield* decodeCodexCursor(stopped.resumeCursor)).threadId,
-                    config: yield* decodeCodex(instance.config ?? {}),
-                  });
-                  break;
-                case "claudeAgent":
-                  providerHistory = yield* deleteNative({
-                    ...common,
-                    provider: "claudeAgent",
-                    providerSessionId: (yield* decodeClaudeCursor(stopped.resumeCursor)).resume,
-                    config: yield* decodeClaude(instance.config ?? {}),
-                  });
-                  break;
-                case "opencode":
-                  providerHistory = yield* deleteNative({
-                    ...common,
-                    provider: "opencode",
-                    providerSessionId: (yield* decodeOpenCodeCursor(stopped.resumeCursor))
-                      .sessionId,
-                    config: yield* decodeOpenCode(instance.config ?? {}),
-                  });
-                  break;
-                default:
-                  providerHistory = "unsupported";
-              }
+          for (const target of targets) {
+            const instance = instances[target.instanceId]!;
+            const common = {
+              cwd: target.cwd,
+              providerSessionId: target.nativeId,
+              environment: mergeProviderInstanceEnvironment(instance.environment),
+              allowMissing: true,
+            };
+            let deleted: "deleted" | "already-absent" | "unsupported";
+            switch (target.driver) {
+              case "codex":
+                deleted = yield* deleteProviderThread({
+                  ...common,
+                  provider: "codex",
+                  config: yield* decodeCodex(instance.config ?? {}),
+                }).pipe(Effect.provide(providerContext));
+                break;
+              case "claudeAgent":
+                deleted = yield* deleteProviderThread({
+                  ...common,
+                  provider: "claudeAgent",
+                  config: yield* decodeClaude(instance.config ?? {}),
+                }).pipe(Effect.provide(providerContext));
+                break;
+              case "opencode":
+                deleted = yield* deleteProviderThread({
+                  ...common,
+                  provider: "opencode",
+                  config: yield* Schema.decodeUnknownEffect(OpenCodeSettings)(
+                    instance.config ?? {},
+                  ),
+                }).pipe(Effect.provide(providerContext));
+                break;
+              default:
+                deleted = "unsupported";
             }
+            if (
+              deleted === "unsupported" ||
+              providerHistory === "not-started" ||
+              deleted === "deleted"
+            )
+              providerHistory = deleted;
           }
-          yield* directory.upsert({
-            threadId,
-            provider: instance.driver,
-            providerInstanceId: instanceId,
-            runtimePayload: { transientSideChatCleanup: "complete" },
+          yield* runtimes.upsert({
+            ...marker,
+            runtimePayload: { transientSideChatCleanup: "complete", targets },
           });
           return { providerHistory };
         }),
@@ -180,17 +215,12 @@ export const makeTransientSideChatCleanup = Effect.fn("makeTransientSideChatClea
     },
     Effect.timeout("60 seconds"),
     Effect.mapError((cause) => {
-      if (isCleanupError(cause)) return cause;
-      if (isProviderDeleteError(cause)) {
+      if (Schema.is(TransientSideChatCleanupError)(cause)) return cause;
+      if (Schema.is(TransientChatProviderThreadDeleteError)(cause))
         return new TransientSideChatCleanupError({ reason: cause.reason, message: cause.message });
-      }
       return new TransientSideChatCleanupError({
-        reason: isValidationError(cause) ? "busy" : "provider-error",
-        message: isValidationError(cause)
-          ? cause.issue
-          : cause instanceof Error && cause.message
-            ? cause.message
-            : "Transient side-chat cleanup failed.",
+        reason: "provider-error",
+        message: cause instanceof Error ? cause.message : "Transient side-chat cleanup failed.",
       });
     }),
   );

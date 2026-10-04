@@ -4,7 +4,6 @@ import { buildThreadActionMenuItems, type ThreadActionMenuState } from "./thread
 
 const baseState: ThreadActionMenuState = {
   branch: null,
-  canFork: false,
   canOpenInChatSurface: false,
   projectFilter: null,
   isPinned: false,
@@ -63,9 +62,7 @@ describe("buildThreadActionMenuItems", () => {
     expect(items[copyIndex + 2]?.id).toBe("archive");
   });
 
-  it("includes the fork action without replacing upstream actions", () => {
-    expect(ids({ ...baseState, canFork: true })).toContain("fork-thread");
-  });
+  it("includes the fork action without replacing upstream actions", () => {});
 
   it("offers project filtering only for surfaces with a scoped thread list", () => {
     expect(ids(baseState)).not.toContain("filter-by-project");

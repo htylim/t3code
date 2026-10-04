@@ -8,6 +8,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { ChildProcess } from "effect/unstable/process";
 
+import { OpenCodeServerLedger } from "./OpenCodeServerLedger.ts";
 import { OpenCodeRuntimeLive } from "./opencodeRuntime.ts";
 import { spawnAndCollect } from "./providerSnapshot.ts";
 import { deleteTransientChatProviderThread } from "./transientChatProviderThreadDelete.ts";
@@ -15,7 +16,10 @@ import { deleteTransientChatProviderThread } from "./transientChatProviderThread
 const sessionId = "11111111-1111-4111-8111-111111111111";
 const otherId = "22222222-2222-4222-8222-222222222222";
 const missingId = "33333333-3333-4333-8333-333333333333";
-const layer = OpenCodeRuntimeLive.pipe(Layer.provideMerge(NodeServices.layer));
+const layer = OpenCodeRuntimeLive.pipe(
+  Layer.provide(Layer.succeed(OpenCodeServerLedger, { track: () => Effect.succeed(Effect.void) })),
+  Layer.provideMerge(NodeServices.layer),
+);
 const claudeConfig = Schema.decodeSync(ClaudeSettings)({});
 const codexConfig = Schema.decodeSync(CodexSettings)({});
 const openCodeConfig = Schema.decodeSync(OpenCodeSettings)({});
@@ -218,26 +222,25 @@ it.layer(layer)("Transient provider deletion entry point", (it) => {
     }),
   );
 
-  for (const [provider, config] of [
+  // A malformed target must fail before launching any provider or worker.
+  it.effect.each([
     ["codex", codexConfig],
     ["claudeAgent", claudeConfig],
     ["opencode", openCodeConfig],
-  ] as const) {
-    // A malformed target must fail before launching any provider or worker.
-    it.effect(`rejects invalid ${provider} native IDs`, () =>
-      Effect.gen(function* () {
-        const error = yield* Effect.flip(
-          deleteTransientChatProviderThread({
-            provider,
-            config,
-            providerSessionId: "../../other-session",
-            cwd: "/project",
-          } as Parameters<typeof deleteTransientChatProviderThread>[0]),
-        );
-        assert.equal(error.reason, "invalid-target");
-      }),
-    );
-  }
+  ] as const)("rejects invalid %s native IDs", ([provider, config]) =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        deleteTransientChatProviderThread({
+          provider,
+          config,
+          providerSessionId: "../../other-session",
+          cwd: "/project",
+        } as Parameters<typeof deleteTransientChatProviderThread>[0]),
+      );
+      assert.equal(error.reason, "invalid-target");
+    }),
+  );
+
   it.effect("rejects a relative project directory", () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(

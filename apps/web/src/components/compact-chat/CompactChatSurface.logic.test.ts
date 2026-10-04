@@ -1,13 +1,13 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
-  ApprovalRequestId,
+  RuntimeRequestId,
   ComposerContextId,
   EnvironmentId,
   MessageId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
-  TurnId,
+  RunId,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -32,15 +32,9 @@ const thread: CompactChatTargetThread = {
   },
   runtimeMode: "auto",
   interactionMode: "default",
-  session: {
-    threadId: target.threadId,
+  runtime: {
     status: "running",
-    providerName: "Codex",
-    providerInstanceId: ProviderInstanceId.make("codex"),
-    runtimeMode: "auto",
-    activeTurnId: TurnId.make("turn-target"),
-    lastError: null,
-    updatedAt: "2026-08-11T12:00:00.000Z",
+    activeRunId: RunId.make("turn-target"),
   },
 };
 
@@ -89,15 +83,15 @@ describe("compact Chat target isolation", () => {
       messageId: MessageId.make("message-target"),
       createdAt: "2026-08-11T12:01:00.000Z",
     });
-    const interrupt = buildCompactChatInterruptCommand({ target, session: thread.session });
+    const interrupt = buildCompactChatInterruptCommand({ target, session: thread.runtime });
     const approval = buildCompactChatApprovalCommand({
       target,
-      requestId: ApprovalRequestId.make("approval-target"),
+      requestId: RuntimeRequestId.make("approval-target"),
       decision: "accept",
     });
     const userInput = buildCompactChatUserInputCommand({
       target,
-      requestId: ApprovalRequestId.make("input-target"),
+      requestId: RuntimeRequestId.make("input-target"),
       answers: { choice: "Yes" },
     });
 
@@ -107,7 +101,7 @@ describe("compact Chat target isolation", () => {
       expect(command.environmentId).not.toBe(owner.environmentId);
       expect(command.input.threadId).not.toBe(owner.threadId);
     }
-    expect(interrupt.input.turnId).toBe(TurnId.make("turn-target"));
+    expect(interrupt.input.runId).toBe(RunId.make("turn-target"));
   });
 
   it("sends composer-selected attachments, model, and modes to the target", () => {

@@ -89,6 +89,8 @@ import { parseAssistantCitationHref } from "@t3tools/shared/assistantCitations";
 import { parseComposerContextHref } from "@t3tools/shared/composerContextReferences";
 import { AssistantCitationChip } from "./chat/AssistantCitationChip";
 import remarkGfm from "remark-gfm";
+import type { Processor } from "unified";
+import { isWindowsAbsolutePath } from "@t3tools/shared/path";
 import { remarkGithubAlerts } from "../markdown-github-alerts";
 import {
   artifactTemplateFromHastProperties,
@@ -491,6 +493,7 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
 
 const CHAT_MARKDOWN_REMARK_PLUGINS = [
   remarkGfm,
+  remarkKeepWindowsPathDestinations,
   remarkGithubAlerts,
   remarkNormalizeListItemIndentation,
   remarkCodexDirectives,
@@ -500,6 +503,7 @@ const CHAT_MARKDOWN_REMARK_PLUGINS = [
 
 const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS = [
   remarkGfm,
+  remarkKeepWindowsPathDestinations,
   remarkGithubAlerts,
   remarkNormalizeListItemIndentation,
   remarkCodexDirectives,
@@ -632,6 +636,36 @@ function remarkPreserveCodeMeta() {
 
     visit(tree);
   };
+}
+
+interface DestinationCompileContext {
+  readonly stack: ReadonlyArray<{ readonly type: string; url?: string }>;
+  resume(): string;
+  sliceSerialize(token: unknown): string;
+}
+
+function keepWindowsPathDestination(this: DestinationCompileContext, token: unknown) {
+  const decoded = this.resume();
+  const authored = this.sliceSerialize(token);
+  const node = this.stack.at(-1);
+  // Character references still need decoding, so those destinations keep the parsed URL.
+  if (node)
+    node.url = isWindowsAbsolutePath(authored) && !authored.includes("&") ? authored : decoded;
+}
+
+/**
+ * CommonMark reads the `\.` in `C:\me\.t3\shot.png` as an escape, even in a link
+ * destination. Every backslash in a Windows path is a separator, so link, image, and
+ * definition destinations that are Windows paths keep the text as written.
+ */
+function remarkKeepWindowsPathDestinations(this: Processor) {
+  const data = this.data();
+  (data.fromMarkdownExtensions ??= []).push({
+    exit: {
+      resourceDestinationString: keepWindowsPathDestination,
+      definitionDestinationString: keepWindowsPathDestination,
+    },
+  });
 }
 
 /**
@@ -3277,6 +3311,15 @@ const CHAT_MARKDOWN_COMPONENTS = {
 
     const language = extractFenceLanguage(codeBlock.className);
     const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
+    if (language === "mermaid" && !isStreaming) {
+      return (
+        <MermaidDiagram
+          source={codeBlock.code}
+          theme={resolvedTheme}
+          fallback={<pre {...props}>{children}</pre>}
+        />
+      );
+    }
     return (
       <MarkdownCodeBlock
         code={codeBlock.code}
@@ -3356,15 +3399,6 @@ function ChatMarkdown({
         className,
       )}
       // Gates the fade-in for blocks that arrive while the response streams.
-    if (language === "mermaid" && !isStreaming) {
-      return (
-        <MermaidDiagram
-          source={codeBlock.code}
-          theme={resolvedTheme}
-          fallback={<pre {...props}>{children}</pre>}
-        />
-      );
-    }
       data-streaming={componentState.isStreaming ? "" : undefined}
       onCopy={handleCopy}
     >

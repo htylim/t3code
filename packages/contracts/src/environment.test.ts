@@ -2,13 +2,8 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
-import { OrchestrationRpcSchemas } from "./orchestration.ts";
 
 const decodeDescriptor = Schema.decodeUnknownSync(ExecutionEnvironmentDescriptor);
-const decodeDispatchCommand = Schema.decodeUnknownSync(
-  OrchestrationRpcSchemas.dispatchCommand.input,
-);
-
 const descriptor = {
   environmentId: "environment-1",
   label: "Local",
@@ -65,18 +60,20 @@ describe("ExecutionEnvironmentDescriptor", () => {
       }).capabilities.fileAttachments,
     ).toEqual({ maxUploadBytes: 50 * 1024 * 1024 });
   });
-});
 
-describe("thread fork command schema", () => {
-  it("accepts thread.fork through the existing HTTP dispatch payload", () => {
-    const operation = decodeDispatchCommand({
-      type: "thread.fork",
-      sourceThreadId: "thread-source",
-      threadId: "thread-target",
-      commandId: "cmd-http-fork",
-      createdAt: "2026-08-06T00:00:00.000Z",
-    });
+  it("treats missing server-resolved command context as unsupported", () => {
+    expect(decodeDescriptor(descriptor).capabilities.serverResolvedCommandContext).toBeUndefined();
+  });
 
-    expect(operation.type).toBe("thread.fork");
+  it("preserves advertised server-resolved command context", () => {
+    expect(
+      decodeDescriptor({
+        ...descriptor,
+        capabilities: {
+          ...descriptor.capabilities,
+          serverResolvedCommandContext: true,
+        },
+      }).capabilities.serverResolvedCommandContext,
+    ).toBe(true);
   });
 });

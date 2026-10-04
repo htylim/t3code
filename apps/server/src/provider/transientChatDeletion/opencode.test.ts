@@ -65,7 +65,7 @@ describe("OpenCode transient deletion", () => {
       assert.isTrue(h.calls.every((call) => call.directory === directory));
     }),
   );
-  for (const [name, options] of [
+  it.effect.each([
     ["parent", { session: { id: sessionId, parentID: "ses_parent" } }],
     ["wrong session", { session: { id: "ses_other" } }],
     ["child", { children: [{ id: "ses_child" }] }],
@@ -74,29 +74,25 @@ describe("OpenCode transient deletion", () => {
     ["malformed session", { session: {} }],
     ["malformed children", { children: {} }],
     ["malformed status", { status: { [sessionId]: {} } }],
-  ] as const) {
-    it.effect(`rejects a ${name} without deleting`, () =>
-      Effect.gen(function* () {
-        const h = harness(options);
-        yield* Effect.flip(deleteOpenCodeTransientThread(h.client, sessionId, directory));
-        assert.isFalse(h.attempted());
-        assert.equal(h.sessions.size, 2);
-      }),
-    );
-  }
-  for (const failPath of [
-    `/session/${sessionId}`,
-    `/session/${sessionId}/children`,
-    "/session/status",
-  ]) {
-    it.effect(`fails closed when ${failPath} is unavailable`, () =>
+  ] as const)("rejects a %s without deleting", ([_name, options]) =>
+    Effect.gen(function* () {
+      const h = harness(options);
+      yield* Effect.flip(deleteOpenCodeTransientThread(h.client, sessionId, directory));
+      assert.isFalse(h.attempted());
+      assert.equal(h.sessions.size, 2);
+    }),
+  );
+
+  it.effect.each([`/session/${sessionId}`, `/session/${sessionId}/children`, "/session/status"])(
+    "fails closed when %s is unavailable",
+    (failPath) =>
       Effect.gen(function* () {
         const h = harness({ failPath });
         yield* Effect.flip(deleteOpenCodeTransientThread(h.client, sessionId, directory));
         assert.isFalse(h.attempted());
       }),
-    );
-  }
+  );
+
   it.effect("reports a missing target without issuing DELETE", () =>
     Effect.gen(function* () {
       const h = harness({ failPath: `/session/${sessionId}`, failStatus: 404 });
@@ -104,21 +100,20 @@ describe("OpenCode transient deletion", () => {
       assert.isFalse(h.attempted());
     }),
   );
-  for (const options of [
+  it.effect.each([
     { deleteFails: true },
     { keepSession: true },
     { verificationStatus: 401 },
     { verificationStatus: 500 },
-  ]) {
-    it.effect(`does not report false success: ${JSON.stringify(options)}`, () =>
-      Effect.gen(function* () {
-        const h = harness(options);
-        yield* Effect.flip(deleteOpenCodeTransientThread(h.client, sessionId, directory));
-        assert.isTrue(h.attempted());
-        assert.isTrue(h.sessions.has("ses_unrelated"));
-      }),
-    );
-  }
+  ])("does not report false success: %s", (options) =>
+    Effect.gen(function* () {
+      const h = harness(options);
+      yield* Effect.flip(deleteOpenCodeTransientThread(h.client, sessionId, directory));
+      assert.isTrue(h.attempted());
+      assert.isTrue(h.sessions.has("ses_unrelated"));
+    }),
+  );
+
   it.effect("accepts idle status", () =>
     Effect.gen(function* () {
       const h = harness({ status: { [sessionId]: { type: "idle" } } });

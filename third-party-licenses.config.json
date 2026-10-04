@@ -153,9 +153,42 @@
   ],
   "packageOverrides": [
     {
-      "name": "khroma",
-      "version": "2.1.0",
-      "license": "MIT"
+      "name": "@bufbuild/protobuf",
+      "version": "1.10.0",
+      "generatedNotices": [
+        {
+          "licenseId": "Apache-2.0",
+          "copyrights": ["Copyright 2021-2024 Buf Technologies, Inc."]
+        },
+        {
+          "licenseId": "BSD-3-Clause",
+          "copyrights": ["Copyright 2008 Google Inc. All rights reserved."]
+        }
+      ]
+    },
+    {
+      "name": "@connectrpc/connect",
+      "version": "1.7.0",
+      "generatedNotice": {
+        "licenseId": "Apache-2.0",
+        "copyrights": ["Copyright 2021-2024 The Connect Authors"]
+      }
+    },
+    {
+      "name": "@connectrpc/connect-node",
+      "version": "1.7.0",
+      "generatedNotice": {
+        "licenseId": "Apache-2.0",
+        "copyrights": ["Copyright 2021-2024 The Connect Authors"]
+      }
+    },
+    {
+      "name": "@connectrpc/connect-web",
+      "version": "1.7.0",
+      "generatedNotice": {
+        "licenseId": "Apache-2.0",
+        "copyrights": ["Copyright 2021-2024 The Connect Authors"]
+      }
     },
     {
       "license": "MIT",
@@ -478,6 +511,99 @@
         "licenseId": "MIT",
         "copyrights": ["Copyright (c) 2025 opencode"]
       }
+    },
+    {
+      "repositoryUrl": "https://github.com/anomalyco/opencode",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) 2025 opencode"]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "noxcturnal",
+      "sourceUrl": "https://github.com/expo/noxcturnal",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)"]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@noxcturnal/noxcturnal-linux-x64-gnu",
+      "sourceUrl": "https://github.com/expo/noxcturnal",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)"]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@noxcturnal/noxcturnal-darwin-x64",
+      "sourceUrl": "https://github.com/expo/noxcturnal",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)"]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@noxcturnal/noxcturnal-linux-arm64-gnu",
+      "sourceUrl": "https://github.com/expo/noxcturnal",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)"]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@noxcturnal/noxcturnal-darwin-arm64",
+      "sourceUrl": "https://github.com/expo/noxcturnal",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)"]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@noxcturnal/noxcturnal-linux-arm64-musl",
+      "sourceUrl": "https://github.com/expo/noxcturnal",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)"]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@noxcturnal/noxcturnal-linux-x64-musl",
+      "sourceUrl": "https://github.com/expo/noxcturnal",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)"]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@noxcturnal/noxcturnal-win32-arm64-msvc",
+      "sourceUrl": "https://github.com/expo/noxcturnal",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)"]
+      }
+    },
+    {
+      "license": "MIT",
+      "name": "@noxcturnal/noxcturnal-win32-x64-msvc",
+      "sourceUrl": "https://github.com/expo/noxcturnal",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)"]
+      }
+    },
+    {
+      "name": "khroma",
+      "version": "2.1.0",
+      "license": "MIT"
     },
     {
       "name": "fastdom",

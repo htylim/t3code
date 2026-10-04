@@ -19,12 +19,12 @@ describe("Ask in new thread prompt", () => {
         selectedMarkdown: "First line\n\n- Second line",
         sourceThreadTitle: "Epic [3] finding",
         sourceThreadRef: {
-          environmentId: EnvironmentId.make("local/environment"),
-          threadId: ThreadId.make("thread/one"),
+          environmentId: EnvironmentId.make("local-environment"),
+          threadId: ThreadId.make("thread-one"),
         },
       }),
     ).toBe(
-      "Regarding this selection from [Epic \\[3\\] finding](t3code://threads/local%2Fenvironment/thread%2Fone):\n\n> First line\n>\n> - Second line\n\n",
+      "Regarding this selection from [Epic 3 finding](t3-context://v1/thread/thread_thread-one):\n\n> First line\n>\n> - Second line\n\n",
     );
   });
 });

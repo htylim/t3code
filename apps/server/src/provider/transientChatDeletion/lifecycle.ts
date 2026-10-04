@@ -1,11 +1,9 @@
-import type { ThreadId } from "@t3tools/contracts";
+import { TransientSideChatCleanupError, type ThreadId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-
-import { ProviderValidationError } from "../Errors.ts";
 
 const isClosingPayload = Schema.is(
   Schema.Struct({
@@ -16,9 +14,9 @@ const isClosingPayload = Schema.is(
 export const assertTransientChatNotClosing = (threadId: ThreadId, payload: unknown) =>
   isClosingPayload(payload)
     ? Effect.fail(
-        new ProviderValidationError({
-          operation: "transient-side-chat-cleanup",
-          issue: `Transient side chat '${threadId}' is being deleted.`,
+        new TransientSideChatCleanupError({
+          reason: "busy",
+          message: `Transient side chat '${threadId}' is being deleted.`,
         }),
       )
     : Effect.void;
@@ -31,9 +29,9 @@ export const makeTransientChatCleanupGate = Effect.sync(() => {
   const run = <A, E, R>(threadId: ThreadId, effect: Effect.Effect<A, E, R>) =>
     Effect.gen(function* () {
       if (closing.has(threadId)) {
-        return yield* new ProviderValidationError({
-          operation: "transient-side-chat-cleanup",
-          issue: `Transient side chat '${threadId}' is being deleted.`,
+        return yield* new TransientSideChatCleanupError({
+          reason: "busy",
+          message: `Transient side chat '${threadId}' is being deleted.`,
         });
       }
       const done = yield* Deferred.make<void>();
@@ -54,9 +52,9 @@ export const makeTransientChatCleanupGate = Effect.sync(() => {
   const cleanup = <A, E, R>(threadId: ThreadId, effect: Effect.Effect<A, E, R>) =>
     Effect.gen(function* () {
       if (closing.has(threadId)) {
-        return yield* new ProviderValidationError({
-          operation: "transient-side-chat-cleanup",
-          issue: `Cleanup for '${threadId}' is already in progress.`,
+        return yield* new TransientSideChatCleanupError({
+          reason: "busy",
+          message: `Cleanup for '${threadId}' is already in progress.`,
         });
       }
       closing.add(threadId);
@@ -77,3 +75,6 @@ export class TransientChatCleanupGate extends Context.Service<
 >()("t3/provider/transientChatDeletion/lifecycle/TransientChatCleanupGate") {
   static readonly layer = Layer.effect(this, makeTransientChatCleanupGate);
 }
+
+/** One server process shares admission state between V2 turn starts and cleanup RPCs. */
+export const transientChatCleanupGate = Effect.runSync(makeTransientChatCleanupGate);

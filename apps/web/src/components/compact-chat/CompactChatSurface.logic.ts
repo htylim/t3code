@@ -1,13 +1,12 @@
 import {
   isTimelinePromptKeybindingCommand,
-  type ApprovalRequestId,
+  type RuntimeRequestId,
   type ChatAttachment,
   type KeybindingCommand,
   type MessageId,
   type ModelSelection,
   type OrchestrationMessageContext,
   type UserInputAttachments,
-  type OrchestrationSession,
   type ProjectId,
   type ProviderApprovalDecision,
   type ProviderInteractionMode,
@@ -15,9 +14,10 @@ import {
   type RuntimeMode,
   type ScopedThreadRef,
   type UploadChatAttachment,
-  type TurnId,
+  type RunId,
 } from "@t3tools/contracts";
 
+import type { ThreadSession } from "~/types";
 import type { RightPanelKind } from "~/rightPanelStore";
 
 export interface CompactChatTargetThread {
@@ -25,7 +25,7 @@ export interface CompactChatTargetThread {
   readonly modelSelection: ModelSelection;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
-  readonly session: OrchestrationSession | null;
+  readonly runtime: Pick<ThreadSession, "status" | "activeRunId"> | null;
 }
 
 export interface SideChatSourceThread {
@@ -96,22 +96,22 @@ export function buildCompactChatStartTurnCommand(input: {
 
 export function buildCompactChatInterruptCommand(input: {
   readonly target: ScopedThreadRef;
-  readonly session: OrchestrationSession | null;
+  readonly session: Pick<ThreadSession, "status" | "activeRunId"> | null;
 }) {
-  const turnId: TurnId | null =
-    input.session?.status === "running" ? input.session.activeTurnId : null;
+  const runId: RunId | null =
+    input.session?.status === "running" ? input.session.activeRunId : null;
   return {
     environmentId: input.target.environmentId,
     input: {
       threadId: input.target.threadId,
-      ...(turnId !== null ? { turnId } : {}),
+      ...(runId !== null ? { runId } : {}),
     },
   };
 }
 
 export function buildCompactChatApprovalCommand(input: {
   readonly target: ScopedThreadRef;
-  readonly requestId: ApprovalRequestId;
+  readonly requestId: RuntimeRequestId;
   readonly decision: ProviderApprovalDecision;
 }) {
   return {
@@ -126,7 +126,7 @@ export function buildCompactChatApprovalCommand(input: {
 
 export function buildCompactChatUserInputCommand(input: {
   readonly target: ScopedThreadRef;
-  readonly requestId: ApprovalRequestId;
+  readonly requestId: RuntimeRequestId;
   readonly answers: ProviderUserInputAnswers;
   readonly attachmentsByQuestionId?: UserInputAttachments;
 }) {

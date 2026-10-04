@@ -1,318 +1,293 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import { ProjectId, ProviderInstanceId, ThreadId, ProviderDriverKind } from "@t3tools/contracts";
-import * as Deferred from "effect/Deferred";
+import {
+  OrchestrationV2AppThread,
+  ProjectId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ProviderSessionId,
+  ProviderThreadId,
+  ThreadId,
+  type OrchestrationV2ThreadProjection,
+} from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
-import { ThreadDeletionReactor } from "../orchestration/Services/ThreadDeletionReactor.ts";
-import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
+import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
+import type { ProviderAdapterV2SessionRuntime } from "../orchestration-v2/ProviderAdapter.ts";
+import { ProviderSessionManagerV2 } from "../orchestration-v2/ProviderSessionManager.ts";
+import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
 import {
-  ProjectionThreadRepository,
-  type ProjectionThread,
-} from "../persistence/Services/ProjectionThreads.ts";
+  ProviderSessionRuntimeRepository,
+  type ProviderSessionRuntime,
+} from "../persistence/ProviderSessionRuntime.ts";
+import { ProjectService } from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import { ProviderValidationError } from "./Errors.ts";
+import { OpenCodeServerLedger } from "./OpenCodeServerLedger.ts";
 import { OpenCodeRuntimeLive } from "./opencodeRuntime.ts";
-import { ProviderService } from "./Services/ProviderService.ts";
-import {
-  ProviderSessionDirectory,
-  type ProviderRuntimeBinding,
-} from "./Services/ProviderSessionDirectory.ts";
 import { TransientChatProviderThreadDeleteError } from "./transientChatDeletion/errors.ts";
-import {
-  makeTransientChatCleanupGate,
-  TransientChatCleanupGate,
-} from "./transientChatDeletion/lifecycle.ts";
 import { makeTransientSideChatCleanup } from "./transientSideChatCleanup.ts";
 import type { TransientChatProviderThreadDeleteInput } from "./transientChatProviderThreadDelete.ts";
 
-const threadId = ThreadId.make("side-chat");
-const nativeId = "11111111-1111-4111-8111-111111111111";
+const threadId = ThreadId.make("transient-side-chat");
 const instanceId = ProviderInstanceId.make("test-instance");
-const runtime = OpenCodeRuntimeLive.pipe(Layer.provideMerge(NodeServices.layer));
+const sessionId = ProviderSessionId.make("session-transient");
+const nativeId = "11111111-1111-4111-8111-111111111111";
+const now = DateTime.makeUnsafe("2026-10-04T12:00:00Z");
+const runtimeLayer = OpenCodeRuntimeLive.pipe(
+  Layer.provide(Layer.mock(OpenCodeServerLedger)({ track: () => Effect.succeed(Effect.void) })),
+  Layer.provideMerge(NodeServices.layer),
+);
 
-/** Builds a cleanup target with explicit or legacy provider settings. */
-const fixture = Effect.fn("fixture")(function* (
-  driver = "codex",
-  started = true,
-  legacySettings = false,
-) {
-  const fixtureInstanceId = legacySettings ? ProviderInstanceId.make(driver) : instanceId;
-  const gate = yield* makeTransientChatCleanupGate;
-  const provider = ProviderDriverKind.make(driver);
-  let thread: ProjectionThread = {
-    threadId,
+/** V2 projection and retry storage with a controlled native-history deletion boundary. */
+function fixture(driverName = "codex", started = true) {
+  const driver = ProviderDriverKind.make(driverName);
+  const appThread = Schema.decodeUnknownSync(OrchestrationV2AppThread)({
+    createdBy: "user",
+    creationSource: "web",
+    id: threadId,
     projectId: ProjectId.make("project"),
     title: "Side chat",
-    modelSelection: { instanceId: fixtureInstanceId, model: "test" },
-    runtimeMode: "auto",
+    providerInstanceId: instanceId,
+    modelSelection: { instanceId, model: "test-model" },
+    runtimeMode: "full-access",
     interactionMode: "default",
     branch: null,
     worktreePath: null,
-    latestTurnId: null,
-    createdAt: "2026-09-12T00:00:00.000Z",
-    updatedAt: "2026-09-12T00:00:00.000Z",
+    activeProviderThreadId: null,
+    lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+    forkedFrom: null,
+    createdAt: now,
+    updatedAt: now,
     archivedAt: null,
-    settledOverride: null,
-    settledAt: null,
-    unsettledAt: null,
-    snoozedUntil: null,
-    snoozedAt: null,
-    pinnedAt: null,
-    latestUserMessageAt: null,
-    pendingApprovalCount: 0,
-    pendingUserInputCount: 0,
-    hasActionableProposedPlan: 0,
     deletedAt: null,
+  });
+  let projection: OrchestrationV2ThreadProjection = {
+    thread: appThread,
+    updatedAt: now,
+    runs: [],
+    attempts: [],
+    nodes: [],
+    subagents: [],
+    providerThreads: started
+      ? [
+          {
+            id: ProviderThreadId.make("provider-thread-transient"),
+            driver,
+            providerInstanceId: instanceId,
+            providerSessionId: sessionId,
+            appThreadId: threadId,
+            ownerNodeId: null,
+            nativeThreadRef: { driver, nativeId, strength: "strong" },
+            nativeConversationHeadRef: null,
+            status: "idle",
+            firstRunOrdinal: 1,
+            lastRunOrdinal: 1,
+            handoffIds: [],
+            forkedFrom: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ]
+      : [],
+    providerSessions: started
+      ? [
+          {
+            id: sessionId,
+            driver,
+            providerInstanceId: instanceId,
+            status: "ready",
+            cwd: "/project",
+            model: "test-model",
+            capabilities: CodexProviderCapabilitiesV2,
+            createdAt: now,
+            updatedAt: now,
+            lastError: null,
+          },
+        ]
+      : [],
+    providerTurns: [],
+    runtimeRequests: [],
+    messages: [],
+    plans: [],
+    turnItems: [],
+    checkpointScopes: [],
+    checkpoints: [],
+    contextHandoffs: [],
+    contextTransfers: [],
+    visibleTurnItems: [],
   };
-  const cursor =
-    provider === "codex"
-      ? { threadId: nativeId }
-      : provider === "claudeAgent"
-        ? { resume: nativeId }
-        : { sessionId: "ses_native" };
-  let binding: ProviderRuntimeBinding | undefined = started
-    ? {
-        threadId,
-        provider,
-        providerInstanceId: fixtureInstanceId,
-        status: "running",
-        resumeCursor: cursor,
-        runtimePayload: { cwd: "/project" },
-      }
-    : undefined;
-  const calls: string[] = [];
-  const nativeCalls: TransientChatProviderThreadDeleteInput[] = [];
+  let marker: ProviderSessionRuntime | undefined;
   let stopFails = false;
   let nativeFails = false;
   let nativeGone = false;
-  const directory = {
-    getBinding: () => Effect.sync(() => Option.fromUndefinedOr(binding)),
-    upsert: (next: ProviderRuntimeBinding) =>
-      Effect.sync(() => {
-        binding = {
-          ...binding,
-          ...next,
-          runtimePayload: {
-            ...(binding?.runtimePayload as object),
-            ...(next.runtimePayload as object),
-          },
-        };
-      }),
-  };
-  const providers = {
-    stopSession: () =>
-      Effect.gen(function* () {
-        calls.push("stop");
-        if (stopFails)
-          return yield* new ProviderValidationError({ operation: "stop", issue: "Stop failed" });
-        if (binding) binding = { ...binding, status: "stopped" };
-      }),
-  };
-  const engine = {
-    latestSequence: Effect.succeed(1),
-    dispatch: () =>
-      Effect.sync(() => {
-        calls.push("t3-delete");
-        thread = { ...thread, deletedAt: "2026-09-12T00:01:00.000Z" };
-        return { sequence: 1 };
-      }),
-  };
-  const repository = { getById: () => Effect.sync(() => Option.some(thread)) };
-  const explicitInstances = {
-    [fixtureInstanceId]: {
-      driver: provider,
-      config: { homePath: "/provider-home" },
-      environment: [{ name: "TEST_INSTANCE", value: "selected" }],
-    },
-  };
+  const calls: string[] = [];
+  const nativeCalls: TransientChatProviderThreadDeleteInput[] = [];
+  const liveRuntime = {
+    unloadThread: () =>
+      Effect.sync(() => calls.push("unload")).pipe(
+        Effect.andThen(
+          Effect.suspend(() => (stopFails ? Effect.fail("Cannot unload") : Effect.void)),
+        ),
+      ),
+    interruptTurn: () => Effect.void,
+  } as unknown as ProviderAdapterV2SessionRuntime;
   const settingsLayer = ServerSettings.layerTest({
-    providerInstances: legacySettings ? {} : explicitInstances,
+    providerInstances: {
+      [instanceId]: {
+        driver,
+        config: { homePath: "/provider-home" },
+        environment: [{ name: "TEST_INSTANCE", value: "selected" }],
+      },
+    },
   });
   const layers = Layer.mergeAll(
-    runtime,
+    runtimeLayer,
     settingsLayer,
-    Layer.succeed(ThreadDeletionReactor, {
-      start: () => Effect.void,
-      drainThrough: () => Effect.void,
+    Layer.mock(ThreadManagementService)({
+      getThreadProjection: () => Effect.sync(() => projection),
+      dispatch: () =>
+        Effect.sync(() => {
+          calls.push("t3-delete");
+          projection = { ...projection, thread: { ...projection.thread, deletedAt: now } };
+          return { sequence: 1, storedEvents: [] };
+        }),
     }),
-    Layer.mock(ProviderSessionDirectory)(directory),
-    Layer.mock(ProviderService)(providers),
-    Layer.mock(ProjectionThreadRepository)(repository),
-    Layer.mock(OrchestrationEngineService)(engine),
-    Layer.succeed(TransientChatCleanupGate, gate),
+    Layer.mock(ProjectService)({
+      getById: () => Effect.succeed(Option.some({ workspaceRoot: "/project" } as never)),
+    }),
+    Layer.mock(ProviderSessionRuntimeRepository)({
+      getByThreadId: () => Effect.sync(() => Option.fromUndefinedOr(marker)),
+      upsert: (runtime) =>
+        Effect.sync(() => {
+          marker = runtime;
+        }),
+    }),
+    Layer.mock(ProviderSessionManagerV2)({
+      get: () => Effect.succeed(Option.some(liveRuntime)),
+      detach: () =>
+        Effect.sync(() => {
+          calls.push("detach");
+        }),
+      close: () =>
+        Effect.sync(() => {
+          calls.push("close");
+        }),
+    }),
   );
+  let updateSettings: ServerSettings.ServerSettingsService["Service"]["updateSettings"] = () =>
+    Effect.die("Create the cleanup handler first.");
   const create = () =>
-    makeTransientSideChatCleanup((input) =>
-      Effect.gen(function* () {
-        assert.equal(binding?.status, "stopped");
-        calls.push("provider-delete");
-        nativeCalls.push(input);
-        if (nativeFails)
-          return yield* new TransientChatProviderThreadDeleteError({
-            provider: input.provider,
-            providerSessionId: input.providerSessionId,
-            reason: "unsafe-session",
-            message: "Has children",
-          });
-        if (nativeGone) return "already-absent" as const;
-        nativeGone = true;
-        return "deleted" as const;
-      }),
-    ).pipe(Effect.provide(layers));
+    Effect.gen(function* () {
+      updateSettings = (yield* ServerSettings.ServerSettingsService).updateSettings;
+      return yield* makeTransientSideChatCleanup((input) =>
+        Effect.gen(function* () {
+          calls.push("provider-delete");
+          nativeCalls.push(input);
+          if (nativeFails)
+            return yield* new TransientChatProviderThreadDeleteError({
+              provider: input.provider,
+              providerSessionId: input.providerSessionId,
+              reason: "unsafe-session",
+              message: "Has children",
+            });
+          if (nativeGone) return "already-absent" as const;
+          nativeGone = true;
+          return "deleted" as const;
+        }),
+      );
+    }).pipe(Effect.provide(layers));
   return {
     create,
-    gate,
     calls,
     nativeCalls,
+    changeHome: () =>
+      updateSettings({
+        providerInstances: {
+          [instanceId]: {
+            driver: ProviderDriverKind.make("codex"),
+            config: { homePath: "/different-home" },
+          },
+        },
+      }),
     layers,
-    directory,
-    cursor,
-    thread: () => thread,
-    binding: () => binding,
-    stopFails: (value: boolean) => {
-      stopFails = value;
+    stopFails: (fails: boolean) => {
+      stopFails = fails;
     },
-    nativeFails: (value: boolean) => {
-      nativeFails = value;
+    nativeFails: (fails: boolean) => {
+      nativeFails = fails;
     },
   };
-});
-
-for (const provider of ["codex", "claudeAgent", "opencode"] as const) {
-  it.effect(`cleans ${provider} using its native ID, original instance settings, and cwd`, () =>
-    Effect.gen(function* () {
-      const f = yield* fixture(provider);
-      const cleanup = yield* f.create();
-      assert.deepEqual(yield* cleanup({ threadId }), { providerHistory: "deleted" });
-      assert.deepEqual(f.calls, ["t3-delete", "stop", "provider-delete"]);
-      assert.equal(
-        f.nativeCalls[0]?.providerSessionId,
-        provider === "opencode" ? "ses_native" : nativeId,
-      );
-      assert.equal(f.nativeCalls[0]?.environment?.TEST_INSTANCE, "selected");
-      assert.equal(f.nativeCalls[0]?.cwd, "/project");
-      assert.isNotNull(f.thread().deletedAt);
-      const afterRestart = yield* f.create();
-      assert.deepEqual(yield* afterRestart({ threadId }), { providerHistory: "already-absent" });
-      assert.equal(f.nativeCalls.length, 1);
-    }),
-  );
 }
 
-for (const provider of ["codex", "claudeAgent", "opencode"] as const) {
-  it.effect(`cleans the built-in ${provider} instance without an explicit settings entry`, () =>
-    Effect.gen(function* () {
-      const f = yield* fixture(provider, true, true);
-      const cleanup = yield* f.create();
-      assert.deepEqual(yield* cleanup({ threadId }), { providerHistory: "deleted" });
-      assert.equal(f.nativeCalls[0]?.provider, provider);
-      assert.equal(f.nativeCalls[0]?.cwd, "/project");
-      assert.deepEqual(f.calls, ["t3-delete", "stop", "provider-delete"]);
-    }),
-  );
-}
-
-it.effect(
-  "never-started chats are deleted without launching a provider and cannot later start",
-  () =>
-    Effect.gen(function* () {
-      const f = yield* fixture("codex", false);
-      const cleanup = yield* f.create();
-      assert.deepEqual(yield* cleanup({ threadId }), { providerHistory: "not-started" });
-      assert.deepEqual(f.calls, ["t3-delete"]);
-      assert.deepInclude(f.binding()?.runtimePayload, { transientSideChatCleanup: "complete" });
-    }),
-);
-
-it.effect("a failed stop never deletes provider history; a later request retries", () =>
+it.effect("V2 cleanup deletes the T3 thread, unloads native work, and deletes history once", () =>
   Effect.gen(function* () {
-    const f = yield* fixture();
-    const cleanup = yield* f.create();
-    f.stopFails(true);
-    yield* Effect.flip(cleanup({ threadId }));
-    assert.equal(f.nativeCalls.length, 0);
-    assert.deepInclude(f.binding()?.runtimePayload, { transientSideChatCleanup: "pending" });
-    f.stopFails(false);
-    yield* cleanup({ threadId });
-    assert.deepEqual(f.calls, ["t3-delete", "stop", "stop", "provider-delete"]);
+    const state = fixture();
+    const cleanup = yield* state.create();
+    assert.deepEqual(yield* cleanup({ threadId }), { providerHistory: "deleted" });
+    assert.deepEqual(state.calls, ["t3-delete", "unload", "detach", "provider-delete"]);
+    assert.equal(state.nativeCalls[0]?.providerSessionId, nativeId);
+    assert.equal(state.nativeCalls[0]?.cwd, "/project");
+    assert.equal(state.nativeCalls[0]?.environment?.TEST_INSTANCE, "selected");
+    const afterRestart = yield* state.create();
+    assert.deepEqual(yield* afterRestart({ threadId }), { providerHistory: "already-absent" });
+    assert.equal(state.nativeCalls.length, 1);
   }),
 );
 
-it.effect("unsafe provider sessions remain queued; cleanup can resume after a restart", () =>
+it.effect("a failed unload leaves provider history intact and can be retried", () =>
   Effect.gen(function* () {
-    const f = yield* fixture();
-    const cleanup = yield* f.create();
-    f.nativeFails(true);
+    const state = fixture();
+    state.stopFails(true);
+    const cleanup = yield* state.create();
+    assert.equal((yield* Effect.flip(cleanup({ threadId }))).reason, "provider-error");
+    assert.equal(state.nativeCalls.length, 0);
+    state.stopFails(false);
+    assert.equal((yield* cleanup({ threadId })).providerHistory, "deleted");
+  }),
+);
+
+it.effect("native lineage failures remain retryable after V2 deletion", () =>
+  Effect.gen(function* () {
+    const state = fixture();
+    state.nativeFails(true);
+    const cleanup = yield* state.create();
     assert.equal((yield* Effect.flip(cleanup({ threadId }))).reason, "unsafe-session");
-    assert.deepInclude(f.binding()?.runtimePayload, { transientSideChatCleanup: "pending" });
-    f.nativeFails(false);
-    const resumed = yield* f.create();
-    yield* resumed({ threadId });
-    assert.equal(f.nativeCalls.length, 2);
+    state.nativeFails(false);
+    assert.equal((yield* (yield* state.create())({ threadId })).providerHistory, "deleted");
+    assert.equal(state.calls.filter((call) => call === "t3-delete").length, 1);
   }),
 );
 
-it.effect("waits for a first session being created before resolving the native ID", () =>
+it.effect("cleanup refuses a different provider home on retry", () =>
   Effect.gen(function* () {
-    const f = yield* fixture("codex", false);
-    const cleanup = yield* f.create();
-    const started = yield* Deferred.make<void>();
-    const release = yield* Deferred.make<void>();
-    const admission = yield* f.gate
-      .run(
-        threadId,
-        Effect.gen(function* () {
-          yield* Deferred.succeed(started, undefined);
-          yield* Deferred.await(release);
-          yield* f.directory.upsert({
-            threadId,
-            provider: ProviderDriverKind.make("codex"),
-            providerInstanceId: instanceId,
-            status: "running",
-            resumeCursor: f.cursor,
-            runtimePayload: { cwd: "/project" },
-          });
-        }),
-      )
-      .pipe(Effect.forkChild);
-    yield* Deferred.await(started);
-    const close = yield* cleanup({ threadId }).pipe(Effect.forkChild);
-    yield* Effect.yieldNow;
-    assert.deepEqual(f.calls, []);
-    yield* Deferred.succeed(release, undefined);
-    yield* Fiber.join(admission);
-    yield* Fiber.join(close);
-    assert.equal(f.nativeCalls[0]?.providerSessionId, nativeId);
-  }),
-);
-
-it.effect("other providers keep T3-only cleanup", () =>
-  Effect.gen(function* () {
-    const f = yield* fixture("cursor");
-    const cleanup = yield* f.create();
-    assert.deepEqual(yield* cleanup({ threadId }), { providerHistory: "unsupported" });
-    assert.deepEqual(f.calls, ["t3-delete", "stop"]);
-  }),
-);
-
-it.effect("a stopped binding with a missing native ID fails and remains pending", () =>
-  Effect.gen(function* () {
-    const f = yield* fixture();
-    yield* f.directory.upsert({
-      threadId,
-      provider: ProviderDriverKind.make("codex"),
-      providerInstanceId: instanceId,
-      status: "stopped",
-      resumeCursor: null,
-    });
-    const cleanup = yield* f.create();
+    const state = fixture();
+    state.nativeFails(true);
+    const cleanup = yield* state.create();
     yield* Effect.flip(cleanup({ threadId }));
-    yield* Effect.flip(cleanup({ threadId }));
-    assert.equal(f.nativeCalls.length, 0);
-    assert.deepInclude(f.binding()?.runtimePayload, { transientSideChatCleanup: "pending" });
+    yield* state.changeHome();
+    assert.equal((yield* Effect.flip(cleanup({ threadId }))).reason, "invalid-target");
+    assert.equal(state.nativeCalls.length, 1);
+  }),
+);
+
+it.effect("never-started chats need no provider configuration or history deletion", () =>
+  Effect.gen(function* () {
+    const state = fixture("codex", false);
+    const cleanup = yield* state.create();
+    assert.equal((yield* cleanup({ threadId })).providerHistory, "not-started");
+    assert.deepEqual(state.calls, ["t3-delete"]);
+  }),
+);
+
+it.effect("unsupported provider histories leave an explicit result", () =>
+  Effect.gen(function* () {
+    const state = fixture("cursor");
+    const cleanup = yield* state.create();
+    assert.equal((yield* cleanup({ threadId })).providerHistory, "unsupported");
+    assert.equal(state.nativeCalls.length, 0);
   }),
 );

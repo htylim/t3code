@@ -2,7 +2,7 @@ import { GitCommandError } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import type {
   EnvironmentId,
-  OrchestrationThreadShell,
+  OrchestrationV2ThreadShell,
   VcsStatusResult,
   ScopedProjectRef,
 } from "@t3tools/contracts";
@@ -157,18 +157,29 @@ function WorkspaceMenuContents(
   const liveThreads = useThreadShellsForProjectRefs(projectRefs);
   const archived = useArchivedThreadSnapshots([props.environmentId]);
   const threads = useMemo(() => {
-    const byId = new Map<string, OrchestrationThreadShell>();
+    const byId = new Map<string, OrchestrationV2ThreadShell>();
     for (const snapshot of archived.snapshots) {
       for (const thread of snapshot.snapshot.threads) {
         if (thread.projectId === props.projectRef.projectId) byId.set(thread.id, thread);
       }
     }
-    for (const thread of liveThreads) byId.set(thread.id, thread);
+    for (const thread of liveThreads) byId.set(thread.id, thread.source);
     return [...byId.values()];
   }, [archived.snapshots, liveThreads, props.projectRef.projectId]);
   const rows = resolveWorktreeRows({
     refs,
-    threads,
+    threads: threads.map((thread) => ({
+      worktreePath: thread.worktreePath,
+      archivedAt: thread.archivedAt === null ? null : "archived",
+      settledOverride: thread.settledOverride,
+      latestTurn:
+        thread.status === "running" ||
+        thread.status === "starting" ||
+        thread.status === "preparing" ||
+        thread.status === "waiting"
+          ? { state: "running" }
+          : null,
+    })),
     activeProjectCwd: props.projectCwd,
     activeWorktreePath: props.activeWorktreePath,
   });
@@ -299,7 +310,7 @@ function WorktreeRowStatus({
 function WorkspaceRow(
   props: WorkspaceMenuProps & {
     row: WorktreeRow;
-    threads: readonly OrchestrationThreadShell[];
+    threads: readonly OrchestrationV2ThreadShell[];
     current?: boolean;
     archivedReady: boolean;
     setEditing: (editing: boolean) => void;

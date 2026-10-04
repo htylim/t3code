@@ -8,13 +8,17 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import { withCodexAppServerClient } from "./Layers/CodexProvider.ts";
+import { OpenCodeServerLedger } from "./OpenCodeServerLedger.ts";
 import { OpenCodeRuntime, OpenCodeRuntimeLive } from "./opencodeRuntime.ts";
 import { deleteTransientChatProviderThread } from "./transientChatProviderThreadDelete.ts";
 
 // Explicit opt-in: requires installed CLIs. Creates no turns and uses only
 // disposable provider homes; no credentials or real history are needed.
 const enabled = process.env.T3_TEST_NATIVE_TRANSIENT_DELETION === "1";
-const layer = OpenCodeRuntimeLive.pipe(Layer.provideMerge(NodeServices.layer));
+const layer = OpenCodeRuntimeLive.pipe(
+  Layer.provide(Layer.succeed(OpenCodeServerLedger, { track: () => Effect.succeed(Effect.void) })),
+  Layer.provideMerge(NodeServices.layer),
+);
 const codexConfig = Schema.decodeSync(CodexSettings)({});
 const openCodeConfig = Schema.decodeSync(OpenCodeSettings)({});
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
@@ -61,128 +65,126 @@ describe.skipIf(!enabled)("Installed providers: transient deletion", () => {
         }),
     );
 
-    for (const childState of ["none", "active", "archived"] as const) {
-      it.effect(
-        `Codex ${childState === "none" ? "deletes a standalone rollout" : `refuses a parent with an ${childState} child`}`,
-        () =>
-          Effect.gen(function* () {
-            const fs = yield* FileSystem.FileSystem;
-            const path = yield* Path.Path;
-            const home = yield* fs.realPath(yield* fs.makeTempDirectoryScoped());
-            const cwd = path.join(home, "project");
-            yield* fs.makeDirectory(cwd);
-            const directory = path.join(home, "sessions", "2026", "09", "12");
-            yield* fs.makeDirectory(directory, { recursive: true });
-            const seed = Effect.fn("seedCodexRollout")(function* (id: string, parent?: string) {
-              const file = path.join(directory, `rollout-2026-09-12T12-00-00-${id}.jsonl`);
-              yield* fs.writeFileString(
-                file,
-                [
-                  {
+    it.effect.each(["none", "active", "archived"] as const)(
+      "Codex native deletion with descendant state %s",
+      (childState) =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const home = yield* fs.realPath(yield* fs.makeTempDirectoryScoped());
+          const cwd = path.join(home, "project");
+          yield* fs.makeDirectory(cwd);
+          const directory = path.join(home, "sessions", "2026", "09", "12");
+          yield* fs.makeDirectory(directory, { recursive: true });
+          const seed = Effect.fn("seedCodexRollout")(function* (id: string, parent?: string) {
+            const file = path.join(directory, `rollout-2026-09-12T12-00-00-${id}.jsonl`);
+            yield* fs.writeFileString(
+              file,
+              [
+                {
+                  timestamp: "2026-09-12T12:00:00.000Z",
+                  type: "session_meta",
+                  payload: {
+                    id,
                     timestamp: "2026-09-12T12:00:00.000Z",
-                    type: "session_meta",
-                    payload: {
-                      id,
-                      timestamp: "2026-09-12T12:00:00.000Z",
-                      cwd,
-                      originator: "t3code_test",
-                      cli_version: "0.154.0",
-                      model_provider: "openai",
-                      source: parent
-                        ? { subagent: { thread_spawn: { parent_thread_id: parent, depth: 1 } } }
-                        : "cli",
-                    },
-                  },
-                  {
-                    timestamp: "2026-09-12T12:00:00.000Z",
-                    type: "event_msg",
-                    payload: {
-                      type: "user_message",
-                      message: "Disposable transcript fixture.",
-                      images: [],
-                      local_images: [],
-                      text_elements: [],
-                    },
-                  },
-                ]
-                  .map((entry) => encodeJson(entry))
-                  .join("\n") + "\n",
-              );
-              return file;
-            });
-            const root = yield* seed(rootId);
-            const other = yield* seed(otherId);
-            const child = childState !== "none" ? yield* seed(childId, rootId) : undefined;
-            let childPath = child;
-            if (child) {
-              yield* Effect.scoped(
-                Effect.gen(function* () {
-                  const { client } = yield* withCodexAppServerClient({
-                    binaryPath: codexConfig.binaryPath,
-                    homePath: home,
                     cwd,
-                  });
-                  // Check the real provider recognized the lineage in the rollout fixture.
-                  const read = yield* client.raw.request("thread/read", { threadId: childId });
-                  const parsed = yield* decodeChild(read);
-                  assert.equal(parsed.thread.source.subAgent.thread_spawn.parent_thread_id, rootId);
-                  if (childState === "archived") {
-                    yield* client.raw.request("thread/archive", { threadId: childId });
-                    childPath = path.join(home, "archived_sessions", path.basename(child));
-                  }
-                }),
-              );
-              const error = yield* Effect.flip(
-                deleteTransientChatProviderThread({
-                  provider: "codex",
-                  providerSessionId: childId,
+                    originator: "t3code_test",
+                    cli_version: "0.154.0",
+                    model_provider: "openai",
+                    source: parent
+                      ? { subagent: { thread_spawn: { parent_thread_id: parent, depth: 1 } } }
+                      : "cli",
+                  },
+                },
+                {
+                  timestamp: "2026-09-12T12:00:00.000Z",
+                  type: "event_msg",
+                  payload: {
+                    type: "user_message",
+                    message: "Disposable transcript fixture.",
+                    images: [],
+                    local_images: [],
+                    text_elements: [],
+                  },
+                },
+              ]
+                .map((entry) => encodeJson(entry))
+                .join("\n") + "\n",
+            );
+            return file;
+          });
+          const root = yield* seed(rootId);
+          const other = yield* seed(otherId);
+          const child = childState !== "none" ? yield* seed(childId, rootId) : undefined;
+          let childPath = child;
+          if (child) {
+            yield* Effect.scoped(
+              Effect.gen(function* () {
+                const { client } = yield* withCodexAppServerClient({
+                  binaryPath: codexConfig.binaryPath,
+                  homePath: home,
                   cwd,
-                  config: { ...codexConfig, homePath: home },
-                }),
-              );
-              assert.equal(error.reason, "unsafe-session");
-            }
-            const outcome = yield* deleteTransientChatProviderThread({
-              provider: "codex",
-              providerSessionId: rootId,
-              cwd,
-              config: { ...codexConfig, homePath: home },
-            }).pipe(Effect.result);
-            if (childPath) {
-              assert.equal(outcome._tag, "Failure");
-              if (outcome._tag === "Failure") {
-                assert.equal(outcome.failure.reason, "unsafe-session");
-                assert.include(outcome.failure.message, "descendants");
-              }
-              assert.isTrue(yield* fs.exists(root));
-              assert.isTrue(yield* fs.exists(childPath));
-            } else {
-              if (outcome._tag === "Failure") return yield* outcome.failure;
-              assert.isFalse(yield* fs.exists(root));
-              assert.equal(
-                yield* deleteTransientChatProviderThread({
-                  provider: "codex",
-                  providerSessionId: rootId,
-                  cwd,
-                  config: { ...codexConfig, homePath: home },
-                  allowMissing: true,
-                }),
-                "already-absent",
-              );
-              const { client } = yield* withCodexAppServerClient({
-                binaryPath: codexConfig.binaryPath,
-                homePath: home,
+                });
+                // Check the real provider recognized the lineage in the rollout fixture.
+                const read = yield* client.raw.request("thread/read", { threadId: childId });
+                const parsed = yield* decodeChild(read);
+                assert.equal(parsed.thread.source.subAgent.thread_spawn.parent_thread_id, rootId);
+                if (childState === "archived") {
+                  yield* client.raw.request("thread/archive", { threadId: childId });
+                  childPath = path.join(home, "archived_sessions", path.basename(child));
+                }
+              }),
+            );
+            const error = yield* Effect.flip(
+              deleteTransientChatProviderThread({
+                provider: "codex",
+                providerSessionId: childId,
                 cwd,
-              });
-              const read = yield* client.raw
-                .request("thread/read", { threadId: rootId })
-                .pipe(Effect.result);
-              assert.equal(read._tag, "Failure");
+                config: { ...codexConfig, homePath: home },
+              }),
+            );
+            assert.equal(error.reason, "unsafe-session");
+          }
+          const outcome = yield* deleteTransientChatProviderThread({
+            provider: "codex",
+            providerSessionId: rootId,
+            cwd,
+            config: { ...codexConfig, homePath: home },
+          }).pipe(Effect.result);
+          if (childPath) {
+            assert.equal(outcome._tag, "Failure");
+            if (outcome._tag === "Failure") {
+              assert.equal(outcome.failure.reason, "unsafe-session");
+              assert.include(outcome.failure.message, "descendants");
             }
-            assert.isTrue(yield* fs.exists(other));
-          }),
-      );
-    }
+            assert.isTrue(yield* fs.exists(root));
+            assert.isTrue(yield* fs.exists(childPath));
+          } else {
+            if (outcome._tag === "Failure") return yield* outcome.failure;
+            assert.isFalse(yield* fs.exists(root));
+            assert.equal(
+              yield* deleteTransientChatProviderThread({
+                provider: "codex",
+                providerSessionId: rootId,
+                cwd,
+                config: { ...codexConfig, homePath: home },
+                allowMissing: true,
+              }),
+              "already-absent",
+            );
+            const { client } = yield* withCodexAppServerClient({
+              binaryPath: codexConfig.binaryPath,
+              homePath: home,
+              cwd,
+            });
+            const read = yield* client.raw
+              .request("thread/read", { threadId: rootId })
+              .pipe(Effect.result);
+            assert.equal(read._tag, "Failure");
+          }
+          assert.isTrue(yield* fs.exists(other));
+        }),
+    );
 
     it.effect(
       "OpenCode deletes standalone history, refuses both sides of a parent-child pair",

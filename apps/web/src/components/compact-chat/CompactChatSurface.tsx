@@ -1,16 +1,18 @@
-import { derivePendingRequests } from "@t3tools/client-runtime/pending-requests";
-import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { useNavigate } from "@tanstack/react-router";
+import { buildThreadRouteParams } from "~/threadRoutes";
+import {
+  scopeProjectRef,
+  scopeThreadRef,
+  scopedThreadKey,
+} from "@t3tools/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
-import {
-  requestOlderThreadTurns,
-  threadHasOlderTurns,
-} from "@t3tools/client-runtime/state/threads";
+import { derivePendingThreadRequests } from "@t3tools/client-runtime/state/thread-requests";
 import type {
-  ApprovalRequestId,
+  RuntimeRequestId,
   ChatAttachment,
   ModelSelection,
   ProviderApprovalDecision,
@@ -70,16 +72,23 @@ import {
 import {
   deriveActiveWorkStartedAt,
   derivePhase,
-  deriveTimelineEntries,
-  deriveWorkLogEntries,
+  deriveTimelineEntriesFromVisibleTurnItems,
+  derivePendingApprovals,
+  derivePendingUserInputs,
 } from "~/session-logic";
 import { useEnvironment } from "~/state/environments";
-import { useProject, useThread, useThreadShell } from "~/state/entities";
+import {
+  useProject,
+  useThreadProjection,
+  useThreadShell,
+  useThreadHistory,
+  useThreadVisibleTurnItems,
+  waitForThreadShell,
+} from "~/state/entities";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { threadEnvironment, useEnvironmentThread } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
-import type { ChatMessage } from "~/types";
-import { newMessageId } from "~/lib/utils";
+import { newMessageId, newThreadId } from "~/lib/utils";
 import { resolveAppModelSelectionForInstance } from "~/modelSelection";
 import {
   createPageScrollController,
@@ -116,12 +125,6 @@ interface CompactChatSurfaceProps {
   /** Changes when a selection action has updated this target's draft. */
   focusRequestId: number;
 }
-
-const SIDE_CHAT_FORK_ELIGIBILITY = {
-  eligible: false,
-  reason: "unsupported-environment",
-  message: "Forking is not available from a side chat.",
-} as const;
 
 function commandFailureMessage(
   result: AtomCommandResult<unknown, unknown>,
@@ -160,10 +163,15 @@ function CompactState(props: { icon: typeof MessageSquareIcon; title: string; de
 }
 
 export function CompactChatSurface({ owner, target, focusRequestId }: CompactChatSurfaceProps) {
+  const navigate = useNavigate();
   const { resolvedTheme } = useTheme();
   const environment = useEnvironment(target.environmentId);
   const threadState = useEnvironmentThread(target.environmentId, target.threadId);
-  const thread = useThread(target);
+  const threadProjection = useThreadProjection(target)?.projection ?? null;
+  const thread = useThreadShell(target);
+  const threadHistory = useThreadHistory(target);
+  const visibleTurnItems = useThreadVisibleTurnItems(target);
+  const loadEarlierHistory = useAtomCommand(threadEnvironment.loadEarlierHistory);
   const threadShell = useThreadShell(target);
   const project = useProject(
     thread ? scopeProjectRef(thread.environmentId, thread.projectId) : null,
@@ -186,6 +194,10 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
     (state) => state.setInteractionMode,
   );
   const clearComposerDraftContent = useComposerDraftStore((state) => state.clearComposerContent);
+  const forkFromRun = useAtomCommand(threadEnvironment.forkFromRun, { reportFailure: false });
+  const revertCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
+    reportFailure: false,
+  });
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const interruptTurn = useAtomCommand(threadEnvironment.interruptTurn, { reportFailure: false });
   const respondToApproval = useAtomCommand(threadEnvironment.respondToApproval, {
@@ -198,7 +210,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   const dismissUserInput = useAtomCommand(threadEnvironment.dismissUserInput, {
     reportFailure: false,
   });
-  const userInputInFlight = useRef(new Set<ApprovalRequestId>());
+  const userInputInFlight = useRef(new Set<RuntimeRequestId>());
   const composerRef = useRef<ChatComposerHandle | null>(null);
   const promptRef = useRef("");
   const composerImagesRef = useRef<ComposerImageAttachment[]>([]);
@@ -208,7 +220,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   const sendInFlightRef = useRef(false);
   const [sending, setSending] = useState(false);
   const [sendingStartedAt, setSendingStartedAt] = useState<string | null>(null);
-  const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
+  const [respondingRequestIds, setRespondingRequestIds] = useState<RuntimeRequestId[]>([]);
   const [pendingInputAnswers, setPendingInputAnswers] = useState<
     Record<string, Record<string, PendingUserInputDraftAnswer>>
   >({});
@@ -223,9 +235,8 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [timelineOverflows, setTimelineOverflows] = useState(false);
 
-  const messages = thread?.messages ?? [];
-  const activities = thread?.activities ?? [];
-  const proposedPlans = thread?.proposedPlans ?? [];
+  const messages = threadProjection?.messages ?? [];
+
   const attachmentIds = useMemo(
     () => [
       ...new Set(
@@ -242,29 +253,40 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   );
   const attachmentUrls = useAssetUrls(target.environmentId, attachmentResources);
   const attachmentUrlById = useMemo(
-    () => new Map(attachmentIds.map((id, index) => [id, attachmentUrls[index] ?? null])),
+    () =>
+      new Map(
+        attachmentIds.flatMap((id, index) => {
+          const url = attachmentUrls[index];
+          return url ? [[id, url] as const] : [];
+        }),
+      ),
     [attachmentIds, attachmentUrls],
   );
-  const displayMessages = useMemo<ReadonlyArray<ChatMessage>>(
-    () =>
-      messages.map((message) => ({
-        ...message,
-        attachments: message.attachments?.map((attachment) => {
-          const previewUrl = attachmentUrlById.get(attachment.id);
-          return previewUrl ? { ...attachment, previewUrl } : attachment;
-        }),
-      })),
-    [attachmentUrlById, messages],
-  );
-  const workEntries = useMemo(() => deriveWorkLogEntries(activities), [activities]);
   const timelineEntries = useMemo(
-    () => deriveTimelineEntries(displayMessages, proposedPlans, workEntries),
-    [displayMessages, proposedPlans, workEntries],
+    () =>
+      deriveTimelineEntriesFromVisibleTurnItems({
+        visibleTurnItems,
+        optimisticMessages: [],
+        attachmentUrlById,
+        ...(threadProjection
+          ? {
+              attempts: threadProjection.attempts,
+              nodes: threadProjection.nodes,
+              plans: threadProjection.plans,
+            }
+          : {}),
+      }),
+    [visibleTurnItems, attachmentUrlById, threadProjection],
   );
-  const { approvals: pendingApprovals, userInputs: pendingUserInputs } = useMemo(
-    () => derivePendingRequests(activities),
-    [activities],
-  );
+  const { approvals: pendingApprovals, userInputs: pendingUserInputs } = useMemo(() => {
+    const requests = threadProjection
+      ? derivePendingThreadRequests(threadProjection)
+      : { approvals: [], userInputs: [] };
+    return {
+      approvals: derivePendingApprovals(requests.approvals),
+      userInputs: derivePendingUserInputs(requests.userInputs),
+    };
+  }, [threadProjection]);
   const activePendingApproval = pendingApprovals[0] ?? null;
   const activePendingUserInput = pendingUserInputs[0] ?? null;
   const pendingQuestionDraftKeys = useMemo(
@@ -315,14 +337,14 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   useEffect(() => {
     if (threadState.status !== "live" || threadState.data._tag !== "Some") return;
     const questionThread = threadState.data.value;
-    const { userInputs: currentRequests } = derivePendingRequests(questionThread.activities);
-    const prefix = questionAttachmentDraftPrefix(target.environmentId, questionThread.id);
+    const { userInputs: currentRequests } = derivePendingThreadRequests(questionThread);
+    const prefix = questionAttachmentDraftPrefix(target.environmentId, questionThread.thread.id);
     const retained = new Set(
       currentRequests.flatMap((request) =>
         request.questions.map((question) =>
           questionAttachmentDraftId(
             target.environmentId,
-            questionThread.id,
+            questionThread.thread.id,
             request.requestId,
             question.id,
           ),
@@ -405,14 +427,14 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
     ? providerStatuses.find(
         (provider) =>
           provider.instanceId ===
-          (thread.session?.providerInstanceId ?? thread.modelSelection.instanceId),
+          (thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId),
       )
     : undefined;
   const connected = environment?.connection.phase === "connected";
   const isConnecting =
     environment?.connection.phase === "connecting" ||
     environment?.connection.phase === "reconnecting";
-  const phase = derivePhase(thread?.session ?? null);
+  const phase = derivePhase(thread?.runtime ?? null);
   const running = phase === "running";
   const runtimeMode: RuntimeMode =
     composerDraft.runtimeMode ?? thread?.runtimeMode ?? projectSettings.defaultRuntimeMode;
@@ -420,25 +442,25 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
     ? (composerDraft.interactionMode ?? thread?.interactionMode ?? "default")
     : "default";
   const activeContextWindow = useMemo(
-    () => deriveLatestContextWindowSnapshot(activities),
-    [activities],
+    () => deriveLatestContextWindowSnapshot(visibleTurnItems),
+    [visibleTurnItems],
   );
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
-    thread?.latestTurn ?? null,
-    thread?.session ?? null,
+    thread?.latestRun ?? null,
+    thread?.runtime ?? null,
     sendingStartedAt,
   );
   const isWorking = running || sending || isConnecting;
-  const hasOlderTurns = threadHasOlderTurns(threadState);
-  const loadingOlder = threadState.page._tag === "Some" && threadState.page.value.loadingOlder;
+  const hasOlderTurns = threadHistory.hasMoreHistory;
+  const loadingOlder = threadHistory.loading;
   const routeThreadKey = scopedThreadKey(target);
   const threadStateError = Option.getOrNull(threadState.error);
-  const visibleError = error ?? thread?.session?.lastError ?? null;
+  const visibleError = error ?? thread?.runtime?.lastError ?? null;
   const environmentUnavailable =
     environment && !connected
       ? { label: environment.label, connection: environment.connection }
       : null;
-  const lockedProvider = thread?.session ? (selectedProviderStatus?.driver ?? null) : null;
+  const lockedProvider = thread?.runtime ? (selectedProviderStatus?.driver ?? null) : null;
 
   useEffect(() => {
     if (!composerOverlayElement) return;
@@ -523,9 +545,9 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       const nextModelSelection: ModelSelection = { instanceId, model: resolvedModel };
       const blocked = getStartedThreadModelChangeBlockReason({
         providers: providerStatuses,
-        hasStartedSession: thread.session !== null,
+        hasStartedSession: thread.runtime !== null,
         currentModelSelection: thread.modelSelection,
-        currentProviderInstanceId: thread.session?.providerInstanceId,
+        currentProviderInstanceId: thread.runtime?.providerInstanceId,
         nextModelSelection,
       });
       if (blocked) {
@@ -551,9 +573,9 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       if (!thread) return null;
       const blocked = getStartedThreadModelChangeBlockReason({
         providers: providerStatuses,
-        hasStartedSession: thread.session !== null,
+        hasStartedSession: thread.runtime !== null,
         currentModelSelection: thread.modelSelection,
-        currentProviderInstanceId: thread.session?.providerInstanceId,
+        currentProviderInstanceId: thread.runtime?.providerInstanceId,
         nextModelSelection: { instanceId, model },
       });
       return blocked ? `${blocked.description} Start a new thread to use this model.` : null;
@@ -565,14 +587,14 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
     if (!thread || !connected || !running) return;
     setError(null);
     const result = await interruptTurn(
-      buildCompactChatInterruptCommand({ target, session: thread.session }),
+      buildCompactChatInterruptCommand({ target, session: thread.runtime }),
     );
     const failure = commandFailureMessage(result, "Failed to interrupt the current turn.");
     if (failure) setError(failure);
   }, [connected, interruptTurn, running, target, thread]);
 
   const handleApproval = useCallback(
-    async (requestId: ApprovalRequestId, decision: ProviderApprovalDecision) => {
+    async (requestId: RuntimeRequestId, decision: ProviderApprovalDecision) => {
       if (!connected) return;
       setRespondingRequestIds((current) => [...new Set([...current, requestId])]);
       setError(null);
@@ -588,7 +610,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   );
 
   const handleUserInput = useCallback(
-    async (requestId: ApprovalRequestId, answers: Record<string, unknown>) => {
+    async (requestId: RuntimeRequestId, answers: Record<string, unknown>) => {
       const request = pendingUserInputs.find((request) => request.requestId === requestId);
       if (!connected || !request || userInputInFlight.current.has(requestId)) return;
       const attachmentsByQuestionId: Record<string, UserInputAttachments[string]> = {};
@@ -632,7 +654,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   );
 
   const handleDismissUserInput = useCallback(
-    async (requestId: ApprovalRequestId) => {
+    async (requestId: RuntimeRequestId) => {
       if (!connected || userInputInFlight.current.has(requestId)) return;
       userInputInFlight.current.add(requestId);
       setRespondingRequestIds((current) => [...new Set([...current, requestId])]);
@@ -744,6 +766,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       const context = buildMessageContext({
         terminalContexts,
         reviewComments: sendContext.reviewComments,
+        threadContexts: sendContext.threadContexts,
         previewAnnotations: sendContext.previewAnnotations,
         attachments: composerAttachments.map((attachment, index) => ({
           attachment,
@@ -888,11 +911,50 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
         <MessagesTimeline
           key={routeThreadKey}
           isWorking={isWorking}
+          activeTurnInProgress={running}
+          providerStatuses={providerStatuses}
+          runs={threadProjection?.runs ?? []}
+          onAnchorSizeChanged={() => {}}
+          onOpenThread={(threadId) => {
+            void navigate({
+              to: "/$environmentId/$threadId",
+              params: buildThreadRouteParams(scopeThreadRef(target.environmentId, threadId)),
+            });
+          }}
+          onForkFromRun={async (input) => {
+            const targetThreadId = newThreadId();
+            const outcome = await forkFromRun({
+              environmentId: target.environmentId,
+              input: { ...input, targetThreadId, title: `${thread.title} fork` },
+            });
+            if (outcome._tag === "Failure") {
+              const failure = commandFailureMessage(outcome, "Could not fork this response.");
+              if (failure) setError(failure);
+              return;
+            }
+            const forkRef = scopeThreadRef(target.environmentId, targetThreadId);
+            if (!(await waitForThreadShell(forkRef))) {
+              setError(
+                "The fork was created, but its thread has not reached this client. Reconnect and open it from the sidebar.",
+              );
+              return;
+            }
+            await navigate({
+              to: "/$environmentId/$threadId",
+              params: buildThreadRouteParams(forkRef),
+            });
+          }}
+          onRollbackCheckpoint={(input) =>
+            void revertCheckpoint({
+              environmentId: target.environmentId,
+              input: { ...input, threadId: target.threadId },
+            })
+          }
           activeTurnStartedAt={activeWorkStartedAt}
           listRef={legendListRef}
           timelineEntries={timelineEntries}
-          latestTurn={thread.latestTurn}
-          runningTurnId={thread.session?.status === "running" ? thread.session.activeTurnId : null}
+          latestRun={thread.latestRun}
+          runningRunId={thread.runtime?.status === "running" ? thread.runtime.activeRunId : null}
           routeThreadKey={routeThreadKey}
           onOpenTurnDiff={() => {}}
           turnDiffSummaries={[]}
@@ -922,7 +984,10 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
               ? {
                   loading: loadingOlder,
                   onLoadEarlier: () =>
-                    requestOlderThreadTurns(target.environmentId, target.threadId),
+                    loadEarlierHistory({
+                      environmentId: target.environmentId,
+                      input: { threadId: target.threadId },
+                    }),
                 }
               : null
           }
@@ -962,10 +1027,11 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
               <ComposerSurface.Host>
                 <ChatComposer
                   composerRef={composerRef}
-                  promptHistoryMessages={messages}
+                  promptHistoryMessages={timelineEntries.flatMap((entry) =>
+                    entry.kind === "message" ? [entry.message] : [],
+                  )}
                   timelineOverflows={timelineOverflows}
                   composerDraftTarget={target}
-                  projectId={thread.projectId}
                   environmentId={target.environmentId}
                   attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                   supportsAttachmentUploads={supportsAttachmentUploads}
@@ -985,7 +1051,11 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
                   phase={phase}
                   isConnecting={isConnecting}
                   isSendBusy={sending}
-                  sendBusyLabel="Sending"
+                  canInterrupt={running}
+                  canResume={false}
+                  onResume={() => {}}
+                  editingQueuedAttachments={null}
+                  onRemoveEditingQueuedAttachment={() => {}}
                   sendDisabledReason={
                     running
                       ? "Wait for this side-chat turn to finish before sending another message."
@@ -1028,7 +1098,6 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
                   keybindings={keybindings}
                   terminalOpen={false}
                   gitCwd={thread.worktreePath ?? project?.workspaceRoot ?? null}
-                  forkEligibility={SIDE_CHAT_FORK_ELIGIBILITY}
                   multipleModelSelections={null}
                   supportsMultipleModels={false}
                   onMultipleModelSelectionsChange={() => {}}

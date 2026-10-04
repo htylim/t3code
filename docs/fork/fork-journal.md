@@ -19,6 +19,27 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-04 - Integrate upstream Orchestration V2
+
+- Upstream baseline: `8ed276c246`, following `de251fc297`. Integrates the reviewed 102 commits
+  on `integration/upstream-2026-10-04`, starting from fork commit `3d23e894299a`.
+- Upstream now owns thread control, native forks, reference picking, and runtime defaults. The
+  fork implementations were removed first, including their partially replaced behavior.
+- Retained side chats, selected-text actions and quotes, transient hiding and provider-history
+  cleanup, Mermaid, Codex visualization links, workspace management, sidebar hover reveal,
+  project filtering and switching, custom shortcuts, Fork branding, and T3 Connect defaults.
+- Adaptations: side chats use V2 projections, requests, runs, and provider sessions. New-thread
+  selection prompts attach upstream context records. Side-chat owner context names upstream's
+  `t3_thread_read` tool. Cleanup captures native IDs and provider configuration fingerprints,
+  blocks late admission through persisted markers, and awaits native unload before deletion.
+  Shared provider runtimes remain available to their other threads.
+- Verification: focused retained-feature and V2 launch/fork/delete tests passed. Scoped web,
+  server, desktop, contracts, and client-runtime typechecks passed. Targeted lint had no errors;
+  existing warnings remain. Web and server bundles passed, including a bundled transient-deletion
+  command smoke test that rejected an invalid native ID before provider access. Browser and
+  native-client verification were not performed. The live install and original fork checkout
+  were not changed.
+
 ## 2026-10-04 - Retire implementations replaced by Orchestration V2
 
 - Upstream baseline: `de251fc297`, preparing to integrate `8ed276c246`.

@@ -1,4 +1,4 @@
-import { CommandId, MessageId, ProjectId, ThreadId } from "@t3tools/contracts";
+import { MessageId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { type CxOptions, cx } from "class-variance-authority";
 import * as Encoding from "effect/Encoding";
 import { extendTailwindMerge } from "tailwind-merge";
@@ -34,10 +34,6 @@ export function getLocalFileManagerName(platform: string): string {
   return "Files";
 }
 
-export function randomHex(byteLength: number): string {
-  return Encoding.encodeHex(globalThis.crypto.getRandomValues(new Uint8Array(byteLength)));
-}
-
 export function randomUUID(): string {
   const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
   bytes[6] = (bytes[6]! & 0x0f) | 0x40;
@@ -45,8 +41,6 @@ export function randomUUID(): string {
   const hex = Encoding.encodeHex(bytes);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
-
-export const newCommandId = (): CommandId => CommandId.make(randomUUID());
 
 export const newProjectId = (): ProjectId => ProjectId.make(randomUUID());
 

@@ -67,7 +67,7 @@ describe("Codex transient deletion", () => {
     }),
   );
 
-  for (const [name, changes] of [
+  it.effect.each([
     ["parent", { parentThreadId: "parent" }],
     ["fork source", { forkedFromId: "source" }],
     ["subagent source", { source: { subAgent: { thread_spawn: { parent_thread_id: "parent" } } } }],
@@ -76,41 +76,41 @@ describe("Codex transient deletion", () => {
     ["active session", { status: { type: "active" } }],
     ["broken session", { status: { type: "systemError" } }],
     ["wrong target", { id: "another-thread" }],
-  ] as const) {
-    it.effect(`rejects a ${name} without deleting`, () =>
-      Effect.gen(function* () {
-        const h = harness({ thread: { ...root, ...changes } });
-        const error = yield* Effect.flip(deleteCodexTransientThread(h.client, sessionId));
-        assert.equal(error._tag, "TransientChatProviderThreadDeleteError");
-        assert.isFalse(h.deleted());
-      }),
-    );
-  }
-  for (const archived of [false, true]) {
-    it.effect(`refuses ${archived ? "archived" : "active"} descendants`, () =>
-      Effect.gen(function* () {
-        const h = harness({
-          children: (value) => ({
-            data: value === archived ? [{ id: "child" }] : [],
-            nextCursor: null,
-          }),
-        });
-        yield* Effect.flip(deleteCodexTransientThread(h.client, sessionId));
-        assert.isFalse(h.deleted());
-      }),
-    );
-  }
-  for (const children of [{ data: [], nextCursor: "more" }, {}, { data: null, nextCursor: null }]) {
-    it.effect(`rejects incomplete descendant metadata: ${JSON.stringify(children)}`, () =>
+  ] as const)("rejects a %s without deleting", ([_name, changes]) =>
+    Effect.gen(function* () {
+      const h = harness({ thread: { ...root, ...changes } });
+      const error = yield* Effect.flip(deleteCodexTransientThread(h.client, sessionId));
+      assert.equal(error._tag, "TransientChatProviderThreadDeleteError");
+      assert.isFalse(h.deleted());
+    }),
+  );
+
+  it.effect.each([false, true])("refuses %s descendants", (archived) =>
+    Effect.gen(function* () {
+      const h = harness({
+        children: (value) => ({
+          data: value === archived ? [{ id: "child" }] : [],
+          nextCursor: null,
+        }),
+      });
+      yield* Effect.flip(deleteCodexTransientThread(h.client, sessionId));
+      assert.isFalse(h.deleted());
+    }),
+  );
+
+  it.effect.each([{ data: [], nextCursor: "more" }, {}, { data: null, nextCursor: null }])(
+    "rejects incomplete descendant metadata: %s",
+    (children) =>
       Effect.gen(function* () {
         const h = harness({ children: () => children });
         yield* Effect.flip(deleteCodexTransientThread(h.client, sessionId));
         assert.isFalse(h.deleted());
       }),
-    );
-  }
-  for (const failMethod of ["thread/read", "thread/list", "thread/delete"]) {
-    it.effect(`propagates ${failMethod} errors without a fallback`, () =>
+  );
+
+  it.effect.each(["thread/read", "thread/list", "thread/delete"])(
+    "propagates %s errors without a fallback",
+    (failMethod) =>
       Effect.gen(function* () {
         const h = harness({ failMethod });
         const error = yield* Effect.flip(deleteCodexTransientThread(h.client, sessionId));
@@ -121,8 +121,8 @@ describe("Codex transient deletion", () => {
           "thread/archive",
         );
       }),
-    );
-  }
+  );
+
   it.effect("rejects malformed root metadata before inspecting or deleting children", () =>
     Effect.gen(function* () {
       const h = harness({ thread: { id: sessionId } });
