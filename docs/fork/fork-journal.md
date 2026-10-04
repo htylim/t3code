@@ -35,7 +35,9 @@ upstream.
 - Verification: 691 focused web, server, contracts, workspace, and background-stop tests passed.
   Web, server, and desktop typechecks and the web production build passed. Targeted lint had
   no errors; warnings remain. Diff checks passed outside unchanged upstream patch files,
-  whose blank context lines contain spaces. Browser and native-client verification were not performed.
+  whose blank context lines contain spaces. An isolated browser verified Mermaid in main and side
+  chats, light and dark themes, source switching and copying, expanded SVG loading and dismissal,
+  invalid-source fallback, multiple diagrams, and reload. Native-client verification was not performed.
   The `fork` branch, live profile, and remote branches were not changed.
 
 ## 2026-10-04 - Adopt upstream Mermaid rendering
