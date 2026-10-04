@@ -18,7 +18,6 @@
 - [Product usage data](./user/telemetry.md)
 - [Remote access](./user/remote-access.md)
 - [Updating T3 Code](./user/updating.md)
-- [Mermaid diagrams](./user/mermaid-diagrams.md)
 - Provider guides: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md) · [OpenCode](./user/providers-opencode.md) · [Antigravity](./user/providers-antigravity.md) · [Pi](./user/providers-pi.md)
 
 Mobile app: [apps/mobile/README.md](../apps/mobile/README.md)

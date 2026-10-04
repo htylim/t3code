@@ -599,25 +599,6 @@
         "licenseId": "MIT",
         "copyrights": ["Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)"]
       }
-    },
-    {
-      "name": "khroma",
-      "version": "2.1.0",
-      "license": "MIT"
-    },
-    {
-      "name": "fastdom",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2016 Wilson Page <wilsonpage@me.com>"]
-      }
-    },
-    {
-      "name": "strictdom",
-      "generatedNotice": {
-        "licenseId": "MIT",
-        "copyrights": ["Copyright (c) 2013 Wilson Page <wilsonpage@me.com>"]
-      }
     }
   ]
 }

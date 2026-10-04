@@ -109,7 +109,6 @@ import { MediaVideoPlayer } from "./media/MediaVideoPlayer";
 import { MediaActions, type MediaActionSource } from "./media/MediaActions";
 import { resolveProtocolRelativeMediaUrl } from "./media/mediaContent";
 import { FileTagChipContent } from "./chat/FileTagChip";
-import { MermaidDiagram } from "./chat/MermaidDiagram";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import {
   revealInFileExplorerLabelForKind,
@@ -3311,15 +3310,6 @@ const CHAT_MARKDOWN_COMPONENTS = {
 
     const language = extractFenceLanguage(codeBlock.className);
     const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
-    if (language === "mermaid" && !isStreaming) {
-      return (
-        <MermaidDiagram
-          source={codeBlock.code}
-          theme={resolvedTheme}
-          fallback={<pre {...props}>{children}</pre>}
-        />
-      );
-    }
     return (
       <MarkdownCodeBlock
         code={codeBlock.code}

@@ -19,6 +19,17 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-04 - Retire the fork Mermaid renderer
+
+- Upstream baseline: `8ed276c246`, preparing to integrate `efecd3cf8b`.
+- Removed the fork Mermaid component, lazy rendering helper, tests, Markdown hook, dependencies,
+  license overrides, and guide. Upstream now provides Mermaid rendering through `5e35272fda`.
+  The incoming implementation replaces the fork feature completely, including its zoom and pan controls.
+- Scope: web and desktop Markdown. Other fork rendering changes, side chats, reference shortcuts,
+  and Fork packaging remain intact. Native mobile, providers, contracts, and persistence are unchanged.
+- Verification: removal restores the four Mermaid-modified upstream files to `8ed276c246`.
+  All 53 focused Markdown tests and `git diff --check` passed.
+
 ## 2026-10-04 - Restore scoped thread-reference shortcuts on V2
 
 - Upstream baseline: `8ed276c246`.
