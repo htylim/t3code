@@ -1,7 +1,8 @@
 # Fork journal
 
-This journal explains why this fork intentionally differs from upstream. Git remains the source of
-truth for exact file and line history.
+This journal explains the fork differences that we still maintain. Features replaced by upstream
+keep only a short adoption note. Git preserves their removed implementation details and verification
+history. Dated merge checks describe what was tested at that time, not additional features to restore.
 
 Add an entry for meaningful changes to product behavior, architecture, branding, builds, operations,
 or fork policy. Skip mechanical edits and changes that do not alter the fork's relationship with
@@ -37,16 +38,11 @@ upstream.
   whose blank context lines contain spaces. Browser and native-client verification were not performed.
   The `fork` branch, live profile, and remote branches were not changed.
 
-## 2026-10-04 - Retire the fork Mermaid renderer
+## 2026-10-04 - Adopt upstream Mermaid rendering
 
-- Upstream baseline: `8ed276c246`, preparing to integrate `efecd3cf8b`.
-- Removed the fork Mermaid component, lazy rendering helper, tests, Markdown hook, dependencies,
-  license overrides, and guide. Upstream now provides Mermaid rendering through `5e35272fda`.
-  The incoming implementation replaces the fork feature completely, including its zoom and pan controls.
-- Scope: web and desktop Markdown. Other fork rendering changes, side chats, reference shortcuts,
-  and Fork packaging remain intact. Native mobile, providers, contracts, and persistence are unchanged.
-- Verification: removal restores the four Mermaid-modified upstream files to `8ed276c246`.
-  All 53 focused Markdown tests and `git diff --check` passed.
+Upstream `5e35272fda`, integrated through `efecd3cf8b`, replaces the fork Mermaid renderer
+completely. The fork component, helper, zoom and pan controls, dependencies, license overrides,
+and guide were removed. Mermaid is no longer downstream drift.
 
 ## 2026-10-04 - Restore scoped thread-reference shortcuts on V2
 
@@ -86,7 +82,7 @@ upstream.
 - Upstream now owns thread control, native forks, reference picking, and runtime defaults. The
   fork implementations were removed first, including their partially replaced behavior.
 - Retained side chats, selected-text actions and quotes, transient hiding and provider-history
-  cleanup, Mermaid, Codex visualization links, workspace management, sidebar hover reveal,
+  cleanup, Codex visualization links, workspace management, sidebar hover reveal,
   project filtering and switching, custom shortcuts, Fork branding, and T3 Connect defaults.
 - Adaptations: side chats use V2 projections, requests, runs, and provider sessions. New-thread
   selection prompts attach upstream context records. Side-chat owner context names upstream's
@@ -120,16 +116,14 @@ upstream.
   tools failed, and later browser interactions timed out. Native desktop and mobile UI checks
   were not performed. All provider homes and server state were disposable; live data was untouched.
 
-## 2026-10-04 - Retire implementations replaced by Orchestration V2
+## 2026-10-04 - Adopt upstream thread control, forking, and defaults
 
-- Upstream baseline: `de251fc297`, preparing to integrate `8ed276c246`.
-- Removed the fork's complete MCP thread-control, native thread-forking, conversation-reference,
-  and hardcoded Auto-default implementations. Advanced controls, `/fork`, sidebar fork actions,
-  and `%`/`%%` picker behavior are intentionally retired even where upstream differs.
-- Preserved side chats, transient provider-history cleanup, selected-text actions, side-chat owner
-  context, rendering, worktree management, navigation shortcuts, and Fork desktop packaging.
-- Verification: removal diff passes `git diff --check`. Cross-thread callers intentionally await
-  adaptation to upstream during the merge; this intermediate commit is not a releasable build.
+Upstream `8ed276c246` replaces the fork MCP thread-control toolkit, native thread-forking
+implementation, and hardcoded Auto defaults. The fork implementations were removed completely,
+including advanced controls and their client actions. Maintain upstream's behavior for these features.
+
+The old conversation-reference URI and composer nodes were also removed. `%` and `%%` were later
+restored against upstream's context records, as documented above.
 
 ## 2026-09-27 - Repair regressions found in live fork verification
 
@@ -138,39 +132,27 @@ upstream.
   confirmation previously used the closed menu's stale snapshot and could report zero dirty files.
 - Shift+Escape ignores closed popups retained in the DOM. Upstream's mounted header menu otherwise
   blocked clearing the project filter even when no menu was open. Open popups still consume Escape.
-- Verification: reproduced both failures and verified their fixes in an isolated dev client. Passed
-  335 focused workspace, shortcut, mobile fork, Markdown, Mermaid, prompt-navigation, and cleanup
-  tests, web typecheck, and targeted lint. Live Codex Terra, Claude Sonnet, and OpenCode Terra passed
-  native forks, history follow-ups, and transient provider-history deletion. Browser checks covered
-  selection actions, side-chat reuse and focus, both sidebar layouts, thread references, project
-  filtering, worktree rename and removal safeguards, Mermaid, HTML links, and reading positions.
-  Codex passed cross-project MCP child creation, waiting, reading, updating, sending, and interruption;
-  Claude discovered thread-control tools and read its side chat's owner. Native device access was
-  disabled and browser resizing timed out. Native shells and real remote/tunnel connections were
-  not exercised. The installed app and live database were not changed.
+- Verification: reproduced both failures and verified their fixes in an isolated dev client.
+  The historical 335-test subset, web typecheck, and targeted lint passed. Live Codex Terra,
+  Claude Sonnet, and OpenCode Terra checks covered transient provider-history deletion.
+  Browser checks covered selected-text actions, side-chat reuse and focus, both sidebar layouts,
+  project filtering, workspace safeguards, and HTML links. Native device access was disabled
+  and browser resizing timed out. Native shells and remote/tunnel connections were not exercised.
+  The installed app and live database were not changed.
 
 ## 2026-09-27 - Integrate upstream through de251fc297
 
 - Upstream baseline: `de251fc297`, following `7445aa733ada`. Integrates 279 upstream commits
   on `integration/upstream-2026-09-27`, starting from fork commit `e79f64f52a`.
-- Retained drift: native thread forks, MCP thread control, side chats and transient provider-history
-  cleanup, selected-text actions, thread references, workspace management, Mermaid, visualization
-  links, sidebar hover reveal, custom shortcuts, the Auto fallback, and Fork desktop packaging.
-- Adaptations: thread-reference chips use upstream's `ContextChip` and share editor selection
-  styling. Composer suggestions use upstream dismissal state while retaining persistent thread-query
-  dismissal and global Escape shortcuts. Workspace names remain visible, and worktrees still being
-  created receive the upstream setup label. Fork controls now use upstream UI variants.
-- Provider integration: Codex thread-control guidance now travels in a separate `additionalContext`
-  entry, scoped to the session credential and restored after compaction. Native forks retain their
-  queue guard alongside upstream's background queue drain. New copies use the normal auto-settle
-  default. Claude history helpers remain shared by rollback and native forks with isolated homes.
-- Verification: 3,196 focused tests passed across 109 files. An additional compaction regression
-  and the final provider/projector subset passed 86 tests. Scoped web, server, desktop, mobile,
-  contracts, shared, and client-runtime typechecks passed. Targeted lint reported no errors.
-  Web and server production bundles passed, including license generation. Bundled Claude history
-  and transient-deletion commands passed smoke checks against a disposable provider home.
-  Browser checks, live provider turns, native mobile builds, desktop installers, publication,
-  and live-data changes were not performed.
+- Preserved side chats, transient provider-history cleanup, selected-text actions, workspace
+  management, visualization links, sidebar hover reveal, custom shortcuts, and Fork packaging.
+  Workspace names remain visible, creating worktrees show upstream's setup label, and composer
+  suggestions retain global Escape handling.
+- Verification: 3,196 focused tests passed across 109 files, followed by 86 compaction and
+  provider/projector tests. Scoped web, server, desktop, mobile, contracts, shared, and
+  client-runtime typechecks, targeted lint, and web/server builds passed. Bundled Claude history
+  and transient-deletion smoke checks used a disposable provider home. Browser checks, live
+  turns, native builds, installers, publication, and live-data changes were not performed.
 
 ## 2026-09-26 - Reveal the hidden sidebar on hover
 
@@ -200,19 +182,6 @@ upstream.
   a single space after the citation, and typing into the side composer without clicking it.
   Passed 29 focused tests and the web typecheck. Targeted lint retained only existing warnings.
 
-## 2026-09-21 - Restore the fork command picker action
-
-- Upstream baseline: `7445aa733ada`.
-- Change: Restore the explicit `/fork` selection handler before the plan-mode guard in the web
-  composer. Enter and clicking now submit the fork command when plan mode is disabled.
-- Reason: The September 3 upstream merge dropped this downstream handler, leaving `/fork` listed
-  but routed through the plan-mode action.
-- Scope: Web and desktop command-picker selection. Provider support and mobile behavior are unchanged.
-- Verification: Reproduced both stuck-picker interactions before the fix in an isolated browser.
-  After the fix, Claude Sonnet passed Enter and click checks, and Codex Terra passed Enter.
-  Both providers preserved history and answered a follow-up in the fork. Passed 138 focused tests,
-  web typecheck, targeted lint with existing warnings, and formatting checks.
-
 ## 2026-09-13 — Reuse transient side chats for selected text
 
 - Upstream baseline: `b1e223e2b0`
@@ -228,24 +197,6 @@ upstream.
   creation, repeated selections in the same unsent draft, preservation of typed text, reopening a
   hidden chat, returning from Files, and cancellation of explicit new-chat replacement. SQLite
   confirmed no extra threads or sent messages after reuse.
-
-## 2026-09-13 — Mark the visible side chat in the sidebar
-
-- Upstream baseline: `b1e223e2b0`
-- Change: Web and desktop sidebar rows show a PanelRight indicator before their other trailing
-  icons when the thread is visible beside the current main thread. Navigating away, hiding the
-  panel, or selecting another surface removes the indicator; returning restores it. Web thread
-  menus use the same icon for **Open in side surface**.
-- Reason: Make it clear which sidebar thread is currently displayed in the side surface without
-  confusing saved panel membership with visibility.
-- Scope: Both web sidebars, the right-panel selector, and the web context-menu icon map. Native
-  desktop menus retain their existing icon policy. Mobile has no side-chat surface; providers,
-  contracts, and server state are unchanged. Target identity includes the environment.
-- Verification: Passed 88 focused panel-state and context-menu tests, the web type check, targeted
-  lint (with existing sidebar warnings), formatting, and `git diff --check`. In an isolated dev
-  client, verified card and slim rows, navigation away and back in both sidebar layouts, panel
-  closing and reopening, Chat/Files tab switching, and both web menu icons. Measured the indicator
-  moving left on hover while remaining before the pin, snooze, and settle controls.
 
 ## 2026-09-12 - Consolidate selected-text actions in the citation toolbar
 
@@ -273,7 +224,6 @@ upstream.
 - Change: Codex's private-use `visualize` markers now resolve their JSON `path` through the existing
   file-link renderer. Completed markers show the filename and copy as ordinary Markdown links;
   malformed markers and examples in code or existing links remain literal.
-  Compressed workspace assets retain their content type so linked HTML previews render correctly.
   Source-view dismissal waits until the editor is initialized.
 - Reason: Visualization responses previously exposed raw markers and JSON instead of an accessible
   link to the generated HTML file.
@@ -300,36 +250,17 @@ upstream.
   and MCP children. Test models must be selected explicitly instead of inherited from defaults.
 - Verification: Documentation review, targeted formatting, and `git diff --check`.
 
-## 2026-09-12 — Integrate upstream ordering and context
+## 2026-09-12 - Adopt upstream ordering and context
 
-- Upstream baseline: `b1e223e2b0d87124883b1410ab52dd6a1338e40d`
-- Change: Adopted upstream's active ordering and settled timestamps, removing the fork's
-  last-user-message sorting. Conversation-reference pickers use upstream ordering too. Kept
-  conversation-reference chips alongside upstream context chips because the latter do not link
-  T3 threads. Native thread copies preserve context and remap attachment bindings; bounded MCP
-  reads expose those records. Thread-control tools coexist with upstream browser, device, and PR
-  capabilities while retaining child ownership and permission ceilings. Side chats use the new
-  context, question attachment, dismissal, project default, and stop-shortcut paths. Completed
-  the previously unwired mobile `/fork` action and reused Claude's provider-home isolation for
-  native copies. Native forking is a required server dependency, installed in the live runtime,
-  so an omitted layer cannot silently fall back to an unavailable implementation. Upstream's
-  configurable permissions setting starts at the fork's Auto default.
-- Reason: Preserve fork workflows through upstream's contracts and services, with no parallel
-  ordering system or obsolete composer context nodes. The new license manifest also needs a
-  version-specific MIT declaration for Mermaid's khroma dependency, using its shipped license.
-- Scope: Provider sessions, MCP, orchestration, web and mobile composers, sidebar and panel state,
-  permission defaults, desktop integration, and dependency metadata.
-- Verification: Focused provider, MCP HTTP, context-copy, settings migration, projection,
-  attachment, shared contract, web, mobile, desktop, and packaging tests passed. Server, web,
-  mobile, and desktop typechecks passed; targeted lint had no errors. Frozen installation and
-  web/server builds passed, including generated notices for Mermaid and khroma. An isolated
-  environment copied from real data passed live web and Electron checks for Codex and Claude
-  MCP child threads, native forks with continued history, attachment/context copies, side-chat
-  questions with images, scoped cancellation, manual ordering, settle/reopen, keyboard filtering,
-  settings, and phone/tablet layouts. The live pass exposed the missing native-fork dependency;
-  a WebSocket regression, service/HTTP tests, and server typecheck/build verify its repair.
-  Native mobile execution was unavailable on this host; focused mobile tests passed. Upstream
-  reference and patch-file whitespace was retained.
+- Upstream baseline: `b1e223e2b0d87124883b1410ab52dd6a1338e40d`.
+- Upstream now owns active-thread ordering and settled timestamps. Removed the fork sorting
+  implementation. Side chats adopted upstream's context, question attachment, dismissal,
+  project-default, and stop-shortcut behavior.
+- Verification: focused contract, provider, settings, web, mobile, desktop, and packaging tests,
+  scoped typechecks, targeted lint, frozen installation, and web/server builds passed. Isolated
+  web and Electron checks covered side-chat questions with images, cancellation, ordering,
+  settle/reopen, project filtering, settings, and phone/tablet layouts. Native mobile execution
+  was unavailable on this host.
 
 ## 2026-09-11 — Clear the project filter from the keyboard
 
@@ -349,40 +280,6 @@ upstream.
   drafts and existing chats, draft-text preservation, repeated clearing, overlay dismissal priority,
   and modified-Escape shortcut recording with plain-Escape cancellation.
 
-## 2026-09-10 — Restore Claude discovery of T3 MCP tools
-
-- Upstream baseline: `223ff4490`
-- Change: `thread_read` and `thread_update` advertise object input schemas and decode them into
-  their existing discriminated unions, preserving conditional requirements, defaults, and handler
-  types. Regression checks cover the full HTTP tool list and reject top-level union inputs.
-- Reason: Claude rejected the entire MCP tool list because these two fork tools advertised unions
-  without an object type, making both thread control and the upstream browser tools unavailable.
-- Scope: Fork thread-control schemas and focused tests. Shared MCP registration carries the fix to
-  every provider; clients, provider adapters, and persistence are unchanged.
-- Verification: Passed 66 focused MCP, schema, handler, and service tests, server typechecking,
-  targeted lint, formatting, and whitespace checks. In an isolated dev server, real Claude Fable
-  5.1 and Opus 5 sessions discovered all 25 tools, created Claude child threads, read their replies,
-  and renamed them. Browser status/open reached the server and returned the expected missing-host
-  error; actual navigation was not exercised because no desktop automation host was attached.
-
-## 2026-09-10 — Start agent threads across projects on the same server
-
-- Upstream baseline: `223ff4490`
-- Change: Added `projects_list` and allowed MCP `thread_start` to target any registered project on
-  the authenticated server. Cross-project starts default to the destination root and may select a
-  validated existing worktree. Same-project defaults, credential permission ceilings, and child
-  ownership checks remain in place.
-- Reason: Agents need to coordinate work across loaded projects without moving their current thread.
-- Scope: Fork MCP tools, provider guidance, a project-only projection query, focused tests and
-  existing user guidance. Existing orchestration commands carry the results to web, desktop and
-  mobile; provider adapters and persistence schemas are unchanged.
-- Verification: Passed 148 focused MCP, credential, projection and provider-instruction tests,
-  including real Git worktrees and HTTP registration/authorization, plus server typechecking,
-  targeted lint, formatting and `git diff --check`. In an isolated dev server, a real Codex session
-  discovered projects, started children in another project and its own project, and read distinct
-  workspace markers. Cross-project follow-up and rename succeeded; missing-project and broader-mode
-  starts were rejected without creating threads. Verified the conversations in the web client.
-
 ## 2026-09-06 - Integrate upstream shared project defaults
 
 - Upstream baseline: `223ff4490`
@@ -398,7 +295,7 @@ upstream.
 - Scope: Settings contracts and persistence, web and desktop settings, main and side-chat creation,
   and mobile drafts. Integrated upstream compaction declarations, project browser access,
   environment balancing, pending request handling, composer APIs, and sidebar filter persistence
-  with native thread forking, MCP thread control, workspace management, and thread references.
+  while preserving side chats, workspace management, and custom navigation.
 - Verification: Focused provider, orchestration, HTTP/WebSocket, settings migration, contracts,
   client-runtime, web, desktop, mobile, and packaging tests passed. Type checks passed for server,
   web, desktop, mobile, contracts, shared, and client-runtime. Web and server bundles built.
@@ -410,24 +307,6 @@ upstream.
   unsent drafts, worktree selection, side-chat creation, project model overrides, and reset to
   shared defaults. Preview screenshot capture failed; browser verification used DOM inspection
   and interactions, with saved settings and thread records checked separately.
-
-## 2026-09-05 - Scope thread references and support multiword queries
-
-- Upstream baseline: `163d86a78`
-- Change: `%` searches the composing project; `%%` searches all projects in the current environment.
-  Both lists sort by latest user activity, with creation time as the fallback. Spaces continue a
-  query, selection replaces it, and Escape leaves its text intact while keeping it dismissed during
-  further editing. A fresh trigger opens a new query. Enter with no matches keeps the picker open.
-- Reason: Unrelated projects crowded out relevant threads, and whitespace prevented searching
-  multiword titles.
-- Scope: Web and desktop main and side-chat composers, thread-reference filtering, and user guidance.
-  Native mobile, contracts, server queries, and provider adapters are unchanged.
-- Verification: 150 focused trigger, dismissal, replacement, picker, editor, and inline-token tests
-  passed, along with the web typecheck, targeted lint (existing warnings), formatting, and whitespace
-  checks. In an isolated browser with copied thread data, verified project scope after switching
-  draft projects and in a side chat belonging to a different project than the main chat. Confirmed
-  environment-wide ordering against SQLite, multiword queries, Enter/Tab selection, Escape followed
-  by continued typing, fresh triggers, current-thread exclusion, and Enter with no matches.
 
 ## 2026-09-05 - Manage worktrees from the workspace picker
 
@@ -460,24 +339,13 @@ upstream.
 
 ## 2026-09-04 - Merge upstream browser, usage, terminal, and provider changes
 
-- Upstream baseline: `163d86a78`
-- Change: Merged upstream's 174 commits while retaining native thread forking, bounded MCP thread
-  control, side chats and transient context, thread references, Mermaid rendering, timeline
-  bookmarks and prompt navigation, Sidebar v2 project filtering and user-activity sorting, the Auto
-  permission default, and fork desktop identity and update rules. Adopted upstream's orchestration
-  replay and runtime-context queries, provider compaction and analytics, Markdown renderer changes,
-  browser import, usage-limit reporting, and terminal work.
-- Reason: Upstream changed the orchestration, provider-session, composer, Markdown, sidebar,
-  desktop, and mobile seams extended by the fork. A direct conflict choice would have dropped either
-  downstream behavior or upstream's newer contracts.
-- Scope: Server orchestration and providers; web and mobile composers; Markdown, side-chat, sidebar,
-  and keybinding UI; desktop browser support; shared contracts; dependencies; and documentation.
-- Verification: Passed 790 focused server, web, mobile, contracts, shared, and client-runtime tests
-  plus the server, web, mobile, contracts, and shared package type checks. Refreshed dependencies
-  with the merged lockfile, which passed the
-  repository supply-chain policy check. Also ran targeted formatting, conflict-marker checks, and
-  whitespace checks. The only reported whitespace is three payload lines in upstream's
-  `react-native-screens` patch.
+- Upstream baseline: `163d86a78`. Integrated 174 upstream commits.
+- Preserved side chats, transient context, prompt navigation, project filtering, and Fork desktop
+  identity and update rules. Adopted upstream orchestration replay, runtime-context queries,
+  compaction, analytics, Markdown, browser import, usage reporting, and terminal changes.
+- Verification: 790 focused tests, scoped server, web, mobile, contracts, and shared typechecks,
+  frozen installation, targeted lint and formatting, and conflict-marker checks passed.
+  Whitespace findings were limited to three payload lines in upstream's React Native patch.
 
 ## 2026-09-04 - Keep side-chat composer styling aligned with upstream
 
@@ -495,55 +363,15 @@ upstream.
   retained upstream's 1px outline, 22px corners, translucent backdrop, and light-mode shadow in
   both light and dark appearances.
 
-## 2026-09-03 - Sort active threads by user activity
-
-- Upstream baseline: `fff33f9e8`
-- Change: Web, desktop, and mobile sort active threads by their latest user message, with creation
-  time as the fallback. Agent progress and lifecycle changes do not move rows.
-- Reason: The sidebar should match the activity age shown on each row. Treating an un-settle stamp
-  as activity put 3d and 4d threads above a thread with a message from minutes ago.
-- Scope: Shared active-thread ordering, web and mobile sidebar tests, and user documentation.
-- Verification: Passed 159 focused web, mobile, and shared-runtime tests; affected package type
-  checks; targeted lint and formatting; and `git diff --check`. An isolated dev app using the
-  reported thread data placed the minutes-old thread above every 3d and 4d thread.
-
 ## 2026-09-03 - Merge upstream assistant citations, attachments, and desktop changes
 
-- Upstream baseline: `fff33f9e8`
-- Change: Merged upstream's 276 commits while retaining native thread forking, MCP thread control,
-  side chats and transient context, thread references, Mermaid rendering, timeline bookmarks, prompt
-  navigation, Sidebar v2 project filtering, the Auto permission default, and fork desktop identity
-  and update rules. `Cmd/Ctrl+W` now follows upstream's terminal and right-panel close behavior, then
-  falls back to `thread.settleAndNew` when neither panel is open. **Ask in side chat** now sends an
-  assistant citation token for assistant-message selections, with the old blockquote prompt kept as
-  the fallback for selections that cannot be cited.
-- Reason: Upstream added first-class assistant citations and changed the composer, provider,
-  attachment, timeline, desktop, and mobile seams extended by this fork. Taking either side whole
-  would lose fork features or skip upstream's newer behavior.
-- Scope: Contracts, orchestration, provider capabilities and session handling, web and mobile
-  composers, side chats, Markdown, timeline state, keybindings, Sidebar v2, desktop, and dependency
-  metadata.
-- Verification: Passed 699 focused contract, shared, server, web, and mobile tests, then reran a
-  400-test integration subset after the final dependency install. Passed affected package type
-  checks, targeted lint with no errors, targeted formatting, frozen-lockfile installation, and
-  conflict-marker checks. Started the full web and server stack against the repository-local `.t3`
-  state, received HTTP 200 from the web client, and confirmed the server responded before stopping
-  the captured process.
-
-## 2026-08-30 - Keep settled threads anchored to their last message
-
-- Upstream baseline: `acb599d2dc5b`
-- Change: The default web and desktop sidebar now labels and sorts settled threads by their last
-  user message, with creation time as the fallback for threads without one.
-- Reason: Upstream changed a row's timestamp from conversation age to settlement age when the user
-  settled it, so old threads suddenly read `now` despite receiving no new prompt.
-- Scope: Default web and desktop sidebar ordering, focused tests, and user documentation. The
-  legacy sidebar, mobile, server lifecycle metadata, contracts, providers, and persistence are
-  unchanged.
-- Verification: Passed 108 focused sidebar tests, the web type check, targeted lint and formatting,
-  and `git diff --check`. In an isolated web environment, manually settled a seven-day-old thread.
-  The server stamped its settlement as current, while the sidebar kept the `7d` label and sorted it
-  below a settled thread whose last message was 21 hours old.
+- Upstream baseline: `fff33f9e8`. Integrated 276 upstream commits.
+- Preserved side chats, transient context, prompt navigation, project filtering, and Fork desktop
+  identity and update rules. Selected-text side chats use upstream assistant citations.
+  Cmd/Ctrl+W follows terminal and right-panel close behavior before settling the current thread.
+- Verification: 699 focused tests and a final 400-test subset passed, along with scoped
+  typechecks, targeted lint and formatting, frozen installation, and conflict-marker checks.
+  The isolated web/server stack responded successfully before its captured process was stopped.
 
 ## 2026-08-29 - Keep prompt navigation on the minimap cursor
 
@@ -606,46 +434,14 @@ upstream.
 
 ## 2026-08-28 - Merge upstream attachment, feedback, and packaging changes
 
-- Upstream baseline: `acb599d2dc5b`
-- Change: Merged upstream's 112 commits while retaining native thread forking, side chats, thread
-  references, downstream desktop identity, T3 Connect source-build defaults, and the Auto permission
-  default. Side chats now use upstream's attachment upload queue with the legacy inline-image path
-  kept for older servers. Manual context compaction remains disabled in side chats because that
-  surface has no compaction lifecycle. Codex keeps both native session forking and upstream feedback
-  upload support. Fork desktop builds remain excluded from upstream and preview update feeds. The
-  merged server entrypoint canonicalizes both sides of npm and npx symlinks so macOS path aliases do
-  not prevent the CLI from starting.
-- Reason: Upstream changed the composer contract, attachment ownership, Codex runtime API, Markdown
-  processing, and desktop packaging in code also extended by the fork. Taking either side whole
-  would drop behavior or leak uploaded attachment files after failed dispatches.
-- Scope: Contracts and environment capabilities; HTTP and WebSocket orchestration dispatch;
-  provider routing and Codex runtime; web and mobile composers; side chats; Markdown rendering;
-  server entrypoint and provider cache compatibility; desktop artifact configuration and tests;
-  provider documentation.
-- Verification: Passed the complete contracts, shared, client-runtime, web, and server test matrix
-  with 7,326 tests passing and 10 skipped, plus merge-focused desktop packaging tests. Passed all
-  affected type checks, production web and server builds, frozen-lockfile validation, targeted
-  formatting and lint, and `git diff --check`. In an isolated web environment, verified native
-  thread forking and independent source follow-up, main and side-chat attachment uploads, Mermaid
-  rendering and controls, thread-reference chips, and side-chat composition.
-
-## 2026-08-22 — Merge upstream without disabling thread control
-
-- Upstream baseline: `2c4158f87a1b`
-- Change: Merged upstream's 113 commits. The new agent-browser setting now removes only the MCP
-  preview capability and browser instructions; fork-owned thread-control credentials and guidance
-  remain available. Adopted upstream's first-message anchoring and follow-up scrolling while
-  retaining fork reading-position bookmarks and clearing them on send.
-- Reason: Upstream gated its browser-only MCP server by withholding the whole credential, but this
-  fork also uses that credential for bounded thread control. A direct merge would have disabled an
-  unrelated fork feature. Upstream's follow-up scrolling fix is preferable to the old all-message
-  anchoring behavior and does not conflict with restoring a saved reading position.
-- Scope: MCP credential capabilities, provider-session setup, Codex developer instructions,
-  orchestration dispatch integration, web composer and timeline seams, and upstream test doubles
-  updated for native thread forking.
-- Verification: Passed focused contracts, MCP, orchestration, provider, Codex, composer, timeline,
-  and bookmark tests, plus affected contracts, shared, client-runtime, server, and web type checks,
-  targeted formatting and lint, and `git diff --check`.
+- Upstream baseline: `acb599d2dc5b`. Integrated 112 upstream commits.
+- Side chats adopted upstream's attachment upload queue. Fork desktop builds remain excluded
+  from upstream and preview update feeds. The server entrypoint canonicalizes npm and npx
+  symlinks so macOS path aliases do not prevent CLI startup.
+- Verification: the historical package test matrix passed 7,326 tests with 10 skipped, plus
+  merge-focused desktop packaging tests. Scoped typechecks, web/server builds, frozen installation,
+  targeted lint and formatting, and diff checks passed. Isolated browser checks covered main
+  and side-chat attachments and side-chat composition.
 
 ## 2026-08-17 — Focus side chats when opened
 
@@ -699,36 +495,6 @@ upstream.
   `0.0.31-fork.1` DMG, verified its disk-image checksum, and confirmed its name, version, and bundle
   identifier from the packaged `Info.plist`.
 
-## 2026-08-02 — Restore Copy Thread ID in Sidebar v2
-
-- Upstream baseline: `e60821f0e`
-- Change: Added the missing **Copy Thread ID** action to the Sidebar v2 thread context menu with the
-  same clipboard confirmation and failure feedback as the traditional sidebar.
-- Reason: Sidebar v2 replaced the traditional sidebar menu without carrying this useful action over.
-- Scope: Web and desktop thread context menus rendered by `SidebarV2`.
-- Verification: Passed targeted lint and the web type check. In an isolated web environment,
-  right-clicked a real Sidebar v2 thread, selected **Copy Thread ID**, observed the success toast,
-  and confirmed the clipboard value matched that thread's ID in the isolated database.
-
-## 2026-08-06 — Add native thread forking
-
-- Upstream baseline: `4f5834ba7`
-- Change: Added a composer-only `/fork` operation for Codex, Claude Agent, and OpenCode. A fork
-  copies the completed visible timeline into an ordinary target thread, creates an independent
-  native provider session and checkpoint baseline, and deliberately keeps the source workspace.
-  Cursor and Grok remain unsupported. No fork-specific event, projection field, or durable source
-  relationship was added.
-- Reason: Let users branch a provider conversation at its current head without duplicating or
-  isolating the files they are already working on.
-- Scope: Shared contracts and client runtime; provider adapters and durable bindings; server
-  orchestration, attachments, and checkpointing; web and mobile composers; user and maintainer
-  documentation. Desktop inherits the web behavior.
-- Verification: Passed the focused Phase 1–4 contract, provider, orchestration, web, and mobile test
-  selectors and targeted type, lint, and formatting checks. Phase 5 documentation links and
-  formatting were checked explicitly. In an isolated web environment, Codex, Claude Agent, and
-  OpenCode each created a native fork with copied history, navigated to the target, and accepted a
-  follow-up prompt; the Codex source also accepted a later prompt independently.
-
 ## 2026-08-07 — Add Rename Thread keybinding
 
 - Upstream baseline: `a0a7ff840`
@@ -778,21 +544,6 @@ upstream.
   the project picker, then filtered to one project while viewing the other and confirmed the button
   created a fresh draft directly in the filtered project.
 
-## 2026-08-08 — Default permission mode to Auto
-
-- Upstream baseline: `c911fcb78`
-- Change: New threads and missing runtime-mode recovery state default to **Auto** instead of **Full
-  access**. Unknown Codex runtime modes also fall back to Auto rather than failing open. Existing
-  threads and explicit Full-access selections are unchanged.
-- Reason: Never grant unrestricted command and filesystem access merely because no permission mode
-  was selected or persisted.
-- Scope: Shared orchestration contracts, web and mobile defaults, server bootstrap and recovery
-  fallbacks, Codex safety mapping, permission-mode documentation, and focused tests. Historical
-  persistence migrations remain unchanged.
-- Verification: Passed 147 focused contract, server provider, Codex runtime, and web draft-store
-  tests; targeted contracts, server, and web type checks; targeted lint, formatting, and diff
-  checks.
-
 ## 2026-08-08 — Make Cmd+W close right-panel tabs
 
 - Upstream baseline: `4f5834ba7`
@@ -809,46 +560,6 @@ upstream.
   targeted lint, formatting, and diff checks. In the desktop development app, confirmed that
   `Cmd+W` closes right-panel tabs and the panel without closing the window.
 
-## 2026-08-08 — Add thread forking to sidebar menus
-
-- Upstream baseline: `4f5834ba7`
-- Change: Added **Fork this thread** to both web sidebar thread context menus when the existing
-  thread-fork eligibility rules allow it. The action reuses the existing fork operation and opens
-  the new thread on success.
-- Reason: Make thread forking available directly from the thread being acted on instead of requiring
-  users to open it and submit `/fork` in the composer.
-- Scope: Legacy and Sidebar v2 context menus, user documentation, and desktop through its shared web
-  UI. Server orchestration, providers, contracts, persistence, and mobile are unchanged.
-- Verification: Passed 65 focused shared, client-runtime, and web fork tests, the web type check,
-  targeted lint and formatting checks, and the final diff check. In an isolated web environment,
-  right-clicked a completed Claude Agent thread in both Sidebar v2 and the legacy sidebar. Each
-  menu created a new native fork, copied the visible conversation, and navigated to a distinct
-  target thread.
-
-## 2026-08-09 — Add agent thread control through MCP
-
-- Upstream baseline: `4f5834ba7`
-- Change: Added eleven provider-scoped MCP tools for local context and model discovery, lightweight
-  thread listing/status/waits, bounded persisted reads, thread creation and follow-ups,
-  interruption, reversible updates, and explicit approval or user-input responses. Existing
-  workspaces and Git worktrees are accepted only after read-only identity validation.
-- Reason: Let an agent coordinate ordinary T3 threads in its own environment without adding a
-  workflow engine, durable lineage, transcript polling, or worktree management.
-- Scope: Server MCP implementation, tests, and the existing MCP capability, credential, and toolkit
-  registration points. Codex, Claude Agent, Cursor, Grok, and OpenCode use the same existing
-  orchestration commands; contracts, persistence, projections, provider adapters, WebSocket paths,
-  and web, desktop, and mobile clients are unchanged.
-- Verification: Passed 83 focused MCP thread-control, toolkit, output, status, provider-validation,
-  HTTP, authentication, and credential tests, including a local projection integration case and
-  identical start-command routing for all five providers. Also passed the targeted server type
-  check, lint and formatting checks for every changed file, and `git diff --check`.
-- Maintenance note: MCP's `apps/server/src/mcp/toolkits/threadControl/status.ts` intentionally
-  mirrors queued-turn and effective-snooze lifecycle rules found in
-  `packages/client-runtime/src/state/threadSettled.ts` and
-  `apps/server/src/orchestration/decider.ts`. This duplication keeps fork-only MCP code isolated
-  from upstream-owned lifecycle modules. When either upstream implementation changes, review and
-  update the MCP status rules and their focused tests to keep all three consistent.
-
 ## 2026-08-09 — Isolate fork release builds from source branches
 
 - Upstream baseline: `4f5834ba7`
@@ -863,145 +574,6 @@ upstream.
   upstream release workflow are unchanged.
 - Verification: Reviewed the documented version sources against the server, web, packaging, and
   upstream release scripts; checked the Markdown diff and command sequence explicitly.
-
-## 2026-08-09 — Bound MCP thread-control authority
-
-- Upstream baseline: `4f5834ba7`
-- Change: Provider-scoped MCP credentials now carry their provider session's runtime-mode ceiling
-  and an in-memory set of child threads they created. Child creation is limited to the calling
-  project and exact workspace; later mutations require a credential-owned child; start, send, and
-  runtime-mode updates cannot exceed the ceiling. Removed agent-side approval and structured
-  user-input responses from the v1 toolkit, leaving ten thread-control tools.
-- Reason: A supervised agent could previously grant itself Full access through another thread,
-  mutate any known thread, or accept the approval intended to constrain it.
-- Scope: MCP invocation authority, credential issuance and child grants, thread-control mutation
-  validation and schemas, provider-session credential setup, focused tests, and the MCP product
-  specification. Persistence, orchestration contracts, provider adapters, and clients are
-  unchanged.
-- Verification: Passed all 115 MCP tests and 33 focused ProviderService tests, the targeted server
-  type check, targeted lint and formatting checks, and `git diff --check`.
-
-## 2026-08-09 — Make MCP thread waits transition-aware
-
-- Upstream baseline: `4f5834ba7`
-- Change: Cursor-based `threads_wait` renewals now replay at most 1,000 existing orchestration
-  events, immediately reduce them to watched-thread signals, silently catch up past unrelated
-  activity, and match only threads with a relevant transition after the supplied cursor. Ahead or
-  excessively stale cursors still resynchronize from current lightweight status.
-- Reason: A global cursor previously made unrelated multi-agent activity interrupt waits, while an
-  already-completed thread matched immediately on every renewal of the same group.
-- Scope: MCP thread-control implementation, schemas, focused tests, and this fork specification.
-  Orchestration, persistence, shared contracts, provider adapters, and clients are unchanged.
-- Verification: Passed all 118 focused MCP tests, the targeted server type check, targeted lint
-  and formatting checks, and `git diff --check`.
-
-## 2026-08-10 — Release Codex writers after native forks
-
-- Upstream baseline: `90feb48c0`
-- Change: A successful Codex native fork now closes the source app-server before the target can be
-  resumed in its own T3 session. Fork eligibility also rejects sources with working or monitored
-  background agents. Failed native forks leave the source process active. Other providers are
-  unchanged.
-- Reason: Codex loads the forked native thread into the source app-server and keeps its exclusive
-  writer. Starting the target's separate app-server then failed with `already has an active writer`.
-  Separate processes are required because each T3 thread has its own MCP credential and
-  thread-control scope.
-- Scope: Codex adapter lifecycle, fork eligibility and authoritative snapshot checks, focused
-  regression tests, user guidance, and the fork-only writer-release specification. Provider
-  contracts, orchestration events, persistence, and non-Codex adapters are unchanged.
-- Verification: Passed 128 focused Codex runtime, adapter, provider-service, eligibility, fork
-  service, and snapshot tests; server and shared type checks; targeted lint for every changed
-  TypeScript file except `ThreadForkService.test.ts`; formatting for every changed file; and
-  `git diff --check`. That test file retains two pre-existing manual Effect runtime lint violations
-  outside the changed lines. In an isolated web environment, a Codex source completed, `/fork`
-  created a distinct target that accepted a follow-up, and the source then accepted another
-  follow-up without an active-writer error. See
-  `docs/fork/specs/005-codex-fork-writer-release.md` for the design.
-
-## 2026-08-11 — Add thread reference picker
-
-- Upstream baseline: `9821bca1c`
-- Change: Added a web and desktop `%` composer picker backed by already-loaded thread shells. It
-  inserts canonical `t3code://threads/<environment>/<thread>` Markdown, renders sent references as
-  same-origin thread chips, and teaches the provider-neutral `thread_status` and `thread_read` MCP
-  metadata how to validate and read them on demand.
-- Reason: Make it easy to point an agent or another user at an existing T3 conversation without
-  adding transcript injection, message attachments, or new persisted state.
-- Scope: Fork-owned URI parsing, picker ranking, chip presentation, and focused tests; narrow web
-  composer, command-menu, Markdown sanitizer/renderer, and CSS seams; thread-control MCP tool
-  descriptions; user documentation. Desktop inherits web behavior. Native mobile, contracts,
-  persistence, provider adapters, server queries, and desktop deep-link lifecycle are unchanged.
-- Verification: Passed 90 focused URI, picker, composer trigger/replacement, rendered-link,
-  Markdown safety, and MCP metadata tests; web and server type checks; targeted lint and formatting;
-  and `git diff --check`. In an isolated web environment, confirmed bare and filtered `%` results,
-  current-thread and archive exclusion, draft-route inclusion, keyboard selection into raw Markdown,
-  inert malformed links, same-origin chip navigation and copy metadata, the missing-target fallback,
-  and an embedded `100%` expression that did not open the picker.
-- Upstream conflict map: In `composer-logic.ts`, reapply only the web-local `thread` trigger kind
-  and `%` token branch at the current trigger source of truth. In `ChatComposer.tsx`, preserve
-  upstream state and reconnect shell snapshots, thread items, and selection replacement at the
-  current menu seams. In `ComposerCommandMenu.tsx`, port the `thread` item, icon, and **Threads**
-  group to any replacement menu instead of restoring old JSX.
-- Upstream conflict map: In `ChatMarkdown.tsx`, preserve upstream sanitizer, file-link, and external
-  link behavior, then reapply the canonical `t3code:` allow-list, the sanitized original-href marker
-  used to make malformed raw or Markdown links inert, and the early internal-chip branch. Keep the
-  rendered DOM link on the same-origin route. The adjacent `index.css` change only excludes thread
-  chips from ordinary link decoration and adds their focus treatment.
-- Upstream conflict map: `apps/server/src/mcp/toolkits/threadControl/` and the new
-  `threadReference.ts` and `ThreadReferenceLink.tsx` modules are fork-owned. If upstream ships an
-  equivalent feature, prefer its URI/parser/navigation model and remove redundant fork machinery
-  after verifying `%` selection and provider recognition. Do not resolve conflicts by adding
-  attachments, orchestration schemas, database fields, native mobile tokens, provider prompt
-  rewriting, automatic reads, or external desktop protocol handling.
-
-## 2026-08-11 — Render thread references as composer chips
-
-- Upstream baseline: `9821bca1c`
-- Change: Canonical `[title](t3code://threads/<environment>/<thread>)` references now render as
-  atomic, non-navigating chips in the web composer. Their Lexical node still serializes to the exact
-  canonical Markdown, so drafts, clipboard text, submissions, and provider prompts keep the same
-  representation. Sent-message thread chips remain navigable.
-- Reason: `%` selection previously exposed its Markdown implementation in the draft even though
-  `@` files and `$` skills render as compact composer chips.
-- Scope: The fork-owned thread-reference parser and composer node; narrow integration seams in the
-  web prompt segmenter, collapsed/expanded cursor mapping, and Lexical node registration. Desktop
-  inherits the web UI. Mobile, shared token parsing, contracts, persistence, server orchestration,
-  providers, and sent-message rendering are unchanged.
-- Verification: Passed 104 focused thread-reference, composer-segmentation, cursor-mapping, and
-  Lexical-node tests; the web type check; targeted lint and formatting; and `git diff --check`. In
-  an isolated web environment with realistic thread shells, selected a `%` result and confirmed it
-  rendered as one non-editable, non-navigating chip, accepted trailing text, and survived a draft
-  reload without exposing the stored Markdown.
-- Upstream conflict map: `ComposerThreadReferenceNode.tsx` is fork-owned and contains the chip UI
-  and Markdown serialization. In `composer-editor-mentions.ts`, preserve the `thread` segment and
-  merge `collectThreadReferenceMarkdownTokens` results with existing inline tokens, sorting an
-  enclosing thread reference before token-like text in its title. In `composer-logic.ts`, treat
-  `thread` like `mention` for one-unit collapsed cursor mapping. In `ComposerPromptEditor.tsx`,
-  preserve only the node import, inline-token predicate entry, segment-to-node creation, and Lexical
-  node registration. `threadReference.ts` remains the single URI and Markdown validation source.
-  If upstream replaces the composer or ships equivalent thread tokens, port these invariants to its
-  native token model instead of preserving the current Lexical plumbing.
-
-## 2026-08-11 — Start a new thread from selected chat text
-
-- Upstream baseline: `9821bca1c`
-- Change: Web and desktop users can select rendered text within one chat message, right-click, and
-  choose **Ask in new thread**. The new same-project draft is prefilled with a Markdown quote and a
-  canonical reference to the source thread but is not sent automatically.
-- Reason: Make focused follow-up conversations easy without copying whole transcripts, creating
-  selection-specific persistence, or losing the durable source-thread identity.
-- Scope: A fork-owned selection surface, prompt builder, and focused tests; one narrow wrapper seam
-  in `ChatView.tsx`; thread-reference user guidance. Mobile, contracts, persistence, server
-  orchestration, providers, and desktop IPC are unchanged.
-- Verification: Passed 32 focused selected-text and thread-reference tests, the web type check,
-  targeted lint and formatting, and `git diff --check`. In an isolated web environment, selected
-  an assistant response, opened the context action, and confirmed it created a distinct unsent
-  draft with one source-thread chip and both selected lines preserved as Markdown quotes.
-- Upstream conflict map: `selectedTextThreadAction.ts` owns prompt construction. The actions now
-  live in `AssistantSelectionToolbar.tsx`, with a callback passed through `MessagesTimeline` from
-  `ChatView.tsx`; the old right-click wrapper was removed on 2026-09-12. Preserve upstream's
-  selection observer and citation capture when updating the toolbar. If upstream ships equivalent
-  thread actions, prefer those instead of maintaining a second implementation.
 
 ## 2026-08-11 — Add compact Chat right-panel surface
 
@@ -1057,41 +629,10 @@ upstream.
   The shortcut-toggle follow-up passed 8 focused tests, the web type check, targeted lint and
   formatting, and a full close-open-close cycle in the isolated dev app.
 
-## 2026-08-13 — Adopt upstream Copy Thread ID
+## 2026-08-13 - Adopt upstream Copy Thread ID
 
-- Upstream baseline: `9e201941a`
-- Change: Removed the fork-specific **Copy Thread ID** variant and adopted upstream's shared thread
-  action for the sidebar and chat header.
-- Reason: Upstream now provides the same behavior, so keeping a second fork implementation would
-  create needless drift.
-- Scope: Web and desktop thread action menus and fork maintenance history. Thread forking remains a
-  separate fork feature.
-- Verification: Passed 160 merge-focused tests, 118 focused web tests, and the contracts, web,
-  mobile, and server type checks. Formatted the resolved files and checked the final diff.
-
-## 2026-08-14 — Restore thread reading positions
-
-- Upstream baseline: `9e201941a`
-- Change: Web and desktop remember a stable timeline row and its intra-row offset when the user
-  switches away from a thread, then restore that position when the user returns during the same app
-  session. Reaching the live edge or sending clears the bookmark.
-- Reason: Thread navigation previously reopened every conversation at the live edge and lost the
-  user's reading position.
-- Scope: A fork-owned in-memory bookmark module, narrow LegendList and chat lifecycle seams, focused
-  tests, and user documentation. Mobile, server contracts, providers, and database persistence are
-  unchanged.
-- Upstream compatibility: The mounted-list thread switching introduced by `211618fd9f` requires
-  explicit restoration after changing the displayed thread. Keep bookmark-aware live-follow state
-  and suppress bookmark writes until positioning completes. Initial-scroll props alone cannot
-  restore a list that stays mounted. Citations and manual navigation supersede restoration.
-- Verification: Passed 21 focused bookmark and timeline tests, the web type check, targeted lint
-  and formatting, and `git diff --check`. In an isolated web environment, switched away after
-  positioning a message row at `-52.42px`, then returned to the same row at exactly `-52.42px`.
-  The mounted-list repair passed 98 focused tests, including mounted A-to-B-to-A navigation,
-  rapid switching, delayed rows, cancellation, citation priority, and header-size correction;
-  web typecheck and targeted lint also passed. An isolated browser with copied real threads
-  restored A at exactly 400px and B at exactly 887px, preserving each message's screen offset.
-  Rapid switching, an unsent draft, and returning after scrolling to the end also passed.
+Upstream `9e201941a` replaces the fork Copy Thread ID action in the sidebar and chat header.
+The fork-specific implementation was removed.
 
 ## 2026-08-15 — Adopt upstream desktop asset staging
 
@@ -1131,31 +672,16 @@ upstream.
 
 ## 2026-08-15 — Give side chats their main-thread context
 
-- Upstream baseline: `a5e29edeec`
-- Change: Every web or desktop turn sent from a side surface carries typed, provider-only context
-  naming the owning main thread. The provider can use the existing `thread_read` MCP tool when the
-  user's request depends on that conversation, while the persisted user message remains unchanged.
-  Cross-environment side surfaces omit the context.
+- Upstream baseline: `a5e29edeec`, adapted to Orchestration V2 at `8ed276c246`.
+- Change: Every web or desktop turn sent from a same-environment side surface carries provider-only
+  context naming the owning main thread. After the V2 integration, the provider reads that thread
+  through upstream's `t3_thread_read`. Persisted user messages remain unchanged.
 - Reason: A side chat previously knew its target but the agent had no reliable way to discover the
   main conversation it was opened beside.
-- Scope: One optional turn and provider-send field in shared contracts; narrow web side-adapter,
-  orchestration event, reactor, and provider-service seams; focused tests and user documentation.
-  Thread persistence, projections, right-panel state, provider adapters, native mobile, and database
-  migrations are unchanged.
-- Verification: Passed 151 focused contract, provider-service, reactor, and web side-chat tests;
-  contracts, server, and web type checks; targeted lint and formatting; and `git diff --check`. In
-  an isolated dev environment, seeded a unique fact in a main GPT-5.6-Terra thread, opened a blank
-  side chat with Cmd+T, and asked for the fact without supplying the main thread ID. The provider
-  called `thread_read` with the owning thread ID and returned the correct answer. The browser and
-  SQLite projection both confirmed that the visible and persisted side-chat message omitted the
-  provider-only context.
-- Upstream conflict map: `CompactChatSurface.logic.ts` owns the send metadata. In `ChatView.tsx`,
-  preserve only the owner prop passed to the side adapter. In orchestration contracts and the
-  decider, preserve the optional `sideChatContext` propagation without adding it to
-  `thread.message-sent`. In `ProviderCommandReactor.ts`, forward that metadata; in
-  `ProviderService.ts`, prepend the fixed context after validating the user's prompt length and
-  remove the metadata before calling adapters. If upstream ships native side-chat context, remove
-  these seams instead of retaining two mechanisms.
+- Scope: Side-chat send metadata, the V2 run context, and provider prompt projection.
+  Cross-environment side surfaces omit owner context.
+- Verification: The initial 151 focused tests, scoped typechecks, and isolated owner-context check
+  passed. The later V2 live checks recorded above verified owner discovery through `t3_thread_read`.
 
 ## 2026-08-15 — Make newly created side chats transient
 
@@ -1180,55 +706,6 @@ upstream.
   open, replacement, and close cleanup calls. In `state/entities.ts` and `state/queries.ts`, keep the
   local collection and content-search filters. If upstream adds a server-owned unlisted or
   transient thread model, prefer it and remove this client registry instead of maintaining both.
-
-## 2026-08-15 — Remove redundant source text from selected side chats
-
-- Upstream baseline: `6a2e4a683`
-- Change: **Ask in side chat** now prefills only the selected Markdown quote. **Ask in new thread**
-  keeps its source-thread reference.
-- Reason: Side-chat turns already carry the owning main thread as provider-only context, so naming
-  the source again in the visible draft duplicated information.
-- Scope: Web and desktop selected-text prompt building, focused tests, and user guidance. Mobile,
-  contracts, server orchestration, providers, and persistence are unchanged.
-- Verification: Passed the focused selected-text tests, web type check, targeted lint and
-  formatting, and `git diff --check`. In the isolated dev app, selected an assistant response and
-  confirmed **Ask in side chat** opened an unsent draft containing only its Markdown quote.
-
-## 2026-08-17 — Render Mermaid diagrams in web Markdown
-
-- Upstream baseline: `a5e29edeec`
-- Change: Completed `mermaid` fences render as themed diagrams in web and desktop Markdown views.
-  Streaming and invalid diagrams remain source blocks. Rendered diagrams retain their fenced source
-  for selection and copying and provide zoom, fit, copy, and expanded-view actions.
-- Reason: Agents often explain control flow and architecture with Mermaid. Rendering the existing
-  Markdown makes those answers readable without sending diagram data through new contracts or
-  external services.
-- Scope: A fork-owned Mermaid component and lazy renderer; one fenced-code branch in the shared web
-  Markdown renderer; focused tests and user documentation. Desktop inherits the web behavior.
-  Native mobile, server contracts, persistence, and providers are unchanged.
-- Verification: Passed 27 focused Mermaid and Markdown tests, the web type check, targeted lint and
-  formatting, the production web build, and `git diff --check`. In the isolated dev app, mounted
-  the production Mermaid component and confirmed the supplied flowchart, fitted rendering, zoom
-  controls, source copy, expanded view, light and dark themes, and invalid-source fallback. The
-  authenticated chat route was not used because the collaborative browser rejected its one-time
-  local pairing credential.
-- Upstream conflict map: `components/chat/MermaidDiagram.tsx` and `mermaidRendering.ts` own the
-  feature. In `ChatMarkdown.tsx`, preserve only the import and the early `language === "mermaid"`
-  branch immediately before the existing code-block return. If upstream adds Mermaid rendering,
-  prefer it and remove the fork-owned component instead of keeping both implementations.
-
-## 2026-08-17 — Pan Mermaid diagrams with the mouse
-
-- Upstream baseline: `a5e29edeec`
-- Change: Web and desktop users can drag diagram shapes or empty space to pan inline and expanded
-  Mermaid diagrams. Label text remains selectable, and the existing scrollbars remain available.
-- Reason: Zoomed diagrams previously required direct scrollbar use to move around the canvas.
-- Scope: The fork-owned Mermaid component, focused tests, and user documentation. Native mobile,
-  server contracts, persistence, and providers are unchanged.
-- Verification: Focused Mermaid tests, the web type check, targeted lint and formatting, and
-  `git diff --check`. In an isolated dev app, a wide diagram panned horizontally in both inline and
-  expanded views, a tall diagram panned vertically, label text remained selectable, and scrollbar
-  presses were not intercepted.
 
 ## 2026-09-12 — Provider history deletion for transient side chats
 
@@ -1259,30 +736,21 @@ upstream.
   cleanup hook, and Claude worker bundle entry. Revisit the narrow raw Codex descendant query when
   its generated client exposes that experimental filter.
 
-## 2026-09-20: Integrate upstream 0.0.42
+## 2026-09-20 - Integrate upstream 0.0.42
 
 - Upstream baseline: `7445aa733ada`, following `b1e223e2b0`. Integrates 336 upstream commits
   on `integration/upstream-2026-09-20`, starting from fork commit `d204ea91f238`.
-- Removed downstream drift: upstream now owns reading-position restoration and compressed
-  asset content types. Removed the fork bookmark cache and restoration hook, retaining the
-  mounted thread-switch regression against upstream's DOM-aware implementation.
-- Retained drift: side chats, selected-text actions, transient provider-history cleanup,
-  native thread forks, thread-control MCP tools, Mermaid, workspace management, custom
-  shortcuts, the Auto runtime fallback, and the Fork desktop identity.
-- Adaptations: thread-reference chips use Tiptap in both composer modes. Claude history and
-  transient deletion workers support the bundled CLI and its hidden executable commands.
-  Workspace selection honors upstream's required separate worktrees for multiple models.
-  Native forks reject queued work. Side chats remain single-model and accept messages after
-  their current turn finishes.
-- Build fixes: added MIT notices from the installed fastdom and strictdom READMEs. Fixed
-  upstream's managed-worktree exclusion for macOS realpath aliases, as exposed by its existing
-  symlink regression. Regenerated the lockfile with the fork's Mermaid dependency retained.
-- Verification: more than 3,000 focused regression tests passed across the affected fork and
-  integration paths, including the HTTP compression regression. Scoped web, desktop, mobile,
-  server, contracts, and client-runtime type checks passed. Targeted lint reported no errors.
-  Production web and server bundles passed; the bundled Claude history and transient-deletion
-  commands passed smoke tests with a disposable provider home. No live provider turns, browser
-  checks, native mobile builds, desktop installers, publication, or live-data changes were run.
+- Upstream now owns reading-position restoration and compressed asset content types. Removed
+  the fork bookmark cache and restoration hook, retaining the mounted thread-switch regression
+  against upstream's DOM-aware implementation.
+- Preserved side chats, selected-text actions, transient provider-history cleanup, workspace
+  management, custom shortcuts, and Fork desktop identity. Claude history and deletion workers
+  support the bundled CLI. Side chats remain single-model and accept follow-ups after a turn ends.
+  Workspace selection follows upstream's separate-worktree requirement for multiple models.
+- Verification: more than 3,000 focused tests, scoped web, desktop, mobile, server, contracts,
+  and client-runtime typechecks, targeted lint, and web/server builds passed. Bundled history
+  and transient-deletion smoke checks used a disposable provider home. No live turns, browser
+  checks, native builds, installers, publication, or live-data changes were performed.
 
 ## 2026-09-20: Repair regressions found in live integration testing
 
@@ -1296,6 +764,6 @@ upstream.
 - Verification: the three new built-in-provider cleanup regressions failed before the fix and
   passed afterward. The focused cleanup and shortcut suites passed 294 tests. Server and web
   typechecks, targeted lint, and production bundles passed. Isolated live Codex Terra and Claude
-  Sonnet checks verified native forks, MCP access, side-chat cleanup, selection reuse, workspace
+  Sonnet checks verified side-chat cleanup, selection reuse, workspace
   management, thread references, and the affected shortcuts. Browser screenshot capture failed;
   native device access was disabled. Desktop installers and live user data were not touched.
