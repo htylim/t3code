@@ -144,25 +144,27 @@ describe("reuse selected-text side chat draft", () => {
 });
 
 describe("selected-text thread draft", () => {
-  it("prefills the draft created by the new-thread action", async () => {
+  it("prefills the returned draft when the project also has an older draft", async () => {
     const draftId = DraftId.make("draft-1");
     const calls: string[] = [];
+    const olderDraftId = DraftId.make("older-draft");
+    const prompts = new Map([[olderDraftId, "Existing work"]]);
 
     await createSelectedTextThreadDraft({
       prompt: "Quoted prompt",
       createThread: async () => {
         calls.push("create");
-      },
-      findCreatedDraft: () => {
-        calls.push("find");
         return { draftId };
       },
       setPrompt: (target, prompt) => {
         calls.push(`set:${target}:${prompt}`);
+        prompts.set(target, prompt);
       },
     });
 
-    expect(calls).toEqual(["create", "find", "set:draft-1:Quoted prompt"]);
+    expect(calls).toEqual(["create", "set:draft-1:Quoted prompt"]);
+    expect(prompts.get(draftId)).toBe("Quoted prompt");
+    expect(prompts.get(olderDraftId)).toBe("Existing work");
   });
 
   it("fails instead of overwriting an unrelated target when no draft was created", async () => {
@@ -171,8 +173,7 @@ describe("selected-text thread draft", () => {
     await expect(
       createSelectedTextThreadDraft({
         prompt: "Quoted prompt",
-        createThread: async () => {},
-        findCreatedDraft: () => null,
+        createThread: async () => null,
         setPrompt,
       }),
     ).rejects.toThrow("The new thread draft could not be found.");

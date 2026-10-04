@@ -7442,7 +7442,6 @@ export default function ChatView(props: ChatViewProps) {
         await createSelectedTextThreadDraft({
           prompt,
           createThread: () => handleNewThread(activeProjectRef),
-          findCreatedDraft: () => store.getDraftSessionByProjectRef(activeProjectRef),
           setPrompt: (draftId, prompt) => {
             store.setPrompt(draftId, prompt);
             store.addThreadContexts(draftId, [threadContextRecord(citation, activeThread.title)], {

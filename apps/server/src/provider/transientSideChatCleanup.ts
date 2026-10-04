@@ -52,7 +52,12 @@ function fingerprint(instance: unknown): string {
   return NodeCrypto.createHash("sha256").update(encodeJson(instance)).digest("hex");
 }
 
-/** Delete through V2, then remove only the native histories captured before deletion. */
+/** Keep matching native IDs in separate provider homes independent. */
+function cleanupTargetKey(instanceId: ProviderInstanceId, nativeId: string): string {
+  return JSON.stringify([instanceId, nativeId]);
+}
+
+/** Stop native work and delete only the histories captured for this transient thread. */
 export const makeTransientSideChatCleanup = Effect.fn("makeTransientSideChatCleanup")(function* (
   deleteProviderThread: typeof deleteTransientChatProviderThread = deleteTransientChatProviderThread,
 ) {
@@ -129,15 +134,10 @@ export const makeTransientSideChatCleanup = Effect.fn("makeTransientSideChatClea
             runtimePayload: { transientSideChatCleanup: "pending", targets },
           };
           yield* runtimes.upsert(marker);
-          if (projection.thread.deletedAt === null) {
-            yield* threads.dispatch({
-              type: "thread.delete",
-              threadId,
-              commandId: CommandId.make(`transient-side-chat-cleanup:${threadId}`),
-            });
-          }
-          // Ordinary V2 detach is best-effort. Explicitly await interruption and
-          // unload/close before deleting files, without closing shared Codex runtimes.
+          // Stop native work before thread.delete schedules its best-effort detach.
+          // Otherwise that detach can remove the runtime before cleanup awaits unload.
+          // Shared Codex runtimes remain available to their other threads.
+          const deletedByRuntime = new Map<string, "deleted" | "already-absent">();
           for (const session of projection.providerSessions) {
             const runtime = Option.getOrUndefined(yield* providers.get(session.id));
             if (runtime) {
@@ -150,7 +150,21 @@ export const makeTransientSideChatCleanup = Effect.fn("makeTransientSideChatClea
                     yield* runtime.interruptTurn({ providerThread, providerTurnId: turn.id });
                   }
                 }
-                if (runtime.unloadThread) yield* runtime.unloadThread({ providerThread });
+                if (
+                  runtime.deleteTransientThreadHistory &&
+                  providerThread.nativeThreadRef?.nativeId != null
+                ) {
+                  const outcome = yield* runtime.deleteTransientThreadHistory({ providerThread });
+                  deletedByRuntime.set(
+                    cleanupTargetKey(
+                      providerThread.providerInstanceId,
+                      providerThread.nativeThreadRef.nativeId,
+                    ),
+                    outcome,
+                  );
+                } else if (runtime.unloadThread) {
+                  yield* runtime.unloadThread({ providerThread });
+                }
               }
               if (!runtime.unloadThread) yield* providers.close(session.id);
             }
@@ -158,6 +172,13 @@ export const makeTransientSideChatCleanup = Effect.fn("makeTransientSideChatClea
               providerSessionId: session.id,
               threadId,
               revokeMcpCredential: true,
+            });
+          }
+          if (projection.thread.deletedAt === null) {
+            yield* threads.dispatch({
+              type: "thread.delete",
+              threadId,
+              commandId: CommandId.make(`transient-side-chat-cleanup:${threadId}`),
             });
           }
           let providerHistory: "deleted" | "already-absent" | "not-started" | "unsupported" =
@@ -171,32 +192,37 @@ export const makeTransientSideChatCleanup = Effect.fn("makeTransientSideChatClea
               allowMissing: true,
             };
             let deleted: "deleted" | "already-absent" | "unsupported";
-            switch (target.driver) {
-              case "codex":
-                deleted = yield* deleteProviderThread({
-                  ...common,
-                  provider: "codex",
-                  config: yield* decodeCodex(instance.config ?? {}),
-                }).pipe(Effect.provide(providerContext));
-                break;
-              case "claudeAgent":
-                deleted = yield* deleteProviderThread({
-                  ...common,
-                  provider: "claudeAgent",
-                  config: yield* decodeClaude(instance.config ?? {}),
-                }).pipe(Effect.provide(providerContext));
-                break;
-              case "opencode":
-                deleted = yield* deleteProviderThread({
-                  ...common,
-                  provider: "opencode",
-                  config: yield* Schema.decodeUnknownEffect(OpenCodeSettings)(
-                    instance.config ?? {},
-                  ),
-                }).pipe(Effect.provide(providerContext));
-                break;
-              default:
-                deleted = "unsupported";
+            const runtimeOutcome = deletedByRuntime.get(
+              cleanupTargetKey(target.instanceId, target.nativeId),
+            );
+            if (runtimeOutcome !== undefined) {
+              deleted = runtimeOutcome;
+            } else {
+              switch (target.driver) {
+                case "codex":
+                  deleted = yield* deleteProviderThread({
+                    ...common,
+                    provider: "codex",
+                    config: yield* decodeCodex(instance.config ?? {}),
+                  }).pipe(Effect.provide(providerContext));
+                  break;
+                case "claudeAgent":
+                  deleted = yield* deleteProviderThread({
+                    ...common,
+                    provider: "claudeAgent",
+                    config: yield* decodeClaude(instance.config ?? {}),
+                  }).pipe(Effect.provide(providerContext));
+                  break;
+                case "opencode":
+                  deleted = yield* deleteProviderThread({
+                    ...common,
+                    provider: "opencode",
+                    config: yield* decodeOpenCode(instance.config ?? {}),
+                  }).pipe(Effect.provide(providerContext));
+                  break;
+                default:
+                  deleted = "unsupported";
+              }
             }
             if (
               deleted === "unsupported" ||

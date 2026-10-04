@@ -40,6 +40,26 @@ upstream.
   native-client verification were not performed. The live install and original fork checkout
   were not changed.
 
+## 2026-10-04 - Repair regressions found in live V2 verification
+
+- Upstream baseline: `8ed276c246`.
+- Codex transient cleanup deletes through the runtime that owns the native writer. A second
+  app-server could not delete an active writer after unsubscribe. Cleanup now stops native work
+  before V2 deletion schedules detach, preserves shared runtimes, and retains failed jobs for retry.
+- Selected-text new-thread actions prefill the exact draft returned by upstream navigation.
+  Looking up the project again could select an older draft with a different logical project key.
+- Side-chat focus no longer counts as browser-preview focus inside the shared right-panel wrapper.
+  Guarded prompt-navigation shortcuts now reach the side timeline without moving the main timeline.
+- Verification: 1,049 focused tests and five installed-provider deletion safety tests passed.
+  Live Codex Terra and Claude Sonnet checks verified owner context through upstream `t3_thread_read`,
+  native history removal, preservation of the owner, and upstream native fork history. Browser
+  checks covered selection drafts and reuse, regular side chats and both sidebar indicators,
+  hover reveal in both layouts, workspace rename and removal, project filtering and switching,
+  F2, Cmd+W, prompt navigation, Mermaid rendering and fallback, and visualization-file preview.
+  Web and server typechecks and bundles passed. Targeted lint had no errors. Screenshot and resize
+  tools failed, and later browser interactions timed out. Native desktop and mobile UI checks
+  were not performed. All provider homes and server state were disposable; live data was untouched.
+
 ## 2026-10-04 - Retire implementations replaced by Orchestration V2
 
 - Upstream baseline: `de251fc297`, preparing to integrate `8ed276c246`.

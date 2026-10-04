@@ -1,3 +1,4 @@
+import type { TransientChatProviderThreadDeleteError } from "../provider/transientChatDeletion/errors.ts";
 import type { OrchestrationV2HistoricalMessage } from "@t3tools/contracts";
 import {
   ChatAttachment,
@@ -556,6 +557,13 @@ export interface ProviderAdapterV2SessionRuntime {
   readonly unloadThread?: (input: {
     readonly providerThread: OrchestrationV2ProviderThread;
   }) => Effect.Effect<void, ProviderAdapterV2Error>;
+  /** Delete a standalone transient history through the runtime that owns its writer. */
+  readonly deleteTransientThreadHistory?: (input: {
+    readonly providerThread: OrchestrationV2ProviderThread;
+  }) => Effect.Effect<
+    "deleted" | "already-absent",
+    ProviderAdapterV2Error | TransientChatProviderThreadDeleteError
+  >;
   readonly respondToRuntimeRequest: (
     input: ProviderAdapterV2RuntimeRequestResponseInput,
   ) => Effect.Effect<void, ProviderAdapterV2Error>;

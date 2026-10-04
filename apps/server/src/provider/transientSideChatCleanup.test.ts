@@ -43,7 +43,7 @@ const runtimeLayer = OpenCodeRuntimeLive.pipe(
 );
 
 /** V2 projection and retry storage with a controlled native-history deletion boundary. */
-function fixture(driverName = "codex", started = true) {
+function fixture(driverName = "codex", started = true, ownsNativeDeletion = false) {
   const driver = ProviderDriverKind.make(driverName);
   const appThread = Schema.decodeUnknownSync(OrchestrationV2AppThread)({
     createdBy: "user",
@@ -134,6 +134,23 @@ function fixture(driverName = "codex", started = true) {
         ),
       ),
     interruptTurn: () => Effect.void,
+    ...(ownsNativeDeletion
+      ? {
+          deleteTransientThreadHistory: () =>
+            Effect.gen(function* () {
+              calls.push("runtime-delete");
+              if (nativeFails) {
+                return yield* new TransientChatProviderThreadDeleteError({
+                  provider: "codex",
+                  providerSessionId: nativeId,
+                  reason: "unsafe-session",
+                  message: "Has children",
+                });
+              }
+              return "deleted" as const;
+            }),
+        }
+      : {}),
   } as unknown as ProviderAdapterV2SessionRuntime;
   const settingsLayer = ServerSettings.layerTest({
     providerInstances: {
@@ -167,7 +184,10 @@ function fixture(driverName = "codex", started = true) {
         }),
     }),
     Layer.mock(ProviderSessionManagerV2)({
-      get: () => Effect.succeed(Option.some(liveRuntime)),
+      get: () =>
+        Effect.sync(() =>
+          projection.thread.deletedAt === null ? Option.some(liveRuntime) : Option.none(),
+        ),
       detach: () =>
         Effect.sync(() => {
           calls.push("detach");
@@ -228,7 +248,7 @@ it.effect("V2 cleanup deletes the T3 thread, unloads native work, and deletes hi
     const state = fixture();
     const cleanup = yield* state.create();
     assert.deepEqual(yield* cleanup({ threadId }), { providerHistory: "deleted" });
-    assert.deepEqual(state.calls, ["t3-delete", "unload", "detach", "provider-delete"]);
+    assert.deepEqual(state.calls, ["unload", "detach", "t3-delete", "provider-delete"]);
     assert.equal(state.nativeCalls[0]?.providerSessionId, nativeId);
     assert.equal(state.nativeCalls[0]?.cwd, "/project");
     assert.equal(state.nativeCalls[0]?.environment?.TEST_INSTANCE, "selected");
@@ -288,6 +308,34 @@ it.effect("unsupported provider histories leave an explicit result", () =>
     const state = fixture("cursor");
     const cleanup = yield* state.create();
     assert.equal((yield* cleanup({ threadId })).providerHistory, "unsupported");
+    assert.equal(state.nativeCalls.length, 0);
+  }),
+);
+
+/** Shared Codex must delete with its owning client instead of spawning a competing writer. */
+it.effect(
+  "a shared runtime deletes its transient history before detach without a second client",
+  () =>
+    Effect.gen(function* () {
+      const state = fixture("codex", true, true);
+      const cleanup = yield* state.create();
+      assert.equal((yield* cleanup({ threadId })).providerHistory, "deleted");
+      assert.deepEqual(state.calls, ["runtime-delete", "detach", "t3-delete"]);
+      assert.equal(state.nativeCalls.length, 0);
+      assert.equal((yield* cleanup({ threadId })).providerHistory, "already-absent");
+    }),
+);
+
+/** A native refusal keeps retry state and leaves the owning runtime available. */
+it.effect("an owning runtime lineage refusal remains safe and retryable", () =>
+  Effect.gen(function* () {
+    const state = fixture("codex", true, true);
+    state.nativeFails(true);
+    const cleanup = yield* state.create();
+    assert.equal((yield* Effect.flip(cleanup({ threadId }))).reason, "unsafe-session");
+    assert.deepEqual(state.calls, ["runtime-delete"]);
+    state.nativeFails(false);
+    assert.equal((yield* cleanup({ threadId })).providerHistory, "deleted");
     assert.equal(state.nativeCalls.length, 0);
   }),
 );

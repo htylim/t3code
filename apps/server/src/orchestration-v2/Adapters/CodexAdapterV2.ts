@@ -1,3 +1,5 @@
+import { deletionError } from "../../provider/transientChatDeletion/errors.ts";
+import { deleteCodexTransientThread } from "../../provider/transientChatDeletion/codex.ts";
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "../ContextHandoffBudget.ts";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
@@ -5639,6 +5641,20 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                       detail: `Failed to unload Codex thread for provider thread ${unloadInput.providerThread.id}`,
                       cause: normalizeCodexCause(cause),
                     }),
+              ),
+            ),
+          /** Drain the owning writer and delete only the validated transient history. */
+          deleteTransientThreadHistory: ({ providerThread }) =>
+            Effect.gen(function* () {
+              const nativeThreadId = yield* getNativeThreadId(providerThread);
+              return yield* deleteCodexTransientThread(client.raw, nativeThreadId, true);
+            }).pipe(
+              Effect.mapError((cause) =>
+                deletionError(
+                  "codex",
+                  providerThread.nativeThreadRef?.nativeId ?? providerThread.id,
+                  cause,
+                ),
               ),
             ),
           interruptTurn: (turnInput) =>

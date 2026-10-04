@@ -58,14 +58,13 @@ export function reuseSelectedTextSideChatDraft(
   return target;
 }
 
+/** Prefill the exact draft returned by navigation, including reused project drafts. */
 export async function createSelectedTextThreadDraft(input: {
   readonly prompt: string;
-  readonly createThread: () => Promise<unknown>;
-  readonly findCreatedDraft: () => { readonly draftId: DraftId } | null;
+  readonly createThread: () => Promise<{ readonly draftId: DraftId } | null>;
   readonly setPrompt: (draftId: DraftId, prompt: string) => void;
 }): Promise<void> {
-  await input.createThread();
-  const draft = input.findCreatedDraft();
+  const draft = await input.createThread();
   if (draft === null) {
     throw new Error("The new thread draft could not be found.");
   }
