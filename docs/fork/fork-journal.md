@@ -19,6 +19,18 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-04 - Keep both side-chat roles visible in the sidebar
+
+- Upstream baseline: `8ed276c246`.
+- Both web and desktop sidebar layouts mark threads that host a side chat and threads used as
+  side chats. The host uses the outline split-panel icon; the side-chat thread uses a filled right
+  pane. Indicators follow saved chat tabs across navigation, hidden panels, and tab switches.
+- Removing or replacing a chat tab updates the roles. Threads can have both roles, and a shared
+  target stays marked until its last owner removes it. State remains local to the client.
+- Verification: All 95 focused panel-state and side-chat replacement tests passed, along with the
+  web typecheck and targeted lint. Existing sidebar lint warnings remain. Browser verification
+  was not performed.
+
 ## 2026-10-04 - Integrate upstream Orchestration V2
 
 - Upstream baseline: `8ed276c246`, following `de251fc297`. Integrates the reviewed 102 commits

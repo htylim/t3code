@@ -95,8 +95,9 @@ import {
 } from "react";
 import { useParams, useRouter } from "@tanstack/react-router";
 
-import { selectVisibleSideChatThreadKey, useRightPanelStore } from "../rightPanelStore";
-import { SideSurfaceThreadIndicator } from "./SideSurfaceThreadIndicator";
+import { useRightPanelStore } from "../rightPanelStore";
+import { useSideChatThreadStates } from "../hooks/useSideChatThreadStates";
+import { SideSurfaceThreadIndicators } from "./SideSurfaceThreadIndicator";
 import {
   isAtomCommandInterrupted,
   settlePromise,
@@ -1105,7 +1106,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // the descriptor is not loaded. Pinning itself lives in the context menu.
   pinningSupported: boolean;
   isPinned: boolean;
-  isVisibleInSideSurface: boolean;
+  hasSideChat: boolean;
+  isSideChat: boolean;
   // Present on rows whose server supports every drop outcome: dnd-kit
   // sortable bag applied to the row root so the whole row drags (the
   // pointer sensor's distance constraint keeps plain clicks working).
@@ -1770,7 +1772,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             </span>
             {draftIndicator}
             {title}
-            {props.isVisibleInSideSurface ? <SideSurfaceThreadIndicator /> : null}
+            <SideSurfaceThreadIndicators
+              hasSideChat={props.hasSideChat}
+              isSideChat={props.isSideChat}
+            />
             {pinIndicator}
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
@@ -1932,7 +1937,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               ) : (
                 <span className="flex-1" />
               )}
-              {props.isVisibleInSideSurface ? <SideSurfaceThreadIndicator /> : null}
+              <SideSurfaceThreadIndicators
+                hasSideChat={props.hasSideChat}
+                isSideChat={props.isSideChat}
+              />
               {pinIndicator}
               {/* The visible state owns this slot's width: status at rest,
                   actions on hover/keyboard focus or while the popover is open. Keeping
@@ -2411,9 +2419,7 @@ export default function Sidebar() {
     () => resolveRightPanelOwnerRef(routeTarget, routeDraftThread),
     [routeDraftThread, routeTarget],
   );
-  const visibleSideChatThreadKey = useRightPanelStore((state) =>
-    selectVisibleSideChatThreadKey(state.byThreadKey, rightPanelOwnerRef),
-  );
+  const sideChatThreadStates = useSideChatThreadStates();
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
   const routeTargetRef = useRef(routeTarget);
   routeTargetRef.current = routeTarget;
@@ -5041,7 +5047,8 @@ export default function Sidebar() {
                                 .threadPinning === true
                             }
                             isPinned={thread.pinnedAt != null}
-                            isVisibleInSideSurface={visibleSideChatThreadKey === threadKey}
+                            hasSideChat={sideChatThreadStates.get(threadKey)?.hasSideChat ?? false}
+                            isSideChat={sideChatThreadStates.get(threadKey)?.isSideChat ?? false}
                             sortable={sortable}
                             dropVerb={
                               dragState?.activeKey === threadKey

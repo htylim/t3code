@@ -9,10 +9,10 @@ import {
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
   selectSelectedRightPanelSurface,
+  selectSideChatThreadStates,
   selectThreadPanelOpen,
   selectThreadPanelVisibility,
   selectThreadRightPanelState,
-  selectVisibleSideChatThreadKey,
   useRightPanelStore,
 } from "./rightPanelStore";
 
@@ -1215,53 +1215,104 @@ it("stores one target-scoped chat surface under its owning thread", () => {
   });
 });
 
-it("shows only the current owner's visible side chat when navigating away and back", () => {
+/** Read sidebar roles from the current store after each user action. */
+function readSideChatThreadStates() {
+  return selectSideChatThreadStates(useRightPanelStore.getState().byThreadKey);
+}
+
+it("keeps all saved side-chat relationships marked regardless of the active owner", () => {
   const store = useRightPanelStore.getState();
   store.openChat(refA, refB);
-  const visibleThread = (owner: typeof refA | null) =>
-    selectVisibleSideChatThreadKey(useRightPanelStore.getState().byThreadKey, owner);
-
-  expect(visibleThread(refA)).toBe(scopedThreadKey(refB));
-  expect(visibleThread(refB)).toBeNull();
-  expect(visibleThread(null)).toBeNull();
-  expect(visibleThread(refA)).toBe(scopedThreadKey(refB));
+  expect(readSideChatThreadStates().get(scopedThreadKey(refA))).toEqual({
+    hasSideChat: true,
+    isSideChat: false,
+  });
+  expect(readSideChatThreadStates().get(scopedThreadKey(refB))).toEqual({
+    hasSideChat: false,
+    isSideChat: true,
+  });
 
   store.openChat(refC, refA);
-  expect(visibleThread(refC)).toBe(scopedThreadKey(refA));
-  expect(visibleThread(refA)).toBe(scopedThreadKey(refB));
+  expect(readSideChatThreadStates().get(scopedThreadKey(refA))).toEqual({
+    hasSideChat: true,
+    isSideChat: true,
+  });
+  expect(readSideChatThreadStates().get(scopedThreadKey(refB))?.isSideChat).toBe(true);
+  expect(readSideChatThreadStates().get(scopedThreadKey(refC))?.hasSideChat).toBe(true);
 });
 
-it("hides the side-chat indicator for closed panels and other tabs, and restores it on return", () => {
+it("keeps both indicators when the panel is hidden or another tab is selected", () => {
   const store = useRightPanelStore.getState();
   store.openChat(refA, refB);
-  const visibleThread = () =>
-    selectVisibleSideChatThreadKey(useRightPanelStore.getState().byThreadKey, refA);
+  const savedSideChatStates = readSideChatThreadStates();
 
   store.close(refA);
-  expect(visibleThread()).toBeNull();
+  expect(readSideChatThreadStates()).toEqual(savedSideChatStates);
   store.show(refA);
-  expect(visibleThread()).toBe(scopedThreadKey(refB));
+  expect(readSideChatThreadStates()).toEqual(savedSideChatStates);
   store.open(refA, "files");
-  expect(visibleThread()).toBeNull();
+  expect(readSideChatThreadStates()).toEqual(savedSideChatStates);
   store.activateSurface(refA, "chat:env-1:thread-B");
-  expect(visibleThread()).toBe(scopedThreadKey(refB));
+  expect(readSideChatThreadStates()).toEqual(savedSideChatStates);
   store.closeSurface(refA, "chat:env-1:thread-B");
-  expect(visibleThread()).toBeNull();
+  expect(readSideChatThreadStates().size).toBe(0);
 });
 
 it("moves the indicator to the replacement target and distinguishes environments", () => {
   const store = useRightPanelStore.getState();
   const sameIdOtherEnvironment = scopeThreadRef(refC.environmentId, refB.threadId);
-  const visibleThread = () =>
-    selectVisibleSideChatThreadKey(useRightPanelStore.getState().byThreadKey, refA);
 
   store.openChat(refA, refB);
-  expect(visibleThread()).toBe(scopedThreadKey(refB));
+  expect(readSideChatThreadStates().get(scopedThreadKey(refB))?.isSideChat).toBe(true);
   store.openChat(refA, sameIdOtherEnvironment);
-  expect(visibleThread()).toBe(scopedThreadKey(sameIdOtherEnvironment));
-  expect(visibleThread()).not.toBe(scopedThreadKey(refB));
+  expect(readSideChatThreadStates().get(scopedThreadKey(sameIdOtherEnvironment))?.isSideChat).toBe(
+    true,
+  );
+  expect(readSideChatThreadStates().has(scopedThreadKey(refB))).toBe(false);
+  expect(readSideChatThreadStates().get(scopedThreadKey(refA))?.hasSideChat).toBe(true);
   store.openChat(refA, refC);
-  expect(visibleThread()).toBe(scopedThreadKey(refC));
+  expect(readSideChatThreadStates().get(scopedThreadKey(refC))?.isSideChat).toBe(true);
+  expect(readSideChatThreadStates().has(scopedThreadKey(sameIdOtherEnvironment))).toBe(false);
+});
+
+it("keeps a shared side-chat target marked until its last owner removes it", () => {
+  const store = useRightPanelStore.getState();
+  store.openChat(refA, refB);
+  store.openChat(refC, refB);
+
+  store.closeAllSurfaces(refA);
+  expect(readSideChatThreadStates().has(scopedThreadKey(refA))).toBe(false);
+  expect(readSideChatThreadStates().get(scopedThreadKey(refB))?.isSideChat).toBe(true);
+  expect(readSideChatThreadStates().get(scopedThreadKey(refC))?.hasSideChat).toBe(true);
+
+  store.closeAllSurfaces(refC);
+  expect(readSideChatThreadStates().size).toBe(0);
+});
+
+it("restores both indicators from persisted side-chat tabs even while hidden", () => {
+  const store = useRightPanelStore.getState();
+  store.openChat(refA, refB);
+  store.close(refA);
+  const savedSideChatStates = readSideChatThreadStates();
+  const persisted = JSON.parse(
+    JSON.stringify({ byThreadKey: useRightPanelStore.getState().byThreadKey }),
+  );
+
+  useRightPanelStore.setState({ byThreadKey: {} });
+  expect(readSideChatThreadStates().size).toBe(0);
+  useRightPanelStore.setState(migratePersistedRightPanelState(persisted));
+  expect(readSideChatThreadStates()).toEqual(savedSideChatStates);
+});
+
+it("marks owners of transient side chats without treating unrelated panels as chats", () => {
+  const store = useRightPanelStore.getState();
+  store.open(refC, "files");
+  expect(readSideChatThreadStates().size).toBe(0);
+
+  store.openChat(refA, refB, { transient: true });
+  expect(readSideChatThreadStates().get(scopedThreadKey(refA))?.hasSideChat).toBe(true);
+  expect(readSideChatThreadStates().get(scopedThreadKey(refB))?.isSideChat).toBe(true);
+  expect(readSideChatThreadStates().has(scopedThreadKey(refC))).toBe(false);
 });
 
 it("marks newly created side chats as transient", () => {

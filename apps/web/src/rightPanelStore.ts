@@ -1118,13 +1118,36 @@ export function selectActiveRightPanelSurface(
   return selectSelectedRightPanelSurface(byThreadKey, ref);
 }
 
-/** Only the chat visible beside the current owner gets a sidebar indicator. */
-export function selectVisibleSideChatThreadKey(
+export interface SideChatThreadState {
+  hasSideChat: boolean;
+  isSideChat: boolean;
+}
+
+/** Derive both sidebar roles from saved chat tabs, including hidden and inactive panels. */
+export function selectSideChatThreadStates(
   byThreadKey: Record<string, ThreadRightPanelState>,
-  owner: ScopedThreadRef | null | undefined,
-): string | null {
-  const surface = selectActiveRightPanelSurface(byThreadKey, owner);
-  return surface?.kind === "chat" ? scopedThreadKey(surface) : null;
+): ReadonlyMap<string, SideChatThreadState> {
+  const sideChatThreadStates = new Map<string, SideChatThreadState>();
+  for (const [ownerThreadKey, panelState] of Object.entries(byThreadKey)) {
+    for (const surface of panelState.surfaces) {
+      if (surface.kind !== "chat") continue;
+      const ownerState = sideChatThreadStates.get(ownerThreadKey) ?? {
+        hasSideChat: false,
+        isSideChat: false,
+      };
+      ownerState.hasSideChat = true;
+      sideChatThreadStates.set(ownerThreadKey, ownerState);
+
+      const sideChatThreadKey = scopedThreadKey(surface);
+      const sideChatState = sideChatThreadStates.get(sideChatThreadKey) ?? {
+        hasSideChat: false,
+        isSideChat: false,
+      };
+      sideChatState.isSideChat = true;
+      sideChatThreadStates.set(sideChatThreadKey, sideChatState);
+    }
+  }
+  return sideChatThreadStates;
 }
 
 /** The selected surface even while the panel is hidden, so a layout control can restore it. */
