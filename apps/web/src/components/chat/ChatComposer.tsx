@@ -236,8 +236,9 @@ import {
   threadContextReference,
 } from "~/lib/composerContextRecords";
 import { matchComposerThreadItems } from "@t3tools/client-runtime/composerThreadItems";
+import { buildComposerThreadPickerItems } from "../../composerThreadPicker";
 import { THREAD_CONTEXT_DROP_EVENT, threadContextDropTargetProps } from "./threadContextDrag";
-import { readThreadShell, useThreadShells } from "~/state/entities";
+import { readThreadShell, useProjects, useThreadShells } from "~/state/entities";
 import { requestConfirmDialog } from "~/confirmDialog";
 import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
 import type { ComposerContextClipboardFragment, ComposerContextRecord } from "@t3tools/contracts";
@@ -1498,6 +1499,8 @@ export interface ChatComposerHandle {
 export interface ChatComposerProps {
   composerDraftTarget: ScopedThreadRef | DraftId;
   environmentId: EnvironmentId;
+  /** The composing project's ID, including drafts and side chats. */
+  composerProjectId: ProjectId | null;
   attachmentUploadsCapabilityKnown: boolean;
   supportsAttachmentUploads: boolean;
   supportsQuestionAttachments: boolean;
@@ -2487,6 +2490,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     pullRequestTextQuery === debouncedPullRequestTextQuery ? pullRequestTextQuery : null;
   const isPathTrigger = composerTriggerKind === "path";
   const environmentThreadShells = useThreadShells();
+  const environmentProjects = useProjects();
   const workspaceEntries = useComposerPathSearch({
     environmentId,
     cwd: isPathTrigger ? gitCwd : null,
@@ -2567,6 +2571,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const composerMenuItems = useMemo<ComposerCommandItem[]>(() => {
     if (!composerTrigger) return [];
+    if (composerTrigger.kind === "thread") {
+      return buildComposerThreadPickerItems({
+        shells: environmentThreadShells,
+        projects: environmentProjects,
+        environmentId,
+        projectId: props.composerProjectId,
+        excludeThreadId: activeThreadId,
+        scope: composerTrigger.threadScope ?? "project",
+        query: composerTrigger.query,
+      });
+    }
     if (composerTrigger.kind === "path") {
       // Threads only surface for a typed query so `@` alone stays a file picker. A title match
       // is far more specific than a fuzzy path hit, so the few threads lead the list.
@@ -2721,9 +2736,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     compactSlashCommandAvailable,
     composerTrigger,
     environmentId,
+    environmentProjects,
     environmentThreadShells,
     exactPullRequestLookup.data,
     planModeUiEnabled,
+    props.composerProjectId,
     pullRequestLookup.data,
     pullRequestProjectId,
     pullRequestRepository,
@@ -2738,7 +2755,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const composerMenuOpen = Boolean(composerTrigger);
   const composerMenuSearchKey = composerTrigger
-    ? `${composerSuggestionListId}:${composerTrigger.kind}:${composerTrigger.query.trim().toLowerCase()}`
+    ? `${composerSuggestionListId}:${composerTrigger.kind}:${composerTrigger.threadScope ?? ""}:${props.composerProjectId ?? ""}:${composerTrigger.query.trim().toLowerCase()}`
     : null;
   const activeComposerMenuItem = useMemo(() => {
     const activeItemId = resolveComposerMenuActiveItemId({
@@ -2815,6 +2832,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         pullRequestTriggerNumber !== debouncedPullRequestNumber ||
         exactPullRequestLookup.isPending));
   const composerMenuEmptyState = useMemo(() => {
+    if (composerTriggerKind === "thread") {
+      if (composerTrigger?.threadScope === "project" && props.composerProjectId === null) {
+        return "Choose a project or use %% to browse all projects in this environment.";
+      }
+      return composerTrigger?.threadScope === "environment"
+        ? "No matching threads in this environment."
+        : "No matching threads in this project. Use %% to search all projects.";
+    }
     if (composerTriggerKind === "skill") {
       return "No skills found. Try / to browse provider commands.";
     }
@@ -2838,6 +2863,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   }, [
     composerTrigger,
     composerTriggerKind,
+    props.composerProjectId,
     pullRequestLookup.data?.errors,
     pullRequestLookup.error,
     pullRequestProjectId,
@@ -3986,7 +4012,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         return;
       }
       if (item.type === "thread") {
-        if (trigger.kind !== "path") return;
+        if (trigger.kind !== "path" && trigger.kind !== "thread") return;
         const shell = readThreadShell(item.thread);
         if (!shell) return;
         const record = threadContextRecord(item.thread, shell.title);
@@ -4359,6 +4385,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }
       if ((key === "Enter" || key === "Tab") && selectedItem) {
         onSelectComposerItem(selectedItem);
+        return true;
+      }
+      // A failed thread search must not submit its unfinished query or recall a prompt.
+      if (trigger?.kind === "thread" && ["Enter", "Tab", "ArrowUp", "ArrowDown"].includes(key)) {
         return true;
       }
     }
@@ -7339,7 +7369,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                                 ? "Enable a provider in Settings to send a message"
                                 : phase === "disconnected"
                                   ? DISCONNECTED_COMPOSER_PLACEHOLDER
-                                  : "Ask anything, @tag files/folders, $use skills, or / for commands"
+                                  : "Ask anything, @ for files, % for threads, $ for skills, or / for commands"
                     }
                     disabled={
                       isConnecting ||

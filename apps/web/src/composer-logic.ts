@@ -5,13 +5,14 @@ import {
   withAssistantCitationComment,
 } from "@t3tools/shared/assistantCitations";
 import {
+  collectComposerPromptInlineTokens,
   splitPromptIntoComposerSegments,
   type ComposerPromptSegment,
 } from "./composer-editor-mentions";
 
 import { resolveShortcutCommand, type ShortcutEventLike } from "./keybindings";
 
-export type ComposerTriggerKind = "path" | "pull-request" | "slash-command" | "skill";
+export type ComposerTriggerKind = "path" | "pull-request" | "slash-command" | "skill" | "thread";
 export type ComposerSlashCommand = "model" | "plan" | "default";
 export type ComposerSubmissionIntent = "foreground" | "background" | "alternate";
 
@@ -20,6 +21,7 @@ export interface ComposerTrigger {
   query: string;
   rangeStart: number;
   rangeEnd: number;
+  threadScope?: "project" | "environment";
 }
 
 export function formatAssistantCitationForComposer(citation: AssistantCitation, comment = "") {
@@ -240,6 +242,7 @@ export function isCollapsedCursorAdjacentToInlineToken(
   return false;
 }
 
+/** Find the suggestion at the caret; thread queries may contain spaces but cannot cross chips. */
 export function detectComposerTrigger(text: string, cursorInput: number): ComposerTrigger | null {
   const cursor = clampCursor(text, cursorInput);
   const lineStart = text.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
@@ -278,14 +281,39 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
       rangeEnd: cursor,
     };
   }
-  if (!token.startsWith("@")) {
-    return null;
+  if (token.startsWith("@")) {
+    return {
+      kind: "path",
+      query: token.slice(1),
+      rangeStart: tokenStart,
+      rangeEnd: cursor,
+    };
   }
 
+  let rangeStart = cursor - 1;
+  while (rangeStart >= lineStart) {
+    if (
+      text[rangeStart] === "%" &&
+      (rangeStart === 0 || isWhitespace(text[rangeStart - 1] ?? ""))
+    ) {
+      break;
+    }
+    rangeStart -= 1;
+  }
+  if (rangeStart < lineStart) return null;
+  const marker = text.slice(rangeStart, cursor);
+  if (marker.startsWith("%%%")) return null;
+  // Selected context, citation, file, and skill chips end an earlier thread query.
+  for (const inlineToken of collectComposerPromptInlineTokens(text)) {
+    if (inlineToken.start >= cursor) break;
+    if (inlineToken.end > rangeStart) return null;
+  }
+  const markerLength = marker.startsWith("%%") ? 2 : 1;
   return {
-    kind: "path",
-    query: token.slice(1),
-    rangeStart: tokenStart,
+    kind: "thread",
+    threadScope: markerLength === 2 ? "environment" : "project",
+    query: text.slice(rangeStart + markerLength, cursor),
+    rangeStart,
     rangeEnd: cursor,
   };
 }

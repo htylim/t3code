@@ -148,7 +148,9 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                     ? "No skills found. Try / to browse provider commands."
                     : props.triggerKind === "path"
                       ? "No matching files or folders."
-                      : "No matching command."))}
+                      : props.triggerKind === "thread"
+                        ? "No matching threads."
+                        : "No matching command."))}
             </p>
           </div>
         )}
@@ -242,6 +244,7 @@ const LISTBOX_LABEL_BY_TRIGGER: Record<ComposerTriggerKind, string> = {
   "pull-request": "Pull requests",
   "slash-command": "Commands",
   skill: "Skills",
+  thread: "Threads",
 };
 
 const SKILL_SOURCE_ICON_BY_KIND: Record<ProviderSkillSourceKind, LucideIcon> = {

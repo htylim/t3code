@@ -238,6 +238,55 @@ describe("composerSubmissionIntentForKey", () => {
 });
 
 describe("detectComposerTrigger", () => {
+  it.each([
+    ["%", "project", ""],
+    ["%%", "environment", ""],
+    ["%login flow", "project", "login flow"],
+    ["%%login flow ", "environment", "login flow "],
+  ] as const)("detects the scoped thread search %s", (marker, threadScope, query) => {
+    const text = `Please read ${marker}`;
+    expect(detectComposerTrigger(text, text.length)).toEqual({
+      kind: "thread",
+      threadScope,
+      query,
+      rangeStart: "Please read ".length,
+      rangeEnd: text.length,
+    });
+  });
+
+  it.each(["100%", "value%%", "%%%", "https://example.com/%20", "%login\nnext line"])(
+    "leaves ordinary percent text and completed lines alone: %s",
+    (text) => expect(detectComposerTrigger(text, text.length)).toBeNull(),
+  );
+
+  it("uses the newest thread marker and supports a caret in the middle of the query", () => {
+    const text = "%old query then %%login flow after";
+    const cursor = text.indexOf(" after");
+    expect(detectComposerTrigger(text, cursor)).toEqual({
+      kind: "thread",
+      threadScope: "environment",
+      query: "login flow",
+      rangeStart: text.indexOf("%%"),
+      rangeEnd: cursor,
+    });
+  });
+
+  it.each(["@src", "$skill", "#123"])(
+    "keeps %s suggestions ahead of an earlier % query",
+    (token) => {
+      const text = `%login ${token}`;
+      expect(detectComposerTrigger(text, text.length)?.kind).not.toBe("thread");
+    },
+  );
+
+  it("does not open a thread query inside or after a selected upstream context chip", () => {
+    const reference = "[%login flow](t3-context://v1/thread/thread_local_login)";
+    expect(detectComposerTrigger(reference, reference.indexOf(" flow"))).toBeNull();
+    const text = `%older ${reference} after`;
+    expect(detectComposerTrigger(text, text.length)).toBeNull();
+    expect(detectComposerTrigger(`${text} %%`, text.length + 3)?.threadScope).toBe("environment");
+  });
+
   it("detects @path trigger at cursor", () => {
     const text = "Please check @src/com";
     const trigger = detectComposerTrigger(text, text.length);

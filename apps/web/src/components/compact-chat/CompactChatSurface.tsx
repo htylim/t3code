@@ -1044,6 +1044,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
                   activeThreadEnvironmentId={thread.environmentId}
                   activeThread={thread}
                   activeThreadShell={threadShell}
+                  composerProjectId={thread.projectId}
                   isServerThread
                   isLocalDraftThread={false}
                   forceExpandedOnMobile={false}

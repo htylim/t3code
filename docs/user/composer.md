@@ -223,7 +223,11 @@ by any part of its pull request numbers. A complete number is also resolved dire
 pull request is older than the recent list. Type a single word after `#` to search pull requests in
 the repository by text. Choose a result to insert it as a chip.
 
-Another thread can be context too. Type `@` followed by part of its title to pick one from
+Another thread can be context too. On web and desktop, type `%` to browse the composing project's
+threads, or `%%` to browse all projects in the current environment. Continue typing to search by
+title, project, branch, or thread ID. Searches can contain spaces. Results show the latest user
+activity first. Enter or Tab selects a result. Escape dismisses the picker and leaves the text
+intact. You can also type `@` followed by part of a thread's title to pick one from
 the same server, or on web and desktop drag a thread out of the sidebar and drop it on the
 composer; a multi-selection drops together. The chip shows the thread's current title and
 opens it when selected. Your prompt only carries a reference: the agent reads the thread's

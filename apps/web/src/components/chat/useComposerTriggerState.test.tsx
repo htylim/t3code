@@ -133,13 +133,26 @@ describe("composer suggestion dismissal", () => {
     expect(composer.resolveTrigger(candidate)).toEqual(candidate);
   });
 
-  it.each(["/plan", "$skill", "#123"])("also dismisses %s suggestions", async (text) => {
-    await updatePrompt(text);
-    await act(() => composer.dismissTrigger(composer.trigger));
-    await updatePrompt(`${text}x`);
+  it.each(["/plan", "$skill", "#123", "%login", "%%login"])(
+    "also dismisses %s suggestions",
+    async (text) => {
+      await updatePrompt(text);
+      await act(() => composer.dismissTrigger(composer.trigger));
+      await updatePrompt(`${text}x`);
 
+      expect(composer.trigger).toBeNull();
+      await updatePrompt("@src");
+      expect(composer.trigger?.kind).toBe("path");
+    },
+  );
+
+  it("keeps escaped multiword thread searches dismissed until a fresh marker", async () => {
+    await updatePrompt("%login");
+    await act(() => composer.dismissTrigger(composer.trigger));
+    await updatePrompt("%login flow ");
     expect(composer.trigger).toBeNull();
-    await updatePrompt("@src");
-    expect(composer.trigger?.kind).toBe("path");
+    await updatePrompt("%login flow %%");
+    expect(composer.trigger?.threadScope).toBe("environment");
+    expect(composer.trigger?.query).toBe("");
   });
 });

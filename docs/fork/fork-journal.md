@@ -19,6 +19,25 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-04 - Restore scoped thread-reference shortcuts on V2
+
+- Upstream baseline: `8ed276c246`.
+- Restored `%` for the composing project's threads and `%%` for all projects in the current
+  environment. Bare triggers browse recent user activity. Queries accept spaces and search titles,
+  project names, branches, and thread IDs. Escape preserves the text; Enter with no results keeps
+  the picker open. Embedded percentages such as `100%` do not open it.
+- Selection uses upstream's context chips, draft records, and provider projection through
+  `t3_thread_read`. The retired fork URI format and MCP implementation remain removed.
+- Scope: web and desktop main, draft, and side-chat composers. Existing `@` references remain
+  available. Native mobile, provider adapters, contracts, persistence, and server behavior are unchanged.
+- Verification: 291 focused picker, trigger, dismissal, context projection, rich-text, and draft
+  persistence tests passed. Web typecheck and targeted lint passed, with existing lint warnings.
+  The broader draft-store suite has one stale Auto-default assertion that also fails on the
+  untouched integration commit. An isolated browser pass verified bare and multiword queries,
+  project switching, environment scope, current-thread exclusion, Enter and Tab selection,
+  Escape and continued typing, empty-search handling, chip persistence after reload, independent
+  side-panel drafts, literal percentages, and existing `@` results. Native-client checks were not performed.
+
 ## 2026-10-04 - Keep both side-chat roles visible in the sidebar
 
 - Upstream baseline: `8ed276c246`.
