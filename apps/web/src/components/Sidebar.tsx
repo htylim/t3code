@@ -287,14 +287,6 @@ import { confirmSideChatReplacement, openSideChat } from "../sideChatReplacement
 import { useDeleteTransientSideChat } from "./TransientSideChatCleanup";
 import { useProjectCards } from "../fork/projectCards/useProjectCards";
 import { ProjectPreviewCards } from "../fork/projectCards/ProjectPreviewCards";
-import {
-  PROJECT_DRAFT_CONTENT_CLASS_NAME,
-  PROJECT_DRAFT_PRIMARY_LINE_CLASS_NAME,
-  PROJECT_DRAFT_TITLE_CLASS_NAME,
-  PROJECT_THREAD_CONTENT_CLASS_NAME,
-  PROJECT_THREAD_ROW_CLASS_NAME,
-  type SidebarRowLayout,
-} from "../fork/projectCards/rowLayout";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -808,8 +800,8 @@ function SidebarSectionHeader(props: {
   );
 }
 
-// One unsent draft session the user has invested content in. Standalone rows
-// show a project heading; project-card rows keep just the pen and prompt. All the draft's
+// One unsent draft session the user has invested content in. Two lines,
+// nothing else: project name, then the typed prompt. All the draft's
 // settings (model, env mode, branch, worktree) still travel with it —
 // clicking is a plain navigation to /draft/$draftId, which touches nothing.
 // While the draft is open the row renders a frozen snapshot (see
@@ -817,7 +809,6 @@ function SidebarSectionHeader(props: {
 // entirely.
 const SidebarDraftRow = memo(function SidebarDraftRow(props: {
   draftId: DraftId;
-  layout?: SidebarRowLayout;
   composer: ComposerThreadDraftState;
   project: ProjectFaviconProject | null;
   projectDisplayName: string | null;
@@ -899,35 +890,15 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
         onKeyDown={handleKeyDown}
       >
         <span className="sr-only">{preview}</span>
-        <div
-          className={
-            props.layout === "project"
-              ? PROJECT_DRAFT_CONTENT_CLASS_NAME
-              : "relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
-          }
-        >
-          <div
-            className={
-              props.layout === "project"
-                ? PROJECT_DRAFT_PRIMARY_LINE_CLASS_NAME
-                : "flex h-5 min-w-0 items-center gap-1.5"
-            }
-          >
+        <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
+          <div className="flex h-5 min-w-0 items-center gap-1.5">
             <SquarePenIcon aria-hidden className={draftPenClassName} />
-            {props.layout === "project" ? (
-              <span aria-hidden className={PROJECT_DRAFT_TITLE_CLASS_NAME}>
-                {preview}
-              </span>
-            ) : (
-              <>
-                {props.project ? (
-                  <ProjectFavicon project={props.project} className="size-4 shrink-0" />
-                ) : null}
-                <span className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label">
-                  {props.projectDisplayName}
-                </span>
-              </>
-            )}
+            {props.project ? (
+              <ProjectFavicon project={props.project} className="size-4 shrink-0" />
+            ) : null}
+            <span className="min-w-0 flex-1 truncate text-xs font-medium text-secondary-label">
+              {props.projectDisplayName}
+            </span>
             <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-end">
               <Tooltip>
                 <TooltipTrigger
@@ -946,11 +917,9 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
               </Tooltip>
             </span>
           </div>
-          {props.layout !== "project" ? (
-            <div aria-hidden className="mt-0.5 truncate text-sm font-medium text-foreground/90">
-              {preview}
-            </div>
-          ) : null}
+          <div aria-hidden className="mt-0.5 truncate text-sm font-medium text-foreground/90">
+            {preview}
+          </div>
         </div>
       </div>
     </li>
@@ -968,7 +937,6 @@ export interface SidebarDraftRowData {
 // subscription + closing divider) so per-keystroke composer updates
 // re-render only this block, never the whole sidebar. Vanishes at count 0.
 const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
-  rowLayout?: SidebarRowLayout;
   projectByKey: ReadonlyMap<string, EnvironmentProject>;
   projectDisplayNameByKey: ReadonlyMap<string, string>;
   scopedProjectKeys: ReadonlySet<string> | null;
@@ -1057,7 +1025,6 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
       <SidebarDraftRow
         key={draftId}
         draftId={draftId}
-        layout={props.rowLayout ?? "standalone"}
         composer={composer}
         project={props.projectByKey.get(projectKey) ?? null}
         projectDisplayName={props.projectDisplayNameByKey.get(projectKey) ?? null}
@@ -1123,7 +1090,6 @@ const dropVerbBadge: Record<SidebarDropVerb, ReactNode> = {
 const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   thread: SidebarThreadSummary;
   variant: "card" | "slim";
-  layout?: SidebarRowLayout;
   // Settled rows un-settle, snoozed rows wake, and cards settle.
   variantAction: SidebarSweepAction;
   // False on environments whose server predates thread.settle/unsettle:
@@ -1958,16 +1924,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   }
 
   const diff = latestRunDiff(thread);
-  const cardTitleContent = (
-    <>
-      {title}
-      {isRegeneratingTitle ? (
-        <span role="status" className="sr-only">
-          Regenerating title
-        </span>
-      ) : null}
-    </>
-  );
 
   return (
     <li
@@ -1976,9 +1932,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       {...(fileDropHandlers ?? {})}
       className={cn(
         // Matches the h-[4.875rem] content box; the py-0.5 padding is added on top.
-        props.layout === "project"
-          ? PROJECT_THREAD_ROW_CLASS_NAME
-          : "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
+        "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
         sortable?.isDragging && "relative z-20",
       )}
     >
@@ -2002,35 +1956,23 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           }
         >
           {accessibleTitle}
-          <div
-            className={
-              props.layout === "project"
-                ? PROJECT_THREAD_CONTENT_CLASS_NAME
-                : "relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)"
-            }
-          >
+          <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
             <div className="flex h-5 min-w-0 items-center gap-1.5">
               {draftIndicator}
-              {props.layout === "project" ? (
-                cardTitleContent
-              ) : (
-                <>
-                  {props.project ? (
-                    <ProjectFavicon project={props.project} className="size-4 shrink-0" />
-                  ) : null}
-                  {props.projectDisplayName ? (
-                    <span
-                      className={cn(
-                        "min-w-0 flex-1 truncate text-secondary-label text-xs",
-                        shouldRecede ? "font-normal" : "font-medium",
-                      )}
-                    >
-                      {props.projectDisplayName}
-                    </span>
-                  ) : (
-                    <span className="flex-1" />
+              {props.project ? (
+                <ProjectFavicon project={props.project} className="size-4 shrink-0" />
+              ) : null}
+              {props.projectDisplayName ? (
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate text-secondary-label text-xs",
+                    shouldRecede ? "font-normal" : "font-medium",
                   )}
-                </>
+                >
+                  {props.projectDisplayName}
+                </span>
+              ) : (
+                <span className="flex-1" />
               )}
               <SideSurfaceThreadIndicators
                 hasSideChat={props.hasSideChat}
@@ -2039,7 +1981,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               {pinIndicator}
               {/* The visible state owns this slot's width: status at rest,
                   actions on hover/keyboard focus or while the popover is open. Keeping
-                  the hidden state out of flow lets the leading label reclaim
+                  the hidden state out of flow lets the project label reclaim
                   space without either state overlapping it. */}
               {sortable?.isDragging ? (
                 dragDestination
@@ -2181,9 +2123,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   release click still fires and is consumed. */}
               {props.sweepAction !== null ? dragDestination : null}
             </div>
-            {props.layout !== "project" ? (
-              <div className="mt-1 flex min-w-0">{cardTitleContent}</div>
-            ) : null}
+            <div className="mt-1 flex min-w-0">
+              {title}
+              {isRegeneratingTitle ? (
+                <span role="status" className="sr-only">
+                  Regenerating title
+                </span>
+              ) : null}
+            </div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
               {/* Always the branch. The plan step used to take this slot while
                   working, but it truncated to a half-sentence and dropped the
@@ -5275,7 +5222,6 @@ export default function Sidebar({ projectCardsMode = false }: { projectCardsMode
                             key={`${threadKey}:${rowVariant}`}
                             thread={thread}
                             variant={rowVariant}
-                            layout={projectCardsMode && isCard ? "project" : "standalone"}
                             // Snoozed rows wake, settled rows un-settle, and cards settle.
                             variantAction={
                               section === "snoozed"
@@ -5401,7 +5347,6 @@ export default function Sidebar({ projectCardsMode = false }: { projectCardsMode
                       const items: ReactNode[] = [
                         <SidebarDraftBlock
                           key="draft-sessions"
-                          rowLayout={projectCardsMode ? "project" : "standalone"}
                           projectByKey={projectByKey}
                           projectDisplayNameByKey={projectDisplayNameByKey}
                           scopedProjectKeys={scopedProjectKeys}

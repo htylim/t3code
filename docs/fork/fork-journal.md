@@ -29,13 +29,9 @@ upstream.
   gestures and the Working shelf without changing the original preferences.
 - Scope: web and desktop only. Fork components own card layout and client-local storage keys.
   The alternative component delegates to the existing sidebar controller and row renderer, so
-  upstream row labels, actions, status icons, and draft treatment carry over. Shared thread and
-  draft rows accept an optional project layout that removes the repeated project heading.
-  Threads put the existing status and action controls beside the title, above their metadata.
-  Fork-owned dimensions reduce thread content to 56px and draft content to 44px; standalone
-  rows retain their original classes and layout. Upstream changes to
+  upstream row labels, actions, status icons, and draft treatment carry over. Upstream changes to
   sidebar grouping or unread semantics still need review against the fork renderer and shared
-  attention helper. Shared UI primitives, mobile, contracts, server settings, and database schemas
+  attention helper. Existing UI classes, mobile, contracts, server settings, and database schemas
   are unchanged.
 - Reason: large active projects should occupy a preview or one collapsed header instead of
   twenty rows, without duplicating the upstream row implementation.
@@ -44,10 +40,8 @@ upstream.
   search catalog has a duplicate keybinding assertion that also fails on the untouched baseline.
   An isolated Browser panel verified twenty-thread expansion, collapse, Show less, persistence
   after reload, chronological pinned placement, hidden Woke attention, selected older thread
-  revelation, multiple yellow drafts with a divider, and original sidebar restoration.
-  The compact-row follow-up passed 248 focused tests and web typecheck. Browser verification
-  covered title/status alignment, hover controls and the Snooze menu, truncation at 208px and 384px
-  sidebar widths, and removal of repeated project labels and favicons. Native mobile was excluded.
+  revelation, multiple yellow drafts with a divider, and original sidebar restoration. Snapshot
+  capture failed in the Browser panel; DOM inspection was available. Native mobile was excluded.
 
 ## 2026-10-04 - Integrate the latest upstream batch
 
