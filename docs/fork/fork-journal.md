@@ -20,6 +20,29 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-04 - Opt-in project preview sidebar
+
+- Upstream baseline: `efecd3cf8b`, on fork integration `8b3a6e4698`.
+- Active, working, and pinned threads can share project cards with three previews, unlimited
+  invested drafts, chronological ordering, and a blue attention dot. Snoozed and Settled retain
+  their sections. Selecting a hidden thread reveals it temporarily. This mode disables ordering
+  gestures and the Working shelf without changing the original preferences.
+- Scope: web and desktop only. Fork components own card layout and client-local storage keys.
+  The alternative component delegates to the existing sidebar controller and row renderer, so
+  upstream row labels, actions, status icons, and draft treatment carry over. Upstream changes to
+  sidebar grouping or unread semantics still need review against the fork renderer and shared
+  attention helper. Existing UI classes, mobile, contracts, server settings, and database schemas
+  are unchanged.
+- Reason: large active projects should occupy a preview or one collapsed header instead of
+  twenty rows, without duplicating the upstream row implementation.
+- Verification: 264 focused sidebar, grouping, navigation, and packaging tests passed. Web
+  typecheck, production build, and targeted lint passed with existing warnings. The Settings
+  search catalog has a duplicate keybinding assertion that also fails on the untouched baseline.
+  An isolated Browser panel verified twenty-thread expansion, collapse, Show less, persistence
+  after reload, chronological pinned placement, hidden Woke attention, selected older thread
+  revelation, multiple yellow drafts with a divider, and original sidebar restoration. Snapshot
+  capture failed in the Browser panel; DOM inspection was available. Native mobile was excluded.
+
 ## 2026-10-04 - Integrate the latest upstream batch
 
 - Upstream baseline: `efecd3cf8b`, following `8ed276c246`. Integrates 127 upstream commits

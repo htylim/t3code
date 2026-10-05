@@ -170,7 +170,7 @@ import {
   resolveRightPanelOwnerRef,
   resolveThreadRouteTarget,
 } from "../threadRoutes";
-import { formatRelativeTimeLabel, parseTimestampDate } from "../timestampFormat";
+import { formatRelativeTimeLabel } from "../timestampFormat";
 import type { SidebarThreadSummary } from "../types";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { cn } from "~/lib/utils";
@@ -187,7 +187,6 @@ import {
   filterSidebarProjectScopeItems,
   formatWorkingDurationLabel,
   firstValidTimestampMs,
-  hasUnseenCompletion,
   isSidebarNestedLinkClick,
   isSidebarThreadWorking,
   isTrailingDoubleClick,
@@ -203,6 +202,7 @@ import {
   type SidebarDropVerb,
   resolveSidebarThreadStatus,
   resolveThreadLastVisitedAt,
+  resolveSidebarThreadAttention,
   searchSidebarThreads,
   shouldCreateNewThreadInCurrentProject,
   shouldNavigateAfterThreadPark,
@@ -285,6 +285,8 @@ import {
 } from "../composerDraftStore";
 import { confirmSideChatReplacement, openSideChat } from "../sideChatReplacement";
 import { useDeleteTransientSideChat } from "./TransientSideChatCleanup";
+import { useProjectCards } from "../fork/projectCards/useProjectCards";
+import { ProjectPreviewCards } from "../fork/projectCards/ProjectPreviewCards";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -924,7 +926,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
   );
 });
 
-interface SidebarDraftRowData {
+export interface SidebarDraftRowData {
   draftId: DraftId;
   session: DraftSessionState;
   composer: ComposerThreadDraftState;
@@ -941,6 +943,12 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
   routeDraftId: string | null;
   onNavigateToDraft: (draftId: DraftId) => void;
   onDraftContextMenu: (draftId: DraftId, position: { x: number; y: number }) => void;
+  renderRows?:
+    | ((
+        drafts: readonly SidebarDraftRowData[],
+        renderDraftRow: (draft: SidebarDraftRowData) => ReactNode,
+      ) => ReactNode)
+    | undefined;
 }) {
   const draftThreadsByThreadKey = useComposerDraftStore((store) => store.draftThreadsByThreadKey);
   const draftsByThreadKey = useComposerDraftStore((store) => store.draftsByThreadKey);
@@ -1007,30 +1015,33 @@ const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
     props.routeDraftId,
     props.scopedProjectKeys,
   ]);
-  if (drafts.length === 0) {
+  if (drafts.length === 0 && props.renderRows === undefined) {
     return null;
   }
+  /** Render the same draft row in either the flat block or its project card. */
+  const renderDraftRow = ({ composer, draftId, session }: SidebarDraftRowData) => {
+    const projectKey = `${session.environmentId}:${session.projectId}`;
+    return (
+      <SidebarDraftRow
+        key={draftId}
+        draftId={draftId}
+        composer={composer}
+        project={props.projectByKey.get(projectKey) ?? null}
+        projectDisplayName={props.projectDisplayNameByKey.get(projectKey) ?? null}
+        isActive={draftId === props.routeDraftId}
+        onNavigate={props.onNavigateToDraft}
+        // The /draft/$draftId route redirects home on its own when the
+        // draft it renders disappears, so discarding the open draft needs
+        // no special-casing here.
+        onDiscard={discardComposerDraft}
+        onContextMenu={props.onDraftContextMenu}
+      />
+    );
+  };
+  if (props.renderRows !== undefined) return props.renderRows(drafts, renderDraftRow);
   return (
     <>
-      {drafts.map(({ composer, draftId, session }) => {
-        const projectKey = `${session.environmentId}:${session.projectId}`;
-        return (
-          <SidebarDraftRow
-            key={draftId}
-            draftId={draftId}
-            composer={composer}
-            project={props.projectByKey.get(projectKey) ?? null}
-            projectDisplayName={props.projectDisplayNameByKey.get(projectKey) ?? null}
-            isActive={draftId === props.routeDraftId}
-            onNavigate={props.onNavigateToDraft}
-            // The /draft/$draftId route redirects home on its own when the
-            // draft it renders disappears, so discarding the open draft needs
-            // no special-casing here.
-            onDiscard={discardComposerDraft}
-            onContextMenu={props.onDraftContextMenu}
-          />
-        );
-      })}
+      {drafts.map(renderDraftRow)}
       <li
         aria-hidden
         data-testid="sidebar-draft-divider"
@@ -1232,7 +1243,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
 
   // Same semantics as the legacy sidebar (never-visited counts as read):
   // switching sidebars must not light up every historical thread as unread.
-  const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
+  const { isUnread, isWoke } = resolveSidebarThreadAttention({
+    thread,
+    lastVisitedAt,
+    wokeAt: props.wokeAt,
+  });
   const status = resolveSidebarThreadStatus(thread);
   const isInFlight =
     status === "working" || status === "waiting" || status === "approval" || status === "input";
@@ -1243,12 +1258,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // message, settling, archiving, or a change request state that settles the
   // thread. Timer wakes survive a mere visit. An unparseable visit timestamp
   // counts as never-visited, so corrupt local data cannot eat the wake signal.
-  const lastVisitedDate = lastVisitedAt === undefined ? null : parseTimestampDate(lastVisitedAt);
-  const wokeAtDate = props.wokeAt === null ? null : parseTimestampDate(props.wokeAt);
-  const isWoke =
-    wokeAtDate !== null &&
-    (lastVisitedDate === null || lastVisitedDate < wokeAtDate) &&
-    thread.settledOverride !== "settled";
   // Background work always recedes when it is not selected: an unread parent
   // completion must not pull a still-working thread back into the foreground.
   // Ready and action-required rows keep their unread and wake prominence.
@@ -2336,7 +2345,8 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   );
 });
 
-export default function Sidebar() {
+/** Retain shared thread actions while allowing a fork-owned project list renderer. */
+export default function Sidebar({ projectCardsMode = false }: { projectCardsMode?: boolean } = {}) {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
@@ -2348,7 +2358,8 @@ export default function Sidebar() {
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
-  const workingShelfEnabled = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
+  const workingShelfPreference = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
+  const workingShelfEnabled = workingShelfPreference && !projectCardsMode;
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
     settleThread,
@@ -3009,17 +3020,39 @@ export default function Sidebar() {
     return routeThread === undefined ? EMPTY_THREADS : [routeThread];
   }, [routeThreadKey, workingShelfExpanded, workingThreads]);
 
+  const projectCardThreads = useMemo(
+    () => [...pinnedThreads, ...activeThreads],
+    [pinnedThreads, activeThreads],
+  );
+  const selectedDraftProjectKey =
+    routeDraftThread === null || routeDraftThread === undefined
+      ? null
+      : (projectGroups.find((project) =>
+          project.memberProjects.some(
+            (member) =>
+              member.environmentId === routeDraftThread.environmentId &&
+              member.id === routeDraftThread.projectId,
+          ),
+        )?.projectKey ?? `${routeDraftThread.environmentId}:${routeDraftThread.projectId}`);
+  const projectCards = useProjectCards({
+    enabled: projectCardsMode,
+    projects: projectGroups,
+    threads: projectCardThreads,
+    selectedThreadKey: routeThreadKey,
+    selectedDraftProjectKey,
+    selectedDraftId: routeDraftIdForRows,
+  });
   const orderedThreads = useMemo(
     () => [
-      ...pinnedThreads,
-      ...activeThreads,
+      ...(projectCardsMode ? projectCards.visibleThreads : projectCardThreads),
       ...visibleWorkingThreads,
       ...visibleSnoozedThreads,
       ...renderedSettledThreads,
     ],
     [
-      pinnedThreads,
-      activeThreads,
+      projectCardsMode,
+      projectCards.visibleThreads,
+      projectCardThreads,
       visibleWorkingThreads,
       visibleSnoozedThreads,
       renderedSettledThreads,
@@ -3762,10 +3795,13 @@ export default function Sidebar() {
       return [];
     }
     const items: SidebarListItem[] = [{ kind: "marker", marker: "pinned-header" }];
-    const pinnedRows = rowsOf(pinnedThreads, "pinned");
+    const pinnedRows = projectCardsMode ? [] : rowsOf(pinnedThreads, "pinned");
     items.push(...pinnedRows);
     items.push({ kind: "marker", marker: "pinned-divider" });
-    const activeRows = rowsOf(activeThreads, "active");
+    const activeRows = rowsOf(
+      projectCardsMode ? projectCards.visibleThreads : activeThreads,
+      "active",
+    );
     items.push({ kind: "marker", marker: "active-placeholder" });
     items.push(...activeRows);
     if (workingThreads.length > 0) {
@@ -3782,6 +3818,8 @@ export default function Sidebar() {
     items.push(...settledRows);
     return items;
   }, [
+    projectCardsMode,
+    projectCards.visibleThreads,
     activeThreads,
     pinnedThreads,
     renderedSettledThreads,
@@ -5294,6 +5332,7 @@ export default function Sidebar() {
                             id={threadKey}
                             contextDrag={isContextDrag}
                             disabled={
+                              projectCardsMode ||
                               renamingThreadKey === threadKey ||
                               section === "working" ||
                               !draggableThreadKeys.has(threadKey) ||
@@ -5314,9 +5353,43 @@ export default function Sidebar() {
                           routeDraftId={routeDraftIdForRows}
                           onNavigateToDraft={navigateToDraft}
                           onDraftContextMenu={handleDraftContextMenu}
+                          renderRows={
+                            projectCardsMode
+                              ? (drafts, renderDraftRow) => (
+                                  <ProjectPreviewCards
+                                    cards={projectCards.cards}
+                                    projects={projectGroups}
+                                    drafts={drafts}
+                                    cardStates={projectCards.cardStates}
+                                    selectedThreadKey={routeThreadKey}
+                                    selectedDraftId={routeDraftIdForRows}
+                                    revealedSelection={projectCards.revealedSelection}
+                                    now={snoozeNow}
+                                    onCardStateChange={projectCards.setCardState}
+                                    renderThreadRow={(thread) =>
+                                      renderThreadRowInner(
+                                        thread,
+                                        thread.pinnedAt != null ? "pinned" : "active",
+                                      )
+                                    }
+                                    renderDraftRow={renderDraftRow}
+                                  />
+                                )
+                              : undefined
+                          }
                         />,
                       ];
                       for (const item of sidebarListItems) {
+                        if (
+                          projectCardsMode &&
+                          ((item.kind === "thread" &&
+                            (item.section === "active" || item.section === "pinned")) ||
+                            (item.kind === "marker" &&
+                              (item.marker === "pinned-header" ||
+                                item.marker === "pinned-divider" ||
+                                item.marker === "active-placeholder")))
+                        )
+                          continue;
                         if (item.kind === "thread") {
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                           continue;

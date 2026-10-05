@@ -54,6 +54,8 @@ and worktree while you stay in the new thread composer. This requires a Git proj
 
 ## Pin and reorder threads
 
+These ordering and drag controls apply to the original sidebar.
+
 Pin a thread from its menu to keep it above your active work.
 
 Active threads keep their saved order. New and reopened threads appear first; messages and agent
@@ -134,6 +136,20 @@ device keeps its own choice.
 
 While this is on, the active list is ordered by when each thread last came back to you, so you
 cannot drag or move threads within it. Your saved order returns when you turn it off.
+
+### Group active threads by project in the Fork
+
+Enable **Settings → Fork → Project preview cards** on web or desktop to group active,
+working, and pinned threads by project. Each card previews three threads, with all invested
+drafts above them. Expand a card to see all its threads or collapse it to its project header.
+Threads follow their displayed age, newest first. Projects follow their newest active thread.
+Manual reordering and the Working section are unavailable in this view. Snoozed and Settled
+keep their existing sections.
+
+A blue dot means a thread in that project has new or unread activity, including hidden threads.
+Selecting a hidden thread temporarily reveals it alongside the usual three previews.
+The setting and card states stay on this client. Turning the setting off restores the original
+sidebar and its saved ordering. Mobile keeps its original thread list.
 
 ## Settle finished work
 
