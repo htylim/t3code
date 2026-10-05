@@ -775,23 +775,6 @@ export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
   return completedAt > lastVisitedAt;
 }
 
-/** Resolve the row's unread and wake signals for both rows and project summaries. */
-export function resolveSidebarThreadAttention(input: {
-  readonly thread: ThreadStatusInput & { readonly settledOverride?: string | null };
-  readonly lastVisitedAt: string | undefined;
-  readonly wokeAt: string | null;
-}): { readonly isUnread: boolean; readonly isWoke: boolean } {
-  const lastVisitedMs = Date.parse(input.lastVisitedAt ?? "");
-  const wokeAtMs = Date.parse(input.wokeAt ?? "");
-  return {
-    isUnread: hasUnseenCompletion({ ...input.thread, lastVisitedAt: input.lastVisitedAt }),
-    isWoke:
-      Number.isFinite(wokeAtMs) &&
-      (!Number.isFinite(lastVisitedMs) || lastVisitedMs < wokeAtMs) &&
-      input.thread.settledOverride !== "settled",
-  };
-}
-
 export function shouldClearThreadSelectionOnMouseDown(target: HTMLElement | null): boolean {
   if (target === null) return true;
   return !target.closest(THREAD_SELECTION_SAFE_SELECTOR);

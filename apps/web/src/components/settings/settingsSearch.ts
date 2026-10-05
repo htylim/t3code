@@ -12,7 +12,6 @@ import {
 } from "./settingsScope";
 
 export type SettingsPath =
-  | "/settings/fork"
   | "/settings/projects"
   | "/settings/general"
   | "/settings/appearance"
@@ -97,7 +96,6 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/storage": "Storage",
   "/settings/connections": "Connections",
   "/settings/archived": "Archive",
-  "/settings/fork": "Fork",
 };
 
 /** Anchor id of the first row bound to `command` on the Keybindings page. */
@@ -133,12 +131,6 @@ const KEYBINDING_SEARCH_ITEMS = STATIC_KEYBINDING_COMMANDS.toSorted((left, right
  * that may not be mounted point at their nearest stable section instead.
  */
 export const SETTINGS_SEARCH_ITEMS = [
-  {
-    id: "fork-project-preview-cards",
-    title: "Project preview cards",
-    to: "/settings/fork",
-    searchTerms: ["fork sidebar active threads projects group cards collapse preview working"],
-  },
   {
     id: "storage-worktrees",
     title: "Worktree cleanup",
@@ -887,7 +879,6 @@ export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
-  "/settings/fork": null,
   "/settings/projects": "project",
   "/settings/general": null,
   "/settings/appearance": null,
