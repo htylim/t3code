@@ -20,6 +20,22 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-06 - Inherit caller permissions when launching threads
+
+- Upstream baseline: `efecd3cf8b`.
+- MCP `t3_thread_launch` uses the same runtime and interaction mode checks as `create_threads`.
+  Active callers can launch with inherited or narrower permissions. Permission escalation fails
+  before scratch-folder creation or workspace preparation.
+- The fork removes upstream's blanket full-access/default requirement. Tool descriptions and
+  provider instructions describe the inherited permissions. Other project mutations keep their
+  existing restrictions. No client, provider adapter, or wire contract changes are needed.
+- Verification: 24 focused handler and provider-instruction tests, server typecheck, targeted lint,
+  and formatting passed. The original handler fails 15 of the updated handler tests.
+  In the isolated dev client, Codex Terra low launched scratch and existing-checkout threads with
+  inherited auto/default modes and completed their turns. A narrower approval-required/plan launch
+  persisted those modes; a full-access override returned runtime_mode_escalation_denied without
+  creating a thread. Persisted state and client screenshots confirmed the results.
+
 ## 2026-10-06 - Postpone threads without a timer
 
 - Upstream baseline: `efecd3cf8b`.

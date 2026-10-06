@@ -7,6 +7,7 @@ import * as Project from "../../../project/ProjectService.ts";
 import * as ManagedProjectFolders from "../../../project/ManagedProjectFolders.ts";
 import * as Repositories from "../../../sourceControl/SourceControlRepositoryService.ts";
 import { newCommandId, readCaller, readMutationCaller, unavailable } from "../../threadAccess.ts";
+import * as OrchestrationMcp from "../../OrchestratorMcpService.ts";
 import { ProjectToolkit } from "./tools.ts";
 
 function projectFailure(error: Project.ProjectServiceError) {
@@ -41,11 +42,14 @@ export const ProjectHandlersLive = ProjectToolkit.toLayer({
   t3_thread_launch: (input) =>
     Effect.gen(function* () {
       const { caller, scope } = yield* readMutationCaller();
-      if (caller.runtimeMode !== "full-access" || caller.interactionMode !== "default")
-        return yield* new OrchestratorMcpFailure({
-          code: "capability_denied",
-          message: "Project launches require a full-access/default calling thread.",
-        });
+      const runtimeMode = yield* OrchestrationMcp.resolveRuntimeMode(
+        caller.runtimeMode,
+        input.runtimeMode,
+      );
+      const interactionMode = yield* OrchestrationMcp.resolveInteractionMode(
+        caller.interactionMode,
+        input.interactionMode,
+      );
       const commandId = yield* newCommandId();
       const threadId = ThreadId.make(commandId);
       const messageId = MessageId.make(commandId);
@@ -83,8 +87,8 @@ export const ProjectHandlersLive = ProjectToolkit.toLayer({
         projectId,
         title: input.title,
         modelSelection: input.modelSelection ?? caller.modelSelection,
-        runtimeMode: input.runtimeMode ?? caller.runtimeMode,
-        interactionMode: input.interactionMode ?? caller.interactionMode,
+        runtimeMode,
+        interactionMode,
         workspaceStrategy: input.workspaceStrategy ?? { type: "root" },
         ...(input.message === undefined && attachments.length === 0
           ? {}
