@@ -26,6 +26,30 @@ const divider = marker("pinned-divider");
 const settledHeader = marker("settled-header");
 const stationary = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
 
+describe("Postponed during sidebar drag", () => {
+  it.each([true, false])(
+    "retains the %s expanded section while another thread settles",
+    (expanded) => {
+      const items = [
+        pinnedHeader,
+        divider,
+        thread("active", "active"),
+        marker("postponed-header"),
+        ...(expanded ? [thread("postponed", "postponed")] : []),
+        settledHeader,
+        thread("settled", "settled"),
+      ];
+      const transforms = preview(
+        { items, settledOrder: ["active", "settled"], settledExpanded: true },
+        "active",
+        sidebarMarkerId("settled-header"),
+      );
+      expect(transforms.get(sidebarMarkerId("postponed-header"))?.scaleY).toBe(1);
+      if (expanded) expect(transforms.get("postponed")?.scaleY).toBe(1);
+    },
+  );
+});
+
 function layout(
   items: readonly SidebarListItem[],
   active: string,
@@ -37,7 +61,9 @@ function layout(
   const rects = items.map((item) => {
     const height =
       item.kind === "thread"
-        ? (item.section === "pinned" || item.section === "active" ? cardHeight : 36) * scale
+        ? (item.section === "pinned" || item.section === "active" || item.section === "postponed"
+            ? cardHeight
+            : 36) * scale
         : item.marker === "pinned-header" || item.marker === "pinned-divider"
           ? 0
           : (item.marker.endsWith("placeholder") ? 0 : 32) * scale;

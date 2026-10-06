@@ -177,6 +177,9 @@ import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import { buildDraftActionMenuItems, buildThreadActionMenuItems } from "./threadActionMenu.logic";
+import { withPostponedThreadMenu } from "./Sidebar.postponed";
+import { usePostponedThreadStore } from "../postponedThreadStore";
+import { useMovePostponedThreadToActive } from "../hooks/useMovePostponedThreadToActive";
 import {
   animateSidebarLayoutChanges,
   applySidebarThreadDrop,
@@ -762,7 +765,7 @@ function SidebarDragBoundary(props: {
 
 // Shelf headers stay visible and keep their measured height while dragging.
 function SidebarSectionHeader(props: {
-  marker: "working-header" | "snoozed-header" | "settled-header";
+  marker: "working-header" | "postponed-header" | "snoozed-header" | "settled-header";
   label: string;
   className?: string;
   // While dragging, the settled header reads at full strength and takes the
@@ -771,12 +774,7 @@ function SidebarSectionHeader(props: {
   isDropTarget?: boolean;
   toggle: { expanded: boolean; onToggle: () => void };
 }) {
-  const shelf =
-    props.marker === "working-header"
-      ? "working"
-      : props.marker === "snoozed-header"
-        ? "snoozed"
-        : "settled";
+  const shelf = props.marker.replace("-header", "");
   const snoozed = shelf === "snoozed";
   return (
     <SortableSidebarMarker
@@ -1988,9 +1986,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     while the other controls appear beside it. */}
                   <span
                     className={cn(
-                      isWokeStatus
-                        ? "pointer-events-auto"
-                        : "pointer-events-none group-has-[:focus-visible]/sidebar-status-slot:absolute group-has-[:focus-visible]/sidebar-status-slot:right-0 group-has-[:focus-visible]/sidebar-status-slot:opacity-0 group-any-hover/sidebar-row:absolute group-any-hover/sidebar-row:right-0 group-any-hover/sidebar-row:opacity-0",
+                      isWokeStatus ? "pointer-events-auto" : "pointer-events-none",
+                      !isWokeStatus &&
+                        (props.settlementSupported || showSnoozeButton || hasUnsentDraft) &&
+                        "group-has-[:focus-visible]/sidebar-status-slot:absolute group-has-[:focus-visible]/sidebar-status-slot:right-0 group-has-[:focus-visible]/sidebar-status-slot:opacity-0 group-any-hover/sidebar-row:absolute group-any-hover/sidebar-row:right-0 group-any-hover/sidebar-row:opacity-0",
                       "flex items-center self-center justify-self-end tabular-nums text-secondary-label transition-opacity",
                       snoozeMenuOpen && "pointer-events-none absolute right-0 opacity-0",
                     )}
@@ -2338,6 +2337,10 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
 
 export default function Sidebar() {
   const projects = useProjects();
+  const postponedByThreadKey = usePostponedThreadStore((state) => state.byThreadKey);
+  const postponedShelfExpanded = usePostponedThreadStore((state) => state.shelfExpanded);
+  const togglePostponedShelf = usePostponedThreadStore((state) => state.toggleShelf);
+  const movePostponedToActive = useMovePostponedThreadToActive();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
   const deleteTransientSideChat = useDeleteTransientSideChat();
@@ -2723,6 +2726,7 @@ export default function Sidebar() {
     activeReorderableThreadKeys,
     activeThreads,
     workingThreads,
+    postponedThreads,
     snoozedThreads,
     settledThreads,
     snoozeNow,
@@ -2740,6 +2744,7 @@ export default function Sidebar() {
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
     const working: EnvironmentThreadShell[] = [];
+    const postponed: EnvironmentThreadShell[] = [];
     // Working beta: only inbox threads fold away. Pins stay where the user
     // put them, and snoozed or settled threads keep their shelves.
     const inbox = (thread: EnvironmentThreadShell) =>
@@ -2782,10 +2787,15 @@ export default function Sidebar() {
         );
       } else {
         const section = resolveSidebarThreadSection({
+          postponed: postponedByThreadKey[threadKey] !== undefined,
           snoozed: supportsSnooze && effectiveSnoozed(thread, { now: preciseNow }),
           settled: supportsSettlement && thread.settledOverride === "settled",
           pinned: thread.pinnedAt != null,
         });
+        if (section === "postponed") {
+          postponed.push(thread);
+          continue;
+        }
         (section === "snoozed"
           ? snoozed
           : section === "settled"
@@ -2826,6 +2836,7 @@ export default function Sidebar() {
             }),
       // Newest send first; finishing and waking again do not move a row.
       workingThreads: sortWorkingThreadsBySend(working),
+      postponedThreads: sortThreadsForSidebar(postponed),
       // Soonest wake first: "what comes back next" is the shelf's question.
       snoozedThreads: snoozed.toSorted(
         (left, right) =>
@@ -2838,6 +2849,7 @@ export default function Sidebar() {
   }, [
     nowMinute,
     optimisticDrop,
+    postponedByThreadKey,
     scopedProjectKeys,
     serverConfigs,
     snoozeWakeTick,
@@ -2854,10 +2866,18 @@ export default function Sidebar() {
       ...pinnedThreads,
       ...activeThreads,
       ...workingThreads,
+      ...postponedThreads,
       ...snoozedThreads,
       ...settledThreads,
     ],
-    [activeThreads, pinnedThreads, settledThreads, snoozedThreads, workingThreads],
+    [
+      activeThreads,
+      pinnedThreads,
+      postponedThreads,
+      settledThreads,
+      snoozedThreads,
+      workingThreads,
+    ],
   );
   const searchEnvironmentIds = useConnectedEnvironmentIds();
   // useThreadSearch owns the debounce and the two-character floor.
@@ -3009,11 +3029,22 @@ export default function Sidebar() {
     return routeThread === undefined ? EMPTY_THREADS : [routeThread];
   }, [routeThreadKey, workingShelfExpanded, workingThreads]);
 
+  // Keep the open thread visible without changing the saved collapsed state.
+  const visiblePostponedThreads = useMemo(() => {
+    if (postponedShelfExpanded) return postponedThreads;
+    if (routeThreadKey === null) return EMPTY_THREADS;
+    return postponedThreads.filter(
+      (thread) =>
+        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
+    );
+  }, [postponedShelfExpanded, postponedThreads, routeThreadKey]);
+
   const orderedThreads = useMemo(
     () => [
       ...pinnedThreads,
       ...activeThreads,
       ...visibleWorkingThreads,
+      ...visiblePostponedThreads,
       ...visibleSnoozedThreads,
       ...renderedSettledThreads,
     ],
@@ -3021,6 +3052,7 @@ export default function Sidebar() {
       pinnedThreads,
       activeThreads,
       visibleWorkingThreads,
+      visiblePostponedThreads,
       visibleSnoozedThreads,
       renderedSettledThreads,
     ],
@@ -3296,7 +3328,11 @@ export default function Sidebar() {
         currentIndex === -1
           ? null
           : ([...orderedKeys.slice(currentIndex + 1), ...orderedKeys.slice(0, currentIndex)].find(
-              (key) => !settledKeys.has(key) && !snoozedKeys.has(key) && !coParkingKeys?.has(key),
+              (key) =>
+                !settledKeys.has(key) &&
+                !snoozedKeys.has(key) &&
+                usePostponedThreadStore.getState().byThreadKey[key] === undefined &&
+                !coParkingKeys?.has(key),
             ) ?? null);
       const nextThread = nextCardKey ? threadByKeyRef.current.get(nextCardKey) : null;
       return nextThread
@@ -3307,6 +3343,24 @@ export default function Sidebar() {
           : () => void router.navigate({ to: "/" });
     },
     [navigateToThread, router],
+  );
+
+  /** Park the visible selection together and navigate past every thread in the batch. */
+  const postponeThreads = useCallback(
+    (threadKeys: readonly string[]) => {
+      const selectedThreads: EnvironmentThreadShell[] = [];
+      const coParkingKeys = new Set(threadKeys);
+      let navigateForward: (() => void) | null = null;
+      for (const threadKey of threadKeys) {
+        const thread = threadByKeyRef.current.get(threadKey);
+        if (!thread) continue;
+        selectedThreads.push(thread);
+        navigateForward ??= planForwardNavigation(threadKey, coParkingKeys);
+      }
+      usePostponedThreadStore.getState().postpone(selectedThreads);
+      navigateForward?.();
+    },
+    [planForwardNavigation],
   );
 
   const attemptSettle = useCallback(
@@ -3511,10 +3565,18 @@ export default function Sidebar() {
     add(pinnedThreads, "pinned");
     add(activeThreads, "active");
     add(workingThreads, "working");
+    add(postponedThreads, "postponed");
     add(snoozedThreads, "snoozed");
     add(settledThreads, "settled");
     return map;
-  }, [activeThreads, pinnedThreads, settledThreads, snoozedThreads, workingThreads]);
+  }, [
+    activeThreads,
+    pinnedThreads,
+    postponedThreads,
+    settledThreads,
+    snoozedThreads,
+    workingThreads,
+  ]);
   const sectionByThreadKeyRef = useRef(sectionByThreadKey);
   sectionByThreadKeyRef.current = sectionByThreadKey;
   // Drag a row action to apply it to the armed rows in the same section.
@@ -3755,6 +3817,7 @@ export default function Sidebar() {
       pinnedThreads.length +
         activeThreads.length +
         workingThreads.length +
+        postponedThreads.length +
         snoozedThreads.length +
         settledThreads.length ===
       0
@@ -3772,6 +3835,10 @@ export default function Sidebar() {
       items.push({ kind: "marker", marker: "working-header" });
       items.push(...rowsOf(visibleWorkingThreads, "working"));
     }
+    if (postponedThreads.length > 0) {
+      items.push({ kind: "marker", marker: "postponed-header" });
+      items.push(...rowsOf(visiblePostponedThreads, "postponed"));
+    }
     if (snoozedThreads.length > 0) {
       items.push({ kind: "marker", marker: "snoozed-header" });
       items.push(...rowsOf(visibleSnoozedThreads, "snoozed"));
@@ -3785,6 +3852,8 @@ export default function Sidebar() {
     activeThreads,
     pinnedThreads,
     renderedSettledThreads,
+    postponedThreads.length,
+    visiblePostponedThreads,
     settledThreads.length,
     snoozedThreads.length,
     visibleSnoozedThreads,
@@ -4213,6 +4282,16 @@ export default function Sidebar() {
         const thread = threadByKeyRef.current.get(threadKey);
         return thread ? [thread] : [];
       });
+      const postponedSelection = selectedThreads.filter(
+        (thread) =>
+          usePostponedThreadStore.getState().byThreadKey[
+            scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))
+          ] !== undefined,
+      );
+      const activeSelectionKeys = threadKeys.filter((threadKey) => {
+        const section = sectionByThreadKeyRef.current.get(threadKey);
+        return section === "active" || section === "pinned" || section === "working";
+      });
       const canSnoozeSelection = selectedThreads.every(
         (thread) =>
           serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze === true &&
@@ -4244,32 +4323,53 @@ export default function Sidebar() {
       const snoozePresets = resolveSnoozePresets(new Date(), timestampFormat);
       const clicked = await settlePromise(() =>
         api.contextMenu.show(
-          [
-            ...(unpinMenuItem ? [unpinMenuItem] : []),
-            { id: "settle", label: `Settle (${count})` },
-            ...(canSnoozeSelection
-              ? [
-                  {
-                    id: "snooze",
-                    label: `Snooze (${count})`,
-                    children: [
-                      ...snoozePresets.map((preset) => ({
-                        id: `snooze:${preset.id}`,
-                        label: `${preset.label} (${preset.whenLabel})`,
-                      })),
-                      { id: "snooze:custom", label: "Custom…", separatorBefore: true },
-                    ],
-                  },
-                ]
-              : []),
-            ...(titleRegenerationMenuItem ? [titleRegenerationMenuItem] : []),
-            { id: "mark-unread", label: `Mark unread (${count})` },
-            { id: "delete", label: `Delete (${count})`, destructive: true },
-          ],
+          withPostponedThreadMenu(
+            [
+              ...(unpinMenuItem ? [unpinMenuItem] : []),
+              { id: "settle", label: `Settle (${count})` },
+              ...(canSnoozeSelection
+                ? [
+                    {
+                      id: "snooze",
+                      label: `Snooze (${count})`,
+                      children: [
+                        ...snoozePresets.map((preset) => ({
+                          id: `snooze:${preset.id}`,
+                          label: `${preset.label} (${preset.whenLabel})`,
+                        })),
+                        { id: "snooze:custom", label: "Custom…", separatorBefore: true },
+                      ],
+                    },
+                  ]
+                : []),
+              ...(titleRegenerationMenuItem ? [titleRegenerationMenuItem] : []),
+              { id: "mark-unread", label: `Mark unread (${count})` },
+              { id: "delete", label: `Delete (${count})`, destructive: true },
+            ],
+            {
+              postponedCount: postponedSelection.length,
+              activeCount: activeSelectionKeys.length,
+              bulk: true,
+            },
+          ),
           position,
         ),
       );
       if (clicked._tag === "Failure") return;
+      if (clicked.value === "postpone") {
+        postponeThreads(activeSelectionKeys);
+        clearSelection();
+        return;
+      }
+      if (clicked.value === "move-to-active") {
+        await Promise.all(
+          postponedSelection.map((thread) =>
+            movePostponedToActive(scopeThreadRef(thread.environmentId, thread.id)),
+          ),
+        );
+        clearSelection();
+        return;
+      }
       if (clicked.value?.startsWith("snooze:")) {
         const preset =
           clicked.value === "snooze:custom"
@@ -4401,6 +4501,8 @@ export default function Sidebar() {
       deleteThread,
       markThreadUnread,
       performSnooze,
+      postponeThreads,
+      movePostponedToActive,
       removeFromSelection,
       serverConfigs,
       settleThreads,
@@ -4507,32 +4609,43 @@ export default function Sidebar() {
           ) ?? null;
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
-            buildThreadActionMenuItems({
-              branch: thread.branch ?? null,
-              canOpenInChatSurface:
-                rightPanelOwnerRef !== null && scopedThreadKey(rightPanelOwnerRef) !== threadKey,
-              projectFilter: threadProjectGroup
-                ? {
-                    label: threadProjectGroup.displayName,
-                    isActive: projectScopeKey === threadProjectGroup.projectKey,
-                  }
-                : null,
-              isPinned,
-              isSettled,
-              autoSettleEnabled: thread.autoSettleDisabledAt == null,
-              isSnoozed,
-              canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
-              isRegeneratingTitle,
-              isRunning: !threadRuntimeCanArchive(thread.runtime),
-              supports: {
-                settlement: supportsSettlement,
-                autoSettleOptOut: supportsAutoSettleOptOut,
-                snooze: supportsSnooze,
-                pinning: supportsPinning,
-                titleRegeneration: supportsTitleRegeneration,
+            withPostponedThreadMenu(
+              buildThreadActionMenuItems({
+                branch: thread.branch ?? null,
+                canOpenInChatSurface:
+                  rightPanelOwnerRef !== null && scopedThreadKey(rightPanelOwnerRef) !== threadKey,
+                projectFilter: threadProjectGroup
+                  ? {
+                      label: threadProjectGroup.displayName,
+                      isActive: projectScopeKey === threadProjectGroup.projectKey,
+                    }
+                  : null,
+                isPinned,
+                isSettled,
+                autoSettleEnabled: thread.autoSettleDisabledAt == null,
+                isSnoozed,
+                canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
+                isRegeneratingTitle,
+                isRunning: !threadRuntimeCanArchive(thread.runtime),
+                supports: {
+                  settlement: supportsSettlement,
+                  autoSettleOptOut: supportsAutoSettleOptOut,
+                  snooze: supportsSnooze,
+                  pinning: supportsPinning,
+                  titleRegeneration: supportsTitleRegeneration,
+                },
+                snoozePresets,
+              }),
+              {
+                postponedCount: usePostponedThreadStore.getState().byThreadKey[threadKey] ? 1 : 0,
+                activeCount:
+                  !isSettled &&
+                  !isSnoozed &&
+                  !usePostponedThreadStore.getState().byThreadKey[threadKey]
+                    ? 1
+                    : 0,
               },
-              snoozePresets,
-            }),
+            ),
             position,
           ),
         );
@@ -4546,6 +4659,12 @@ export default function Sidebar() {
           return;
         }
         switch (clicked.value) {
+          case "postpone":
+            postponeThreads([threadKey]);
+            return;
+          case "move-to-active":
+            await movePostponedToActive(threadRef);
+            return;
           case "filter-by-project":
             // This item is the only scope control here, so picking the
             // already-scoped project again is the way back to all projects.
@@ -4755,6 +4874,8 @@ export default function Sidebar() {
       deleteTransientSideChat,
       deleteThread,
       handleMultiSelectContextMenu,
+      postponeThreads,
+      movePostponedToActive,
       markThreadUnread,
       openProjectSettings,
       rightPanelOwnerRef,
@@ -5169,13 +5290,13 @@ export default function Sidebar() {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
                         );
-                        // Settled and snoozed are the ONLY things that collapse a
-                        // row: every other thread is a full card. Density comes
-                        // from users (or the auto rules) actually parking work,
-                        // not from the sidebar second-guessing what still matters.
-                        // Working rows stay cards so their live status shows.
+                        // Settled and snoozed use slim rows. Postponed work
+                        // keeps the same cards and live status as active work.
                         const isCard =
-                          section === "active" || section === "pinned" || section === "working";
+                          section === "active" ||
+                          section === "pinned" ||
+                          section === "working" ||
+                          section === "postponed";
                         const rowVariant = isCard ? "card" : "slim";
                         return (
                           <SidebarThreadRow
@@ -5193,14 +5314,17 @@ export default function Sidebar() {
                                   : "settle"
                             }
                             settlementSupported={
+                              section !== "postponed" &&
                               serverConfigs.get(thread.environmentId)?.environment.capabilities
                                 .threadSettlement === true
                             }
                             snoozeSupported={
+                              section !== "postponed" &&
                               serverConfigs.get(thread.environmentId)?.environment.capabilities
                                 .threadSnooze === true
                             }
                             pinningSupported={
+                              section !== "postponed" &&
                               serverConfigs.get(thread.environmentId)?.environment.capabilities
                                 .threadPinning === true
                             }
@@ -5296,6 +5420,7 @@ export default function Sidebar() {
                             disabled={
                               renamingThreadKey === threadKey ||
                               section === "working" ||
+                              section === "postponed" ||
                               !draggableThreadKeys.has(threadKey) ||
                               optimisticDrop !== null
                             }
@@ -5380,12 +5505,33 @@ export default function Sidebar() {
                               />,
                             );
                             break;
+                          case "postponed-header":
+                            items.push(
+                              <SidebarSectionHeader
+                                key="postponed-shelf-header"
+                                marker="postponed-header"
+                                className={cn(workingThreads.length === 0 && "mt-auto")}
+                                label={
+                                  postponedShelfExpanded
+                                    ? "Postponed"
+                                    : `Postponed (${postponedThreads.length})`
+                                }
+                                toggle={{
+                                  expanded: postponedShelfExpanded,
+                                  onToggle: togglePostponedShelf,
+                                }}
+                              />,
+                            );
+                            break;
                           case "snoozed-header":
                             items.push(
                               <SidebarSectionHeader
                                 key="snoozed-shelf-header"
                                 marker="snoozed-header"
-                                className={cn(workingThreads.length === 0 && "mt-auto")}
+                                className={cn(
+                                  workingThreads.length + postponedThreads.length === 0 &&
+                                    "mt-auto",
+                                )}
                                 label={
                                   snoozedShelfExpanded
                                     ? "Snoozed"
@@ -5404,7 +5550,10 @@ export default function Sidebar() {
                                 key="settled-shelf-header"
                                 marker="settled-header"
                                 className={cn(
-                                  workingThreads.length + snoozedThreads.length === 0 && "mt-auto",
+                                  workingThreads.length +
+                                    postponedThreads.length +
+                                    snoozedThreads.length ===
+                                    0 && "mt-auto",
                                 )}
                                 label={
                                   settledShelfExpanded
@@ -5464,6 +5613,7 @@ export default function Sidebar() {
           pinnedThreads.length +
             activeThreads.length +
             workingThreads.length +
+            postponedThreads.length +
             snoozedThreads.length +
             settledThreads.length ===
             0 ? (

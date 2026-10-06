@@ -1,3 +1,4 @@
+import { usePostponedThreadBanner } from "./chat/usePostponedThreadBanner";
 import { ChatCanvas } from "./chat/ChatCanvas";
 import { usageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
 import {
@@ -7246,7 +7247,9 @@ export default function ChatView(props: ChatViewProps) {
       onDismiss: acknowledgeActiveThreadWoke,
     };
   }, [acknowledgeActiveThreadWoke, activeThread?.id, activeThreadWokeVisible]);
+  const postponedThreadBannerItem = usePostponedThreadBanner(activeThreadRef);
   const parkedThreadBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
+    if (postponedThreadBannerItem !== null) return postponedThreadBannerItem;
     if (!activeThreadSnoozed && !activeThreadSettled) {
       return null;
     }
@@ -7280,6 +7283,7 @@ export default function ChatView(props: ChatViewProps) {
     activeThread?.id,
     activeThreadSettled,
     activeThreadSnoozed,
+    postponedThreadBannerItem,
     handleUnsnoozeActiveThread,
     handleUnsettleActiveThread,
     isUnsnoozing,

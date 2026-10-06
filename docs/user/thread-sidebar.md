@@ -234,3 +234,14 @@ Choose **Snooze → Custom…** from a thread's menu to pick a date and time in 
 local time zone, or a duration in minutes, hours, or days. Durations start when
 you confirm; one day means 24 hours. On web and desktop, you can also snooze
 several selected threads together. Choose **Wake thread** to bring a thread back early.
+
+## Postpone without a timer
+
+In the fork's web and desktop sidebar, right-click an active thread and choose **Postpone**.
+You can postpone several selected threads together. Postponed threads keep their normal cards
+and stay in their own section until you choose **Move to active** or send a new message.
+Agent completion, failure, and requests for attention do not move them back automatically.
+
+The section starts collapsed and remembers whether you expand or collapse it. Postponement
+and the section preference persist in the current browser or desktop profile. They do not
+sync to other devices. This section is available in the current sidebar, not the legacy layout.

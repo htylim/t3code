@@ -1,4 +1,4 @@
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import {
   type AtomCommandResult,
@@ -12,10 +12,10 @@ import { useRouter } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 
 import { resolveSnoozePresets } from "../components/Sidebar.snooze";
-import {
-  buildThreadActionMenuItems,
-  type ThreadActionMenuId,
-} from "../components/threadActionMenu.logic";
+import { buildThreadActionMenuItems } from "../components/threadActionMenu.logic";
+import { withPostponedThreadMenu } from "../components/Sidebar.postponed";
+import { usePostponedThreadStore } from "../postponedThreadStore";
+import { useMovePostponedThreadToActive } from "./useMovePostponedThreadToActive";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -39,7 +39,7 @@ import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
 import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
-import { useClientSettings } from "./useSettings";
+import { useClientSettings, useLegacySidebarEnabled } from "./useSettings";
 import { useThreadActions } from "./useThreadActions";
 
 function failureToast(title: string, error: unknown) {
@@ -101,6 +101,8 @@ export function useThreadActionMenu(input: {
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
+  const legacySidebarEnabled = useLegacySidebarEnabled();
+  const movePostponedToActive = useMovePostponedThreadToActive();
   const { copyToClipboard: copyPathToClipboard } = useCopyToClipboard<{ path: string }>({
     onCopy: ({ path }) => {
       toastManager.add({ type: "success", title: "Path copied", description: path });
@@ -154,9 +156,29 @@ export function useThreadActionMenu(input: {
           supports,
           snoozePresets,
         });
-        const clicked = await settlePromise(() => api.contextMenu.show(items, position));
+        const threadKey = scopedThreadKey(threadRef);
+        const isPostponed = usePostponedThreadStore.getState().byThreadKey[threadKey] !== undefined;
+        const menuItems = withPostponedThreadMenu(items, {
+          postponedCount: isPostponed ? 1 : 0,
+          activeCount:
+            !legacySidebarEnabled &&
+            !isPostponed &&
+            thread.settledOverride !== "settled" &&
+            !effectiveSnoozed(thread, { now: now.toISOString() })
+              ? 1
+              : 0,
+        });
+        const clicked = await settlePromise(() => api.contextMenu.show(menuItems, position));
         if (clicked._tag === "Failure" || clicked.value === null) return;
-        const action: ThreadActionMenuId = clicked.value;
+        const action = clicked.value;
+        if (action === "postpone") {
+          usePostponedThreadStore.getState().postpone([thread]);
+          return;
+        }
+        if (action === "move-to-active") {
+          await movePostponedToActive(threadRef);
+          return;
+        }
         if (action.startsWith("snooze:")) {
           const preset =
             action === "snooze:custom"
@@ -333,6 +355,8 @@ export function useThreadActionMenu(input: {
       copyThreadIdToClipboard,
       deleteThread,
       handleNewThread,
+      legacySidebarEnabled,
+      movePostponedToActive,
       logicalProjectKeyByPhysicalKey,
       markThreadUnread,
       onStartRename,

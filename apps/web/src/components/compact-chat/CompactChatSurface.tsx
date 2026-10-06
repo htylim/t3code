@@ -1,3 +1,4 @@
+import { usePostponedThreadBanner } from "~/components/chat/usePostponedThreadBanner";
 import { useNavigate } from "@tanstack/react-router";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import {
@@ -169,6 +170,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   const threadState = useEnvironmentThread(target.environmentId, target.threadId);
   const threadProjection = useThreadProjection(target)?.projection ?? null;
   const thread = useThreadShell(target);
+  const postponedThreadBanner = usePostponedThreadBanner(target);
   const threadHistory = useThreadHistory(target);
   const visibleTurnItems = useThreadVisibleTurnItems(target);
   const loadEarlierHistory = useAtomCommand(threadEnvironment.loadEarlierHistory);
@@ -1063,7 +1065,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
                       : null
                   }
                   isPreparingWorktree={false}
-                  bannerItems={[]}
+                  bannerItems={postponedThreadBanner === null ? [] : [postponedThreadBanner]}
                   environmentUnavailable={environmentUnavailable}
                   activePendingApproval={activePendingApproval}
                   pendingApprovals={pendingApprovals}

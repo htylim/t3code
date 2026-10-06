@@ -20,6 +20,26 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-06 - Postpone threads without a timer
+
+- Upstream baseline: `efecd3cf8b`.
+- The current web and desktop sidebar has a Postponed section with normal thread cards,
+  single and bulk Postpone and Move to active actions, and a remembered collapse state.
+  Opening a thread shows a composer notice. A new user message restores it automatically,
+  including sends from side chats. Completion, failure, and attention requests leave it postponed.
+- A separate client preference stores environment-scoped thread keys and the last user-message
+  timestamp. It persists across restarts in that browser or desktop profile, without syncing to
+  other devices. No database migration, wire contract, provider adapter, or server changes.
+  The legacy sidebar and native mobile have no new section.
+- Merge-sensitive changes are limited to the sidebar's classification, menus, card rendering,
+  navigation and drag boundaries; the shared header menu; and narrow composer and layout hooks.
+  The web context-menu fallback includes pause and play icons for the parking actions.
+  Storage, restoration, menu additions, and the composer notice live in separate fork modules.
+- Verification: 239 focused storage, restoration, menu, snooze, sidebar and drag tests passed.
+  Web typecheck passed. Targeted lint has no errors; existing large UI files report warnings.
+  Dev state uses a pruned read-only snapshot of stopped threads in a temporary home.
+  Browser and native-client verification were not performed.
+
 ## 2026-10-05 - Exclude individual Claude and Codex accounts from usage
 
 - Upstream baseline: `efecd3cf8b`.
