@@ -1,6 +1,8 @@
 import {
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
+  ProviderDriverKind,
+  ProviderInstanceId,
   UsageDay,
   USAGE_CONTRACT_VERSION,
   WS_METHODS,
@@ -32,6 +34,7 @@ import * as Persistence from "../platform/persistence.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import { createServerEnvironmentAtoms } from "./server.ts";
+import { withForkUsageDashboardIncluded } from "@t3tools/shared/forkUsageDashboard";
 
 const TARGET = new PrimaryConnectionTarget({
   environmentId: EnvironmentId.make("usage-environment"),
@@ -230,6 +233,51 @@ it.effect("refreshes cached usage windows only when override prices change", () 
       unmountCurrent();
     }),
   ),
+);
+
+it.effect(
+  "refreshes usage after fork account exclusion changes without rescanning for label edits",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const reads = yield* Queue.unbounded<number>();
+        const harness = yield* makeHarness((request) =>
+          Queue.offer(reads, request).pipe(Effect.asVoid),
+        );
+        const summary = harness.summary();
+        const unmount = harness.registry.mount(summary);
+        expect(yield* Queue.take(reads)).toBe(1);
+        yield* waitForCost(harness.registry, summary, 0);
+
+        const instanceId = ProviderInstanceId.make("personal");
+        const personalInstance = {
+          driver: ProviderDriverKind.make("codex"),
+          config: { homePath: "~/personal" },
+        };
+        const excludedInstance = withForkUsageDashboardIncluded(personalInstance, false);
+        yield* harness.updateSettings({
+          ...DEFAULT_SERVER_SETTINGS,
+          providerInstances: { [instanceId]: excludedInstance },
+        });
+        expect(yield* Queue.take(reads)).toBe(2);
+        yield* waitForCost(harness.registry, summary, 0);
+
+        yield* harness.updateSettings({
+          ...DEFAULT_SERVER_SETTINGS,
+          providerInstances: { [instanceId]: { ...excludedInstance, displayName: "Renamed" } },
+        });
+        yield* harness.updateSettings({
+          ...DEFAULT_SERVER_SETTINGS,
+          providerInstances: {
+            [instanceId]: withForkUsageDashboardIncluded(excludedInstance, true),
+          },
+        });
+        expect(yield* Queue.take(reads)).toBe(3);
+        yield* waitForCost(harness.registry, summary, 0);
+        expect(harness.requests()).toBe(3);
+        unmount();
+      }),
+    ),
 );
 
 it.effect("restarts a pending usage read after a price change", () =>

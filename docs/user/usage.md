@@ -34,6 +34,11 @@ variable. Use absolute paths or `~/` paths in the account's environment settings
 environment paths depend on each project's working directory and cannot be reliably discovered
 by Usage. Accounts sharing a history directory count once.
 
+In T3 Code Fork, open **Settings → Providers**, select a Claude or Codex account, and turn off
+**Include in usage dashboard** to exclude its history from Cost and Tokens on that environment.
+Turn it back on to include the history again. This does not delete sessions or change Limits.
+If another included account shares the same history directory, that history still counts.
+
 When your app and server support different providers, usage totals may cover only the providers
 your app understands. Update the app to include newly supported providers.
 

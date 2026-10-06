@@ -10,6 +10,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { mergeUsage } from "@t3tools/shared/usageMerge";
+import { withForkUsageDashboardIncluded } from "@t3tools/shared/forkUsageDashboard";
 import {
   EnvironmentId,
   ProviderDriverKind,
@@ -158,6 +159,129 @@ function totalOutputTokens(summary: { buckets: readonly { totals: { outputTokens
 }
 
 describe("UsageService", () => {
+  it.live.each(["codex", "claudeAgent"] as const)(
+    "excludes %s account sources and retained history, then restores them without deleting usage",
+    (driver) =>
+      Effect.gen(function* () {
+        const { home, settings } = yield* setup;
+        const workHome = NodePath.join(home, "work-account");
+        const personalHome = NodePath.join(home, "personal-account");
+        const historyDirectory = driver === "codex" ? "sessions" : "projects";
+        const personalTranscript = NodePath.join(personalHome, historyDirectory, "session.jsonl");
+        for (const [accountHome, outputTokens] of [
+          [workHome, 10],
+          [personalHome, 20],
+        ] as const) {
+          const transcriptDirectory = NodePath.join(accountHome, historyDirectory);
+          let transcriptContent = claudeLine(outputTokens, outputTokens);
+          if (driver === "codex") {
+            transcriptContent =
+              [
+                { type: "session_meta", payload: { id: accountHome } },
+                { type: "turn_context", payload: { model: "gpt-5.6-sol" } },
+                {
+                  type: "event_msg",
+                  timestamp: "2026-08-01T10:00:00Z",
+                  payload: {
+                    type: "token_count",
+                    info: { last_token_usage: { input_tokens: 10, output_tokens: outputTokens } },
+                  },
+                },
+              ]
+                .map((record) => encodeUnknownJsonString(record))
+                .join("\n") + "\n";
+          }
+          yield* Effect.promise(async () => {
+            await NodeFSP.mkdir(transcriptDirectory, { recursive: true });
+            await NodeFSP.writeFile(
+              NodePath.join(transcriptDirectory, "session.jsonl"),
+              transcriptContent,
+            );
+          });
+        }
+
+        const personalHistoryPath = yield* Effect.promise(() =>
+          NodeFSP.realpath(NodePath.join(personalHome, historyDirectory)),
+        );
+        const workHistoryPath = yield* Effect.promise(() =>
+          NodeFSP.realpath(NodePath.join(workHome, historyDirectory)),
+        );
+        yield* Effect.gen(function* () {
+          const settingsService = yield* ServerSettings.ServerSettingsService;
+          const service = yield* UsageService.make;
+          const initial = yield* service.readSummary(WINDOW);
+          assert.strictEqual(totalOutputTokens(initial), 30);
+          const currentSettings = yield* settingsService.getSettings;
+          const personalInstanceId = ProviderInstanceId.make("personal");
+          const personalInstance = currentSettings.providerInstances[personalInstanceId]!;
+          yield* settingsService.updateSettings({
+            providerInstances: {
+              ...currentSettings.providerInstances,
+              [personalInstanceId]: withForkUsageDashboardIncluded(personalInstance, false),
+            },
+          });
+          // Deleted transcripts must not reappear via the retained scan cache while excluded.
+          yield* Effect.promise(() => NodeFSP.rm(personalTranscript));
+          const excluded = yield* service.readSummary(WINDOW);
+          assert.strictEqual(totalOutputTokens(excluded), 10);
+          assert.notInclude(
+            excluded.sources.map((source) => source.fingerprint.resolvedHomePath),
+            personalHistoryPath,
+          );
+
+          const restartedService = yield* UsageService.make;
+          const afterRestart = yield* restartedService.readSummary(WINDOW);
+          assert.strictEqual(totalOutputTokens(afterRestart), 10);
+          yield* settingsService.updateSettings({
+            providerInstances: currentSettings.providerInstances,
+          });
+          const restored = yield* restartedService.readSummary(WINDOW);
+          assert.strictEqual(totalOutputTokens(restored), 30);
+
+          // An included account still owns a shared source when another account excludes it.
+          yield* settingsService.updateSettings({
+            providerInstances: {
+              ...currentSettings.providerInstances,
+              [ProviderInstanceId.make(driver)]: withForkUsageDashboardIncluded(
+                currentSettings.providerInstances[ProviderInstanceId.make(driver)]!,
+                false,
+              ),
+              [personalInstanceId]: { ...personalInstance, config: { homePath: workHome } },
+            },
+          });
+          const shared = yield* restartedService.readSummary(WINDOW);
+          assert.strictEqual(totalOutputTokens(shared), 10);
+          assert.lengthOf(
+            shared.sources.filter(
+              (source) => source.fingerprint.resolvedHomePath === workHistoryPath,
+            ),
+            1,
+          );
+        }).pipe(
+          Effect.provide(
+            serviceLayers({
+              prefix: `usage-fork-exclusion-${driver}`,
+              home,
+              settings: {
+                ...settings,
+                providerInstances: {
+                  [ProviderInstanceId.make(driver)]: {
+                    driver: ProviderDriverKind.make(driver),
+                    config: { homePath: workHome },
+                  },
+                  [ProviderInstanceId.make("personal")]: {
+                    driver: ProviderDriverKind.make(driver),
+                    enabled: false,
+                    config: { homePath: personalHome },
+                  },
+                },
+              },
+            }),
+          ),
+        );
+      }).pipe(Effect.scoped),
+  );
+
   it.live.each([
     { explicitDefault: true, label: "explicit" },
     { explicitDefault: false, label: "legacy" },

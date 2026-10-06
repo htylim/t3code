@@ -20,6 +20,27 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-05 - Exclude individual Claude and Codex accounts from usage
+
+- Upstream baseline: `efecd3cf8b`.
+- Web and desktop provider settings can exclude a Claude or Codex account's history from Cost
+  and Tokens. Limits and provider availability are unchanged. Re-enabling inclusion restores
+  retained usage. An included account still contributes a directory shared with an excluded account.
+- The preference is `forkUsageDashboardIncluded: false` inside the existing provider instance
+  config in `settings.json`. Inclusion is the default and removes the key. No settings schema,
+  wire contract, or database migration changes are needed. Upstream builds preserve the config
+  field but ignore its behavior.
+- Merge-sensitive changes are limited to the provider settings component, usage source selection
+  and scan key, the shared client usage refresh dependency, and one shared package export. The
+  preference helpers and UI control live in separate fork files. Native mobile has no new control;
+  server filtering applies to every client and connection mode.
+- Verification: 44 focused service, JSON round-trip, client refresh, and provider form tests passed.
+  Server, web, shared, and client-runtime typechecks passed. Targeted lint had no errors and one
+  existing unused-variable warning. An isolated browser pass with copied usage data verified
+  Claude and Codex exclusion, re-enabling, JSON persistence after reload, and Cost and Tokens
+  totals. Native-client verification was not performed. Live settings and provider history
+  were unchanged.
+
 ## 2026-10-04 - Integrate the latest upstream batch
 
 - Upstream baseline: `efecd3cf8b`, following `8ed276c246`. Integrates 127 upstream commits

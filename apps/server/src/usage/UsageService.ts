@@ -29,6 +29,10 @@ import {
   UsageReadError,
 } from "@t3tools/contracts";
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import {
+  forkUsageDashboardExcludedInstanceIds,
+  isForkUsageDashboardIncluded,
+} from "@t3tools/shared/forkUsageDashboard";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -318,6 +322,7 @@ export const make = Effect.gen(function* () {
         });
       }
       for (const instance of instances) {
+        if (!isForkUsageDashboardIncluded({ driver, config: instance.config })) continue;
         const environment = mergeProviderInstanceEnvironment(instance.environment, hostEnvironment);
         const provider = driver === "claudeAgent" ? "claude" : driver;
         let home: string;
@@ -943,6 +948,7 @@ export const make = Effect.gen(function* () {
       settings.usagePriceOverrides,
       settings.usageModelAliases,
       settings.cursorKeychainUsageEnabled,
+      forkUsageDashboardExcludedInstanceIds(settings.providerInstances),
     ]);
 
   const readSummary = Effect.fn("UsageService.readSummary")(function* (input: UsageSummaryInput) {

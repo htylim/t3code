@@ -22,6 +22,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { forkUsageDashboardExcludedInstanceIds } from "@t3tools/shared/forkUsageDashboard";
 
 import {
   createAtomCommandScheduler,
@@ -945,6 +946,7 @@ export function createServerEnvironmentAtoms<R, E>(
           .sort()
           .map((model) => [model, aliases[model]]),
         settings?.cursorKeychainUsageEnabled ?? false,
+        forkUsageDashboardExcludedInstanceIds(settings?.providerInstances ?? {}),
       ]);
     }).pipe(Atom.withLabel(`environment-data:server:usage-scan-settings:${environmentId}`)),
   );

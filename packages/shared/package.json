@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./forkUsageDashboard": {
+      "types": "./src/forkUsageDashboard.ts",
+      "import": "./src/forkUsageDashboard.ts"
+    },
     "./orchestrationV2ThreadError": {
       "types": "./src/orchestrationV2ThreadError.ts",
       "import": "./src/orchestrationV2ThreadError.ts"

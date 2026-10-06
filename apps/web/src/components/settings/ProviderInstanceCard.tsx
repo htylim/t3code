@@ -55,6 +55,7 @@ import { RedactedSensitiveText } from "./RedactedSensitiveText";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { AcpSessionManagementSection } from "./AcpSessionManagementSection";
 import { FoldedSettingsSection } from "./FoldedSettingsSection";
+import { ForkUsageDashboardSetting } from "./ForkUsageDashboardSetting";
 import { readCodexSetupMode } from "./CodexSetupSection.logic";
 import {
   getProviderVersionAdvisoryPresentation,
@@ -1043,6 +1044,12 @@ export function ProviderInstanceCard({
               />
             </div>
           }
+        />
+        <ForkUsageDashboardSetting
+          instanceId={instanceId}
+          instance={instance}
+          readOnly={readOnly}
+          onUpdate={onUpdate}
         />
       </SettingsSection>
 
