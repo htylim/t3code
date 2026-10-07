@@ -172,13 +172,8 @@ function WorkspaceMenuContents(
       worktreePath: thread.worktreePath,
       archivedAt: thread.archivedAt === null ? null : "archived",
       settledOverride: thread.settledOverride,
-      latestTurn:
-        thread.status === "running" ||
-        thread.status === "starting" ||
-        thread.status === "preparing" ||
-        thread.status === "waiting"
-          ? { state: "running" }
-          : null,
+      relationshipToParent: thread.lineage.relationshipToParent,
+      status: thread.status,
     })),
     activeProjectCwd: props.projectCwd,
     activeWorktreePath: props.activeWorktreePath,

@@ -20,6 +20,20 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-07 - Release worktrees after subagents finish
+
+- Upstream baseline: `efecd3cf8b`.
+- Web and desktop workspace pickers ignore idle and terminal subagents when determining busy
+  status. Unsettled conversations, including user forks, still reserve their assigned worktree.
+  Queued and executing turns block rename and removal even on settled or archived threads.
+- Reason: Completed Codex review children remained unsettled after their parents were settled.
+  The sidebar hides these children, but the workspace picker counted them as busy indefinitely.
+- Scope: Workspace row classification and its shell-state adapter. No server, database, wire
+  contract, provider adapter, or native mobile changes.
+- Verification: All 102 focused toolbar tests, web typecheck, targeted lint, formatting, and
+  diff checks passed. Seven false-busy regressions fail with the original predicate.
+  The installed app and live database were unchanged. Browser verification was not performed.
+
 ## 2026-10-07 - Stop background commands outside recent history
 
 - Upstream baseline: `efecd3cf8b`.

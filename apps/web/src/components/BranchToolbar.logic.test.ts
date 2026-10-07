@@ -24,6 +24,7 @@ import {
   shouldIncludeBranchPickerItem,
   shouldShowComposerContextStrip,
   shouldShowEnvironmentIndicator,
+  type WorktreeThreadState,
 } from "./BranchToolbar.logic";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
@@ -916,6 +917,18 @@ describe("workspace rows", () => {
     return { name, worktreePath, isRemote, current: false, isDefault: false };
   }
 
+  /** Defaults to the completed, unsettled subagent that caused false busy labels. */
+  function worktreeThread(overrides: Partial<WorktreeThreadState> = {}): WorktreeThreadState {
+    return {
+      worktreePath: "/trees/alpha",
+      archivedAt: null,
+      settledOverride: null,
+      relationshipToParent: "subagent",
+      status: "completed",
+      ...overrides,
+    };
+  }
+
   it("deduplicates local paths, sorts directory names and excludes current and main", () => {
     const rows = resolveWorktreeRows({
       refs: [
@@ -960,30 +973,100 @@ describe("workspace rows", () => {
           worktreePath: "/busy",
           archivedAt: null,
           settledOverride: null,
-          latestTurn: { state: "completed" },
+          relationshipToParent: null,
+          status: "completed",
         },
         {
           worktreePath: "/settled",
           archivedAt: null,
           settledOverride: "settled",
-          latestTurn: null,
+          relationshipToParent: null,
+          status: "idle",
         },
         {
           worktreePath: "/archived",
           archivedAt: "2026-09-01",
           settledOverride: null,
-          latestTurn: { state: "running" },
+          relationshipToParent: null,
+          status: "running",
         },
       ],
       activeProjectCwd: "/repo",
       activeWorktreePath: null,
     });
     expect(rows.map(({ dirName, isBusy, isIdle }) => ({ dirName, isBusy, isIdle }))).toEqual([
-      { dirName: "archived", isBusy: false, isIdle: false },
+      { dirName: "archived", isBusy: true, isIdle: false },
       { dirName: "busy", isBusy: true, isIdle: true },
       { dirName: "settled", isBusy: false, isIdle: true },
     ]);
   });
+
+  it("releases worktrees with settled parents and completed hidden subagents", () => {
+    const rows = resolveWorktreeRows({
+      refs: [ref("alpha", "/trees/alpha"), ref("beta", "/trees/beta")],
+      threads: [
+        worktreeThread({ relationshipToParent: null, settledOverride: "settled" }),
+        worktreeThread(),
+        worktreeThread({ status: "idle" }),
+        worktreeThread({
+          worktreePath: "/trees/beta",
+          relationshipToParent: null,
+          settledOverride: "settled",
+        }),
+        worktreeThread({ worktreePath: "/trees/beta" }),
+        worktreeThread({ worktreePath: null, relationshipToParent: null, status: "idle" }),
+      ],
+      activeProjectCwd: "/repo",
+      activeWorktreePath: null,
+    });
+
+    expect(rows.map(({ dirName, isBusy, isIdle }) => ({ dirName, isBusy, isIdle }))).toEqual([
+      { dirName: "alpha", isBusy: false, isIdle: true },
+      { dirName: "beta", isBusy: false, isIdle: true },
+    ]);
+  });
+
+  it.each(["idle", "completed", "failed", "interrupted", "cancelled", "rolled_back"] as const)(
+    "does not reserve a worktree for a %s subagent",
+    (status) => {
+      const rows = resolveWorktreeRows({
+        refs: [ref("alpha", "/trees/alpha")],
+        threads: [worktreeThread({ status })],
+        activeProjectCwd: "/repo",
+        activeWorktreePath: null,
+      });
+
+      expect(rows[0]).toMatchObject({ isBusy: false, isIdle: true });
+    },
+  );
+
+  it.each(["preparing", "queued", "starting", "running", "waiting"] as const)(
+    "reserves a worktree for a %s subagent even when archived or settled",
+    (status) => {
+      const rows = resolveWorktreeRows({
+        refs: [ref("alpha", "/trees/alpha")],
+        threads: [worktreeThread({ status, archivedAt: "2026-10-07", settledOverride: "settled" })],
+        activeProjectCwd: "/repo",
+        activeWorktreePath: null,
+      });
+
+      expect(rows[0]).toMatchObject({ isBusy: true, isIdle: false });
+    },
+  );
+
+  it.each([null, "fork"] as const)(
+    "keeps an unsettled conversation with parent relationship %s busy between turns",
+    (relationshipToParent) => {
+      const rows = resolveWorktreeRows({
+        refs: [ref("alpha", "/trees/alpha")],
+        threads: [worktreeThread({ relationshipToParent })],
+        activeProjectCwd: "/repo",
+        activeWorktreePath: null,
+      });
+
+      expect(rows[0]).toMatchObject({ isBusy: true, isIdle: true });
+    },
+  );
 
   it.each([
     [true, true, "busy"],

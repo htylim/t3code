@@ -5,6 +5,7 @@ import type {
   VcsRef,
   ProjectId,
   WorktreeSubmodules,
+  OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { sanitizeNewRefName } from "@t3tools/shared/git";
@@ -352,7 +353,8 @@ export interface WorktreeThreadState {
   readonly worktreePath: string | null;
   readonly archivedAt: string | null;
   readonly settledOverride: string | null;
-  readonly latestTurn: { readonly state: string } | null;
+  readonly relationshipToParent: OrchestrationV2ThreadShell["lineage"]["relationshipToParent"];
+  readonly status: OrchestrationV2ThreadShell["status"];
 }
 
 export interface WorktreeRow {
@@ -361,6 +363,17 @@ export interface WorktreeRow {
   refName: string | null;
   isBusy: boolean;
   isIdle: boolean;
+}
+
+/** Keeps workspace actions blocked while a turn is queued, starting or executing. */
+function isWorktreeThreadRunning(thread: WorktreeThreadState): boolean {
+  return (
+    thread.status === "preparing" ||
+    thread.status === "queued" ||
+    thread.status === "starting" ||
+    thread.status === "running" ||
+    thread.status === "waiting"
+  );
 }
 
 /** Lists local worktrees once, excluding the main checkout and current row. */
@@ -382,12 +395,22 @@ export function resolveWorktreeRows(input: {
     )
       continue;
     const threads = input.threads.filter((thread) => thread.worktreePath === worktreePath);
+    const hasRunningThread = threads.some(isWorktreeThreadRunning);
     rows.set(worktreePath, {
       worktreePath,
       dirName: resolveWorktreeDirectoryName(worktreePath),
       refName: ref.isDetached ? null : ref.name,
-      isBusy: threads.some((thread) => thread.archivedAt === null && !isThreadSettled(thread)),
-      isIdle: !threads.some((thread) => thread.latestTurn?.state === "running"),
+      // Subagents have no sidebar settlement action. Their completed history
+      // must not reserve a worktree after the parent conversation is settled.
+      isBusy:
+        hasRunningThread ||
+        threads.some(
+          (thread) =>
+            thread.archivedAt === null &&
+            thread.relationshipToParent !== "subagent" &&
+            !isThreadSettled(thread),
+        ),
+      isIdle: !hasRunningThread,
     });
   }
   return [...rows.values()].sort((left, right) => left.dirName.localeCompare(right.dirName));
