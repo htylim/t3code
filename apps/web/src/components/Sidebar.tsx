@@ -1792,6 +1792,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             <SideSurfaceThreadIndicators
               hasSideChat={props.hasSideChat}
               isSideChat={props.isSideChat}
+              threadRef={threadRef}
+              onNavigateToThread={onThreadActivate}
             />
             {pinIndicator}
             {terminalStatusIcon}
@@ -1966,6 +1968,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               <SideSurfaceThreadIndicators
                 hasSideChat={props.hasSideChat}
                 isSideChat={props.isSideChat}
+                threadRef={threadRef}
+                onNavigateToThread={onThreadActivate}
               />
               {pinIndicator}
               {/* The visible state owns this slot's width: status at rest,

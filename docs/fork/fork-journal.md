@@ -124,15 +124,21 @@ and guide were removed. Mermaid is no longer downstream drift.
 
 ## 2026-10-04 - Keep both side-chat roles visible in the sidebar
 
-- Upstream baseline: `8ed276c246`.
+- Upstream baseline: `8ed276c246`, with parent navigation added against `efecd3cf8b` on 2026-10-07.
 - Both web and desktop sidebar layouts mark threads that host a side chat and threads used as
   side chats. The host uses the outline split-panel icon; the side-chat thread uses a filled right
   pane. Indicators follow saved chat tabs across navigation, hidden panels, and tab switches.
 - Removing or replacing a chat tab updates the roles. Threads can have both roles, and a shared
   target stays marked until its last owner removes it. State remains local to the client.
-- Verification: All 95 focused panel-state and side-chat replacement tests passed, along with the
-  web typecheck and targeted lint. Existing sidebar lint warnings remain. Browser verification
-  was not performed.
+- Clicking the filled indicator opens its parent thread and reveals the saved side chat, even
+  when the panel was hidden or another tab was selected. Keyboard activation does the same.
+  A target shared by several parents opens its first saved parent. Existing tabs and transient
+  chat metadata stay intact. Both sidebar layouts share this behavior; native mobile has no indicator.
+- Verification: All 96 focused panel-state and indicator interaction tests passed, along with the
+  web typecheck and targeted lint. Existing sidebar lint warnings remain. An isolated Browser panel
+  pass verified the current sidebar's row navigation, parent navigation from a hidden panel,
+  keyboard activation, and the "In a side chat" label. Native mobile and the legacy sidebar
+  were not tested in a running client.
 
 ## 2026-10-04 - Integrate upstream Orchestration V2
 

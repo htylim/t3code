@@ -815,6 +815,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           <SideSurfaceThreadIndicators
             hasSideChat={props.hasSideChat}
             isSideChat={props.isSideChat}
+            threadRef={threadRef}
+            onNavigateToThread={navigateToThread}
           />
           {discoveredPorts.length > 0 && (
             <Tooltip>
