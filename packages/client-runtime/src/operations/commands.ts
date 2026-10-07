@@ -775,10 +775,22 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
   });
 });
 
+/** Stops active or background work, using server-owned state when supported. */
 export const interruptThreadTurn = Effect.fn("EnvironmentCommands.interruptThreadTurn")(function* (
   input: InterruptThreadTurnInput,
 ) {
   let runId = input.runId ?? (input.turnId as RunId | undefined);
+  if (runId === undefined) {
+    const serverConfig = yield* getInitialServerConfig();
+    if (serverConfig.environment.capabilities.serverResolvedInterruptContext === true) {
+      return yield* dispatch({
+        type: "run.interrupt",
+        commandId: yield* allocateCommandId(input),
+        threadId: input.threadId,
+        holdQueue: true,
+      });
+    }
+  }
   if (runId === undefined) {
     const projection = yield* getProjection(input.threadId);
     runId = projection.runs.findLast(

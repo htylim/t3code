@@ -82,6 +82,9 @@ describe("ExecutionEnvironmentDescriptor", () => {
 
   it("treats missing server-resolved command context as unsupported", () => {
     expect(decodeDescriptor(descriptor).capabilities.serverResolvedCommandContext).toBeUndefined();
+    expect(
+      decodeDescriptor(descriptor).capabilities.serverResolvedInterruptContext,
+    ).toBeUndefined();
   });
 
   it("preserves advertised server-resolved command context", () => {

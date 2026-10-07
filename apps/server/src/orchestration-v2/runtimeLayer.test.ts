@@ -3455,56 +3455,67 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
       }),
   );
 
-  it.effect("keeps the queue after a user interrupts the active run", () =>
-    Effect.gen(function* () {
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
-      const threadId = ThreadId.make("runtime-layer-interrupted-queue");
-      yield* orchestrator.dispatch({
-        type: "thread.create",
-        createdBy: "user",
-        creationSource: "web",
-        commandId: CommandId.make(`${threadId}:create`),
-        threadId,
-        projectId: ProjectId.make(`${threadId}:project`),
-        title: "Interrupted queue",
-        modelSelection,
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        branch: null,
-        worktreePath: process.cwd(),
-      });
-      for (const [index, text] of ["Active", "Queued"].entries()) {
+  it.effect.each([false, true])(
+    "keeps the queue after Stop with a server-resolved target %s",
+    (resolveRunOnServer) =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const threadId = ThreadId.make(`runtime-layer-interrupted-queue:${resolveRunOnServer}`);
         yield* orchestrator.dispatch({
-          type: "message.dispatch",
+          type: "thread.create",
           createdBy: "user",
           creationSource: "web",
-          commandId: CommandId.make(`${threadId}:message:${index}`),
+          commandId: CommandId.make(`${threadId}:create`),
           threadId,
-          messageId: MessageId.make(`${threadId}:message:${index}`),
-          text,
-          attachments: [],
+          projectId: ProjectId.make(`${threadId}:project`),
+          title: "Interrupted queue",
           modelSelection,
-          dispatchMode: { type: index === 0 ? "start_immediately" : "queue_after_active" },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: process.cwd(),
         });
-      }
-      const before = yield* orchestrator.getThreadProjection(threadId);
-      const activeRun = before.runs[0]!;
-      const queuedRun = before.runs[1]!;
-      yield* orchestrator.dispatch({
-        type: "run.interrupt",
-        commandId: CommandId.make(`${threadId}:interrupt`),
-        threadId,
-        runId: activeRun.id,
-        holdQueue: true,
-      });
+        for (const [index, text] of ["Active", "Queued"].entries()) {
+          yield* orchestrator.dispatch({
+            type: "message.dispatch",
+            createdBy: "user",
+            creationSource: "web",
+            commandId: CommandId.make(`${threadId}:message:${index}`),
+            threadId,
+            messageId: MessageId.make(`${threadId}:message:${index}`),
+            text,
+            attachments: [],
+            modelSelection,
+            dispatchMode: { type: index === 0 ? "start_immediately" : "queue_after_active" },
+          });
+        }
+        const before = yield* orchestrator.getThreadProjection(threadId);
+        const activeRun = before.runs[0]!;
+        const queuedRun = before.runs[1]!;
+        yield* orchestrator.dispatch({
+          type: "run.interrupt",
+          commandId: CommandId.make(`${threadId}:interrupt`),
+          threadId,
+          ...(resolveRunOnServer ? {} : { runId: activeRun.id }),
+          holdQueue: true,
+        });
 
-      yield* orchestrator.resumeQueuedRuns;
-      const after = yield* orchestrator.getThreadProjection(threadId);
-      assert.equal(after.runs.find((run) => run.id === activeRun.id)?.status, "interrupted");
-      assert.equal(after.runs.find((run) => run.id === queuedRun.id)?.status, "queued");
-      assert.isTrue(after.runs.find((run) => run.id === queuedRun.id)?.queueHeld);
-      assert.isFalse(after.turnItems.some((item) => item.runId === queuedRun.id));
-    }),
+        yield* orchestrator.resumeQueuedRuns;
+        const after = yield* orchestrator.getThreadProjection(threadId);
+        assert.equal(after.runs.find((run) => run.id === activeRun.id)?.status, "interrupted");
+        assert.equal(after.runs.find((run) => run.id === queuedRun.id)?.status, "queued");
+        assert.isTrue(after.runs.find((run) => run.id === queuedRun.id)?.queueHeld);
+        assert.isFalse(after.turnItems.some((item) => item.runId === queuedRun.id));
+        // Stop again after settlement must not promote or interrupt the held queue.
+        yield* orchestrator.dispatch({
+          type: "run.interrupt",
+          commandId: CommandId.make(`${threadId}:interrupt-again`),
+          threadId,
+          holdQueue: true,
+        });
+        const repeated = yield* orchestrator.getThreadProjection(threadId);
+        assert.deepEqual(repeated.runs, after.runs);
+      }),
   );
 
   it.effect.each(["startup", "shutdown"] as const)(

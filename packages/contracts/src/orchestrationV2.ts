@@ -2780,7 +2780,8 @@ export const OrchestrationV2Command = Schema.Union([
     type: Schema.Literal("run.interrupt"),
     commandId: CommandId,
     threadId: ThreadId,
-    runId: RunId,
+    /** Omit to resolve the active run or settled background work on the server. */
+    runId: Schema.optional(RunId),
     reason: Schema.optional(Schema.String),
     holdQueue: Schema.optional(Schema.Boolean),
   }),

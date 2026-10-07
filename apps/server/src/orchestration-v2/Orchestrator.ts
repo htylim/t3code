@@ -8000,6 +8000,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       });
     });
 
+  /** Resolves Stop against current execution state, independent of history paging. */
   const dispatchRunInterrupt = (
     command: Extract<OrchestrationV2Command, { readonly type: "run.interrupt" }>,
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
@@ -8025,7 +8026,28 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           turnItemStatuses: ["pending", "running", "waiting"],
         },
       );
-      const run = projection.runs.find((candidate) => candidate.id === command.runId);
+      const latestRun = projection.runs.at(-1);
+      const activeRun = projection.runs.findLast(
+        (candidate) =>
+          candidate.status === "preparing" ||
+          candidate.status === "starting" ||
+          candidate.status === "running" ||
+          candidate.status === "waiting",
+      );
+      const pendingBackgroundWork = derivePendingBackgroundWork({
+        latestRun,
+        providerThreads: projection.providerThreads,
+        turnItems: projection.turnItems,
+        activeProviderThreadId: projection.thread.activeProviderThreadId,
+        runs: projection.runs,
+      });
+      const backgroundRun = pendingBackgroundWork.length > 0 ? latestRun : undefined;
+      const run =
+        command.runId === undefined
+          ? (activeRun ?? backgroundRun)
+          : projection.runs.find((candidate) => candidate.id === command.runId);
+      // A repeated Stop on an idle thread succeeds without interrupting unrelated work.
+      if (command.runId === undefined && run === undefined) return;
       const rootNode =
         run?.rootNodeId === null
           ? undefined
@@ -8034,15 +8056,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         run?.providerThreadId === null
           ? undefined
           : projection.providerThreads.find((candidate) => candidate.id === run?.providerThreadId);
-      const hasBackgroundWork =
-        run?.id === projection.runs.at(-1)?.id &&
-        derivePendingBackgroundWork({
-          latestRun: run,
-          providerThreads: projection.providerThreads,
-          turnItems: projection.turnItems,
-          activeProviderThreadId: projection.thread.activeProviderThreadId,
-          runs: projection.runs,
-        }).length > 0;
+      const hasBackgroundWork = run?.id === latestRun?.id && pendingBackgroundWork.length > 0;
       // A failed start has no provider turn. Background work still belongs
       // to the provider thread, so Stop reaches its latest accepted turn.
       const providerTurn =
@@ -9753,9 +9767,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 
     const plan = yield* dispatchOnce(command).pipe(
       Effect.flatMap((planned) =>
-        // A settle that finds the provider already ended everything has
-        // nothing to record, which is its expected outcome, not a failure.
-        planned.events.length > 0 || command.type === "thread.background-work.settle"
+        // Settling or resolving Stop after the work has already ended is a successful no-op.
+        planned.events.length > 0 ||
+        command.type === "thread.background-work.settle" ||
+        (command.type === "run.interrupt" && command.runId === undefined)
           ? Effect.succeed(planned)
           : Effect.fail(
               new OrchestratorDispatchError({

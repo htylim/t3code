@@ -78,6 +78,7 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
   readonly projection?: OrchestrationV2ThreadProjection;
   readonly projectionRequests?: ThreadId[];
   readonly advertiseServerResolvedCommandContext?: boolean;
+  readonly advertiseServerResolvedInterruptContext?: boolean;
 }) {
   const client = {
     [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command: OrchestrationV2Command) =>
@@ -125,6 +126,9 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
       environment: {
         capabilities: {
           repositoryIdentity: true,
+          ...(input.advertiseServerResolvedInterruptContext === true
+            ? { serverResolvedInterruptContext: true }
+            : {}),
           ...(input.advertiseServerResolvedCommandContext === false
             ? {}
             : { serverResolvedCommandContext: true }),
@@ -499,6 +503,34 @@ describe("V2 environment commands", () => {
         expect(commands.at(-1)).not.toHaveProperty("deliveryIntent");
       }
       expect(projectionRequests).toEqual([v2ThreadId, v2ThreadId, v2ThreadId, v2ThreadId]);
+    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+  );
+
+  it.effect("dispatches Stop without reading paginated history when the server resolves it", () =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const projectionRequests: ThreadId[] = [];
+      const supervisor = yield* makeSupervisor({
+        commands,
+        projects: [],
+        projectionRequests,
+        projection: { ...v2Projection, runs: [], turnItems: [] },
+        advertiseServerResolvedInterruptContext: true,
+      });
+
+      yield* interruptThreadTurn({ threadId: v2ThreadId }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+      );
+
+      expect(projectionRequests).toEqual([]);
+      expect(commands).toEqual([
+        {
+          type: "run.interrupt",
+          commandId: expect.any(String),
+          threadId: v2ThreadId,
+          holdQueue: true,
+        },
+      ]);
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 

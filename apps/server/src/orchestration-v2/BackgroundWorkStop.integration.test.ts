@@ -41,7 +41,8 @@ const modelSelection = { instanceId, model: "test-model" };
 // Codex turns leave commands running, then the thread moves to another
 // provider thread (a provider switch). Stop on the newer, settled run must
 // reach both provider threads and end all of the Codex work.
-const stopEarlierBackgroundWork = (failedStart: boolean) =>
+/** Verifies Stop reaches older commands with an explicit or server-resolved target. */
+const stopEarlierBackgroundWork = (failedStart: boolean, resolveRunOnServer = false) =>
   Effect.scoped(
     Effect.gen(function* () {
       const cwd = yield* checkpointWorkspace("background-work-stop");
@@ -440,11 +441,45 @@ const stopEarlierBackgroundWork = (failedStart: boolean) =>
           });
         }
 
+        if (resolveRunOnServer) {
+          const laterEvents: OrchestrationV2DomainEvent[] = [];
+          for (let ordinal = 1000; ordinal < 1100; ordinal++) {
+            laterEvents.push({
+              id: EventId.make(`later-command:${ordinal}`),
+              type: "turn-item.updated",
+              threadId,
+              runId: latestRun.runId,
+              occurredAt: now,
+              payload: {
+                id: TurnItemId.make(`turn-item:later-command:${ordinal}`),
+                threadId,
+                runId: latestRun.runId,
+                nodeId: null,
+                providerThreadId: otherProviderThreadId,
+                providerTurnId: latestRun.providerTurnId,
+                nativeItemRef: null,
+                parentItemId: null,
+                ordinal,
+                status: "completed",
+                title: null,
+                startedAt: now,
+                completedAt: now,
+                updatedAt: now,
+                type: "command_execution",
+                input: "echo done",
+              },
+            });
+          }
+          yield* sink.write({ events: laterEvents });
+          const window = yield* orchestrator.getThreadSnapshotWindow(threadId, { rowLimit: 77 });
+          assert.isFalse(window.projection.turnItems.some((item) => item.id === devServerId));
+        }
+
         yield* orchestrator.dispatch({
           type: "run.interrupt",
           commandId: CommandId.make("stop-background-work"),
           threadId,
-          runId: failedStart ? failedRun.runId : latestRun.runId,
+          ...(resolveRunOnServer ? {} : { runId: failedStart ? failedRun.runId : latestRun.runId }),
         });
         yield* worker.drain();
 
@@ -484,4 +519,9 @@ it.effect("Stop reaches background work an earlier provider thread still runs", 
 it.effect(
   "Stop reaches earlier background work after the newest run fails before provider start",
   () => stopEarlierBackgroundWork(true),
+);
+
+it.effect.each([false, true])(
+  "Stop resolves an out-of-window command on the server after failed start %s",
+  (failedStart) => stopEarlierBackgroundWork(failedStart, true),
 );

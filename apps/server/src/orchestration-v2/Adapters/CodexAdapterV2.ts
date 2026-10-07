@@ -1854,11 +1854,12 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             return context === undefined ? undefined : ({ context, settled: false } as const);
           });
 
+        /** Retains a known terminal handle when a later item update omits it. */
         const trackRunningCommandItem = (nativeTurnId: string, item: TrackedRunningCommandItem) =>
           Ref.update(runningCommandItemsByTurn, (current) => {
             const updated = new Map(current);
             const items = new Map(updated.get(nativeTurnId) ?? []);
-            items.set(item.id, item);
+            items.set(item.id, { ...items.get(item.id), ...item });
             updated.set(nativeTurnId, items);
             return updated;
           });
@@ -3709,6 +3710,21 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             };
             return { node, request, turnItem };
           });
+
+        yield* client.handleServerNotification(
+          "item/commandExecution/terminalInteraction",
+          (payload) =>
+            // Codex can report a null processId at startup and supply the handle here later.
+            // Update only a retained command, so a late event cannot revive completed work.
+            Ref.update(runningCommandItemsByTurn, (current) => {
+              const items = current.get(payload.turnId);
+              const command = items?.get(payload.itemId);
+              if (command === undefined) return current;
+              const updatedItems = new Map(items);
+              updatedItems.set(payload.itemId, { ...command, processId: payload.processId });
+              return new Map(current).set(payload.turnId, updatedItems);
+            }),
+        );
 
         yield* client.handleServerNotification("item/agentMessage/delta", (payload) =>
           Effect.gen(function* () {

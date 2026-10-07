@@ -1615,11 +1615,13 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       return yield* Effect.die(`Timed out waiting for ${label}.`);
     });
 
+  /** Replays native frames and exposes barriers after requests and notifications are handled. */
   const makeCodexReplayHarness = (
     transcript: CodexReplay.CodexAppServerReplayTranscript,
     onEvent: (event: ProviderAdapterV2Event) => Effect.Effect<unknown> = () => Effect.void,
     onRequest: (method: string, params: unknown) => Effect.Effect<void> = () => Effect.void,
     readChildMetadata?: (threadId: string) => Effect.Effect<unknown>,
+    onNotification: (method: string) => Effect.Effect<void> = () => Effect.void,
   ) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -1646,6 +1648,17 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                   (client) =>
                     ({
                       ...client,
+                      handleServerNotification: (method, handler) =>
+                        client.handleServerNotification(method, (payload) =>
+                          handler(payload).pipe(Effect.tap(() => onNotification(method))),
+                        ),
+                      raw: {
+                        ...client.raw,
+                        request: (method, params) =>
+                          onRequest(method, params).pipe(
+                            Effect.andThen(client.raw.request(method, params)),
+                          ),
+                      },
                       request: (method, params) =>
                         onRequest(method, params).pipe(
                           Effect.andThen(client.request(method, params)),
@@ -4012,6 +4025,106 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           assert.lengthOf(harness.terminalEvents(), 1);
           assert.equal(harness.terminalEvents()[0]?.status, "completed");
           assert.lengthOf(harness.continuationRequests, 0);
+        }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+      );
+    },
+  );
+  it.effect.each(["before_settle", "after_settle"] as const)(
+    "stops a command whose terminal handle arrives %s",
+    (handleTiming) => {
+      const originalTranscript = makeBackgroundStopTranscript(true);
+      const terminalInteraction = {
+        type: "emit_inbound" as const,
+        label: "item/commandExecution/terminalInteraction",
+        frame: {
+          method: "item/commandExecution/terminalInteraction",
+          params: {
+            threadId: BG_NATIVE_THREAD,
+            turnId: BG_NATIVE_TURN,
+            itemId: BG_COMMAND_ITEM,
+            processId: "4242",
+            stdin: "",
+          },
+        },
+      };
+      const transcript = makeCodexReplayTranscript({
+        scenario: `codex-bg-stop-late-handle-${handleTiming}`,
+        entries: originalTranscript.entries.flatMap(
+          (entry): CodexReplay.CodexAppServerReplayEntry[] => {
+            if (entry.type === "emit_inbound" && entry.label === "item/started/command") {
+              const commandStarted = {
+                ...entry,
+                frame: {
+                  method: "item/started",
+                  params: {
+                    threadId: BG_NATIVE_THREAD,
+                    turnId: BG_NATIVE_TURN,
+                    item: { ...backgroundCommandItem("inProgress"), processId: null },
+                  },
+                },
+              };
+              return handleTiming === "before_settle"
+                ? [commandStarted, terminalInteraction, commandStarted]
+                : [commandStarted];
+            }
+            if (
+              entry.type === "emit_inbound" &&
+              entry.label === "turn/completed" &&
+              handleTiming === "after_settle"
+            ) {
+              return [entry, terminalInteraction];
+            }
+            return [entry];
+          },
+        ),
+      });
+      return Effect.scoped(
+        Effect.gen(function* () {
+          const stopped = yield* Deferred.make<void>();
+          const terminationRequests: unknown[] = [];
+          const handleReceived = yield* Deferred.make<void>();
+          const harness = yield* makeCodexReplayHarness(
+            transcript,
+            (event) =>
+              event.type === "turn_item.updated" &&
+              event.turnItem.type === "command_execution" &&
+              event.turnItem.status === "interrupted"
+                ? Deferred.succeed(stopped, undefined)
+                : Effect.void,
+            (method, params) =>
+              Effect.sync(() => {
+                if (method === "thread/backgroundTerminals/terminate") {
+                  terminationRequests.push(params);
+                }
+              }),
+            undefined,
+            (method) =>
+              method === "item/commandExecution/terminalInteraction"
+                ? Deferred.succeed(handleReceived, undefined).pipe(Effect.asVoid)
+                : Effect.void,
+          );
+          yield* harness.runtime.startTurn(
+            makeCodexTestTurnInput({
+              threadId: harness.threadId,
+              providerThread: harness.providerThread,
+              now: yield* DateTime.now,
+              attemptId: RunAttemptId.make("attempt-codex-bg-stop-late-handle"),
+              text: BG_PROMPT,
+            }),
+          );
+          yield* harness.firstTerminal;
+          yield* Deferred.await(handleReceived);
+          yield* harness.runtime.interruptTurn({
+            providerThread: harness.providerThread,
+            providerTurnId: harness.terminalEvents()[0]!.providerTurnId,
+            requestRuntimeRestart: true,
+          });
+          yield* Deferred.await(stopped);
+          assert.deepEqual(terminationRequests, [
+            { threadId: BG_NATIVE_THREAD, processId: "4242" },
+          ]);
+          assert.isFalse(yield* harness.hasPendingBackgroundWork);
+          assert.equal(harness.terminalEvents()[0]?.status, "completed");
         }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
       );
     },

@@ -20,6 +20,25 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-07 - Stop background commands outside recent history
+
+- Upstream baseline: `efecd3cf8b`.
+- Stop resolves its target in the orchestrator from current runs and pending background work.
+  The shared web, desktop, and mobile command path skips the paginated projection lookup when
+  the server advertises support. Older servers retain the existing client lookup.
+- Codex records terminal handles from terminal-interaction notifications, including after a
+  turn settles. Later command updates retain known handles; notifications cannot revive commands
+  that have already ended.
+- Reason: A visible running-command banner could outlive the latest 77 history rows, causing Stop
+  to return without sending an interrupt. Commands started without a handle could also be marked
+  stopped without receiving a native termination request.
+- Scope: Optional interrupt target and capability contracts, shared client command dispatch,
+  orchestrator target resolution, and the Codex adapter. No database migration or UI changes.
+- Verification: Focused client, Codex replay, background-work integration, queue, capability, and
+  desktop packaging tests passed. Scoped server, contracts, client-runtime, web, and mobile
+  typechecks and targeted lint passed. The late-handle regressions fail without the adapter fix.
+  Live user data and the installed desktop app were unchanged.
+
 ## 2026-10-06 - Inherit caller permissions when launching threads
 
 - Upstream baseline: `efecd3cf8b`.
