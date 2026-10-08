@@ -7,6 +7,7 @@ import {
   buildKeybindingCommandOptions,
   buildWhenVariableOptions,
   commandLabel,
+  groupKeybindingRows,
   keybindingConflictLabels,
   keybindingFromKeyboardEvent,
   isKeybindingRecordingCancel,
@@ -76,6 +77,25 @@ describe("KeybindingsSettings.logic", () => {
       );
     },
   );
+  it("groups rows by command area in page order and drops empty groups", () => {
+    const groups = groupKeybindingRows(buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, ""));
+    expect(groups.map((group) => group.title)).toEqual([
+      "Navigation",
+      "Threads",
+      "Composer",
+      "Terminal",
+      "Preview & diff",
+      "Appearance",
+      "Other",
+    ]);
+    const composer = groups.find((group) => group.id === "composer");
+    expect(composer?.rows.map((row) => row.command)).toEqual(
+      expect.arrayContaining(["composer.host", "modelPicker.toggle"]),
+    );
+    expect(groupKeybindingRows(buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, "split"))).toEqual(
+      [expect.objectContaining({ id: "terminal" })],
+    );
+  });
   it("orders Usage bindings and command choices like the page", () => {
     const expected = [
       "usage.open",
@@ -284,6 +304,7 @@ describe("KeybindingsSettings.logic", () => {
     expect(commandLabel("thread.rename")).toBe("Thread: Rename");
     expect(commandLabel("timeline.previousPrompt")).toBe("Timeline: Previous Prompt");
     expect(commandLabel("themeEditor.toggle")).toBe("Theme Editor: Toggle");
+    expect(commandLabel("view.reopenClosed")).toBe("Reopen Closed Tab");
     expect(commandLabel("script.setup-db.run")).toBe("Run Script: Setup Db");
   });
 

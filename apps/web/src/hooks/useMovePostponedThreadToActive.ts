@@ -10,13 +10,17 @@ import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { usePostponedThreadStore } from "../postponedThreadStore";
 import { readThreadShell } from "../state/entities";
 import { threadEnvironment } from "../state/threads";
-import { useAtomCommand } from "../state/use-atom-command";
+import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import * as ThreadUndo from "./threadUndo";
 
 /** Clear underlying parking states before removing the local postponement preference. */
 export function useMovePostponedThreadToActive() {
-  const unsettleThread = useAtomCommand(threadEnvironment.unsettle, { reportFailure: false });
-  const unsnoozeThread = useAtomCommand(threadEnvironment.unsnooze, { reportFailure: false });
+  const unsettleThread = useOrchestrationCommand(threadEnvironment.unsettle, {
+    reportFailure: false,
+  });
+  const unsnoozeThread = useOrchestrationCommand(threadEnvironment.unsnooze, {
+    reportFailure: false,
+  });
   return useCallback(
     async (threadRef: ScopedThreadRef): Promise<boolean> => {
       const thread = readThreadShell(threadRef);

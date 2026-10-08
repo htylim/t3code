@@ -1,4 +1,5 @@
-import * as NodeCrypto from "node:crypto";
+import * as Crypto from "effect/Crypto";
+import * as Hex from "effect/encoding/Hex";
 
 import {
   ClaudeSettings,
@@ -19,7 +20,7 @@ import { ProviderSessionManagerV2 } from "../orchestration-v2/ProviderSessionMan
 import { ProviderSessionRuntimeRepository } from "../persistence/ProviderSessionRuntime.ts";
 import { ProjectService } from "../project/ProjectService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
-import { deriveProviderInstanceConfigMap } from "./Layers/ProviderInstanceRegistryHydration.ts";
+import { deriveProviderInstanceConfigMap } from "./ProviderInstanceRegistryHydration.ts";
 import { mergeProviderInstanceEnvironment } from "./ProviderInstanceEnvironment.ts";
 import { transientChatCleanupGate } from "./transientChatDeletion/lifecycle.ts";
 import { TransientChatProviderThreadDeleteError } from "./transientChatDeletion/errors.ts";
@@ -47,11 +48,6 @@ function invalidTarget(message: string) {
   return new TransientSideChatCleanupError({ reason: "invalid-target", message });
 }
 
-/** Fingerprint settings so a retry cannot delete from a different provider account or home. */
-function fingerprint(instance: unknown): string {
-  return NodeCrypto.createHash("sha256").update(encodeJson(instance)).digest("hex");
-}
-
 /** Keep matching native IDs in separate provider homes independent. */
 function cleanupTargetKey(instanceId: ProviderInstanceId, nativeId: string): string {
   return JSON.stringify([instanceId, nativeId]);
@@ -66,6 +62,17 @@ export const makeTransientSideChatCleanup = Effect.fn("makeTransientSideChatClea
   const runtimes = yield* ProviderSessionRuntimeRepository;
   const projects = yield* ProjectService;
   const settings = yield* ServerSettingsService;
+  const crypto = yield* Crypto.Crypto;
+  /** Fingerprint settings so a retry cannot delete from a different provider account or home. */
+  const fingerprint = Effect.fn("TransientSideChatCleanup.fingerprint")(function* (
+    instance: unknown,
+  ) {
+    const digest = yield* crypto
+      .digest("SHA-256", new TextEncoder().encode(encodeJson(instance)))
+      .pipe(Effect.orDie);
+    return Hex.encode(digest);
+  });
+
   const providerContext =
     yield* Effect.context<Effect.Services<ReturnType<typeof deleteTransientChatProviderThread>>>();
 
@@ -88,31 +95,30 @@ export const makeTransientSideChatCleanup = Effect.fn("makeTransientSideChatClea
             yield* projects.getById(projection.thread.projectId, { includeDeleted: true }),
           );
           if (!project) return yield* invalidTarget("The transient chat project was not found.");
-          const targets =
-            prior?.targets ??
-            projection.providerThreads.flatMap((providerThread) => {
+          const targets = [...(prior?.targets ?? [])];
+          if (prior === undefined) {
+            for (const providerThread of projection.providerThreads) {
               const nativeId = providerThread.nativeThreadRef?.nativeId;
-              if (nativeId == null) return [];
+              if (nativeId == null) continue;
               const instance = instances[providerThread.providerInstanceId];
               const session = projection.providerSessions.find(
                 (candidate) => candidate.id === providerThread.providerSessionId,
               );
-              return [
-                {
-                  instanceId: providerThread.providerInstanceId,
-                  driver: providerThread.driver,
-                  nativeId,
-                  cwd: session?.cwd ?? projection.thread.worktreePath ?? project.workspaceRoot,
-                  configFingerprint: fingerprint(instance ?? null),
-                },
-              ];
-            });
+              targets.push({
+                instanceId: providerThread.providerInstanceId,
+                driver: providerThread.driver,
+                nativeId,
+                cwd: session?.cwd ?? projection.thread.worktreePath ?? project.workspaceRoot,
+                configFingerprint: yield* fingerprint(instance ?? null),
+              });
+            }
+          }
           for (const target of targets) {
             const instance = instances[target.instanceId];
             if (
               !instance ||
               instance.driver !== target.driver ||
-              fingerprint(instance) !== target.configFingerprint
+              (yield* fingerprint(instance)) !== target.configFingerprint
             ) {
               return yield* invalidTarget(
                 "The original provider configuration is unavailable or changed. Restore it before retrying cleanup.",

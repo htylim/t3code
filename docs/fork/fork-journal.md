@@ -20,6 +20,25 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-08 - Integrate the October 8 nightly
+
+- Upstream baseline: `5e2225671f`, release `v0.0.46-nightly.20261008.2819`.
+  The integration branch brings in 302 commits since `efecd3cf8b`.
+- The pre-merge feature audit retired the launch permission patch and retained the remaining
+  downstream behavior. The adoption entry below records full and partial upstream overlap.
+- Merge adaptations cover Effect 4 import and service changes, RPC permission maps, the shared
+  composer and panel APIs, and provider runtime layers. The workspace menu retains upstream's
+  environment picker. Side chats honor the new orchestration permission checks.
+- Server-resolved Stop also clears idle-thread PR watches. Reopening a closed panel restores
+  existing side chats but skips transient chats whose history cleanup runs on close. The new panel
+  menu remains configurable while Mod+T keeps opening a side chat by default.
+- Verification: Frozen dependency installation, scoped server, web, desktop, mobile, contracts,
+  shared, and client-runtime typechecks, source bundle builds, and targeted lint passed. Focused
+  fork, provider, orchestration, permission, usage, panel, shortcut, and packaging checks passed
+  except one incoming Git diff statistics test, which also fails in an untouched nightly checkout.
+  Three symlink-watcher tests failed inside the sandbox and passed outside it. No browser,
+  native-client, live-provider, or installed-app verification was performed.
+
 ## 2026-10-07 - Release worktrees after subagents finish
 
 - Upstream baseline: `efecd3cf8b`.

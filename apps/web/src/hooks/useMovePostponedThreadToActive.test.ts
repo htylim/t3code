@@ -1,6 +1,6 @@
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import * as Cause from "effect/Cause";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { toastManager } from "../components/ui/toast";
@@ -17,8 +17,8 @@ vi.mock("react", async (original) => ({
 vi.mock("../state/threads", () => ({
   threadEnvironment: { unsettle: "unsettle", unsnooze: "unsnooze" },
 }));
-vi.mock("../state/use-atom-command", () => ({
-  useAtomCommand: (command: string) =>
+vi.mock("../state/use-orchestration-command", () => ({
+  useOrchestrationCommand: (command: string) =>
     command === "unsettle" ? commands.unsettleThread : commands.unsnoozeThread,
 }));
 vi.mock("../state/entities", () => ({ readThreadShell: shellReader }));

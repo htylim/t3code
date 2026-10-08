@@ -7,15 +7,15 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
-import { withCodexAppServerClient } from "./Layers/CodexProvider.ts";
+import { withCodexAppServerClient } from "./CodexProvider.ts";
 import { OpenCodeServerLedger } from "./OpenCodeServerLedger.ts";
-import { OpenCodeRuntime, OpenCodeRuntimeLive } from "./opencodeRuntime.ts";
+import * as OpenCodeRuntime from "./opencodeRuntime.ts";
 import { deleteTransientChatProviderThread } from "./transientChatProviderThreadDelete.ts";
 
 // Explicit opt-in: requires installed CLIs. Creates no turns and uses only
 // disposable provider homes; no credentials or real history are needed.
 const enabled = process.env.T3_TEST_NATIVE_TRANSIENT_DELETION === "1";
-const layer = OpenCodeRuntimeLive.pipe(
+const layer = OpenCodeRuntime.layer.pipe(
   Layer.provide(Layer.succeed(OpenCodeServerLedger, { track: () => Effect.succeed(Effect.void) })),
   Layer.provideMerge(NodeServices.layer),
 );
@@ -193,7 +193,7 @@ describe.skipIf(!enabled)("Installed providers: transient deletion", () => {
           const fs = yield* FileSystem.FileSystem;
           const path = yield* Path.Path;
           const temporary = yield* fs.realPath(yield* fs.makeTempDirectoryScoped());
-          const runtime = yield* OpenCodeRuntime;
+          const runtime = yield* OpenCodeRuntime.OpenCodeRuntime;
           const environment = {
             ...process.env,
             XDG_DATA_HOME: path.join(temporary, "data"),

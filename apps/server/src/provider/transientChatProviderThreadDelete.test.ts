@@ -6,17 +6,17 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 
 import { OpenCodeServerLedger } from "./OpenCodeServerLedger.ts";
-import { OpenCodeRuntimeLive } from "./opencodeRuntime.ts";
+import * as OpenCodeRuntime from "./opencodeRuntime.ts";
 import { spawnAndCollect } from "./providerSnapshot.ts";
 import { deleteTransientChatProviderThread } from "./transientChatProviderThreadDelete.ts";
 
 const sessionId = "11111111-1111-4111-8111-111111111111";
 const otherId = "22222222-2222-4222-8222-222222222222";
 const missingId = "33333333-3333-4333-8333-333333333333";
-const layer = OpenCodeRuntimeLive.pipe(
+const layer = OpenCodeRuntime.layer.pipe(
   Layer.provide(Layer.succeed(OpenCodeServerLedger, { track: () => Effect.succeed(Effect.void) })),
   Layer.provideMerge(NodeServices.layer),
 );

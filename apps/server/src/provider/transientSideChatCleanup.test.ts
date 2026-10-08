@@ -27,7 +27,7 @@ import {
 import { ProjectService } from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { OpenCodeServerLedger } from "./OpenCodeServerLedger.ts";
-import { OpenCodeRuntimeLive } from "./opencodeRuntime.ts";
+import * as OpenCodeRuntime from "./opencodeRuntime.ts";
 import { TransientChatProviderThreadDeleteError } from "./transientChatDeletion/errors.ts";
 import { makeTransientSideChatCleanup } from "./transientSideChatCleanup.ts";
 import type { TransientChatProviderThreadDeleteInput } from "./transientChatProviderThreadDelete.ts";
@@ -37,7 +37,7 @@ const instanceId = ProviderInstanceId.make("test-instance");
 const sessionId = ProviderSessionId.make("session-transient");
 const nativeId = "11111111-1111-4111-8111-111111111111";
 const now = DateTime.makeUnsafe("2026-10-04T12:00:00Z");
-const runtimeLayer = OpenCodeRuntimeLive.pipe(
+const runtimeLayer = OpenCodeRuntime.layer.pipe(
   Layer.provide(Layer.mock(OpenCodeServerLedger)({ track: () => Effect.succeed(Effect.void) })),
   Layer.provideMerge(NodeServices.layer),
 );

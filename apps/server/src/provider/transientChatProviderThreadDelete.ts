@@ -3,14 +3,14 @@ import type { ClaudeSettings, CodexSettings, OpenCodeSettings } from "@t3tools/c
 import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 
 import { expandHomePath } from "../pathExpansion.ts";
 import { spawnAndCollect } from "./providerSnapshot.ts";
 import { makeClaudeEnvironment } from "./Drivers/ClaudeHome.ts";
 import { resolveCodexHomeLayout } from "./Drivers/CodexHomeLayout.ts";
-import { resolveCodexLaunchArgs } from "./Layers/codexLaunchArgs.ts";
-import { withCodexAppServerClient } from "./Layers/CodexProvider.ts";
+import { resolveCodexLaunchArgs } from "./codexLaunchArgs.ts";
+import { withCodexAppServerClient } from "./CodexProvider.ts";
 import { OpenCodeRuntime } from "./opencodeRuntime.ts";
 import { deleteCodexTransientThread } from "./transientChatDeletion/codex.ts";
 import { deleteOpenCodeTransientThread } from "./transientChatDeletion/opencode.ts";

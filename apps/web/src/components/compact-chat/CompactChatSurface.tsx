@@ -12,6 +12,7 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import { derivePendingThreadRequests } from "@t3tools/client-runtime/state/thread-requests";
+import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
 import type {
   RuntimeRequestId,
   ChatAttachment,
@@ -89,6 +90,8 @@ import {
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { threadEnvironment, useEnvironmentThread } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
+import { useOrchestrationCommand } from "~/state/use-orchestration-command";
+import { useEnvironmentScope } from "~/state/session";
 import { newMessageId, newThreadId } from "~/lib/utils";
 import { resolveAppModelSelectionForInstance } from "~/modelSelection";
 import {
@@ -167,6 +170,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   const navigate = useNavigate();
   const { resolvedTheme } = useTheme();
   const environment = useEnvironment(target.environmentId);
+  const canOperateThread = useEnvironmentScope(target.environmentId, AuthOrchestrationOperateScope);
   const threadState = useEnvironmentThread(target.environmentId, target.threadId);
   const threadProjection = useThreadProjection(target)?.projection ?? null;
   const thread = useThreadShell(target);
@@ -196,20 +200,24 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
     (state) => state.setInteractionMode,
   );
   const clearComposerDraftContent = useComposerDraftStore((state) => state.clearComposerContent);
-  const forkFromRun = useAtomCommand(threadEnvironment.forkFromRun, { reportFailure: false });
-  const revertCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
+  const forkFromRun = useOrchestrationCommand(threadEnvironment.forkFromRun, {
     reportFailure: false,
   });
-  const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
-  const interruptTurn = useAtomCommand(threadEnvironment.interruptTurn, { reportFailure: false });
-  const respondToApproval = useAtomCommand(threadEnvironment.respondToApproval, {
+  const revertCheckpoint = useOrchestrationCommand(threadEnvironment.revertCheckpoint, {
     reportFailure: false,
   });
-  const respondToUserInput = useAtomCommand(threadEnvironment.respondToUserInput, {
+  const startTurn = useOrchestrationCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const interruptTurn = useOrchestrationCommand(threadEnvironment.interruptTurn, {
+    reportFailure: false,
+  });
+  const respondToApproval = useOrchestrationCommand(threadEnvironment.respondToApproval, {
+    reportFailure: false,
+  });
+  const respondToUserInput = useOrchestrationCommand(threadEnvironment.respondToUserInput, {
     reportFailure: false,
   });
 
-  const dismissUserInput = useAtomCommand(threadEnvironment.dismissUserInput, {
+  const dismissUserInput = useOrchestrationCommand(threadEnvironment.dismissUserInput, {
     reportFailure: false,
   });
   const userInputInFlight = useRef(new Set<RuntimeRequestId>());
@@ -1035,6 +1043,10 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
                   timelineOverflows={timelineOverflows}
                   composerDraftTarget={target}
                   environmentId={target.environmentId}
+                  canOperateThread={canOperateThread}
+                  resumeCompactionTokens={null}
+                  keepFullHistory={false}
+                  onToggleKeepFullHistory={() => {}}
                   attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                   supportsAttachmentUploads={supportsAttachmentUploads}
                   supportsQuestionAttachments={supportsQuestionAttachments}

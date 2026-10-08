@@ -21,6 +21,7 @@ import { useThreadShellsForProjectRefs } from "../state/entities";
 import { useEnvironmentQuery } from "../state/query";
 import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
+import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { vcsEnvironment } from "../state/vcs";
 import {
   resolveCurrentWorkspaceLabel,
@@ -36,6 +37,7 @@ import { useComposerMenuProps } from "./chat/composerEventScope";
 import { revealInFileExplorerLabelForOs } from "./preview/fileExplorerLabel";
 import { Button } from "./ui/button";
 import { ComposerControl } from "./chat/ComposerControl";
+import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { Input } from "./ui/input";
 import {
   Menu,
@@ -67,6 +69,8 @@ export interface WorkspaceMenuProps {
   onUseWorktree: (seed: PreviousWorktreeSeed) => void;
   trigger?: ReactNode;
   environmentItems?: ReactNode;
+  canChooseEnvironment?: boolean;
+  displayMode?: "toolbar" | "panel";
 }
 
 /** Shares the workspace popup between the wide and narrow composer controls. */
@@ -100,7 +104,7 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
     </>
   );
 
-  if (props.envLocked) {
+  if (props.envLocked && !props.canChooseEnvironment) {
     return (
       <span
         className="inline-flex h-7 min-w-0 items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
@@ -119,10 +123,16 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
       }}
     >
       <MenuTrigger
-        render={<ComposerControl size="xs" />}
+        render={
+          props.displayMode === "panel" ? (
+            <ThreadDetailsControl part="select" />
+          ) : (
+            <ComposerControl size="xs" />
+          )
+        }
         aria-label="Workspace"
         data-composer-shortcut="composer.workspace"
-        className="min-w-0 shrink"
+        className={props.displayMode === "panel" ? undefined : "min-w-0 shrink"}
         data-composer-context-control
       >
         {triggerContent}
@@ -325,7 +335,7 @@ function WorkspaceRow(
   const renameWorktree = useAtomCommand(vcsEnvironment.renameWorktree, { reportFailure: false });
   const removeWorktree = useAtomCommand(vcsEnvironment.removeWorktree, { reportFailure: false });
   const refreshStatus = useAtomCommand(vcsEnvironment.refreshStatus);
-  const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata);
+  const updateMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata);
   const localApi = readLocalApi();
   let renameReason: string | null = null;
   let removeReason: string | null = null;

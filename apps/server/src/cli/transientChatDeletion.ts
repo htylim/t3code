@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { Argument, Command } from "effect/unstable/cli";
+import { Argument, Command } from "effect/cli";
 import { runTransientChatDeletionWorker } from "../transientChatDeletionWorker.ts";
 
 /** Runs the isolated Claude deletion worker inside a standalone executable. */

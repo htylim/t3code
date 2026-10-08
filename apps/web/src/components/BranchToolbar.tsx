@@ -23,7 +23,6 @@ import {
   resolveContextStripLabelsCompact,
   resolveCurrentWorkspaceLabel,
   resolveEnvModeLabel,
-  resolveEffectiveEnvMode,
   resolvePreviousWorktreeSeed,
   resolveLockedWorkspaceLabel,
   type PreviousWorktreeSeed,
@@ -36,9 +35,9 @@ import {
 import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
 import { WorkspaceMenu, type WorkspaceMenuProps } from "./WorkspaceMenu";
 import { MenuGroup, MenuGroupLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "./ui/menu";
+import { THREAD_DETAILS_PANEL_ICON_CLASS } from "./chat/threadDetailsPanelStyles";
 import { Separator } from "./ui/separator";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { MiddleTruncate } from "./ui/middle-truncate";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { measureRestingComposerControls } from "./chat/restingComposerControlsMeasurement";
 import { resolveRestingComposerControlsNaturalWidth } from "./composerFooterLayout";
@@ -76,7 +75,9 @@ interface BranchToolbarProps {
   contextStripVisible?: boolean;
 }
 
-interface MobileRunContextSelectorProps {
+interface RunContextSelectorProps {
+  displayMode?: "toolbar" | "panel";
+  workspaceRoot?: string;
   forceNewWorktree: boolean;
   autoEnvironmentLabel?: string | undefined;
   onAutoEnvironment?: (() => void) | undefined;
@@ -93,7 +94,9 @@ interface MobileRunContextSelectorProps {
   workspaceProps: WorkspaceMenuProps;
 }
 
-const MobileRunContextSelector = memo(function MobileRunContextSelector({
+const RunContextSelector = memo(function RunContextSelector({
+  displayMode = "toolbar",
+  workspaceRoot,
   forceNewWorktree,
   autoEnvironmentLabel,
   onAutoEnvironment,
@@ -107,7 +110,7 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
   effectiveEnvMode,
   activeWorktreePath,
   workspaceProps,
-}: MobileRunContextSelectorProps) {
+}: RunContextSelectorProps) {
   const activeEnvironment = useMemo(
     () => availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null,
     [availableEnvironments, environmentId],
@@ -124,12 +127,29 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
       : effectiveEnvMode === "worktree"
         ? resolveEnvModeLabel("worktree")
         : resolveCurrentWorkspaceLabel(activeWorktreePath);
+  const isPanel = displayMode === "panel";
+  const workspacePath =
+    forceNewWorktree || (effectiveEnvMode === "worktree" && !activeWorktreePath)
+      ? null
+      : (activeWorktreePath ?? workspaceRoot);
   const workspaceIcon = (
     <Tooltip>
       <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-        <WorkspaceIcon className={cn("size-3 shrink-0", showEnvironmentIndicator && "mx-0!")} />
+        <WorkspaceIcon
+          className={
+            isPanel
+              ? THREAD_DETAILS_PANEL_ICON_CLASS
+              : cn("size-3 shrink-0", showEnvironmentIndicator && "mx-0!")
+          }
+        />
       </TooltipTrigger>
-      <TooltipPopup>{workspaceLabel}</TooltipPopup>
+      <TooltipPopup>
+        {isPanel
+          ? forceNewWorktree
+            ? "Each model starts in its own worktree."
+            : (workspacePath ?? workspaceLabel)
+          : workspaceLabel}
+      </TooltipPopup>
     </Tooltip>
   );
   const icon = showEnvironmentIndicator ? (
@@ -139,11 +159,14 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
       <Tooltip>
         <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
           {autoEnvironmentLabel ? (
-            <ScaleIcon className="size-3 shrink-0 mx-0!" aria-hidden="true" />
+            <ScaleIcon
+              className={isPanel ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3 shrink-0 mx-0!"}
+              aria-hidden="true"
+            />
           ) : (
             <EnvironmentMachineIcon
               kind={activeEnvironment?.machine ?? "server"}
-              className="size-3 shrink-0 mx-0!"
+              className={isPanel ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3 shrink-0 mx-0!"}
             />
           )}
         </TooltipTrigger>
@@ -157,7 +180,7 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
   const triggerContent = (
     <>
       {icon}
-      <ComposerContextLabel>
+      <ComposerContextLabel displayMode={displayMode}>
         {autoEnvironmentLabel ??
           (showEnvironmentIndicator ? (activeEnvironment?.label ?? "Run on") : workspaceLabel)}
       </ComposerContextLabel>
@@ -167,6 +190,8 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
   return (
     <WorkspaceMenu
       {...workspaceProps}
+      displayMode={displayMode}
+      canChooseEnvironment={showEnvironmentPicker && !envLocked}
       trigger={triggerContent}
       environmentItems={
         <>
@@ -563,7 +588,26 @@ export const BranchToolbar = memo(function BranchToolbar({
   if (layout === "panel") {
     return (
       <div className="flex w-full flex-col" data-thread-panel-run-context>
-        {panelSection !== "branch" ? <WorkspaceMenu {...workspaceProps} /> : null}
+        {panelSection !== "branch" ? (
+          <RunContextSelector
+            displayMode="panel"
+            workspaceRoot={activeProject.workspaceRoot}
+            forceNewWorktree={forceNewWorktree}
+            autoEnvironmentLabel={autoEnvironmentLabel}
+            onAutoEnvironment={onAutoEnvironment}
+            envLocked={envLocked}
+            envModeLocked={envModeLocked}
+            environmentId={environmentId}
+            availableEnvironments={availableEnvironments}
+            showEnvironmentPicker={showEnvironmentPicker}
+            showEnvironmentIndicator={activeEnvironmentOption !== null}
+            onEnvironmentChange={onEnvironmentChange}
+            effectiveEnvMode={effectiveEnvMode}
+            activeWorktreePath={activeWorktreePath}
+            onEnvModeChange={onEnvModeChange}
+            workspaceProps={workspaceProps}
+          />
+        ) : null}
         {panelSection !== "workspace" ? (
           <BranchToolbarBranchSelector
             displayMode="panel"
@@ -599,7 +643,7 @@ export const BranchToolbar = memo(function BranchToolbar({
     >
       {showGitControls ? (
         <div className="contents @3xl/composer-surface:hidden">
-          <MobileRunContextSelector
+          <RunContextSelector
             forceNewWorktree={forceNewWorktree}
             autoEnvironmentLabel={autoEnvironmentLabel}
             onAutoEnvironment={onAutoEnvironment}
