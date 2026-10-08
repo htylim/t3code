@@ -20,12 +20,32 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-08 - Add a selectable H3 wordmark to the Fork sidebar
+
+- Upstream baseline: `5e2225671f`.
+- Change: Settings > Fork has a device-local "Use H3 wordmark" toggle, enabled by default.
+  Turning it off restores T3 in the sidebar. The width probe follows the same preference,
+  settings search finds the toggle, and restoring device defaults enables H3 again.
+  Other stages keep the upstream T3 wordmark.
+- Reason: Make H3 branding optional without changing the desktop app's identity.
+- Scope: Fork settings, client settings persistence, and the shared sidebar brand. App names,
+  icons, onboarding, chat marks, desktop identity, and data paths are unchanged. Native mobile
+  accepts the additive client preference but does not expose the desktop wordmark toggle.
+- Verification: All 333 focused settings, persistence, search, and packaging tests passed.
+  Web typecheck, formatting, and targeted lint passed, with existing lint warnings in the
+  settings panels. An isolated dev client with a browser-only Fork branding fixture switched
+  between H3 and T3 in both themes, retained T3 after a full reload, found the toggle through
+  settings search, and restored H3 through both the row reset and device-default reset.
+  The visible header and width probe matched. Saved Browser panel screenshots are blurred,
+  so this pass verified DOM state and computed styles rather than screenshot appearance.
+
 ## 2026-10-08 - Add Forge artwork to the Fork header
 
 - Upstream baseline: `5e2225671f`.
 - Change: The shared web and desktop sidebar header displays the selected Forge artwork in
-  light and dark themes. It retains normal theme colors for the wordmark, controls, and Fork
-  pill. Artwork, Pill, and None remain the existing visibility choices. The neutral overlay
+  light and dark themes. It retains normal theme colors for the wordmark and controls. The Fork
+  pill uses a translucent theme-colored fill and a thin border instead of an opaque secondary
+  background. Artwork, Pill, and None remain the existing visibility choices. The neutral overlay
   also works with custom palettes, which otherwise fall back to the pill.
 - Reason: Give the fork the chosen visual identity without replacing upstream stage artwork
   or adding another customization setting.
@@ -35,8 +55,10 @@ upstream.
 - Verification: All 31 focused settings, stage-artwork, and composer tests, web typecheck,
   targeted lint, formatting, and diff checks passed. A disposable production web build bundled
   both artwork files. Lossless WebP encoding preserves visible pixels and transparency while
-  reducing asset size. Browser verification was not performed. The installed app and live data
-  were unchanged.
+  reducing asset size. An isolated dev-server Browser panel pass with a browser-only Fork branding
+  fixture confirmed the pill's light and dark computed styles and artwork switching. Saved
+  screenshots were blurred, and the panel disconnected before the settings interaction check.
+  The installed app and live data were unchanged.
 
 ## 2026-10-08 - Fit wrapped Markdown tables to the chat width
 

@@ -45,6 +45,23 @@ const ITEMS: ReadonlyArray<SettingsSearchItem> = [
 ];
 
 describe("searchSettings", () => {
+  it("finds the device-local wordmark toggle only in fork builds", () => {
+    const availability = {
+      hasCloudPublicConfig: false,
+      hasEnvironment: false,
+      hasProviderSettingsEnvironment: false,
+      hasMacProviderSettingsEnvironment: false,
+      canManageLocalBackend: false,
+      isWslSettingsRowVisible: false,
+      hasThreadAutoSettlement: false,
+    };
+    const forkItems = filterAvailableSettingsSearchItems({ ...availability, isForkBuild: true });
+    expect(searchSettings("H3", forkItems)[0]?.to).toBe("/settings/fork");
+    expect(searchSettings("T3 branding", forkItems)[0]?.id).toBe("fork-wordmark");
+    expect(getSettingsSearchTargetScope("fork-wordmark")?.scope).toBeNull();
+    expect(searchSettings("H3", filterAvailableSettingsSearchItems(availability))).toEqual([]);
+  });
+
   it.each(["send shortcut", "multiline", "new line"])("finds Send shortcut for %s", (query) => {
     expect(searchSettings(query).map((item) => item.id)).toContain("send-shortcut");
   });

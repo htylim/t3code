@@ -37,6 +37,17 @@ afterEach(() => {
 });
 
 describe("client settings hydration", () => {
+  it("persists T3 and restores that choice after a fresh hydration", async () => {
+    await persistClientSettingsPatch({ forkUseH3Wordmark: false });
+    const savedSettings = persistenceMocks.setClientSettings.mock.calls[0]![0];
+    expect(savedSettings.forkUseH3Wordmark).toBe(false);
+
+    __resetClientSettingsPersistenceForTests();
+    persistenceMocks.getClientSettings.mockResolvedValue(savedSettings);
+    await ensureClientSettingsHydrated();
+    expect(getClientSettings().forkUseH3Wordmark).toBe(false);
+  });
+
   const savedSettings = {
     ...DEFAULT_CLIENT_SETTINGS,
     timestampFormat: "12-hour" as const,

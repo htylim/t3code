@@ -609,6 +609,23 @@ describe("ClientSettings environment identification", () => {
   });
 });
 
+describe("ClientSettings fork wordmark", () => {
+  it("defaults older saved settings to H3 without losing other preferences", () => {
+    const settings = decodeClientSettings({ wordWrap: false });
+    expect(settings.forkUseH3Wordmark).toBe(true);
+    expect(settings.wordWrap).toBe(false);
+  });
+
+  it.each([true, false])("preserves a saved wordmark choice: %s", (forkUseH3Wordmark) => {
+    expect(decodeClientSettings({ forkUseH3Wordmark }).forkUseH3Wordmark).toBe(forkUseH3Wordmark);
+    expect(decodeClientSettingsPatch({ forkUseH3Wordmark })).toEqual({ forkUseH3Wordmark });
+  });
+
+  it("rejects non-boolean wordmark preferences", () => {
+    expect(() => decodeClientSettingsPatch({ forkUseH3Wordmark: "H3" })).toThrow();
+  });
+});
+
 describe("ClientSettings sidebar", () => {
   it("defaults to the current sidebar", () => {
     expect(decodeClientSettings({}).legacySidebarEnabled).toBe(false);

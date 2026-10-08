@@ -3,10 +3,11 @@ import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
-import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
+import { useClientSettings, useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { usePullRequestsSupported } from "../../state/environments";
 import { T3Wordmark } from "../T3Wordmark";
+import { H3Wordmark } from "../H3Wordmark";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
@@ -72,7 +73,11 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
         <SidebarBrand onBackdrop={backdropVariant !== null} />
         {pillLabel ? (
           <div className="ml-1 flex h-7 items-center">
-            <Badge data-environment-identification="pill" size="sm" variant="secondary">
+            <Badge
+              data-environment-identification="pill"
+              size="sm"
+              variant={isForkHeader ? "subtle" : "secondary"}
+            >
               {pillLabel}
             </Badge>
           </div>
@@ -128,11 +133,17 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
   );
 }
 
+/** Use the same stage-specific wordmark in the visible header and its width probe. */
 function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
+  const isForkHeader = useEnvironmentStageLabel() === "Fork";
+  const forkUseH3Wordmark = useClientSettings((settings) => settings.forkUseH3Wordmark);
+  const showH3Wordmark = isForkHeader && forkUseH3Wordmark;
+  const Wordmark = showH3Wordmark ? H3Wordmark : T3Wordmark;
+
   return (
     // Center the visible capitals, without the font's ascender/descender space.
     <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
-      <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
+      <Wordmark aria-label={showH3Wordmark ? "H3" : "T3"} className="h-[1cap] w-auto shrink-0" />
       <span
         className={cn(
           "truncate [text-box:trim-both_cap_alphabetic]",

@@ -32,6 +32,7 @@ import {
 /** Pages whose every row is saved on this client; they have no scope to pick. */
 export const SETTINGS_DEVICE_ONLY_PATHS: ReadonlySet<string> = new Set([
   "/settings/appearance",
+  "/settings/fork",
   "/settings/snap-shot",
   "/settings/connections",
 ]);
