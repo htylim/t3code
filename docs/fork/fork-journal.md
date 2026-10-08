@@ -26,7 +26,8 @@ upstream.
 - Change: Settings > Fork has a device-local "Use H3 wordmark" toggle, enabled by default.
   Turning it off restores T3 in the sidebar. The width probe follows the same preference,
   settings search finds the toggle, and restoring device defaults enables H3 again.
-  Other stages keep the upstream T3 wordmark.
+  The Fork pill shares the wordmark's text baseline. Other stages keep the upstream T3 wordmark
+  and centered pill layout.
 - Reason: Make H3 branding optional without changing the desktop app's identity.
 - Scope: Fork settings, client settings persistence, and the shared sidebar brand. App names,
   icons, onboarding, chat marks, desktop identity, and data paths are unchanged. Native mobile
@@ -38,6 +39,9 @@ upstream.
   settings search, and restored H3 through both the row reset and device-default reset.
   The visible header and width probe matched. Saved Browser panel screenshots are blurred,
   so this pass verified DOM state and computed styles rather than screenshot appearance.
+  A follow-up alignment pass measured matching wordmark and pill text baselines for H3 and
+  T3 in light and dark themes at 14, 16, and 20 px interface sizes. Narrow headers still clip
+  the pill's wrapped line.
 
 ## 2026-10-08 - Add Forge artwork to the Fork header
 

@@ -69,7 +69,12 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       />
       {/* One visible line: the pill wraps onto the clipped second line once it no longer fits.
           The padding keeps the brand's focus ring inside the clip. */}
-      <div className="relative z-10 flex h-8 min-w-0 flex-1 flex-wrap content-start items-center gap-x-2 overflow-hidden py-0.5">
+      <div
+        className={cn(
+          "relative z-10 flex h-8 min-w-0 flex-1 flex-wrap content-start gap-x-2 overflow-hidden py-0.5",
+          isForkHeader ? "items-baseline" : "items-center",
+        )}
+      >
         <SidebarBrand onBackdrop={backdropVariant !== null} />
         {pillLabel ? (
           <div className="ml-1 flex h-7 items-center">
