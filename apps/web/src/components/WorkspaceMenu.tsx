@@ -8,7 +8,7 @@ import type {
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { ChevronDownIcon, FolderGit2Icon, FolderGitIcon, FolderIcon, PlusIcon } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode, type MouseEventHandler } from "react";
 
 import { requestConfirmDialog } from "../confirmDialog";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
@@ -71,6 +71,7 @@ export interface WorkspaceMenuProps {
   environmentItems?: ReactNode;
   canChooseEnvironment?: boolean;
   displayMode?: "toolbar" | "panel";
+  onContextMenu?: MouseEventHandler | undefined;
 }
 
 /** Shares the workspace popup between the wide and narrow composer controls. */
@@ -109,6 +110,8 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
       <span
         className="inline-flex h-7 min-w-0 items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
         data-composer-context-control
+        aria-label={props.displayMode === "panel" ? "Run context" : undefined}
+        onContextMenu={props.onContextMenu}
       >
         {triggerContent}
       </span>
@@ -130,7 +133,14 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
             <ComposerControl size="xs" />
           )
         }
-        aria-label="Workspace"
+        aria-label={props.displayMode === "panel" ? "Run context" : "Workspace"}
+        onContextMenu={props.onContextMenu}
+        onMouseDownCapture={(event) => {
+          if (props.displayMode === "panel" && event.ctrlKey && event.button === 0) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
         data-composer-shortcut="composer.workspace"
         className={props.displayMode === "panel" ? undefined : "min-w-0 shrink"}
         data-composer-context-control

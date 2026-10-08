@@ -1608,6 +1608,8 @@ describe("UsageService", () => {
         const updated = yield* Fiber.join(second);
         assert.strictEqual(original.buckets[0]?.costUsd, 0);
         assert.closeTo(updated.buckets[0]?.costUsd ?? -1, 0.00006, 1e-12);
+        // Finish cache writes before the fixture's temporary directory is removed.
+        yield* service.awaitPersisted;
       }).pipe(
         Effect.provide(layerService({ prefix: "usage-service-price-race-test", home, settings })),
       );

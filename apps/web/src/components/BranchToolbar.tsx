@@ -1,9 +1,13 @@
 import { ComposerContextLabel } from "./ComposerContextLabel";
+import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
+import { readLocalApi } from "../localApi";
+import { stackedThreadToast, toastManager } from "./ui/toast";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { FolderGit2Icon, FolderGitIcon, FolderIcon, ScaleIcon } from "lucide-react";
 import {
   type Ref,
+  type MouseEvent as ReactMouseEvent,
   memo,
   useImperativeHandle,
   useCallback,
@@ -73,6 +77,38 @@ interface BranchToolbarProps {
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
   composerControlsHostRef?: (element: HTMLDivElement | null) => void;
   contextStripVisible?: boolean;
+}
+
+/** Offers the existing checkout path through the native or web context menu. */
+function showWorkspaceContextMenu(event: ReactMouseEvent, workspacePath: string) {
+  const api = readLocalApi();
+  if (!api) return;
+  event.preventDefault();
+  event.stopPropagation();
+  void api.contextMenu
+    .show([{ id: "copy-path", label: "Copy full path", icon: "copy" }], {
+      x: event.clientX,
+      y: event.clientY,
+    })
+    .then((action) => {
+      if (action !== "copy-path") return;
+      void writeTextToClipboard(workspacePath, "workspace path").then(
+        (didCopy) => {
+          if (didCopy) {
+            toastManager.add({ type: "success", title: "Path copied", description: workspacePath });
+          }
+        },
+        (error: unknown) => {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Failed to copy path",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        },
+      );
+    });
 }
 
 interface RunContextSelectorProps {
@@ -192,6 +228,11 @@ const RunContextSelector = memo(function RunContextSelector({
       {...workspaceProps}
       displayMode={displayMode}
       canChooseEnvironment={showEnvironmentPicker && !envLocked}
+      onContextMenu={
+        isPanel && workspacePath
+          ? (event) => showWorkspaceContextMenu(event, workspacePath)
+          : undefined
+      }
       trigger={triggerContent}
       environmentItems={
         <>

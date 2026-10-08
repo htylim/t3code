@@ -49,12 +49,27 @@ upstream.
 - Server-resolved Stop also clears idle-thread PR watches. Reopening a closed panel restores
   existing side chats but skips transient chats whose history cleanup runs on close. The new panel
   menu remains configurable while Mod+T keeps opening a side chat by default.
+- Live verification restored the panel workspace's copy-path context menu, which the shared
+  workspace popup dropped during integration. Pairing binds the optional-scope predicate as a
+  SQLite integer because the incoming boolean parameter prevented fresh browser pairing. The
+  incoming usage price-race test now awaits cache persistence before removing its fixture directory.
 - Verification: Frozen dependency installation, scoped server, web, desktop, mobile, contracts,
   shared, and client-runtime typechecks, source bundle builds, and targeted lint passed. Focused
-  fork, provider, orchestration, permission, usage, panel, shortcut, and packaging checks passed
-  except one incoming Git diff statistics test, which also fails in an untouched nightly checkout.
-  Three symlink-watcher tests failed inside the sandbox and passed outside it. No browser,
-  native-client, live-provider, or installed-app verification was performed.
+  checks across every retained fork feature passed: 1,624 tests in 59 suites. One incoming Git diff
+  statistics test still fails identically in an untouched nightly checkout. Three symlink-watcher
+  tests failed inside the sandbox and passed outside it.
+- Browser verification used a disposable home, stopped-thread snapshot, and two temporary Git
+  projects. It covered side-chat creation, focus, owning-thread context, transient native-history
+  cleanup, persistent close/reopen and sidebar roles; selected-text citation, new-thread, reuse and
+  replacement cancellation; `%` and `%%` references; project filters and scoped new threads;
+  rename, postpone and restoration; workspace rename and dirty-removal cancellation; custom
+  shortcuts, repeated prompt navigation, and hover reveal in current, legacy and Settings sidebars.
+  Account exclusion persisted and changed Cost and Tokens while another included instance retained
+  shared history. Upstream inline HTML rendered alongside fork visualization links and wrapped
+  tables. A low-effort Codex Terra command remained active after its reply, then Stop terminated
+  its recorded PID. Synthetic Codex and OpenCode native-history deletion tests also passed.
+  Packaged desktop, native mobile, remote/tunnel connections, and live Claude turns were not run;
+  their relevant shared logic, contracts, typechecks and packaging checks were covered.
 
 ## 2026-10-07 - Release worktrees after subagents finish
 

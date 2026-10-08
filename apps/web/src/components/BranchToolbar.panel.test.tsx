@@ -12,7 +12,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("../localApi", () => ({
-  readLocalApi: () => ({ contextMenu: { show: state.showContextMenu } }),
+  readLocalApi: () => ({ contextMenu: { show: state.showContextMenu }, shell: {} }),
 }));
 vi.mock("../hooks/useCopyToClipboard", () => ({
   writeTextToClipboard: state.writeTextToClipboard,
