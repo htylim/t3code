@@ -367,6 +367,42 @@ describe("resolveEnvironmentIdentificationMode", () => {
       }),
     ).toBe("artwork");
   });
+
+  it("keeps theme-independent artwork enabled with a custom palette", () => {
+    expect(
+      resolveEnvironmentIdentificationMode({
+        mode: "artwork",
+        settingsHydrated: true,
+        paletteThemeActive: true,
+        paletteThemeAllowsArtwork: false,
+        artworkSupportsCustomThemes: true,
+      }),
+    ).toBe("artwork");
+  });
+
+  it.each(["pill", "none"] as const)(
+    "preserves the saved %s choice for theme-independent artwork",
+    (mode) => {
+      expect(
+        resolveEnvironmentIdentificationMode({
+          mode,
+          settingsHydrated: true,
+          paletteThemeActive: true,
+          artworkSupportsCustomThemes: true,
+        }),
+      ).toBe(mode);
+    },
+  );
+
+  it("waits for saved settings before showing theme-independent artwork", () => {
+    expect(
+      resolveEnvironmentIdentificationMode({
+        mode: "artwork",
+        settingsHydrated: false,
+        artworkSupportsCustomThemes: true,
+      }),
+    ).toBe("none");
+  });
 });
 
 describe("mergeEnvironmentSettings", () => {

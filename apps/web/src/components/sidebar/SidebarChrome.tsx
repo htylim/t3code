@@ -26,6 +26,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPreferences";
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
+import { ForkHeaderArtwork } from "./ForkHeaderArtwork";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
@@ -36,13 +37,17 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron: boolean;
 }) {
   const stageLabel = useEnvironmentStageLabel();
-  const environmentIdentificationMode = useEnvironmentIdentificationMode();
+  const isForkHeader = stageLabel === "Fork";
+  const environmentIdentificationMode = useEnvironmentIdentificationMode({
+    artworkSupportsCustomThemes: isForkHeader,
+  });
+  const showForkArtwork = isForkHeader && environmentIdentificationMode === "artwork";
   const backdropVariant = resolveSidebarStageBackdropVariant(
     stageLabel,
     environmentIdentificationMode === "artwork",
   );
   const pillLabel =
-    environmentIdentificationMode === "pill"
+    environmentIdentificationMode === "pill" || showForkArtwork
       ? resolveEnvironmentIdentificationPillLabel(stageLabel)
       : null;
 
@@ -55,6 +60,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       )}
     >
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
+      {showForkArtwork ? <ForkHeaderArtwork /> : null}
       <SidebarTrigger
         // Over the stage artwork: the media viewer's control-on-imagery treatment.
         variant={backdropVariant ? "media-navigation" : "ghost"}

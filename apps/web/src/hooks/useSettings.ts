@@ -338,14 +338,18 @@ export function useClientSettings<T = ClientSettings>(
   return useMemo(() => (selector ? selector(settings) : (settings as T)), [selector, settings]);
 }
 
+/** Resolve the saved identification choice without flashing artwork before hydration. */
 export function resolveEnvironmentIdentificationMode(input: {
   mode: EnvironmentIdentificationMode;
   settingsHydrated: boolean;
   paletteThemeActive?: boolean;
   paletteThemeAllowsArtwork?: boolean;
+  artworkSupportsCustomThemes?: boolean;
 }): EnvironmentIdentificationMode {
   // Avoid briefly rendering the default artwork before a persisted pill/none choice loads.
   if (!input.settingsHydrated) return "none";
+  // The neutral Forge overlay has light and dark assets and keeps normal theme text colors.
+  if (input.artworkSupportsCustomThemes) return input.mode;
   // Artwork palettes are maintained for built-ins only. Keep an explicit
   // "none", but use the theme-aware pill for user-controlled palettes.
   return input.paletteThemeActive && !input.paletteThemeAllowsArtwork && input.mode === "artwork"
@@ -353,7 +357,12 @@ export function resolveEnvironmentIdentificationMode(input: {
     : input.mode;
 }
 
-export function useEnvironmentIdentificationMode(): EnvironmentIdentificationMode {
+/** Read identification settings, allowing theme-independent overlays to keep the artwork choice. */
+export function useEnvironmentIdentificationMode({
+  artworkSupportsCustomThemes = false,
+}: {
+  artworkSupportsCustomThemes?: boolean;
+} = {}): EnvironmentIdentificationMode {
   const settingsHydrated = useClientSettingsHydrated();
   const mode = useClientSettingsValue().environmentIdentificationMode;
   const { resolvedTheme, theme, themeHalves } = useTheme();
@@ -369,6 +378,7 @@ export function useEnvironmentIdentificationMode(): EnvironmentIdentificationMod
     settingsHydrated,
     paletteThemeActive: previewSidebarArtwork !== null || activeThemeDefinition !== null,
     paletteThemeAllowsArtwork: previewSidebarArtwork ?? themeAllowsSidebarArtwork(activeTheme),
+    artworkSupportsCustomThemes,
   });
 }
 

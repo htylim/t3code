@@ -20,6 +20,24 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-08 - Add Forge artwork to the Fork header
+
+- Upstream baseline: `5e2225671f`.
+- Change: The shared web and desktop sidebar header displays the selected Forge artwork in
+  light and dark themes. It retains normal theme colors for the wordmark, controls, and Fork
+  pill. Artwork, Pill, and None remain the existing visibility choices. The neutral overlay
+  also works with custom palettes, which otherwise fall back to the pill.
+- Reason: Give the fork the chosen visual identity without replacing upstream stage artwork
+  or adding another customization setting.
+- Scope: A fork-owned header component and artwork assets, a narrow sidebar header integration,
+  and the identification settings hook. Both current and legacy sidebars share the header.
+  Native mobile, providers, server contracts, authentication artwork, and update tracks are unchanged.
+- Verification: All 31 focused settings, stage-artwork, and composer tests, web typecheck,
+  targeted lint, formatting, and diff checks passed. A disposable production web build bundled
+  both artwork files. Lossless WebP encoding preserves visible pixels and transparency while
+  reducing asset size. Browser verification was not performed. The installed app and live data
+  were unchanged.
+
 ## 2026-10-08 - Fit wrapped Markdown tables to the chat width
 
 - Upstream baseline: `5e2225671f`.
