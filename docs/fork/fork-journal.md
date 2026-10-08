@@ -20,6 +20,23 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-08 - Fit wrapped Markdown tables to the chat width
+
+- Upstream baseline: `5e2225671f`.
+- Change: Wrapped tables allow headers and cells to shrink to the available chat width.
+  Enabling wrapping no longer preserves the unwrapped column widths. The existing word-wrap
+  preference and per-table toggle still control wrapping, and unwrapped tables retain scrolling.
+- Reason: Ordinary two-column tables required horizontal scrolling even with wrapping enabled.
+- Scope: Shared web and desktop Markdown renderer and table CSS. Native mobile uses a separate
+  renderer. No provider, server, connection, or wire-contract changes.
+- Verification: All 74 focused Markdown tests, web typecheck, formatting, and diff checks passed.
+  Targeted lint passed with existing warnings in unrelated code. Browser verification against
+  isolated dev state passed for the reported table, long headers, identifiers, URLs, and the wrap
+  toggle. Wrapped two-column tables fit 728, 600, 320, and 160 pixel containers; twelve-column
+  tables retained scrolling when narrower than their minimum content width. The viewport resize
+  tool timed out, so narrow-width checks temporarily resized the Markdown container instead.
+  Recheck wrapping after upstream changes to the table CSS or toggle.
+
 ## 2026-10-08 - Integrate the October 8 nightly
 
 - Upstream baseline: `5e2225671f`, release `v0.0.46-nightly.20261008.2819`.
