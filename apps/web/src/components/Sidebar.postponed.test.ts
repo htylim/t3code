@@ -32,27 +32,50 @@ describe("Postponed sidebar behavior", () => {
     expect(withPostponedThreadMenu(threadMenu, { activeCount: 0, postponedCount: 0 })).toEqual(
       threadMenu,
     );
+    expect(menu.find((entry) => entry.id === "postpone")?.label).toBe("Postpone");
   });
 
-  it("offers Move to active for postponed work and prevents competing parking actions", () => {
+  it("offers Un-postpone alongside the normal thread actions", () => {
     const menu = withPostponedThreadMenu(threadMenu, { activeCount: 0, postponedCount: 1 });
     expect(menu.map((entry) => entry.id)).toEqual([
+      "pin",
       "move-to-active",
+      "settle",
+      "snooze",
       "rename",
       "mark-unread",
       "delete",
     ]);
-    expect(menu[0]?.label).toBe("Move to active");
+    expect(menu.find((entry) => entry.id === "move-to-active")?.label).toBe("Un-postpone");
+  });
+
+  it.each([
+    ["settle", "Settle thread", "Postpone thread", "Un-postpone thread"],
+    ["unsettle", "Un-settle thread", "Postpone thread", "Un-postpone thread"],
+    ["unsettle", "Un-Settle Thread", "Postpone Thread", "Un-Postpone Thread"],
+    ["unsettle", "Un-Settle", "Postpone", "Un-Postpone"],
+  ])("matches the wording of %s labeled %s", (id, label, postponeLabel, unpostponeLabel) => {
+    const menu = withPostponedThreadMenu([{ id, label }], {
+      activeCount: 1,
+      postponedCount: 1,
+    });
+    expect(menu.find((entry) => entry.id === "postpone")?.label).toBe(postponeLabel);
+    expect(menu.find((entry) => entry.id === "move-to-active")?.label).toBe(unpostponeLabel);
   });
 
   it("counts each actionable subset in a mixed bulk selection", () => {
-    const menu = withPostponedThreadMenu(threadMenu, {
+    const bulkMenu = threadMenu.map((entry) =>
+      entry.id === "settle" ? { ...entry, label: "Settle (5)" } : entry,
+    );
+    const menu = withPostponedThreadMenu(bulkMenu, {
       activeCount: 2,
       postponedCount: 3,
       bulk: true,
     });
     expect(menu.find((entry) => entry.id === "postpone")?.label).toBe("Postpone (2)");
-    expect(menu.find((entry) => entry.id === "move-to-active")?.label).toBe("Move to active (3)");
+    expect(menu.find((entry) => entry.id === "move-to-active")?.label).toBe("Un-postpone (3)");
+    expect(menu.map((entry) => entry.id)).toContain("settle");
+    expect(menu.map((entry) => entry.id)).toContain("snooze");
     expect(threadMenu.map((entry) => entry.id)).toContain("snooze");
   });
 

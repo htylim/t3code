@@ -1,4 +1,5 @@
 import { usePostponedThreadBanner } from "./chat/usePostponedThreadBanner";
+import { isThreadSettledForActions, usePostponedThreadStore } from "../postponedThreadStore";
 import { ChatCanvas } from "./chat/ChatCanvas";
 import { usageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
 import {
@@ -7205,8 +7206,12 @@ export default function ChatView(props: ChatViewProps) {
     activeThreadShell,
     activeThreadWokeAt,
   ]);
+  const activeThreadPostponed = usePostponedThreadStore(
+    (state) => activeThreadKey !== null && state.byThreadKey[activeThreadKey] !== undefined,
+  );
   const activeThreadSettled =
-    supportsSettlement && activeThreadShell?.settledOverride === "settled";
+    supportsSettlement &&
+    isThreadSettledForActions(activeThreadShell?.settledOverride, activeThreadPostponed);
   const unsettleThreadMutation = useOrchestrationCommand(threadEnvironment.unsettle, {
     reportFailure: false,
   });

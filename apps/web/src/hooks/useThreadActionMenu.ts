@@ -21,7 +21,7 @@ import {
   threadActionRequiresOperate,
 } from "../components/threadActionMenu.logic";
 import { withPostponedThreadMenu } from "../components/Sidebar.postponed";
-import { usePostponedThreadStore } from "../postponedThreadStore";
+import { isThreadSettledForActions, usePostponedThreadStore } from "../postponedThreadStore";
 import { useMovePostponedThreadToActive } from "./useMovePostponedThreadToActive";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { threadEnvironment } from "../state/threads";
@@ -150,23 +150,25 @@ export function useThreadActionMenu(input: {
           titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
         };
         const isRegeneratingTitle = thread.titleRegeneration != null;
+        const threadKey = scopedThreadKey(threadRef);
+        const isPostponed = usePostponedThreadStore.getState().byThreadKey[threadKey] !== undefined;
         const snoozePresets = resolveSnoozePresets(now, timestampFormat);
         const items = buildThreadActionMenuItems({
           canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
           branch: thread.branch ?? null,
           projectFilter: null,
           isPinned: thread.pinnedAt != null,
-          isSettled: supports.settlement && thread.settledOverride === "settled",
+          isSettled:
+            supports.settlement && isThreadSettledForActions(thread.settledOverride, isPostponed),
           autoSettleEnabled: thread.autoSettleDisabledAt == null,
-          isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
+          isSnoozed:
+            !isPostponed && supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
           canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
           isRegeneratingTitle,
           isRunning: !threadRuntimeCanArchive(thread.runtime),
           supports,
           snoozePresets,
         });
-        const threadKey = scopedThreadKey(threadRef);
-        const isPostponed = usePostponedThreadStore.getState().byThreadKey[threadKey] !== undefined;
         const menuItems = withPostponedThreadMenu(items, {
           postponedCount: isPostponed ? 1 : 0,
           activeCount:

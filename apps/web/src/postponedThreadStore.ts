@@ -19,6 +19,8 @@ interface PostponedThreadState {
   shelfExpanded: boolean;
   postpone: (threads: readonly EnvironmentThreadShell[]) => void;
   restore: (threadKeys: readonly string[]) => void;
+  /** Put back an Undo snapshot without replacing a newer postponement. */
+  reinstate: (threadKey: string, record: PostponedThreadRecord) => void;
   toggleShelf: () => void;
 }
 
@@ -53,7 +55,7 @@ export function readPersistedPostponedThreads(persistedState: unknown) {
 export function createPostponedThreadStore(storage: StateStorage) {
   return create<PostponedThreadState>()(
     persist(
-      (set) => ({
+      (set, get) => ({
         byThreadKey: {},
         shelfExpanded: false,
         postpone: (threads) =>
@@ -65,12 +67,21 @@ export function createPostponedThreadStore(storage: StateStorage) {
             }
             return { byThreadKey };
           }),
-        restore: (threadKeys) =>
-          set((state) => {
-            const byThreadKey = { ...state.byThreadKey };
-            for (const threadKey of threadKeys) delete byThreadKey[threadKey];
-            return { byThreadKey };
-          }),
+        restore: (threadKeys) => {
+          const state = get();
+          // Shared actions also run on ordinary threads. Avoid writing their unchanged preference.
+          if (threadKeys.every((threadKey) => state.byThreadKey[threadKey] === undefined)) return;
+          const byThreadKey = { ...state.byThreadKey };
+          for (const threadKey of threadKeys) delete byThreadKey[threadKey];
+          set({ byThreadKey });
+        },
+        reinstate: (threadKey, record) =>
+          set((state) => ({
+            byThreadKey: {
+              ...state.byThreadKey,
+              [threadKey]: state.byThreadKey[threadKey] ?? record,
+            },
+          })),
         toggleShelf: () => set((state) => ({ shelfExpanded: !state.shelfExpanded })),
       }),
       {
@@ -92,6 +103,14 @@ export function createPostponedThreadStore(storage: StateStorage) {
 export const usePostponedThreadStore = createPostponedThreadStore(
   resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
 );
+
+/** Postponed cards still offer Settle even after automatic settlement on the server. */
+export function isThreadSettledForActions(
+  settledOverride: EnvironmentThreadShell["settledOverride"] | undefined,
+  isPostponed: boolean,
+): boolean {
+  return settledOverride === "settled" && !isPostponed;
+}
 
 /** Select only new user sends. Completions, failures and attention requests never restore work. */
 export function resumedPostponedThreadKeys(

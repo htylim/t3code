@@ -165,7 +165,14 @@ Upstream's new panel-menu command remains configurable; the fork's side-chat sho
 
 - Upstream baseline: `efecd3cf8b`.
 - The current web and desktop sidebar has a Postponed section with normal thread cards,
-  single and bulk Postpone and Move to active actions, and a remembered collapse state.
+  single and bulk Postpone thread and Un-postpone thread actions, and a remembered collapse state.
+  Parking menu labels follow the sibling Settle/Un-settle wording, with separate bulk action counts.
+  Postponed cards retain Settle and Snooze actions. Active cards have a Pause action to postpone,
+  between Snooze and Settle. Postponed cards have a rightmost return-arrow action to un-postpone,
+  using the same icon as Un-settle.
+  Successful lifecycle actions clear postponement through the shared thread-action hook, including
+  Cmd+W and header menus. Settle remains available after automatic server settlement, and Undo
+  restores the original postponement snapshot after Settle, Snooze, or Unpin.
   Opening a thread shows a composer notice. A new user message restores it automatically,
   including sends from side chats. Completion, failure, and attention requests leave it postponed.
 - A separate client preference stores environment-scoped thread keys and the last user-message
@@ -176,10 +183,14 @@ Upstream's new panel-menu command remains configurable; the fork's side-chat sho
   navigation and drag boundaries; the shared header menu; and narrow composer and layout hooks.
   The web context-menu fallback includes pause and play icons for the parking actions.
   Storage, restoration, menu additions, and the composer notice live in separate fork modules.
-- Verification: 239 focused storage, restoration, menu, snooze, sidebar and drag tests passed.
-  Web typecheck passed. Targeted lint has no errors; existing large UI files report warnings.
-  Dev state uses a pruned read-only snapshot of stopped threads in a temporary home.
-  Browser and native-client verification were not performed.
+- Verification: 419 focused storage, restoration, action, permission, menu, sidebar and keybinding
+  tests passed. Web typecheck, formatting and diff checks passed. Targeted lint has no errors;
+  existing large UI files report warnings.
+  An isolated dev-server Browser panel pass confirmed the menu labels, hover actions, direct
+  postpone/un-postpone round trip, matching overlay positions, and Cmd+W moving the thread to Settled and
+  opening a draft. The Browser host disconnected before hover-settle, Snooze, and Undo could be
+  confirmed. Native-client
+  verification was not performed.
 
 ## 2026-10-05 - Exclude individual Claude and Codex accounts from usage
 

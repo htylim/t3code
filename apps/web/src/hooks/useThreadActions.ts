@@ -25,6 +25,7 @@ import { useCallback, useMemo, useRef } from "react";
 
 import { getFallbackThreadIdAfterDelete, pinOrderKeyBetween } from "../components/Sidebar.logic";
 import { useComposerDraftStore } from "../composerDraftStore";
+import { usePostponedThreadStore } from "../postponedThreadStore";
 import { environmentSession, readEnvironmentScope } from "../state/session";
 import { terminalEnvironment } from "../state/terminal";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -667,10 +668,14 @@ export function useThreadActions() {
       ThreadUndo.invalidate("settle", scopedThreadKey(target));
       // reason "user" pins the thread active: auto-settle (PR merged /
       // inactivity) stays suppressed until real activity clears the pin.
-      return unsettleThreadMutation({
+      const result = await unsettleThreadMutation({
         environmentId: target.environmentId,
         input: { threadId: target.threadId, reason: "user" },
       });
+      if (result._tag === "Success") {
+        usePostponedThreadStore.getState().restore([scopedThreadKey(target)]);
+      }
+      return result;
     },
     [unsettleThreadMutation],
   );
@@ -719,13 +724,17 @@ export function useThreadActions() {
         ? (opts.orderKey ?? topOfPinnedRunOrderKey())
         : undefined;
       ThreadUndo.invalidate("pin", scopedThreadKey(target));
-      return pinThreadMutation({
+      const result = await pinThreadMutation({
         environmentId: target.environmentId,
         input: {
           threadId: target.threadId,
           ...(orderKey !== undefined ? { orderKey } : {}),
         },
       });
+      if (result._tag === "Success") {
+        usePostponedThreadStore.getState().restore([scopedThreadKey(target)]);
+      }
+      return result;
     },
     [pinThreadMutation],
   );
@@ -744,16 +753,27 @@ export function useThreadActions() {
       }
       const thread = readThreadShell(target);
       const orderKey = thread?.pinOrderKey ?? undefined;
+      const threadKey = scopedThreadKey(target);
+      const postponedRecord = usePostponedThreadStore.getState().byThreadKey[threadKey];
       const action = ThreadUndo.begin("pin", scopedThreadKey(target));
       const result = await unpinThreadMutation({
         environmentId: target.environmentId,
         input: { threadId: target.threadId },
       });
+      if (result._tag === "Success") {
+        usePostponedThreadStore.getState().restore([threadKey]);
+      }
       if (result._tag === "Success" && action.isCurrent()) {
         showThreadUndoNotice({
           action: "Unpinned",
           claim: action,
-          undo: () => pinThread(target, orderKey === undefined ? {} : { orderKey }),
+          undo: async () => {
+            const pinned = await pinThread(target, orderKey === undefined ? {} : { orderKey });
+            if (pinned._tag === "Success" && postponedRecord) {
+              usePostponedThreadStore.getState().reinstate(threadKey, postponedRecord);
+            }
+            return pinned;
+          },
           failureTitle: "Failed to undo unpin",
         });
       } else {
@@ -782,6 +802,8 @@ export function useThreadActions() {
       const wokeAt = resolved
         ? threadWokeAt(resolved.thread, { now: new Date().toISOString() })
         : null;
+      const threadKey = scopedThreadKey(target);
+      const postponedRecord = usePostponedThreadStore.getState().byThreadKey[threadKey];
       // Settling also drops the pin and the snooze server-side, so Undo
       // has to put those back as well.
       const pinOrderKey = resolved?.thread.pinnedAt != null ? resolved.thread.pinOrderKey : null;
@@ -803,6 +825,7 @@ export function useThreadActions() {
       if (wokeAt !== null) {
         markThreadVisited(scopedThreadKey(target), wokeAt);
       }
+      usePostponedThreadStore.getState().restore([threadKey]);
       showThreadUndoNotice({
         action: "Settled",
         claim: action,
@@ -817,10 +840,14 @@ export function useThreadActions() {
             if (pinned._tag !== "Success") return pinned;
           }
           if (snoozedUntil !== null) {
-            return snoozeThreadMutation({
+            const snoozed = await snoozeThreadMutation({
               environmentId: target.environmentId,
               input: { threadId: target.threadId, snoozedUntil },
             });
+            if (snoozed._tag !== "Success") return snoozed;
+          }
+          if (postponedRecord) {
+            usePostponedThreadStore.getState().reinstate(threadKey, postponedRecord);
           }
           return unsettled;
         },
@@ -917,10 +944,14 @@ export function useThreadActions() {
         );
       }
       ThreadUndo.invalidate("snooze", scopedThreadKey(target));
-      return unsnoozeThreadMutation({
+      const result = await unsnoozeThreadMutation({
         environmentId: target.environmentId,
         input: { threadId: target.threadId, reason: "user" },
       });
+      if (result._tag === "Success") {
+        usePostponedThreadStore.getState().restore([scopedThreadKey(target)]);
+      }
+      return result;
     },
     [unsnoozeThreadMutation],
   );
@@ -952,7 +983,9 @@ export function useThreadActions() {
           ),
         );
       }
-      const action = ThreadUndo.begin("snooze", scopedThreadKey(target));
+      const threadKey = scopedThreadKey(target);
+      const postponedRecord = usePostponedThreadStore.getState().byThreadKey[threadKey];
+      const action = ThreadUndo.begin("snooze", threadKey);
       const result = await snoozeThreadMutation({
         environmentId: target.environmentId,
         input: { threadId: target.threadId, snoozedUntil },
@@ -962,10 +995,17 @@ export function useThreadActions() {
         return result;
       }
       // Snooze hides the row, so keep its confirmation in the sidebar.
+      usePostponedThreadStore.getState().restore([threadKey]);
       showThreadUndoNotice({
         action: "Snoozed",
         claim: action,
-        undo: () => unsnoozeThread(target),
+        undo: async () => {
+          const unsnoozed = await unsnoozeThread(target);
+          if (unsnoozed._tag === "Success" && postponedRecord) {
+            usePostponedThreadStore.getState().reinstate(threadKey, postponedRecord);
+          }
+          return unsnoozed;
+        },
         failureTitle: "Failed to wake thread",
       });
       return result;

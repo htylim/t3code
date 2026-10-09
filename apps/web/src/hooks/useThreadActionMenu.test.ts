@@ -8,6 +8,10 @@ import { AsyncResult } from "effect/reactivity";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { ThreadActionMenuId } from "../components/threadActionMenu.logic";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { usePostponedThreadStore } from "../postponedThreadStore";
+
+type ForkThreadActionMenuId = ThreadActionMenuId | "postpone" | "move-to-active";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -20,12 +24,13 @@ function deferred<T>() {
 const state = vi.hoisted(() => ({
   granted: new Set<string>(),
   effects: [] as string[],
+  settledOverride: null as "settled" | null,
   completed: deferred<void>(),
   show: vi.fn<
     (
-      items: ReadonlyArray<ContextMenuItem<ThreadActionMenuId>>,
+      items: ReadonlyArray<ContextMenuItem<ForkThreadActionMenuId>>,
       position: { x: number; y: number },
-    ) => Promise<ThreadActionMenuId | null>
+    ) => Promise<ForkThreadActionMenuId | null>
   >(),
 }));
 
@@ -61,6 +66,7 @@ vi.mock("../state/entities", () => ({
     worktreePath: null,
     runtime: null,
     latestRun: null,
+    settledOverride: state.settledOverride,
   }),
   useProjects: () => [{ id: "project", environmentId: "secondary" }],
 }));
@@ -114,6 +120,7 @@ vi.mock("./useHandleNewThread", () => ({
   useNewThreadHandler: () => async () => recordEffect("draft"),
 }));
 vi.mock("./useSettings", () => ({
+  useLegacySidebarEnabled: () => false,
   useClientSettings: (select: (settings: unknown) => unknown) =>
     select({
       confirmThreadDelete: true,
@@ -163,6 +170,29 @@ beforeEach(() => {
   state.effects = [];
   state.completed = deferred<void>();
   state.show.mockReset().mockResolvedValue(null);
+  state.settledOverride = null;
+  usePostponedThreadStore.setState({ byThreadKey: {} });
+});
+
+describe("postponed thread menu", () => {
+  it("offers Settle and Snooze even after the server automatically settles postponed work", async () => {
+    state.granted.add("secondary");
+    state.settledOverride = "settled";
+    usePostponedThreadStore.getState().reinstate(scopedThreadKey(target), {
+      latestUserMessageAt: null,
+    });
+    state.show.mockResolvedValue("settle");
+    createMenu().openMenu(position);
+    const actions = state.show.mock.calls[0]![0];
+    expect(actions.find((action) => action.id === "move-to-active")?.label).toBe(
+      "Un-postpone thread",
+    );
+    expect(actions.find((action) => action.id === "settle")?.disabled).not.toBe(true);
+    expect(actions.find((action) => action.id === "snooze")).toBeDefined();
+    expect(actions.find((action) => action.id === "unsettle")).toBeUndefined();
+    await state.completed.promise;
+    expect(state.effects).toEqual(["settleThread"]);
+  });
 });
 
 describe("thread menu permissions", () => {

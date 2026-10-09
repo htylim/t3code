@@ -73,6 +73,7 @@ import {
   FolderIcon,
   GitBranchIcon,
   MessageCircleQuestionIcon,
+  PauseIcon,
   PinIcon,
   PinOffIcon,
   PlusIcon,
@@ -186,7 +187,7 @@ import {
   threadActionRequiresOperate,
 } from "./threadActionMenu.logic";
 import { withPostponedThreadMenu } from "./Sidebar.postponed";
-import { usePostponedThreadStore } from "../postponedThreadStore";
+import { isThreadSettledForActions, usePostponedThreadStore } from "../postponedThreadStore";
 import { useMovePostponedThreadToActive } from "../hooks/useMovePostponedThreadToActive";
 import {
   animateSidebarLayoutChanges,
@@ -1123,6 +1124,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // the descriptor is not loaded. Pinning itself lives in the context menu.
   pinningSupported: boolean;
   isPinned: boolean;
+  isPostponed: boolean;
   hasSideChat: boolean;
   isSideChat: boolean;
   // Present on rows whose server supports every drop outcome: dnd-kit
@@ -1168,6 +1170,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     event: PointerEvent,
   ) => void;
   onUnsettle: (threadRef: ScopedThreadRef) => void;
+  onPostponeThreads: (threadKeys: readonly string[]) => void;
+  onUnpostpone: (threadRef: ScopedThreadRef) => void;
   onSnooze: (threadRef: ScopedThreadRef, preset: Pick<SnoozePreset, "snoozedUntil">) => void;
   onUnsnooze: (threadRef: ScopedThreadRef) => void;
   onUnpin: (threadRef: ScopedThreadRef) => void;
@@ -1196,6 +1200,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     onThreadActivate,
     onThreadClick,
     onUnsettle,
+    onPostponeThreads,
+    onUnpostpone,
     onUnsnooze,
     onUnpin,
     openPullRequestsInRightPanel,
@@ -1538,6 +1544,23 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     },
     [onSnooze, threadRef],
   );
+  /** Toggle postponement through the same actions as the thread menu, without opening the card. */
+  const handlePostponementClick = useCallback(
+    (event: ReactMouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (props.isPostponed) {
+        onUnpostpone(threadRef);
+      } else {
+        onPostponeThreads([threadKey]);
+      }
+    },
+    [onPostponeThreads, onUnpostpone, props.isPostponed, threadKey, threadRef],
+  );
+  /** Keep postponement controls from starting a card drag or an action sweep. */
+  const handlePostponementPointerDown = useCallback((event: ReactPointerEvent) => {
+    event.stopPropagation();
+  }, []);
   // While the snooze popover is open the pointer leaves the row, which
   // would fade the hover actions out from under the open menu. Pin them and
   // suppress the row tooltip so its portal cannot overlap the popover.
@@ -1548,8 +1571,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     canOperateThread &&
     props.snoozeSupported &&
     canSnooze(thread, { now: new Date().toISOString() });
+  const canPostpone = variant === "card" && !props.isPostponed;
+  const postponementActionLabel = props.isPostponed ? "Un-postpone thread" : "Postpone thread";
   const showHoverActions =
-    (canOperateThread && props.settlementSupported) || showSnoozeButton || hasUnsentDraft;
+    (canOperateThread && props.settlementSupported) ||
+    showSnoozeButton ||
+    hasUnsentDraft ||
+    canPostpone ||
+    props.isPostponed;
   // If the thread becomes blocked while the popover is open, the button
   // unmounts without firing onOpenChange(false). Deriving the flag keeps a
   // stale true from permanently hiding the status label / pinning the
@@ -1964,6 +1993,31 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   }
 
   const diff = latestRunDiff(thread);
+  const postponementButton = (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={postponementActionLabel}
+            onClick={handlePostponementClick}
+            onPointerDown={handlePostponementPointerDown}
+            className={cn(
+              "inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground",
+              props.isPostponed && "-mr-1",
+            )}
+          />
+        }
+      >
+        {props.isPostponed ? (
+          <Undo2Icon aria-hidden className="mb-px size-3.5" />
+        ) : (
+          <PauseIcon aria-hidden className="size-3.5" />
+        )}
+      </TooltipTrigger>
+      <TooltipPopup side="top">{postponementActionLabel}</TooltipPopup>
+    </Tooltip>
+  );
 
   return (
     <li
@@ -2041,7 +2095,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     className={cn(
                       isWokeStatus ? "pointer-events-auto" : "pointer-events-none",
                       !isWokeStatus &&
-                        (props.settlementSupported || showSnoozeButton || hasUnsentDraft) &&
+                        showHoverActions &&
                         "group-has-[:focus-visible]/sidebar-status-slot:absolute group-has-[:focus-visible]/sidebar-status-slot:right-0 group-has-[:focus-visible]/sidebar-status-slot:opacity-0 group-any-hover/sidebar-row:absolute group-any-hover/sidebar-row:right-0 group-any-hover/sidebar-row:opacity-0",
                       "flex items-center self-center justify-self-end tabular-nums text-secondary-label transition-opacity",
                       snoozeMenuOpen && "pointer-events-none absolute right-0 opacity-0",
@@ -2101,7 +2155,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                       threadTimeLabel(thread)
                     )}
                   </span>
-                  {props.settlementSupported || showSnoozeButton || hasUnsentDraft ? (
+                  {showHoverActions ? (
                     <span
                       className={cn(
                         // focus-visible, not focus-within: a mouse click leaves
@@ -2138,7 +2192,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           timestampFormat={props.timestampFormat}
                         />
                       ) : null}
-                      {props.settlementSupported ? (
+                      {canPostpone ? postponementButton : null}
+                      {canOperateThread && props.settlementSupported ? (
                         <Tooltip>
                           <TooltipTrigger
                             render={
@@ -2147,7 +2202,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                                 aria-label="Settle thread"
                                 onClick={handleSettleClick}
                                 onPointerDown={handleActionPointerDown}
-                                className="-mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                className={cn(
+                                  "inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground",
+                                  !props.isPostponed && "-mr-1",
+                                )}
                               />
                             }
                           >
@@ -2157,6 +2215,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           <TooltipPopup>Settle thread</TooltipPopup>
                         </Tooltip>
                       ) : null}
+                      {props.isPostponed ? postponementButton : null}
                     </span>
                   ) : null}
                 </span>
@@ -3488,7 +3547,7 @@ export default function Sidebar() {
   );
   // Post-settle navigation must skip threads settling in this same batch —
   // they are all leaving the card block together. Rows that are already
-  // explicitly settled are skipped: nothing to do on a valid mixed selection.
+  // explicitly settled are skipped unless locally postponed work still needs to leave its shelf.
   // Pinned rows ARE included: the decider clears the pin as part of settling,
   // so they park like the rest.
   const settleThreads = useCallback(
@@ -3496,7 +3555,14 @@ export default function Sidebar() {
       const coSettlingKeys = new Set(threadKeys);
       for (const threadKey of threadKeys) {
         const thread = threadByKeyRef.current.get(threadKey);
-        if (!thread || thread.settledOverride === "settled") continue;
+        if (!thread) continue;
+        if (
+          isThreadSettledForActions(
+            thread.settledOverride,
+            usePostponedThreadStore.getState().byThreadKey[threadKey] !== undefined,
+          )
+        )
+          continue;
         attemptSettle(scopeThreadRef(thread.environmentId, thread.id), { coSettlingKeys });
       }
     },
@@ -4384,7 +4450,13 @@ export default function Sidebar() {
         return section === "active" || section === "pinned" || section === "working";
       });
       const settlingThreads = selectedThreads.filter(
-        (thread) => thread.settledOverride !== "settled",
+        (thread) =>
+          !isThreadSettledForActions(
+            thread.settledOverride,
+            usePostponedThreadStore.getState().byThreadKey[
+              scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))
+            ] !== undefined,
+          ),
       );
       const canSnoozeSelection = selectedThreads.every(
         (thread) =>
@@ -4487,7 +4559,14 @@ export default function Sidebar() {
                   const current = threadByKeyRef.current.get(
                     scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
                   );
-                  return current && current.settledOverride !== "settled" ? [current] : [];
+                  if (!current) return [];
+                  const isPostponed =
+                    usePostponedThreadStore.getState().byThreadKey[
+                      scopedThreadKey(scopeThreadRef(current.environmentId, current.id))
+                    ] !== undefined;
+                  return isThreadSettledForActions(current.settledOverride, isPostponed)
+                    ? []
+                    : [current];
                 })
               : selectedThreads;
       if (clicked.value === "settle" && actionTargets.length === 0) return;
@@ -5468,21 +5547,19 @@ export default function Sidebar() {
                                   : "settle"
                             }
                             settlementSupported={
-                              section !== "postponed" &&
                               serverConfigs.get(thread.environmentId)?.environment.capabilities
                                 .threadSettlement === true
                             }
                             snoozeSupported={
-                              section !== "postponed" &&
                               serverConfigs.get(thread.environmentId)?.environment.capabilities
                                 .threadSnooze === true
                             }
                             pinningSupported={
-                              section !== "postponed" &&
                               serverConfigs.get(thread.environmentId)?.environment.capabilities
                                 .threadPinning === true
                             }
                             isPinned={thread.pinnedAt != null}
+                            isPostponed={section === "postponed"}
                             hasSideChat={sideChatThreadStates.get(threadKey)?.hasSideChat ?? false}
                             isSideChat={sideChatThreadStates.get(threadKey)?.isSideChat ?? false}
                             sortable={sortable}
@@ -5548,6 +5625,8 @@ export default function Sidebar() {
                             onSettle={attemptSettle}
                             onActionSweepStart={startActionSweep}
                             onUnsettle={attemptUnsettle}
+                            onPostponeThreads={postponeThreads}
+                            onUnpostpone={movePostponedToActive}
                             onSnooze={attemptSnooze}
                             onUnsnooze={attemptUnsnooze}
                             onUnpin={attemptUnpin}

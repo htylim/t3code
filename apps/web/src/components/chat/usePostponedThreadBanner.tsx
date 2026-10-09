@@ -26,7 +26,7 @@ export function usePostponedThreadBanner(
       description: "Send a message to move it to active",
       actions: (
         <Button size="xs" variant="ghost" onClick={() => void moveToActive(threadRef)}>
-          Move to active
+          Un-postpone thread
         </Button>
       ),
     };

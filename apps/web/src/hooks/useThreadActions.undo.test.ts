@@ -1,10 +1,15 @@
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { AsyncResult } from "effect/reactivity";
+import * as Cause from "effect/Cause";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useThreadActions } from "./useThreadActions";
 import { threadEnvironment } from "../state/threads";
 import { toastManager } from "../components/ui/toast";
 import { useThreadUndoNotice } from "./showThreadUndoNotice";
+import { usePostponedThreadStore } from "../postponedThreadStore";
+import { makeThreadFixture } from "../test-fixtures";
 
 const commands = vi.hoisted(() => ({
   pin: vi.fn(),
@@ -99,11 +104,106 @@ beforeEach(() => {
   router.state.matches[0]!.params = {};
   threadShell.pinnedAt = null;
   threadShell.snoozedUntil = null;
+  usePostponedThreadStore.setState({ byThreadKey: {} });
 });
 afterEach(() => {
   vi.runAllTimers();
   vi.useRealTimers();
   vi.restoreAllMocks();
+});
+
+const postponedTargetKey = scopedThreadKey(target);
+const postponedActions = [
+  {
+    command: "settle",
+    run: (actions: ReturnType<typeof useThreadActions>) => actions.settleThread(target),
+  },
+  {
+    command: "snooze",
+    run: (actions: ReturnType<typeof useThreadActions>) =>
+      actions.snoozeThread(target, "2099-01-01T00:00:00Z"),
+  },
+  {
+    command: "pin",
+    run: (actions: ReturnType<typeof useThreadActions>) => actions.pinThread(target),
+  },
+  {
+    command: "unpin",
+    run: (actions: ReturnType<typeof useThreadActions>) => actions.unpinThread(target),
+  },
+  {
+    command: "unsettle",
+    run: (actions: ReturnType<typeof useThreadActions>) => actions.unsettleThread(target),
+  },
+  {
+    command: "unsnooze",
+    run: (actions: ReturnType<typeof useThreadActions>) => actions.unsnoozeThread(target),
+  },
+] as const;
+
+/** Seed parking state for actions shared by cards, menus and shortcuts. */
+function postponeTarget() {
+  usePostponedThreadStore.getState().postpone([
+    makeThreadFixture({
+      environmentId: target.environmentId,
+      id: target.threadId,
+      latestUserMessageAt: "2026-10-01T10:00:00Z",
+    }),
+  ]);
+  return usePostponedThreadStore.getState().byThreadKey[postponedTargetKey];
+}
+
+describe("actions on postponed threads", () => {
+  it.each(postponedActions)(
+    "$command leaves Postponed only after the command succeeds",
+    async ({ command, run }) => {
+      const originalRecord = postponeTarget();
+      let completeCommand!: (outcome: ReturnType<typeof AsyncResult.success<void>>) => void;
+      commands[command].mockReturnValue(
+        new Promise((resolve) => {
+          completeCommand = resolve;
+        }),
+      );
+      const pendingAction = run(useThreadActions());
+      expect(usePostponedThreadStore.getState().byThreadKey[postponedTargetKey]).toEqual(
+        originalRecord,
+      );
+      completeCommand(AsyncResult.success(undefined));
+      expect((await pendingAction)._tag).toBe("Success");
+      expect(usePostponedThreadStore.getState().byThreadKey[postponedTargetKey]).toBeUndefined();
+    },
+  );
+
+  it.each(postponedActions)(
+    "$command keeps the postponement if the command fails",
+    async ({ command, run }) => {
+      const originalRecord = postponeTarget();
+      commands[command].mockResolvedValue(AsyncResult.failure(Cause.fail(new Error("offline"))));
+      expect((await run(useThreadActions()))._tag).toBe("Failure");
+      expect(usePostponedThreadStore.getState().byThreadKey[postponedTargetKey]).toEqual(
+        originalRecord,
+      );
+    },
+  );
+
+  it.each(
+    postponedActions.filter((action) => ["settle", "snooze", "unpin"].includes(action.command)),
+  )("Undo restores the original postponement after $command", async ({ run }) => {
+    const originalRecord = postponeTarget();
+    await run(useThreadActions());
+    await currentUndo()();
+    expect(usePostponedThreadStore.getState().byThreadKey[postponedTargetKey]).toEqual(
+      originalRecord,
+    );
+  });
+
+  it("keeps the thread out of Postponed when undoing settlement fails", async () => {
+    postponeTarget();
+    await useThreadActions().settleThread(target);
+    commands.unsettle.mockResolvedValue(AsyncResult.failure(Cause.fail(new Error("offline"))));
+    await currentUndo()();
+    expect(usePostponedThreadStore.getState().byThreadKey[postponedTargetKey]).toBeUndefined();
+  });
 });
 
 describe("unpin Undo", () => {

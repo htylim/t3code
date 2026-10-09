@@ -5,6 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { createMemoryStorage } from "./lib/storage";
 import {
   createPostponedThreadStore,
+  isThreadSettledForActions,
   readPersistedPostponedThreads,
   resumedPostponedThreadKeys,
 } from "./postponedThreadStore";
@@ -21,6 +22,28 @@ const secondThreadKey = scopedThreadKey(
 );
 
 describe("fork postponed thread preferences", () => {
+  it("keeps Settle available on postponed work that automatically settled", () => {
+    expect(isThreadSettledForActions("settled", true)).toBe(false);
+    expect(isThreadSettledForActions("settled", false)).toBe(true);
+    expect(isThreadSettledForActions(null, true)).toBe(false);
+    expect(isThreadSettledForActions(null, false)).toBe(false);
+  });
+
+  it("persists an Undo snapshot without overwriting a newer postponement", () => {
+    const storage = createMemoryStorage();
+    const store = createPostponedThreadStore(storage);
+    const originalRecord = { latestUserMessageAt: "2026-10-01T10:00:00Z" };
+    store.getState().reinstate(firstThreadKey, originalRecord);
+    expect(createPostponedThreadStore(storage).getState().byThreadKey[firstThreadKey]).toEqual(
+      originalRecord,
+    );
+    const newerRecord = { latestUserMessageAt: "2026-10-02T10:00:00Z" };
+    store.getState().restore([firstThreadKey]);
+    store.getState().reinstate(firstThreadKey, newerRecord);
+    store.getState().reinstate(firstThreadKey, originalRecord);
+    expect(store.getState().byThreadKey[firstThreadKey]).toEqual(newerRecord);
+  });
+
   it("keeps a bulk postponement and the collapsed section after a restart", () => {
     const storage = createMemoryStorage();
     const firstSession = createPostponedThreadStore(storage);
