@@ -248,7 +248,7 @@ several selected threads together. Choose **Wake thread** to bring a thread back
 In the fork's web and desktop sidebar, right-click an active thread and choose **Postpone thread**.
 You can postpone several selected threads together. Postponed threads keep their normal cards
 and stay in their own section until you choose **Un-postpone thread** or send a new message.
-Use Pause on an active card to postpone it and the return arrow on a postponed card to restore it.
+Use the return arrow on a postponed card to restore it.
 Settle, Snooze, and Pin remain available and move the thread out of Postponed. Cmd/Ctrl+W settles it and opens
 a new thread when the terminal and right panel are closed. Undo after Settle or Snooze returns
 it to Postponed.

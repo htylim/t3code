@@ -73,7 +73,6 @@ import {
   FolderIcon,
   GitBranchIcon,
   MessageCircleQuestionIcon,
-  PauseIcon,
   PinIcon,
   PinOffIcon,
   PlusIcon,
@@ -1170,7 +1169,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     event: PointerEvent,
   ) => void;
   onUnsettle: (threadRef: ScopedThreadRef) => void;
-  onPostponeThreads: (threadKeys: readonly string[]) => void;
   onUnpostpone: (threadRef: ScopedThreadRef) => void;
   onSnooze: (threadRef: ScopedThreadRef, preset: Pick<SnoozePreset, "snoozedUntil">) => void;
   onUnsnooze: (threadRef: ScopedThreadRef) => void;
@@ -1200,7 +1198,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     onThreadActivate,
     onThreadClick,
     onUnsettle,
-    onPostponeThreads,
     onUnpostpone,
     onUnsnooze,
     onUnpin,
@@ -1544,21 +1541,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     },
     [onSnooze, threadRef],
   );
-  /** Toggle postponement through the same actions as the thread menu, without opening the card. */
-  const handlePostponementClick = useCallback(
+  /** Un-postpone through the same action as the thread menu, without opening the card. */
+  const handleUnpostponeClick = useCallback(
     (event: ReactMouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      if (props.isPostponed) {
-        onUnpostpone(threadRef);
-      } else {
-        onPostponeThreads([threadKey]);
-      }
+      onUnpostpone(threadRef);
     },
-    [onPostponeThreads, onUnpostpone, props.isPostponed, threadKey, threadRef],
+    [onUnpostpone, threadRef],
   );
-  /** Keep postponement controls from starting a card drag or an action sweep. */
-  const handlePostponementPointerDown = useCallback((event: ReactPointerEvent) => {
+  /** Keep Un-postpone from starting a card drag or an action sweep. */
+  const handleUnpostponePointerDown = useCallback((event: ReactPointerEvent) => {
     event.stopPropagation();
   }, []);
   // While the snooze popover is open the pointer leaves the row, which
@@ -1571,13 +1564,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     canOperateThread &&
     props.snoozeSupported &&
     canSnooze(thread, { now: new Date().toISOString() });
-  const canPostpone = variant === "card" && !props.isPostponed;
-  const postponementActionLabel = props.isPostponed ? "Un-postpone thread" : "Postpone thread";
   const showHoverActions =
     (canOperateThread && props.settlementSupported) ||
     showSnoozeButton ||
     hasUnsentDraft ||
-    canPostpone ||
     props.isPostponed;
   // If the thread becomes blocked while the popover is open, the button
   // unmounts without firing onOpenChange(false). Deriving the flag keeps a
@@ -1993,31 +1983,24 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   }
 
   const diff = latestRunDiff(thread);
-  const postponementButton = (
+  const unpostponeButton = props.isPostponed ? (
     <Tooltip>
       <TooltipTrigger
         render={
           <button
             type="button"
-            aria-label={postponementActionLabel}
-            onClick={handlePostponementClick}
-            onPointerDown={handlePostponementPointerDown}
-            className={cn(
-              "inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground",
-              props.isPostponed && "-mr-1",
-            )}
+            aria-label="Un-postpone thread"
+            onClick={handleUnpostponeClick}
+            onPointerDown={handleUnpostponePointerDown}
+            className="-mr-1 inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
           />
         }
       >
-        {props.isPostponed ? (
-          <Undo2Icon aria-hidden className="mb-px size-3.5" />
-        ) : (
-          <PauseIcon aria-hidden className="size-3.5" />
-        )}
+        <Undo2Icon aria-hidden className="mb-px size-3.5" />
       </TooltipTrigger>
-      <TooltipPopup side="top">{postponementActionLabel}</TooltipPopup>
+      <TooltipPopup side="top">Un-postpone thread</TooltipPopup>
     </Tooltip>
-  );
+  ) : null;
 
   return (
     <li
@@ -2192,7 +2175,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           timestampFormat={props.timestampFormat}
                         />
                       ) : null}
-                      {canPostpone ? postponementButton : null}
                       {canOperateThread && props.settlementSupported ? (
                         <Tooltip>
                           <TooltipTrigger
@@ -2215,7 +2197,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           <TooltipPopup>Settle thread</TooltipPopup>
                         </Tooltip>
                       ) : null}
-                      {props.isPostponed ? postponementButton : null}
+                      {unpostponeButton}
                     </span>
                   ) : null}
                 </span>
@@ -5625,7 +5607,6 @@ export default function Sidebar() {
                             onSettle={attemptSettle}
                             onActionSweepStart={startActionSweep}
                             onUnsettle={attemptUnsettle}
-                            onPostponeThreads={postponeThreads}
                             onUnpostpone={movePostponedToActive}
                             onSnooze={attemptSnooze}
                             onUnsnooze={attemptUnsnooze}

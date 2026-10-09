@@ -167,8 +167,8 @@ Upstream's new panel-menu command remains configurable; the fork's side-chat sho
 - The current web and desktop sidebar has a Postponed section with normal thread cards,
   single and bulk Postpone thread and Un-postpone thread actions, and a remembered collapse state.
   Parking menu labels follow the sibling Settle/Un-settle wording, with separate bulk action counts.
-  Postponed cards retain Settle and Snooze actions. Active cards have a Pause action to postpone,
-  between Snooze and Settle. Postponed cards have a rightmost return-arrow action to un-postpone,
+  Postponing active cards is available through their menus. Postponed cards retain Settle and Snooze
+  actions and have a rightmost return-arrow action to un-postpone,
   using the same icon as Un-settle.
   Successful lifecycle actions clear postponement through the shared thread-action hook, including
   Cmd+W and header menus. Settle remains available after automatic server settlement, and Undo
