@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import type { RuntimeMode } from "@t3tools/contracts";
+import type { RuntimeMode, ScopedThreadRef } from "@t3tools/contracts";
+import type { ThreadRouteTarget } from "../threadRoutes";
 
 const testState = vi.hoisted(() => {
   let completeProjectFileRead: (value: null) => void = () => undefined;
   let projectFileRead = Promise.resolve<null>(null);
+  let routeTarget: ThreadRouteTarget | null = null;
   let targetSettings = {
     defaultThreadEnvMode: "local" as "local" | "worktree",
     newWorktreesStartFromOrigin: false,
@@ -15,6 +17,7 @@ const testState = vi.hoisted(() => {
     readonly environmentId: string;
     readonly promotedTo: null;
     readonly threadId: string;
+    readonly sourceThreadRef?: ScopedThreadRef | null;
   } | null = null;
   const router = {
     state: {
@@ -28,11 +31,27 @@ const testState = vi.hoisted(() => {
   const draftStore = {
     getComposerDraft: vi.fn(() => ({})),
     getDraftSessionByLogicalProjectKey: vi.fn(() => storedDraft),
-    getDraftSession: vi.fn(() => null),
+    getDraftSession: vi.fn(() => storedDraft),
     getDraftThread: vi.fn(() => null),
     applyStickyState: vi.fn(),
     setDraftThreadContext: vi.fn(),
-    setLogicalProjectDraftThreadId: vi.fn(),
+    /** Keep draft context so tests observe source references after creation and reuse. */
+    setLogicalProjectDraftThreadId: vi.fn(
+      (
+        _logicalProjectKey: string,
+        projectRef: { environmentId: string },
+        draftId: string,
+        draftContext: { threadId: string; sourceThreadRef?: ScopedThreadRef | null },
+      ) => {
+        storedDraft = {
+          ...storedDraft,
+          draftId,
+          environmentId: projectRef.environmentId,
+          promotedTo: null,
+          ...draftContext,
+        };
+      },
+    ),
     setModelSelection: vi.fn(),
   };
 
@@ -53,6 +72,7 @@ const testState = vi.hoisted(() => {
       },
     ) {
       storedDraft = nextStoredDraft;
+      routeTarget = null;
       targetSettings = {
         defaultThreadEnvMode: workspaceDefaults.envMode,
         newWorktreesStartFromOrigin: workspaceDefaults.startFromOrigin,
@@ -68,6 +88,15 @@ const testState = vi.hoisted(() => {
       });
     },
     router,
+    set routeTarget(nextRouteTarget: ThreadRouteTarget | null) {
+      routeTarget = nextRouteTarget;
+    },
+    get routeTarget() {
+      return routeTarget;
+    },
+    get storedDraft() {
+      return storedDraft;
+    },
   };
 });
 
@@ -173,7 +202,7 @@ vi.mock("../state/server", () => ({
   environmentServerConfigsAtom: {},
   primaryServerSettingsAtom: "primary-settings",
 }));
-vi.mock("../threadRoutes", () => ({ resolveThreadRouteTarget: () => null }));
+vi.mock("../threadRoutes", () => ({ resolveThreadRouteTarget: () => testState.routeTarget }));
 vi.mock("../uiStateStore", () => ({
   legacyProjectCwdPreferenceKey: () => "remote-project",
   useUiStateStore: () => [],
@@ -194,6 +223,25 @@ describe.each([
     },
   ],
 ])("useNewThreadHandler with a %s draft", (_, draft) => {
+  it("does not use the viewed thread as the source for interactive creation", async () => {
+    testState.reset(draft);
+    testState.routeTarget = {
+      kind: "server",
+      threadRef: { environmentId: "environment-ssh", threadId: "tagged-parent" },
+    } as ThreadRouteTarget;
+    const projectRef = {
+      environmentId: "environment-ssh",
+      projectId: "project-remote",
+    } as never;
+
+    const pendingOpen = useNewThreadHandler()(projectRef);
+    testState.completeProjectFileRead(null);
+    const opened = await pendingOpen;
+
+    expect(testState.storedDraft?.draftId).toBe(opened!.draftId);
+    expect(testState.storedDraft?.sourceThreadRef).toBeNull();
+  });
+
   it.each(["approval-required", "auto-accept-edits", "auto", "full-access"] as const)(
     "uses the target environment's %s permissions for new threads",
     async (runtimeMode) => {
@@ -286,4 +334,27 @@ describe.each([
       );
     },
   );
+});
+
+it("clears a persisted source when the empty draft is already open", async () => {
+  const draft = {
+    draftId: "draft-existing",
+    environmentId: "environment-ssh",
+    promotedTo: null,
+    threadId: "thread-existing",
+    sourceThreadRef: {
+      environmentId: "environment-ssh",
+      threadId: "tagged-parent",
+    } as ScopedThreadRef,
+  } as const;
+  testState.reset(draft);
+  testState.routeTarget = { kind: "draft", draftId: draft.draftId } as ThreadRouteTarget;
+
+  await useNewThreadHandler()({
+    environmentId: "environment-ssh",
+    projectId: "project-remote",
+  } as never);
+
+  expect(testState.storedDraft?.draftId).toBe(draft.draftId);
+  expect(testState.storedDraft?.sourceThreadRef).toBeNull();
 });

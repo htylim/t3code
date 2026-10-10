@@ -10840,7 +10840,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     const plannedEvents = yield* Ref.get(events);
     const tagInheritanceEffects: Array<PendingOrchestrationEffectV2> = [];
     for (const event of plannedEvents) {
-      if (event.type !== "thread.created") continue;
+      // A viewed thread is not a parent. Only MCP creation inherits its caller's tag.
+      if (event.type !== "thread.created" || event.payload.creationSource !== "mcp") continue;
       const sourceThreadId =
         command.type === "thread.create"
           ? command.sourceThreadId

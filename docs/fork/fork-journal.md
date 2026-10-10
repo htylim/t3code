@@ -41,10 +41,12 @@ upstream.
   and its thread permissions. Clients share one subscription per environment and observe
   individual label and color values. Omitted colors preserve existing colors for older
   clients; null resets the color. Project labels and optional tag pills remain separate,
-  including in row accessibility names. New threads copy their source's label and color
-  through a durable creation effect before the provider starts. Agent launches, batch
-  creation, forks, delegated threads, web drafts, side chats, and plan implementation
-  threads carry this context. A persisted inheritance marker preserves later edits and
+  including in row accessibility names. Threads created through MCP copy their source's
+  label and color through a durable creation effect before the provider starts. This
+  covers MCP launches, batch creation, forks, and delegated threads. Interactive creation
+  starts without a tag, including keyboard shortcuts, drafts, side chats, and forks.
+  Reused drafts clear source references persisted by older clients.
+  A persisted inheritance marker preserves later edits and
   clears when the effect replays after a restart. MCP tag
   metadata, suggestions, custom icons, and project aliases remain future work.
 - Verification: Color customization passed 38 focused storage, contract, editor, and picker
@@ -65,8 +67,14 @@ upstream.
   160 focused tests, web typecheck, and targeted lint passed after adding the gesture.
   Inheritance passed storage restart and replay checks, real MCP creation and delegation
   checks, an empty launch through the effect worker, fork replay suites, draft persistence,
-  and scoped typechecks and lint. An isolated browser-created side chat copied its source's
-  label and custom color without starting a provider turn.
+  and scoped typechecks and lint. The MCP-only inheritance correction passed 99 focused
+  launch, fork, draft, and MCP integration tests, web and server typechecks, and targeted lint.
+  An isolated Browser panel pass dispatched the Cmd+N and Cmd+Shift+N DOM key events,
+  verified untagged threads after sending, and cleared a persisted draft source on reuse.
+  A real Terra turn called `t3_thread_launch` and created an empty thread with its caller's
+  label and custom color. Native Browser panel input reached the main app's command
+  palette instead of the hidden test tab. The completed verification used DOM input
+  through `preview_evaluate` in the isolated tab.
   The original label-only feature passed focused storage, contract, authorization, menu, dialog, and shortcut tests,
   scoped server, web, mobile, contracts, and client-runtime typechecks, formatting, and
   targeted lint. Storage tests cover restart, concurrent writes, failed atomic replacement,

@@ -67,9 +67,10 @@ The thread breadcrumb shows project / tag / thread. Clear the tag to remove its 
 Tags stay with the thread on its host and appear on other connected devices.
 Tagging a thread does not change its project.
 
-New threads created from a tagged thread inherit its label and color. This includes
-agent-launched conversations, forks, and delegated threads. You can edit or clear the
-new thread's tag independently; later changes to the source tag do not update it.
+When an agent creates a thread through MCP tools, the new thread inherits the calling
+thread's label and color. Threads you create interactively start without a tag,
+including keyboard shortcuts and forks. You can edit or clear an inherited tag
+independently; later changes to the source tag do not update it.
 
 ## Pin and reorder threads
 

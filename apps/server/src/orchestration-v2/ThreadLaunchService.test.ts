@@ -363,32 +363,42 @@ it.effect.each(
   },
 );
 
-it.effect("inherits a source tag during an empty launch without changing top-level lineage", () => {
-  const harness = makeHarness();
-  return Effect.gen(function* () {
-    const launches = yield* ThreadLaunch.ThreadLaunchService;
-    const threadTags = yield* ThreadTags;
-    const worker = yield* OrchestrationEffectWorkerV2;
-    const parent = yield* launches.launch(
-      launchInput({ command: "tag-parent", thread: "tag-parent" }),
-    );
-    const parentTag = { label: "launch group", color: "#8b5cf6" };
-    yield* threadTags.set({ threadId: parent.threadId, tag: parentTag });
-    const child = yield* launches.launch({
-      ...launchInput({ command: "tag-child", thread: "tag-child" }),
-      sourceThreadId: parent.threadId,
-    });
-    yield* worker.drain();
-    const tags = Option.getOrThrow(yield* Stream.runHead(threadTags.changes));
-    assert.deepEqual(tags[child.threadId], parentTag);
-    assert.deepEqual(child.projection.thread.lineage, {
-      parentThreadId: null,
-      relationshipToParent: null,
-      rootThreadId: child.threadId,
-    });
-    assert.lengthOf(child.projection.messages, 0);
-  }).pipe(Effect.provide(harness.layer));
-});
+it.effect.each([
+  { createdBy: "agent", creationSource: "mcp", inheritsTag: true },
+  { createdBy: "user", creationSource: "web", inheritsTag: false },
+  { createdBy: "user", creationSource: "mobile", inheritsTag: false },
+  { createdBy: "agent", creationSource: "provider", inheritsTag: false },
+] as const)(
+  "inherits source tags only for MCP launches, source $creationSource",
+  ({ createdBy, creationSource, inheritsTag }) => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      const threadTags = yield* ThreadTags;
+      const worker = yield* OrchestrationEffectWorkerV2;
+      const parent = yield* launches.launch(
+        launchInput({ command: "tag-parent", thread: "tag-parent" }),
+      );
+      const parentTag = { label: "launch group", color: "#8b5cf6" };
+      yield* threadTags.set({ threadId: parent.threadId, tag: parentTag });
+      const child = yield* launches.launch({
+        ...launchInput({ command: "tag-child", thread: "tag-child" }),
+        sourceThreadId: parent.threadId,
+        createdBy,
+        creationSource,
+      });
+      yield* worker.drain();
+      const tags = Option.getOrThrow(yield* Stream.runHead(threadTags.changes));
+      assert.deepEqual(tags[child.threadId], inheritsTag ? parentTag : undefined);
+      assert.deepEqual(child.projection.thread.lineage, {
+        parentThreadId: null,
+        relationshipToParent: null,
+        rootThreadId: child.threadId,
+      });
+      assert.lengthOf(child.projection.messages, 0);
+    }).pipe(Effect.provide(harness.layer));
+  },
+);
 
 it.effect("retains automation and sender attribution while a message waits in the queue", () => {
   const harness = makeHarness({ runSetup: () => Effect.never });

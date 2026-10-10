@@ -2622,7 +2622,7 @@ export const OrchestrationV2Command = Schema.Union([
     ...OrchestrationV2CreationFields,
     commandId: CommandId,
     threadId: ThreadId,
-    /** Copies fork tag metadata without changing the new thread's lineage. */
+    /** MCP creation copies its source's tag without changing the new thread's lineage. */
     sourceThreadId: Schema.optional(ThreadId),
     projectId: ProjectId,
     title: TrimmedNonEmptyString,

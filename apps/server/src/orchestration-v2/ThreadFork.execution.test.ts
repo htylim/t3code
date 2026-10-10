@@ -16,6 +16,8 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
 
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import { ClaudeProviderCapabilitiesV2 } from "./Adapters/ClaudeAdapterV2.ts";
@@ -23,6 +25,8 @@ import * as EventSink from "./EventSink.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
+import { ThreadTags } from "../fork/ThreadTags.ts";
+import { OrchestrationEffectWorkerV2 } from "./EffectWorker.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
 const forkCases = (["codex", "claudeAgent"] as const).flatMap((driverName) => {
@@ -45,21 +49,26 @@ const forkCases = (["codex", "claudeAgent"] as const).flatMap((driverName) => {
     { runEffectWorker: false },
   );
 
-  return (["failed", "interrupted", "cancelled"] as const).map((status) => ({
-    driver,
-    status,
-    instanceId,
-    modelSelection,
-    layer,
-  }));
+  return (["failed", "interrupted", "cancelled"] as const).flatMap((status) =>
+    (["web", "mcp"] as const).map((creationSource) => ({
+      driver,
+      status,
+      instanceId,
+      modelSelection,
+      layer,
+      creationSource,
+    })),
+  );
 });
 
 it.effect.each(forkCases)(
-  "bounds $driver context when continuing a fork of a $status run",
-  ({ driver, status, instanceId, modelSelection, layer }) =>
+  "bounds $driver context and inherits tags only through MCP for a $creationSource fork of a $status run",
+  ({ driver, status, instanceId, modelSelection, layer, creationSource }) =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       const eventSink = yield* EventSink.EventSinkV2;
+      const threadTags = yield* ThreadTags;
+      const worker = yield* OrchestrationEffectWorkerV2;
       const now = yield* DateTime.now;
       const sourceThreadId = ThreadId.make("fork-boundary-source");
       const targetThreadId = ThreadId.make("fork-boundary-target");
@@ -218,15 +227,20 @@ it.effect.each(forkCases)(
           ],
         });
       }
+      const parentTag = { label: "fork group", color: "#8b5cf6" };
+      yield* threadTags.set({ threadId: sourceThreadId, tag: parentTag });
       yield* orchestrator.dispatch({
         type: "thread.fork",
         commandId: CommandId.make("fork-source"),
         sourceThreadId,
         targetThreadId,
         sourcePoint: { type: "run", runId: sourceRunId },
-        createdBy: "user",
-        creationSource: "web",
+        createdBy: creationSource === "mcp" ? "agent" : "user",
+        creationSource,
       });
+      yield* worker.drain();
+      const tags = Option.getOrThrow(yield* Stream.runHead(threadTags.changes));
+      assert.deepEqual(tags[targetThreadId], creationSource === "mcp" ? parentTag : undefined);
       yield* orchestrator.dispatch({
         type: "message.dispatch",
         commandId: CommandId.make("continue-fork"),

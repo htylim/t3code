@@ -103,11 +103,6 @@ export function useNewThreadHandler() {
           : null;
       const carrySourceDraft =
         currentRouteTarget?.kind === "draft" ? getDraftSession(currentRouteTarget.draftId) : null;
-      const sourceThreadRef =
-        currentRouteTarget?.kind === "server" &&
-        currentRouteTarget.threadRef.environmentId === projectRef.environmentId
-          ? currentRouteTarget.threadRef
-          : (carrySourceDraft?.sourceThreadRef ?? null);
       // Composer overrides win over the persisted thread state — they are
       // what the user currently sees in the composer controls.
       const carrySourceComposer = currentRouteTarget
@@ -303,7 +298,8 @@ export function useNewThreadHandler() {
             emptyStoredDraftThread.draftId,
             {
               threadId: emptyStoredDraftThread.threadId,
-              ...(!isDraftAlreadyOpen ? { sourceThreadRef } : {}),
+              // Interactive creation also clears sources persisted by older clients.
+              sourceThreadRef: null,
               ...workspaceContext,
               ...(!isDraftAlreadyOpen ? { runtimeMode: defaultRuntimeMode } : {}),
               ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
@@ -351,6 +347,7 @@ export function useNewThreadHandler() {
         }
         setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, currentRouteTarget.draftId, {
           threadId: latestActiveDraftThread.threadId,
+          sourceThreadRef: null,
           createdAt: latestActiveDraftThread.createdAt,
           runtimeMode: latestActiveDraftThread.runtimeMode,
           interactionMode: latestActiveDraftThread.interactionMode,
@@ -394,6 +391,7 @@ export function useNewThreadHandler() {
           // contradictory envMode.
           setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, racedDraft.draftId, {
             threadId: racedDraft.threadId,
+            sourceThreadRef: null,
             createdAt: racedDraft.createdAt,
             runtimeMode: racedDraft.runtimeMode,
             interactionMode: racedDraft.interactionMode,
@@ -408,7 +406,7 @@ export function useNewThreadHandler() {
         }
         setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, draftId, {
           threadId,
-          sourceThreadRef,
+          sourceThreadRef: null,
           createdAt,
           branch: options?.branch ?? null,
           worktreePath: options?.worktreePath ?? null,
