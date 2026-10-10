@@ -1,16 +1,19 @@
 import { cn } from "../lib/utils";
 
-/** Render a tag pill. Editable pills open on double-click or keyboard activation. */
+/** Render a tag pill. Editing defaults to double-click; keyboard activation always opens it. */
 export function ThreadTagPill({
   label,
   color,
   className,
   onEdit,
+  editGesture = "double-click",
 }: {
   readonly label: string;
   readonly color?: string | null;
   readonly className?: string;
   readonly onEdit?: (() => void) | undefined;
+  /** Breadcrumbs use single-click; sidebar pills keep double-click. */
+  readonly editGesture?: "single-click" | "double-click";
 }) {
   const pillClassName = cn(
     "inline-block max-w-full truncate rounded-full border border-foreground/10 bg-foreground/5 px-2 align-middle text-xs leading-4",
@@ -36,12 +39,14 @@ export function ThreadTagPill({
         onClick={(event) => {
           event.stopPropagation();
           // Native keyboard activation has no pointer click count.
-          if (event.detail === 0) onEdit();
+          if (event.detail === 0 || (editGesture === "single-click" && event.detail === 1)) {
+            onEdit();
+          }
         }}
         onDoubleClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          onEdit();
+          if (editGesture === "double-click") onEdit();
         }}
       >
         {label}

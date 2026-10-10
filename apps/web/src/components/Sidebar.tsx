@@ -1725,6 +1725,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           isRegeneratingTitle && "opacity-55",
         )}
       >
+        {variant === "slim" && variantAction === "unsettle" && threadTagLabel
+          ? `${threadTagLabel} / `
+          : null}
         {thread.title}
       </span>
     );

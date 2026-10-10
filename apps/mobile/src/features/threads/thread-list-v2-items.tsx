@@ -661,6 +661,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   );
   const threadTagLabel = useAtomValue(threadTagEnvironment.labelAtom(threadRef));
   const threadTagColor = useAtomValue(threadTagEnvironment.colorAtom(threadRef));
+  const slimThreadTitle =
+    !snoozedRow && threadTagLabel ? `${threadTagLabel} / ${thread.title}` : thread.title;
   const projectDisplayName = props.projectTitle ?? props.project?.title ?? "";
   const tagsSupported = useAtomValue(threadTagEnvironment.supportedAtom(thread.environmentId));
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
@@ -1292,7 +1294,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         interactionOpacity={rowAppearance.interactionOpacity}
         accessibilityHint={swipeAccessibilityHint}
         accessibilityLabel={
-          props.hasQueuedMessages ? `${thread.title}, messages queued to send` : thread.title
+          props.hasQueuedMessages ? `${slimThreadTitle}, messages queued to send` : slimThreadTitle
         }
         accessibilityRole="button"
         accessibilityState={{ selected }}
@@ -1332,7 +1334,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               )}
               numberOfLines={1}
             >
-              {thread.title}
+              {slimThreadTitle}
             </Text>
             {props.searchMatch ? (
               <ThreadSearchMatchExcerpt

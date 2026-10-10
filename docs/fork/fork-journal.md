@@ -20,14 +20,28 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-10 - Personal provider for live tests
+
+- Upstream baseline: `a11f464133`.
+- Change: Live tests must use the ChatGPT `Personal` provider instance. Other accounts and
+  provider fallback are forbidden. Test turns explicitly select Personal and Codex Terra with
+  low reasoning effort.
+- Reason: Keep test usage on the maintainer's personal subscription.
+- Scope: Fork development and verification instructions, including side chats and MCP tests.
+- Verification: Confirmed `codex_personal` in the live provider catalog. The isolated dev
+  configuration enables only Personal. Instructions passed formatting and diff checks.
+
 ## 2026-10-10 - Thread tags outside SQLite
 
 - Upstream baseline: `a11f464133`.
 - Change: Threads can carry one explicit label and an optional color. Active and postponed
   sidebar cards show the project icon and name followed by / and the tag pill.
+  Settled rows on web, desktop, and mobile show the project icon followed by tag / thread
+  when tagged. The label and separator share the title's existing muted color without a pill.
   Web and desktop breadcrumbs show project / tag / thread, with the icon beside the project.
   An unset tag keeps the existing project label and icon. Tag editing is available in
-  thread menus, double-clicking an existing pill, the command palette, and the configurable `thread.tag` shortcut,
+  thread menus, single-clicking a breadcrumb pill, double-clicking a sidebar pill,
+  the command palette, and the configurable `thread.tag` shortcut,
   defaulting to `mod+alt+t`. Web and desktop editors offer preset swatches and the theme
   editor's custom picker, with a live pill preview. Native editors offer the same presets
   and custom hex input. Tags use soft colored pills without a tag icon. The tag action
@@ -49,7 +63,12 @@ upstream.
   A persisted inheritance marker preserves later edits and
   clears when the effect replays after a restart. MCP tag
   metadata, suggestions, custom icons, and project aliases remain future work.
-- Verification: Color customization passed 38 focused storage, contract, editor, and picker
+- Verification: Settled tag labels passed 159 focused sidebar and mobile appearance tests,
+  web and mobile typechecks, targeted lint with existing warnings, formatting, and diff checks.
+  An isolated dev-server Browser panel pass verified tagged and untagged settled rows use
+  the same muted text color and transparent background. Long tags truncate without widening
+  the row. Native verification was not run for that rendering change.
+  Color customization passed 38 focused storage, contract, editor, and picker
   tests, affected typechecks, targeted lint, formatting, and diff checks. An isolated
   Browser panel pass with a synthetic thread verified presets, custom hex and RGB sync,
   reset, cancel, reload persistence, and matching sidebar and breadcrumb pills without
@@ -62,7 +81,11 @@ upstream.
   project-only cards, project/tag cards, and long-name truncation without row overflow.
   Cleanup passed 160 focused sidebar, header, and tag-editor tests, web typecheck, and lint;
   a browser reload confirmed the same layout with separate project and tag accessibility labels.
-  Editable pills passed sidebar and breadcrumb double-click checks, including an inactive
+  The breadcrumb single-click change passed 13 existing header/editor tests, web typecheck,
+  targeted lint with existing warnings, and formatting. An isolated Browser panel pass verified
+  one breadcrumb click opens the editor before and after reload. Sidebar single-click leaves
+  the editor closed; double-click opens it. Saving updates the settled label and survives reload.
+  Editable sidebar pills passed double-click checks, including an inactive
   thread without navigation or title rename, keyboard activation, and cancel. The same
   160 focused tests, web typecheck, and targeted lint passed after adding the gesture.
   Inheritance passed storage restart and replay checks, real MCP creation and delegation

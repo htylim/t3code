@@ -70,12 +70,18 @@ vp run dev
 `vp run dev` starts the server and web client and prints a one-time pairing URL. Use
 `vp run dev:desktop` for desktop development.
 
-Never use expensive models for live provider tests. Use a low-cost model such as **Claude Sonnet**
-when testing Claude and **Codex Terra** when testing Codex, with low reasoning effort where
-available. Keep test prompts and responses short.
+All live tests must use the ChatGPT provider instance named `Personal`, authenticated with the
+personal ChatGPT subscription. Its configured Codex home is `~/.codex-personal` and its shadow
+home is `~/.codex-t3/personal`. Never use another provider instance or account for testing,
+including the ShipHero ChatGPT or Claude accounts. If Personal is unavailable, stop live
+provider testing and report the blocker. Do not fall back to another provider.
 
-Explicitly select the test model before sending a turn; do not rely on app defaults or inherit an
-expensive model from an existing conversation. This applies to every test surface and to side chats,
+Never use expensive models for live provider tests. Select **Codex Terra** on Personal with low
+reasoning effort where available. Keep test prompts and responses short.
+
+Explicitly select and verify the Personal provider instance and test model before sending a turn;
+do not rely on app defaults or inherit a provider or expensive model from an existing conversation.
+This applies to every test surface and to side chats,
 native forks, and MCP child threads as well as main threads.
 
 ## Build the Fork desktop app

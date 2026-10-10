@@ -362,6 +362,7 @@ export const ChatHeader = memo(function ChatHeader({
                     <ThreadTagPill
                       label={threadTagLabel}
                       color={threadTagColor}
+                      editGesture="single-click"
                       onEdit={
                         canEditThreadTag ? () => requestThreadTag(activeThreadRef) : undefined
                       }
