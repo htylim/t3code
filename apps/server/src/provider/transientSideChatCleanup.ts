@@ -1,10 +1,10 @@
+import { OpenCodeSettings } from "@t3tools/provider-opencode/settings";
 import * as Crypto from "effect/Crypto";
 import * as Hex from "effect/encoding/Hex";
 
 import {
   ClaudeSettings,
   CodexSettings,
-  OpenCodeSettings,
   CommandId,
   ProviderInstanceId,
   TransientSideChatCleanupError,
@@ -21,9 +21,9 @@ import { ProviderSessionRuntimeRepository } from "../persistence/ProviderSession
 import { ProjectService } from "../project/ProjectService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { deriveProviderInstanceConfigMap } from "./ProviderInstanceRegistryHydration.ts";
-import { mergeProviderInstanceEnvironment } from "./ProviderInstanceEnvironment.ts";
+import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import { transientChatCleanupGate } from "./transientChatDeletion/lifecycle.ts";
-import { TransientChatProviderThreadDeleteError } from "./transientChatDeletion/errors.ts";
+import { TransientChatProviderThreadDeleteError } from "@t3tools/provider-core/server/errors";
 import { deleteTransientChatProviderThread } from "./transientChatProviderThreadDelete.ts";
 
 const CleanupTarget = Schema.Struct({
@@ -194,7 +194,7 @@ export const makeTransientSideChatCleanup = Effect.fn("makeTransientSideChatClea
             const common = {
               cwd: target.cwd,
               providerSessionId: target.nativeId,
-              environment: mergeProviderInstanceEnvironment(instance.environment),
+              environment: yield* mergeProviderInstanceEnvironment(instance.environment),
               allowMissing: true,
             };
             let deleted: "deleted" | "already-absent" | "unsupported";

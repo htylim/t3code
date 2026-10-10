@@ -20,6 +20,32 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-10 - Integrate upstream through October 10
+
+- Upstream baseline: `a11f464133`, 207 commits since `5e2225671f`.
+- Change: Integrate upstream's provider and usage package moves, HostProcess services,
+  thread search, sortable panel tabs, and the remaining incoming changes. Preserve the
+  fork's side chats and transient cleanup, postpone, `%` and `%%` references, workspace
+  management and busy rules, sidebar hover, custom shortcuts and prompt navigation,
+  visualization links, wrapped tables, branding, usage-account exclusion, and Stop fixes.
+- Reason: Keep the fork current while retaining behavior upstream does not yet replace.
+  Upstream `4daec109cd` now owns the identical SQLite pairing-scope fix. Upstream's usage
+  fixture lifetime fix replaces the extra fork persistence wait in the price-race test.
+- Scope: Resolve 14 conflicts on an isolated integration branch. Move the transient-history
+  deletion error into provider-core so the extracted adapter contract does not depend on
+  server code. Adapt cleanup to OpenCode's settings/runtime package and Effect environment
+  merging. Keep Mod+T for side chats, incoming thread search and tab dragging, live chat tab
+  titles, and legacy fork default-model migration. Usage exclusion filters raw instance
+  configuration before upstream's provider schema decoding.
+- Verification: Frozen dependency installation, scoped server, web, desktop, mobile,
+  contracts, shared, client-runtime, provider-core, and OpenCode typechecks, server and web
+  bundle builds, targeted lint, and formatting passed. The focused feature checks passed
+  2,162 tests. One Git review-diff rename/statistics test fails identically in a separate,
+  untouched `a11f464133` checkout. Three settings symlink-watcher tests passed outside the sandbox.
+  Diff checks pass apart from unchanged whitespace in upstream's React Native WebView patch.
+  Browser, installed desktop, native mobile, remote connections, and live provider turns
+  were not run. The main checkout, `fork` branch, installed app, and live data were unchanged.
+
 ## 2026-10-08 - Add a selectable H3 wordmark to the Fork sidebar
 
 - Upstream baseline: `5e2225671f`.

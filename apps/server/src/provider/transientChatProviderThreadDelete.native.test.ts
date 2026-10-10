@@ -1,6 +1,7 @@
+import { OpenCodeSettings } from "@t3tools/provider-opencode/settings";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
-import { CodexSettings, OpenCodeSettings } from "@t3tools/contracts";
+import { CodexSettings } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -8,8 +9,8 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import { withCodexAppServerClient } from "./CodexProvider.ts";
-import { OpenCodeServerLedger } from "./OpenCodeServerLedger.ts";
-import * as OpenCodeRuntime from "./opencodeRuntime.ts";
+import { OpenCodeServerLedger } from "@t3tools/provider-opencode/server/OpenCodeServerLedger";
+import * as OpenCodeRuntime from "@t3tools/provider-opencode/server/OpenCodeRuntime";
 import { deleteTransientChatProviderThread } from "./transientChatProviderThreadDelete.ts";
 
 // Explicit opt-in: requires installed CLIs. Creates no turns and uses only

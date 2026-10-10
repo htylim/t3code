@@ -1,19 +1,10 @@
 import * as Schema from "effect/Schema";
+import {
+  TransientChatProviderThreadDeleteError,
+  type TransientChatProvider,
+} from "@t3tools/provider-core/server/errors";
 
-export const TransientChatProvider = Schema.Literals(["codex", "claudeAgent", "opencode"]);
-export type TransientChatProvider = typeof TransientChatProvider.Type;
-
-export class TransientChatProviderThreadDeleteError extends Schema.TaggedError<TransientChatProviderThreadDeleteError>()(
-  "TransientChatProviderThreadDeleteError",
-  {
-    provider: TransientChatProvider,
-    providerSessionId: Schema.String,
-    reason: Schema.Literals(["invalid-target", "unsafe-session", "provider-error"]),
-    message: Schema.String,
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {}
-
+/** Preserves an existing deletion error or wraps a provider failure. */
 const isDeletionError = Schema.is(TransientChatProviderThreadDeleteError);
 
 export function deletionError(

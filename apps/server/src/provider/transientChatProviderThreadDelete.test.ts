@@ -1,6 +1,7 @@
+import { OpenCodeSettings } from "@t3tools/provider-opencode/settings";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import { ClaudeSettings, CodexSettings, OpenCodeSettings } from "@t3tools/contracts";
+import { ClaudeSettings, CodexSettings } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -8,9 +9,9 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { ChildProcess } from "effect/process";
 
-import { OpenCodeServerLedger } from "./OpenCodeServerLedger.ts";
-import * as OpenCodeRuntime from "./opencodeRuntime.ts";
-import { spawnAndCollect } from "./providerSnapshot.ts";
+import { OpenCodeServerLedger } from "@t3tools/provider-opencode/server/OpenCodeServerLedger";
+import * as OpenCodeRuntime from "@t3tools/provider-opencode/server/OpenCodeRuntime";
+import { spawnAndCollect } from "@t3tools/provider-core/server/snapshotProbe";
 import { deleteTransientChatProviderThread } from "./transientChatProviderThreadDelete.ts";
 
 const sessionId = "11111111-1111-4111-8111-111111111111";

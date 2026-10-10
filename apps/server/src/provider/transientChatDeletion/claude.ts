@@ -4,7 +4,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as NodeOS from "node:os";
 
-import { TransientChatProviderThreadDeleteError } from "./errors.ts";
+import { TransientChatProviderThreadDeleteError } from "@t3tools/provider-core/server/errors";
 
 // getSessionInfo also returns undefined for unreadable or unrecognizable history.
 // Only accept absence after a filesystem check. Searching every project is

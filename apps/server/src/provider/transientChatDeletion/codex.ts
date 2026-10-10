@@ -2,7 +2,7 @@ import type { CodexAppServerClient } from "effect-codex-app-server/client";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { TransientChatProviderThreadDeleteError } from "./errors.ts";
+import { TransientChatProviderThreadDeleteError } from "@t3tools/provider-core/server/errors";
 
 const Thread = Schema.Struct({
   id: Schema.String,
@@ -37,17 +37,18 @@ export const deleteCodexTransientThread = Effect.fn("deleteCodexTransientThread"
     .request("thread/read", { threadId: providerSessionId, includeTurns: false })
     .pipe(
       Effect.flatMap(decodeThread),
-      Effect.catchTag("CodexAppServerRequestError", (error) =>
-        allowMissing &&
-        error.code === -32600 &&
-        [
-          `thread not found: ${providerSessionId}`,
-          `thread not loaded: ${providerSessionId}`,
-          `no rollout found for thread id ${providerSessionId}`,
-        ].includes(error.errorMessage)
-          ? Effect.succeed(undefined)
-          : Effect.fail(error),
-      ),
+      Effect.catchTags({
+        CodexAppServerRequestError: (error) =>
+          allowMissing &&
+          error.code === -32600 &&
+          [
+            `thread not found: ${providerSessionId}`,
+            `thread not loaded: ${providerSessionId}`,
+            `no rollout found for thread id ${providerSessionId}`,
+          ].includes(error.errorMessage)
+            ? Effect.succeed(undefined)
+            : Effect.fail(error),
+      }),
     );
   if (read === undefined) return "already-absent" as const;
   const { thread } = read;

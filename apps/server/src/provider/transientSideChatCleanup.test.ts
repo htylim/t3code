@@ -17,7 +17,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
-import type { ProviderAdapterV2SessionRuntime } from "../orchestration-v2/ProviderAdapter.ts";
+import type { ProviderAdapterV2SessionRuntime } from "@t3tools/provider-core/server/ProviderAdapter";
 import { ProviderSessionManagerV2 } from "../orchestration-v2/ProviderSessionManager.ts";
 import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
 import {
@@ -26,9 +26,9 @@ import {
 } from "../persistence/ProviderSessionRuntime.ts";
 import { ProjectService } from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import { OpenCodeServerLedger } from "./OpenCodeServerLedger.ts";
-import * as OpenCodeRuntime from "./opencodeRuntime.ts";
-import { TransientChatProviderThreadDeleteError } from "./transientChatDeletion/errors.ts";
+import { OpenCodeServerLedger } from "@t3tools/provider-opencode/server/OpenCodeServerLedger";
+import * as OpenCodeRuntime from "@t3tools/provider-opencode/server/OpenCodeRuntime";
+import { TransientChatProviderThreadDeleteError } from "@t3tools/provider-core/server/errors";
 import { makeTransientSideChatCleanup } from "./transientSideChatCleanup.ts";
 import type { TransientChatProviderThreadDeleteInput } from "./transientChatProviderThreadDelete.ts";
 

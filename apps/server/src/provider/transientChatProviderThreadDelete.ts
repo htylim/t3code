@@ -1,23 +1,22 @@
-import { HostProcessIsExecutable } from "@t3tools/shared/hostProcess";
-import type { ClaudeSettings, CodexSettings, OpenCodeSettings } from "@t3tools/contracts";
+import { type OpenCodeSettings } from "@t3tools/provider-opencode/settings";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import type { ClaudeSettings, CodexSettings } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { ChildProcess } from "effect/process";
 
-import { expandHomePath } from "../pathExpansion.ts";
-import { spawnAndCollect } from "./providerSnapshot.ts";
+import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
+import { spawnAndCollect } from "@t3tools/provider-core/server/snapshotProbe";
 import { makeClaudeEnvironment } from "./Drivers/ClaudeHome.ts";
 import { resolveCodexHomeLayout } from "./Drivers/CodexHomeLayout.ts";
 import { resolveCodexLaunchArgs } from "./codexLaunchArgs.ts";
 import { withCodexAppServerClient } from "./CodexProvider.ts";
-import { OpenCodeRuntime } from "./opencodeRuntime.ts";
+import * as OpenCodeRuntime from "@t3tools/provider-opencode/server/OpenCodeRuntime";
 import { deleteCodexTransientThread } from "./transientChatDeletion/codex.ts";
 import { deleteOpenCodeTransientThread } from "./transientChatDeletion/opencode.ts";
-import {
-  deletionError,
-  TransientChatProviderThreadDeleteError,
-} from "./transientChatDeletion/errors.ts";
+import { deletionError } from "./transientChatDeletion/errors.ts";
+import { TransientChatProviderThreadDeleteError } from "@t3tools/provider-core/server/errors";
 
 type Target = {
   /** Native provider ID, not the T3 thread ID. */
@@ -62,6 +61,7 @@ const isOpenCodeId = Schema.is(Schema.String.check(Schema.isPattern(/^ses_[a-zA-
 export const deleteTransientChatProviderThread = Effect.fn("deleteTransientChatProviderThread")(
   function* (input: TransientChatProviderThreadDeleteInput) {
     const path = yield* Path.Path;
+    const homeDirectory = yield* HostProcess.HomeDirectory;
     const isProviderSessionId = input.provider === "opencode" ? isOpenCodeId : isUuid;
     if (!isProviderSessionId(input.providerSessionId) || !path.isAbsolute(input.cwd)) {
       return yield* new TransientChatProviderThreadDeleteError({
@@ -75,7 +75,7 @@ export const deleteTransientChatProviderThread = Effect.fn("deleteTransientChatP
       case "codex": {
         const home = yield* resolveCodexHomeLayout(input.config);
         const { client } = yield* withCodexAppServerClient({
-          binaryPath: expandHomePath(input.config.binaryPath),
+          binaryPath: expandHomePath(input.config.binaryPath, homeDirectory),
           homePath: home.effectiveHomePath,
           launchArgs: resolveCodexLaunchArgs(input.config.launchArgs, input.environment),
           cwd: input.cwd,
@@ -89,7 +89,7 @@ export const deleteTransientChatProviderThread = Effect.fn("deleteTransientChatP
       }
       case "claudeAgent": {
         const environment = yield* makeClaudeEnvironment(input.config, input.environment);
-        const workerArguments = (yield* HostProcessIsExecutable)
+        const workerArguments = (yield* HostProcess.IsExecutable)
           ? ["__transient-chat-delete"]
           : [
               yield* path.fromFileUrl(
@@ -136,9 +136,9 @@ export const deleteTransientChatProviderThread = Effect.fn("deleteTransientChatP
         return outcome.outcome;
       }
       case "opencode": {
-        const runtime = yield* OpenCodeRuntime;
+        const runtime = yield* OpenCodeRuntime.OpenCodeRuntime;
         const server = yield* runtime.connectToOpenCodeServer({
-          binaryPath: expandHomePath(input.config.binaryPath),
+          binaryPath: expandHomePath(input.config.binaryPath, homeDirectory),
           directory: input.cwd,
           serverUrl: input.config.serverUrl,
           ...(input.config.serverPassword ? { serverPassword: input.config.serverPassword } : {}),

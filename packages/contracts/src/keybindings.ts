@@ -113,6 +113,7 @@ export const STATIC_KEYBINDING_COMMANDS = [
   "chat.newLocal",
   "chat.newSide",
   "chat.newWithoutProject",
+  "chat.find",
   "editor.openFavorite",
   ...TIMELINE_PROMPT_KEYBINDING_COMMANDS,
   "usage.cost",

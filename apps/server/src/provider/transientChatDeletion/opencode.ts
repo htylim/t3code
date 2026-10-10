@@ -2,7 +2,7 @@ import type { OpencodeClient } from "@opencode-ai/sdk/v2";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import { TransientChatProviderThreadDeleteError } from "./errors.ts";
+import { TransientChatProviderThreadDeleteError } from "@t3tools/provider-core/server/errors";
 
 const decodeSession = Schema.decodeUnknownEffect(
   Schema.Struct({ id: Schema.String, parentID: Schema.optionalKey(Schema.String) }),
