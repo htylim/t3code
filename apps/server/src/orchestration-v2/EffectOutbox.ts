@@ -29,6 +29,11 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { forkParked } from "../serverActivation.ts";
 
 export const OrchestrationEffectRequestV2 = Schema.Union([
+  /** Copy a new thread's tag before its provider lifecycle effects run. */
+  Schema.Struct({
+    type: Schema.Literal("thread-tag.inherit"),
+    sourceThreadId: ThreadId,
+  }),
   Schema.Struct({
     type: Schema.Literal("provider-runtime.continue"),
     sourceRunId: RunId,
@@ -121,6 +126,7 @@ export const OrchestrationEffectRequestV2 = Schema.Union([
 export type OrchestrationEffectRequestV2 = typeof OrchestrationEffectRequestV2.Type;
 
 export const REPLAY_SAFE_EFFECT_TYPES_AFTER_PROCESS_LOSS = [
+  "thread-tag.inherit",
   "provider-runtime.continue",
   "provider-session.detach",
   "provider-thread.rollback",

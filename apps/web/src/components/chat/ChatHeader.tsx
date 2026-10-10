@@ -11,6 +11,8 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { useAtomValue } from "@effect/atom-react";
 import { threadTagEnvironment } from "../../state/threadTags";
+import { ThreadTagPill } from "../ThreadTagPill";
+import { requestThreadTag } from "../ThreadTagDialog";
 import { ChevronDownIcon } from "lucide-react";
 import {
   memo,
@@ -99,6 +101,10 @@ export const ChatHeader = memo(function ChatHeader({
     [activeThreadEnvironmentId, activeThreadId],
   );
   const threadTagLabel = useAtomValue(threadTagEnvironment.labelAtom(activeThreadRef));
+  const threadTagColor = useAtomValue(threadTagEnvironment.colorAtom(activeThreadRef));
+  const canEditThreadTag = useAtomValue(
+    threadTagEnvironment.set.permissionAtom(activeThreadEnvironmentId),
+  );
   const canOperateThread = useEnvironmentScope(
     activeThreadEnvironmentId,
     AuthOrchestrationOperateScope,
@@ -164,7 +170,14 @@ export const ChatHeader = memo(function ChatHeader({
       document.fonts.removeEventListener("loadingdone", measure);
       stopObserving();
     };
-  }, [activeProjectName, activeThreadTitle, parentThreadLink, interfaceFont, isRenamingTitle]);
+  }, [
+    activeProjectName,
+    activeThreadTitle,
+    threadTagLabel,
+    parentThreadLink,
+    interfaceFont,
+    isRenamingTitle,
+  ]);
   const renameCommittedRef = useRef(false);
   const startRename = useCallback(() => {
     if (
@@ -313,26 +326,6 @@ export const ChatHeader = memo(function ChatHeader({
         ariaLabel="Thread breadcrumb"
         className="flex-1 overflow-clip [overflow-clip-margin:2px]"
       >
-        {isServerThread && threadTagLabel ? (
-          <>
-            <WorkspaceBreadcrumbItem className="shrink">
-              <Tooltip>
-                <TooltipTrigger
-                  render={<span className="inline-flex min-w-0 items-center gap-1.5" />}
-                >
-                  {activeProject ? (
-                    <ProjectFavicon project={activeProject} className="size-3.5" />
-                  ) : null}
-                  <WorkspaceBreadcrumbText className="max-w-40">
-                    {threadTagLabel}
-                  </WorkspaceBreadcrumbText>
-                </TooltipTrigger>
-                <TooltipPopup side="top">{threadTagLabel}</TooltipPopup>
-              </Tooltip>
-            </WorkspaceBreadcrumbItem>
-            <WorkspaceBreadcrumbSeparator />
-          </>
-        ) : null}
         {activeProject ? (
           <>
             <WorkspaceBreadcrumbItem className="shrink">
@@ -358,6 +351,27 @@ export const ChatHeader = memo(function ChatHeader({
             <WorkspaceBreadcrumbSeparator>
               <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
             </WorkspaceBreadcrumbSeparator>
+          </>
+        ) : null}
+        {isServerThread && threadTagLabel ? (
+          <>
+            <WorkspaceBreadcrumbItem className="shrink">
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex min-w-0 items-center" />}>
+                  <WorkspaceBreadcrumbText className="max-w-40">
+                    <ThreadTagPill
+                      label={threadTagLabel}
+                      color={threadTagColor}
+                      onEdit={
+                        canEditThreadTag ? () => requestThreadTag(activeThreadRef) : undefined
+                      }
+                    />
+                  </WorkspaceBreadcrumbText>
+                </TooltipTrigger>
+                <TooltipPopup side="top">{threadTagLabel}</TooltipPopup>
+              </Tooltip>
+            </WorkspaceBreadcrumbItem>
+            <WorkspaceBreadcrumbSeparator />
           </>
         ) : null}
         {parentThreadLink ? (

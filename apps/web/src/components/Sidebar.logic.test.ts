@@ -97,6 +97,22 @@ describe("resolveSidebarRowAccessibility", () => {
       isActive: false,
       expected: { label: "Untitled task", current: undefined },
     },
+    {
+      title: "Tagged task",
+      statusLabel: null,
+      projectDisplayName: "T3 Code",
+      threadTagLabel: "mcp-v3",
+      isActive: true,
+      expected: { label: "Tagged task, T3 Code, mcp-v3", current: "page" },
+    },
+    {
+      title: "Task without a project",
+      statusLabel: null,
+      projectDisplayName: null,
+      threadTagLabel: "mcp-v3",
+      isActive: false,
+      expected: { label: "Task without a project, mcp-v3", current: undefined },
+    },
   ])("leads with the title without folding row actions into its name: %j", (input) => {
     const { expected, ...state } = input;
     expect(resolveSidebarRowAccessibility(state)).toEqual(expected);

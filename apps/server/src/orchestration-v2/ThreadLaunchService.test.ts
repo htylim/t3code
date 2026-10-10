@@ -56,6 +56,8 @@ import * as EffectOutbox from "./EffectOutbox.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ThreadLaunch from "./ThreadLaunchService.ts";
+import { ThreadTags } from "../fork/ThreadTags.ts";
+import { OrchestrationEffectWorkerV2 } from "./EffectWorker.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
 import * as ThreadTitleRegeneration from "./ThreadTitleRegenerationService.ts";
 import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
@@ -232,6 +234,7 @@ function makeHarness(options: HarnessOptions = {}) {
   return {
     layer: Layer.mergeAll(
       layerLaunch,
+      layerOrchestrator,
       layerThreadManagement,
       layerTitleRegeneration,
       layerOutbox,
@@ -359,6 +362,33 @@ it.effect.each(
     }).pipe(Effect.provide(Layer.mergeAll(harness.layer, layerScheduledTasks)));
   },
 );
+
+it.effect("inherits a source tag during an empty launch without changing top-level lineage", () => {
+  const harness = makeHarness();
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const threadTags = yield* ThreadTags;
+    const worker = yield* OrchestrationEffectWorkerV2;
+    const parent = yield* launches.launch(
+      launchInput({ command: "tag-parent", thread: "tag-parent" }),
+    );
+    const parentTag = { label: "launch group", color: "#8b5cf6" };
+    yield* threadTags.set({ threadId: parent.threadId, tag: parentTag });
+    const child = yield* launches.launch({
+      ...launchInput({ command: "tag-child", thread: "tag-child" }),
+      sourceThreadId: parent.threadId,
+    });
+    yield* worker.drain();
+    const tags = Option.getOrThrow(yield* Stream.runHead(threadTags.changes));
+    assert.deepEqual(tags[child.threadId], parentTag);
+    assert.deepEqual(child.projection.thread.lineage, {
+      parentThreadId: null,
+      relationshipToParent: null,
+      rootThreadId: child.threadId,
+    });
+    assert.lengthOf(child.projection.messages, 0);
+  }).pipe(Effect.provide(harness.layer));
+});
 
 it.effect("retains automation and sender attribution while a message waits in the queue", () => {
   const harness = makeHarness({ runSetup: () => Effect.never });

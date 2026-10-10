@@ -48,6 +48,7 @@ describe("compact Chat target isolation", () => {
     const create = buildSideChatCreateCommand({
       target,
       sourceThread: {
+        id: owner.threadId,
         projectId: ProjectId.make("project-main"),
         modelSelection,
         runtimeMode: "full-access",
@@ -62,6 +63,7 @@ describe("compact Chat target isolation", () => {
       environmentId: target.environmentId,
       input: {
         threadId: target.threadId,
+        sourceThreadId: owner.threadId,
         projectId: ProjectId.make("project-main"),
         title: "New thread",
         modelSelection,

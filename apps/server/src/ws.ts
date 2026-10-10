@@ -1962,6 +1962,9 @@ const layerWsRpc = (
                   ThreadMessageIntake.launchThread({
                     commandId: input.commandId,
                     ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
+                    ...(input.sourceThreadId === undefined
+                      ? {}
+                      : { sourceThreadId: input.sourceThreadId }),
                     ...(input.reuseExistingThread === undefined
                       ? {}
                       : { reuseExistingThread: input.reuseExistingThread }),

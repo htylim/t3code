@@ -58,6 +58,78 @@ const snapshot = Effect.gen(function* () {
 });
 
 it.layer(NodeServices.layer)("fork thread tags", (it) => {
+  it.effect(
+    "inherits the label and color once, preserving later edits and clears after restart",
+    () =>
+      withStore((storeLayer) =>
+        Effect.gen(function* () {
+          yield* Effect.gen(function* () {
+            const store = yield* ThreadTags.ThreadTags;
+            yield* store.set({
+              threadId: firstThreadId,
+              tag: { label: "parent", color: "#8b5cf6" },
+            });
+            yield* store.inherit({ sourceThreadId: firstThreadId, threadId: secondThreadId });
+            assert.deepEqual(Option.getOrThrow(yield* snapshot)[secondThreadId], {
+              label: "parent",
+              color: "#8b5cf6",
+            });
+            yield* store.set({
+              threadId: firstThreadId,
+              tag: { label: "changed", color: "#ef4444" },
+            });
+            assert.deepEqual(Option.getOrThrow(yield* snapshot)[secondThreadId], {
+              label: "parent",
+              color: "#8b5cf6",
+            });
+            yield* store.set({ threadId: secondThreadId, tag: { label: "child", color: null } });
+            yield* store.inherit({ sourceThreadId: firstThreadId, threadId: secondThreadId });
+            assert.deepEqual(Option.getOrThrow(yield* snapshot)[secondThreadId], {
+              label: "child",
+              color: null,
+            });
+            yield* store.set({ threadId: secondThreadId, tag: null });
+          }).pipe(Effect.provide(storeLayer));
+          yield* Effect.gen(function* () {
+            const store = yield* ThreadTags.ThreadTags;
+            yield* store.inherit({ sourceThreadId: firstThreadId, threadId: secondThreadId });
+            assert.isUndefined(Option.getOrThrow(yield* snapshot)[secondThreadId]);
+          }).pipe(Effect.provide(storeLayer));
+        }).pipe(Effect.scoped),
+      ),
+  );
+
+  it.effect("keeps an untagged source untagged and preserves a child's explicit tag", () =>
+    withStore((storeLayer) =>
+      Effect.gen(function* () {
+        const store = yield* ThreadTags.ThreadTags;
+        yield* store.inherit({ sourceThreadId: firstThreadId, threadId: secondThreadId });
+        yield* store.set({ threadId: firstThreadId, tag: { label: "added later" } });
+        yield* store.inherit({ sourceThreadId: firstThreadId, threadId: secondThreadId });
+        assert.isUndefined(Option.getOrThrow(yield* snapshot)[secondThreadId]);
+        const explicitThreadId = ThreadId.make("explicit");
+        yield* store.set({ threadId: explicitThreadId, tag: { label: "explicit" } });
+        yield* store.inherit({ sourceThreadId: firstThreadId, threadId: explicitThreadId });
+        assert.deepEqual(Option.getOrThrow(yield* snapshot)[explicitThreadId], {
+          label: "explicit",
+        });
+      }).pipe(Effect.provide(storeLayer), Effect.scoped),
+    ),
+  );
+
+  it.effect("does not create tag metadata for a missing, deleted, or self source target", () =>
+    withStore((storeLayer, filename) =>
+      Effect.gen(function* () {
+        const store = yield* ThreadTags.ThreadTags;
+        const fs = yield* FileSystem.FileSystem;
+        for (const threadId of [missingThreadId, deletedThreadId, firstThreadId]) {
+          yield* store.inherit({ sourceThreadId: firstThreadId, threadId });
+        }
+        assert.isFalse(yield* fs.exists(filename));
+      }).pipe(Effect.provide(storeLayer), Effect.scoped),
+    ),
+  );
+
   it.effect("defaults to no overrides without creating a file", () =>
     withStore((storeLayer, filename) =>
       Effect.gen(function* () {
@@ -116,6 +188,43 @@ it.layer(NodeServices.layer)("fork thread tags", (it) => {
           second: { label: "two" },
         });
       }).pipe(Effect.provide(storeLayer), Effect.scoped),
+    ),
+  );
+
+  it.effect("persists colors, preserves them for old clients, and publishes explicit resets", () =>
+    withStore((storeLayer, filename) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        yield* Effect.gen(function* () {
+          const store = yield* ThreadTags.ThreadTags;
+          yield* store.set({ threadId: firstThreadId, tag: { label: "work", color: "#8b5cf6" } });
+        }).pipe(Effect.provide(storeLayer));
+        yield* Effect.gen(function* () {
+          const store = yield* ThreadTags.ThreadTags;
+          const updates = yield* Stream.toQueue(store.changes, { capacity: "unbounded" });
+          assert.deepEqual(yield* Queue.take(updates), {
+            first: { label: "work", color: "#8b5cf6" },
+          });
+          yield* store.set({ threadId: firstThreadId, tag: { label: "renamed" } });
+          assert.deepEqual(yield* Queue.take(updates), {
+            first: { label: "renamed", color: "#8b5cf6" },
+          });
+          yield* store.set({
+            threadId: firstThreadId,
+            tag: { label: "renamed", color: "#14b8a6" },
+          });
+          assert.deepEqual(yield* Queue.take(updates), {
+            first: { label: "renamed", color: "#14b8a6" },
+          });
+          yield* store.set({ threadId: firstThreadId, tag: { label: "renamed", color: null } });
+          assert.deepEqual(yield* Queue.take(updates), {
+            first: { label: "renamed", color: null },
+          });
+          yield* store.set({ threadId: firstThreadId, tag: null });
+          assert.deepEqual(yield* Queue.take(updates), {});
+        }).pipe(Effect.provide(storeLayer));
+        assert.deepEqual(JSON.parse(yield* fs.readFileString(filename)).threads, {});
+      }).pipe(Effect.scoped),
     ),
   );
 

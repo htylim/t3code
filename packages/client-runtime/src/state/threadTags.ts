@@ -42,9 +42,12 @@ export function createThreadTagEnvironmentAtoms<R, E>(
   const labelAtom = Atom.family((ref: ScopedThreadRef) =>
     Atom.make((get) => get(snapshotAtom(ref.environmentId))?.[ref.threadId]?.label ?? null),
   );
+  const colorAtom = Atom.family((ref: ScopedThreadRef) =>
+    Atom.make((get) => get(snapshotAtom(ref.environmentId))?.[ref.threadId]?.color ?? null),
+  );
   const set = createEnvironmentRpcCommand(runtime, {
     label: "fork:thread-tags:set",
     tag: WS_METHODS.threadTagsSet,
   });
-  return { supportedAtom, snapshotAtom, failedAtom, labelAtom, set };
+  return { supportedAtom, snapshotAtom, failedAtom, labelAtom, colorAtom, set };
 }

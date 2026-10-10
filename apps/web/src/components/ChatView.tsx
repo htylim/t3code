@@ -8052,6 +8052,7 @@ export default function ChatView(props: ChatViewProps) {
         buildSideChatCreateCommand({
           target,
           sourceThread: {
+            id: activeThread.id,
             projectId: activeThread.projectId,
             modelSelection,
             runtimeMode,
@@ -9858,6 +9859,9 @@ export default function ChatView(props: ChatViewProps) {
                   bootstrap: {
                     createThread: {
                       projectId: activeProject.id,
+                      ...(draftThread?.sourceThreadRef?.environmentId === environmentId
+                        ? { sourceThreadId: draftThread.sourceThreadRef.threadId }
+                        : {}),
                       title,
                       modelSelection: target.selection,
                       runtimeMode,
@@ -10198,6 +10202,9 @@ export default function ChatView(props: ChatViewProps) {
                 ? {
                     createThread: {
                       projectId: activeProject.id,
+                      ...(draftThread?.sourceThreadRef?.environmentId === environmentId
+                        ? { sourceThreadId: draftThread.sourceThreadRef.threadId }
+                        : {}),
                       title,
                       modelSelection: threadCreateModelSelection,
                       runtimeMode,
@@ -10887,6 +10894,7 @@ export default function ChatView(props: ChatViewProps) {
       environmentId,
       input: {
         threadId: nextThreadId,
+        sourceThreadId: activeThread.id,
         projectId: activeProject.id,
         title: nextThreadTitle,
         modelSelection: nextThreadModelSelection,

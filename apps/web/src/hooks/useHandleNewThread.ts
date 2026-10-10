@@ -103,6 +103,11 @@ export function useNewThreadHandler() {
           : null;
       const carrySourceDraft =
         currentRouteTarget?.kind === "draft" ? getDraftSession(currentRouteTarget.draftId) : null;
+      const sourceThreadRef =
+        currentRouteTarget?.kind === "server" &&
+        currentRouteTarget.threadRef.environmentId === projectRef.environmentId
+          ? currentRouteTarget.threadRef
+          : (carrySourceDraft?.sourceThreadRef ?? null);
       // Composer overrides win over the persisted thread state — they are
       // what the user currently sees in the composer controls.
       const carrySourceComposer = currentRouteTarget
@@ -298,6 +303,7 @@ export function useNewThreadHandler() {
             emptyStoredDraftThread.draftId,
             {
               threadId: emptyStoredDraftThread.threadId,
+              ...(!isDraftAlreadyOpen ? { sourceThreadRef } : {}),
               ...workspaceContext,
               ...(!isDraftAlreadyOpen ? { runtimeMode: defaultRuntimeMode } : {}),
               ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
@@ -402,6 +408,7 @@ export function useNewThreadHandler() {
         }
         setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, draftId, {
           threadId,
+          sourceThreadRef,
           createdAt,
           branch: options?.branch ?? null,
           worktreePath: options?.worktreePath ?? null,

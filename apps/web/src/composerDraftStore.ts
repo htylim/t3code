@@ -21,7 +21,7 @@ import {
   ThreadContextRecord,
   type ServerProvider,
   type ScopedProjectRef,
-  type ScopedThreadRef,
+  ScopedThreadRef,
   ThreadId,
   SnapShotSource,
 } from "@t3tools/contracts";
@@ -81,6 +81,7 @@ import { replaceComposerContextReferences } from "@t3tools/shared/composerContex
 import { UnifiedSettings } from "@t3tools/contracts/settings";
 import { ReviewCommentContextSchema, type ReviewCommentContext } from "./reviewCommentContext";
 const isRuntimeMode = Schema.is(RuntimeMode);
+const isScopedThreadRef = Schema.is(ScopedThreadRef);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 const isReviewCommentContext = Schema.is(ReviewCommentContextSchema);
 const isThreadContextRecord = Schema.is(ThreadContextRecord);
@@ -318,6 +319,7 @@ type LegacyPersistedComposerDraftStoreState = PersistedComposerDraftStoreState &
 
 const PersistedDraftThreadState = Schema.Struct({
   threadId: ThreadId,
+  sourceThreadRef: Schema.optionalKey(Schema.NullOr(ScopedThreadRef)),
   environmentId: Schema.String,
   projectId: ProjectId,
   logicalProjectKey: Schema.optionalKey(Schema.String),
@@ -450,6 +452,7 @@ export function composerDraftHasUserContent(
  */
 export interface DraftSessionState {
   threadId: ThreadId;
+  sourceThreadRef?: ScopedThreadRef | null;
   environmentId: EnvironmentId;
   projectId: ProjectId;
   logicalProjectKey: string;
@@ -537,6 +540,7 @@ interface ComposerDraftStoreState {
       threadId?: ThreadId;
       branch?: string | null;
       worktreePath?: string | null;
+      sourceThreadRef?: ScopedThreadRef | null;
       createdAt?: string;
       envMode?: DraftThreadEnvMode;
       startFromOrigin?: boolean;
@@ -554,6 +558,7 @@ interface ComposerDraftStoreState {
       threadId?: ThreadId;
       branch?: string | null;
       worktreePath?: string | null;
+      sourceThreadRef?: ScopedThreadRef | null;
       createdAt?: string;
       envMode?: DraftThreadEnvMode;
       startFromOrigin?: boolean;
@@ -569,6 +574,7 @@ interface ComposerDraftStoreState {
     options: {
       branch?: string | null;
       worktreePath?: string | null;
+      sourceThreadRef?: ScopedThreadRef | null;
       projectRef?: ScopedProjectRef;
       createdAt?: string;
       envMode?: DraftThreadEnvMode;
@@ -1590,6 +1596,7 @@ function createDraftThreadState(
     threadId?: ThreadId;
     branch?: string | null;
     worktreePath?: string | null;
+    sourceThreadRef?: ScopedThreadRef | null;
     createdAt?: string;
     envMode?: DraftThreadEnvMode;
     startFromOrigin?: boolean;
@@ -1625,6 +1632,10 @@ function createDraftThreadState(
       : options.startFromOrigin;
   const environmentSelection =
     options?.environmentSelection ?? existingThread?.environmentSelection;
+  const sourceThreadRef =
+    options?.sourceThreadRef !== undefined
+      ? options.sourceThreadRef
+      : existingThread?.sourceThreadRef;
   return {
     threadId,
     environmentId: projectRef.environmentId,
@@ -1646,6 +1657,7 @@ function createDraftThreadState(
       options?.interactionMode ?? existingThread?.interactionMode ?? DEFAULT_INTERACTION_MODE,
     branch: nextBranch,
     worktreePath: nextWorktreePath,
+    ...(sourceThreadRef === undefined ? {} : { sourceThreadRef }),
     envMode:
       options?.envMode ?? (nextWorktreePath ? "worktree" : (existingThread?.envMode ?? "local")),
     startFromOrigin: nextStartFromOrigin,
@@ -1681,6 +1693,7 @@ function draftThreadsEqual(left: DraftThreadState | undefined, right: DraftThrea
     left.interactionMode === right.interactionMode &&
     left.branch === right.branch &&
     left.worktreePath === right.worktreePath &&
+    scopedThreadRefsEqual(left.sourceThreadRef, right.sourceThreadRef) &&
     left.envMode === right.envMode &&
     left.startFromOrigin === right.startFromOrigin &&
     scopedThreadRefsEqual(left.promotedTo, right.promotedTo)
@@ -1829,6 +1842,9 @@ function normalizePersistedDraftThreads(
             : DEFAULT_INTERACTION_MODE,
         branch: typeof branch === "string" ? branch : null,
         worktreePath: normalizedWorktreePath,
+        ...(isScopedThreadRef(candidateDraftThread.sourceThreadRef)
+          ? { sourceThreadRef: candidateDraftThread.sourceThreadRef }
+          : {}),
         envMode: normalizeDraftThreadEnvMode(candidateDraftThread.envMode, normalizedWorktreePath),
         startFromOrigin,
         ...(candidateDraftThread.environmentSelection === "manual" ||
@@ -2592,6 +2608,9 @@ function toHydratedDraftThreadState(
     interactionMode: persistedDraftThread.interactionMode,
     branch: persistedDraftThread.branch,
     worktreePath: persistedDraftThread.worktreePath,
+    ...(persistedDraftThread.sourceThreadRef
+      ? { sourceThreadRef: persistedDraftThread.sourceThreadRef }
+      : {}),
     envMode: persistedDraftThread.envMode,
     startFromOrigin: persistedDraftThread.startFromOrigin,
     ...(persistedDraftThread.environmentSelection
@@ -2896,6 +2915,10 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               interactionMode: options.interactionMode ?? existing.interactionMode,
               branch: nextBranch,
               worktreePath: nextWorktreePath,
+              sourceThreadRef:
+                options.sourceThreadRef !== undefined
+                  ? options.sourceThreadRef
+                  : (existing.sourceThreadRef ?? null),
               envMode:
                 options.envMode ?? (nextWorktreePath ? "worktree" : (existing.envMode ?? "local")),
               startFromOrigin: nextStartFromOrigin,
@@ -2912,6 +2935,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               nextDraftThread.interactionMode === existing.interactionMode &&
               nextDraftThread.branch === existing.branch &&
               nextDraftThread.worktreePath === existing.worktreePath &&
+              scopedThreadRefsEqual(nextDraftThread.sourceThreadRef, existing.sourceThreadRef) &&
               nextDraftThread.envMode === existing.envMode &&
               nextDraftThread.startFromOrigin === existing.startFromOrigin &&
               scopedThreadRefsEqual(nextDraftThread.promotedTo, existing.promotedTo);

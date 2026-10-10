@@ -9,6 +9,8 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { ThreadTagColorPicker } from "./ThreadTagColorPicker";
+import { ThreadTagPill } from "./ThreadTagPill";
 import {
   Dialog,
   DialogPopup,
@@ -22,7 +24,7 @@ import {
 type TagRequest = { readonly threadRef: ScopedThreadRef };
 const useTagRequest = create<{ request: TagRequest | null }>(() => ({ request: null }));
 
-/** Open the same tag editor from a menu, command palette, or keyboard shortcut. */
+/** Open the shared editor from a tag pill, menu, command palette, or keyboard shortcut. */
 export function requestThreadTag(threadRef: ScopedThreadRef): void {
   useTagRequest.setState({ request: { threadRef } });
 }
@@ -61,13 +63,14 @@ function ThreadTagDialog({ request }: { request: TagRequest }) {
         <DialogHeader>
           <DialogTitle>Tag thread</DialogTitle>
           <DialogDescription>
-            Set a label for this thread. Clear it to use the project name.
+            Set a tag for this thread. Clear the label to remove the tag.
           </DialogDescription>
         </DialogHeader>
         {snapshot !== null && supported && allowed ? (
           <ThreadTagForm
             threadRef={threadRef}
             initialLabel={snapshot[threadRef.threadId]?.label ?? ""}
+            initialColor={snapshot[threadRef.threadId]?.color ?? null}
             onClose={() => closeThreadTagDialog(request)}
           />
         ) : (
@@ -87,14 +90,17 @@ function ThreadTagDialog({ request }: { request: TagRequest }) {
 function ThreadTagForm({
   threadRef,
   initialLabel,
+  initialColor,
   onClose,
 }: {
   threadRef: ScopedThreadRef;
   initialLabel: string;
+  initialColor: string | null;
   onClose: () => void;
 }) {
   const inputId = useId();
   const [label, setLabel] = useState(initialLabel);
+  const [color, setColor] = useState(initialColor);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setTag = useAtomCommand(threadTagEnvironment.set, { reportFailure: false });
@@ -107,7 +113,10 @@ function ThreadTagForm({
     const trimmedLabel = nextLabel.trim();
     const saved = await setTag({
       environmentId: threadRef.environmentId,
-      input: { threadId: threadRef.threadId, tag: trimmedLabel ? { label: trimmedLabel } : null },
+      input: {
+        threadId: threadRef.threadId,
+        tag: trimmedLabel ? { label: trimmedLabel, color } : null,
+      },
     });
     setSaving(false);
     if (saved._tag === "Success") onClose();
@@ -126,17 +135,26 @@ function ThreadTagForm({
       }}
     >
       <DialogPanel>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor={inputId}>Thread tag</Label>
-          <Input
-            id={inputId}
-            autoFocus
-            maxLength={THREAD_TAG_LABEL_MAX_LENGTH}
-            placeholder="e.g. v3 refactor"
-            value={label}
-            disabled={saving}
-            onChange={(event) => setLabel(event.target.value)}
-          />
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={inputId}>Thread tag</Label>
+            <Input
+              id={inputId}
+              autoFocus
+              maxLength={THREAD_TAG_LABEL_MAX_LENGTH}
+              placeholder="e.g. v3 refactor"
+              value={label}
+              disabled={saving}
+              onChange={(event) => setLabel(event.target.value)}
+            />
+          </div>
+          <ThreadTagColorPicker color={color} disabled={saving} onChange={setColor} />
+          <div className="grid gap-2">
+            <span className="text-xs text-muted-foreground">Preview</span>
+            <div className="min-w-0">
+              <ThreadTagPill label={label.trim() || "Thread tag"} color={color} />
+            </div>
+          </div>
           {error ? (
             <p role="alert" className="text-sm text-destructive">
               {error}

@@ -138,6 +138,7 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
         const result = yield* ThreadMessageIntake.launchThread({
           commandId,
           threadId,
+          ...(caller === undefined ? {} : { sourceThreadId: caller.id }),
           projectId,
           title: input.title,
           modelSelection,

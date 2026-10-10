@@ -56,12 +56,20 @@ and worktree while you stay in the new thread composer. This requires a Git proj
 
 Choose **Tag thread** from a thread's menu to set a label such as "v3 refactor".
 On web and desktop, you can also use the command palette or press `mod+alt+t`.
+Double-click an existing tag pill in the sidebar or breadcrumb to edit it.
 Change the shortcut in **Settings → Keybindings** under `thread.tag`.
 
-The tag replaces the project name on the sidebar card and keeps the project's icon.
-The thread breadcrumb shows the tag before the project. Clear the tag to restore the
-project label. Tags stay with the thread on its host and appear on other connected devices.
+Choose a preset color for the tag's pill, or use **Custom color** to pick your own.
+**Default** removes the custom color without clearing the label.
+
+The sidebar card shows the project's icon and name, followed by the tag's pill.
+The thread breadcrumb shows project / tag / thread. Clear the tag to remove its pill.
+Tags stay with the thread on its host and appear on other connected devices.
 Tagging a thread does not change its project.
+
+New threads created from a tagged thread inherit its label and color. This includes
+agent-launched conversations, forks, and delegated threads. You can edit or clear the
+new thread's tag independently; later changes to the source tag do not update it.
 
 ## Pin and reorder threads
 

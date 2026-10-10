@@ -15,6 +15,7 @@ import {
   type ScopedThreadRef,
   type UploadChatAttachment,
   type RunId,
+  type ThreadId,
 } from "@t3tools/contracts";
 
 import type { ThreadSession } from "~/types";
@@ -29,6 +30,7 @@ export interface CompactChatTargetThread {
 }
 
 export interface SideChatSourceThread {
+  readonly id: ThreadId;
   readonly projectId: ProjectId;
   readonly modelSelection: ModelSelection;
   readonly runtimeMode: RuntimeMode;
@@ -47,6 +49,7 @@ export function buildSideChatCreateCommand(input: {
     input: {
       threadId: input.target.threadId,
       projectId: input.sourceThread.projectId,
+      sourceThreadId: input.sourceThread.id,
       title: "New thread",
       modelSelection: input.sourceThread.modelSelection,
       runtimeMode: input.sourceThread.runtimeMode,

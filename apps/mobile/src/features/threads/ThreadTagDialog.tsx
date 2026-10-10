@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { THREAD_TAG_LABEL_MAX_LENGTH, type ScopedThreadRef } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { THREAD_TAG_COLOR_PRESETS } from "@t3tools/client-runtime/thread-tag-colors";
 import { useState } from "react";
 import { Modal, Pressable, TextInput, View } from "react-native";
 import { AppText } from "../../components/AppText";
@@ -27,12 +28,13 @@ export function ThreadTagDialog({
         <View className="w-full rounded-[24px] bg-card px-6 pb-4 pt-5">
           <AppText className="text-lg font-t3-medium">Tag thread</AppText>
           <AppText className="mt-2 text-sm text-foreground-secondary">
-            Clear the label to use the project name.
+            Clear the label to remove the tag.
           </AppText>
           {snapshot !== null && allowed ? (
             <ThreadTagForm
               threadRef={threadRef}
               initialLabel={snapshot[threadRef.threadId]?.label ?? ""}
+              initialColor={snapshot[threadRef.threadId]?.color ?? null}
               onClose={onClose}
             />
           ) : (
@@ -57,20 +59,27 @@ export function ThreadTagDialog({
 function ThreadTagForm({
   threadRef,
   initialLabel,
+  initialColor,
   onClose,
 }: {
   readonly threadRef: ScopedThreadRef;
   readonly initialLabel: string;
+  readonly initialColor: string | null;
   readonly onClose: () => void;
 }) {
   const [label, setLabel] = useState(initialLabel);
+  const [color, setColor] = useState(initialColor);
+  const [customColorOpen, setCustomColorOpen] = useState(false);
+  const [customColorDraft, setCustomColorDraft] = useState(initialColor ?? "");
+  const invalidCustomColor =
+    customColorOpen && customColorDraft !== "" && !/^#[0-9a-f]{6}$/i.test(customColorDraft);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setTag = useAtomCommand(threadTagEnvironment.set, { reportFailure: false });
 
   /** Send the override to the thread's host, then dismiss after persistence succeeds. */
   async function saveTag(nextLabel: string): Promise<void> {
-    if (saving) return;
+    if (saving || (nextLabel.trim() && invalidCustomColor)) return;
     setSaving(true);
     setError(null);
     const trimmedLabel = nextLabel.trim();
@@ -78,7 +87,7 @@ function ThreadTagForm({
       environmentId: threadRef.environmentId,
       input: {
         threadId: threadRef.threadId,
-        tag: trimmedLabel ? { label: trimmedLabel } : null,
+        tag: trimmedLabel ? { label: trimmedLabel, color } : null,
       },
     });
     setSaving(false);
@@ -102,6 +111,76 @@ function ThreadTagForm({
         returnKeyType="done"
         className="mt-4 rounded-xl border border-border bg-screen px-3 py-2.5 text-base text-foreground"
       />
+      <AppText className="mt-4 text-sm font-t3-medium">Tag color</AppText>
+      <View className="mt-2 flex-row flex-wrap items-center gap-3">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: color === null, disabled: saving }}
+          disabled={saving}
+          onPress={() => {
+            setColor(null);
+            setCustomColorDraft("");
+          }}
+          className="min-h-10 justify-center rounded-xl border border-border px-3"
+        >
+          <AppText>Default</AppText>
+        </Pressable>
+        {THREAD_TAG_COLOR_PRESETS.map((preset) => (
+          <Pressable
+            key={preset.color}
+            accessibilityRole="button"
+            accessibilityLabel={`${preset.label} tag color`}
+            accessibilityState={{
+              selected: color?.toLowerCase() === preset.color,
+              disabled: saving,
+            }}
+            disabled={saving}
+            onPress={() => {
+              setColor(preset.color);
+              setCustomColorDraft(preset.color);
+            }}
+            className="size-10 items-center justify-center rounded-full border border-border"
+            style={{ backgroundColor: preset.color }}
+          >
+            {color?.toLowerCase() === preset.color ? (
+              <AppText style={{ color: "#ffffff" }}>✓</AppText>
+            ) : null}
+          </Pressable>
+        ))}
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: customColorOpen, disabled: saving }}
+        disabled={saving}
+        onPress={() => setCustomColorOpen(!customColorOpen)}
+        className="mt-2 min-h-10 justify-center"
+      >
+        <AppText>Custom color</AppText>
+      </Pressable>
+      {customColorOpen ? (
+        <>
+          <TextInput
+            accessibilityLabel="Custom tag hex color"
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={7}
+            placeholder="#8b5cf6"
+            value={customColorDraft}
+            editable={!saving}
+            onChangeText={(hexColor) => {
+              setCustomColorDraft(hexColor);
+              if (hexColor === "") setColor(null);
+              else if (/^#[0-9a-f]{6}$/i.test(hexColor)) setColor(hexColor.toLowerCase());
+            }}
+            className="rounded-xl border border-border bg-screen px-3 py-2.5 text-base text-foreground"
+          />
+          {invalidCustomColor ? (
+            <AppText className="mt-2 text-sm text-danger-foreground">
+              Enter a six-digit hex color, such as #8b5cf6.
+            </AppText>
+          ) : null}
+        </>
+      ) : null}
       {error ? (
         <AppText accessibilityRole="alert" className="mt-2 text-sm text-danger-foreground">
           {error}
@@ -128,7 +207,7 @@ function ThreadTagForm({
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          disabled={saving}
+          disabled={saving || invalidCustomColor}
           onPress={() => void saveTag(label)}
           className="min-h-10 justify-center"
         >

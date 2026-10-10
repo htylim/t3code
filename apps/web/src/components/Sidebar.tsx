@@ -10,6 +10,7 @@ import {
 } from "./chat/threadContextDrag";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestThreadTag } from "./ThreadTagDialog";
+import { ThreadTagPill } from "./ThreadTagPill";
 import { readThreadTagsSupported, threadTagEnvironment } from "../state/threadTags";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
@@ -1215,8 +1216,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     [thread.environmentId, thread.id],
   );
   const threadKey = scopedThreadKey(threadRef);
-  const explicitTagLabel = useAtomValue(threadTagEnvironment.labelAtom(threadRef));
-  const threadTagLabel = explicitTagLabel ?? props.projectDisplayName;
+  const threadTagLabel = useAtomValue(threadTagEnvironment.labelAtom(threadRef));
+  const threadTagColor = useAtomValue(threadTagEnvironment.colorAtom(threadRef));
+  const canEditThreadTag = useAtomValue(
+    threadTagEnvironment.set.permissionAtom(thread.environmentId),
+  );
   const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   useEffect(() => {
     if (!canOperateThread && isRenaming) onCancelRename();
@@ -1672,7 +1676,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const accessibility = resolveSidebarRowAccessibility({
     title: thread.title,
     statusLabel: topStatus?.label ?? null,
-    projectDisplayName: threadTagLabel,
+    projectDisplayName: props.projectDisplayName,
+    threadTagLabel,
     isActive: props.isActive,
   });
 
@@ -2044,18 +2049,33 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               {props.project ? (
                 <ProjectFavicon project={props.project} className="size-4 shrink-0" />
               ) : null}
-              {threadTagLabel ? (
-                <span
-                  className={cn(
-                    "min-w-0 flex-1 truncate text-secondary-label text-xs",
-                    shouldRecede ? "font-normal" : "font-medium",
-                  )}
-                >
-                  {threadTagLabel}
-                </span>
-              ) : (
-                <span className="flex-1" />
-              )}
+              <div
+                className={cn(
+                  "flex min-w-0 flex-1 items-center gap-1.5 text-secondary-label text-xs",
+                  shouldRecede ? "font-normal" : "font-medium",
+                )}
+              >
+                {props.projectDisplayName ? (
+                  <span className={cn("min-w-0 truncate", threadTagLabel && "max-w-1/2")}>
+                    {props.projectDisplayName}
+                  </span>
+                ) : null}
+                {threadTagLabel ? (
+                  <>
+                    {props.projectDisplayName ? (
+                      <span aria-hidden className="shrink-0 text-icon-muted">
+                        /
+                      </span>
+                    ) : null}
+                    <ThreadTagPill
+                      label={threadTagLabel}
+                      color={threadTagColor}
+                      className="min-w-0 shrink"
+                      onEdit={canEditThreadTag ? () => requestThreadTag(threadRef) : undefined}
+                    />
+                  </>
+                ) : null}
+              </div>
               <SideSurfaceThreadIndicators
                 hasSideChat={props.hasSideChat}
                 isSideChat={props.isSideChat}

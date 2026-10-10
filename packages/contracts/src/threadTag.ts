@@ -3,9 +3,14 @@ import { ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 export const THREAD_TAG_LABEL_MAX_LENGTH = 120;
 
+/** Opaque sRGB color shared by web and native tag pills. */
+export const ThreadTagColor = Schema.String.check(Schema.isPattern(/^#[0-9a-f]{6}$/i));
+
 /** One explicit label. An absent tag uses the thread's project label and icon. */
 export const ThreadTag = Schema.Struct({
   label: TrimmedNonEmptyString.check(Schema.isMaxLength(THREAD_TAG_LABEL_MAX_LENGTH)),
+  // Omission preserves the color for older clients. Null explicitly clears it.
+  color: Schema.optional(Schema.NullOr(ThreadTagColor)),
 });
 export type ThreadTag = typeof ThreadTag.Type;
 

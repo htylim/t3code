@@ -40,6 +40,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import { ThreadTags } from "../fork/ThreadTags.ts";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -1671,6 +1672,9 @@ describe("orchestrator MCP toolkit", () => {
               .pipe(Effect.flip);
             expect(reused.message).toContain("already used");
 
+            const threadTags = yield* ThreadTags;
+            const parentTag = { label: "MCP work", color: "#8b5cf6" };
+            yield* threadTags.set({ threadId: parentThreadId, tag: parentTag });
             const delegatedCall = yield* invoke("delegate_task", {
               task: delegatedPrompt,
               target: {
@@ -1697,6 +1701,8 @@ describe("orchestrator MCP toolkit", () => {
               senderThreadId: parentThreadId,
             });
             expect(delegated.status).toBe("completed");
+            const delegatedTags = yield* Stream.runHead(threadTags.changes);
+            expect(Option.getOrThrow(delegatedTags)[delegated.childThreadId]).toEqual(parentTag);
             expect(delegated.summary).toBe(delegatedResult);
             expect(delegated.providerInstanceId).toBe(claudeInstanceId);
 
@@ -2089,6 +2095,18 @@ describe("orchestrator MCP toolkit", () => {
             expect(created.threads).toHaveLength(2);
             const emptyThread = created.threads[0]!;
             const promptedThread = created.threads[1]!;
+            const createdTags = Option.getOrThrow(
+              yield* threadTags.changes.pipe(
+                Stream.filter(
+                  (tags) =>
+                    tags[emptyThread.threadId] !== undefined &&
+                    tags[promptedThread.threadId] !== undefined,
+                ),
+                Stream.runHead,
+              ),
+            );
+            expect(createdTags[emptyThread.threadId]).toEqual(parentTag);
+            expect(createdTags[promptedThread.threadId]).toEqual(parentTag);
             expect(emptyThread).toMatchObject({
               status: "idle",
               createdBy: "agent",

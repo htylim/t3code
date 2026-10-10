@@ -67,6 +67,7 @@ import {
   SettingsIcon,
   SquarePenIcon,
   SunIcon,
+  TagIcon,
   TextSearchIcon,
 } from "lucide-react";
 import { requestThreadFindOpen } from "./chat/threadFindActionBus";
@@ -2072,7 +2073,7 @@ function OpenCommandPaletteDialog(props: {
       value: "action:tag-thread",
       searchTerms: ["tag thread", "label thread", "clear tag"],
       title: "Tag thread...",
-      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+      icon: <TagIcon className={ITEM_ICON_CLASS} />,
       shortcutCommand: "thread.tag",
       run: async () =>
         requestThreadTag(scopeThreadRef(activeThread.environmentId, activeThread.id)),

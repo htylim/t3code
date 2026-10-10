@@ -23,23 +23,54 @@ upstream.
 ## 2026-10-10 - Thread tags outside SQLite
 
 - Upstream baseline: `a11f464133`.
-- Change: Threads can carry one explicit label. Active and postponed sidebar cards use it
-  instead of the project name. Web and desktop breadcrumbs show it before the project.
+- Change: Threads can carry one explicit label and an optional color. Active and postponed
+  sidebar cards show the project icon and name followed by / and the tag pill.
+  Web and desktop breadcrumbs show project / tag / thread, with the icon beside the project.
   An unset tag keeps the existing project label and icon. Tag editing is available in
-  thread menus, the command palette, and the configurable `thread.tag` shortcut,
-  defaulting to `mod+alt+t`. Native thread lists also display and edit tags.
+  thread menus, double-clicking an existing pill, the command palette, and the configurable `thread.tag` shortcut,
+  defaulting to `mod+alt+t`. Web and desktop editors offer preset swatches and the theme
+  editor's custom picker, with a live pill preview. Native editors offer the same presets
+  and custom hex input. Tags use soft colored pills without a tag icon. The tag action
+  uses a label icon in browser menus and the command palette; text-only menus keep their style.
+  Browser context menus use the available window height so actions scroll only when they cannot fit.
 - Reason: Label related work across projects without adding a database migration or
   modifying upstream's event-sourced thread model.
 - Scope: A fork-owned service persists versioned overrides in
   `<stateDir>/fork/thread-tags.json`. Atomic, serialized writes preserve unknown future
   fields. Capability-gated RPCs and shared client atoms follow the destination environment
   and its thread permissions. Clients share one subscription per environment and observe
-  individual label strings. The project icon remains the fallback. Inheritance, MCP tag
+  individual label and color values. Omitted colors preserve existing colors for older
+  clients; null resets the color. Project labels and optional tag pills remain separate,
+  including in row accessibility names. New threads copy their source's label and color
+  through a durable creation effect before the provider starts. Agent launches, batch
+  creation, forks, delegated threads, web drafts, side chats, and plan implementation
+  threads carry this context. A persisted inheritance marker preserves later edits and
+  clears when the effect replays after a restart. MCP tag
   metadata, suggestions, custom icons, and project aliases remain future work.
-- Verification: Focused storage, contract, authorization, menu, dialog, and shortcut tests,
+- Verification: Color customization passed 38 focused storage, contract, editor, and picker
+  tests, affected typechecks, targeted lint, formatting, and diff checks. An isolated
+  Browser panel pass with a synthetic thread verified presets, custom hex and RGB sync,
+  reset, cancel, reload persistence, and matching sidebar and breadcrumb pills without
+  tag icons. The menu icon passed a Browser panel right-click check, 29 focused menu
+  tests, web typecheck, and targeted lint. Native UI checks were not run for the color controls.
+  Browser menu sizing checks showed every action without scrolling in a 559px-tall window
+  and kept scrolling actions inside a 400px-tall window; all eight fallback-menu tests passed.
+  The project-first layout passed 160 focused header, sidebar, and mobile appearance tests,
+  web and mobile typechecks, and targeted lint. Browser checks confirmed breadcrumb order,
+  project-only cards, project/tag cards, and long-name truncation without row overflow.
+  Cleanup passed 160 focused sidebar, header, and tag-editor tests, web typecheck, and lint;
+  a browser reload confirmed the same layout with separate project and tag accessibility labels.
+  Editable pills passed sidebar and breadcrumb double-click checks, including an inactive
+  thread without navigation or title rename, keyboard activation, and cancel. The same
+  160 focused tests, web typecheck, and targeted lint passed after adding the gesture.
+  Inheritance passed storage restart and replay checks, real MCP creation and delegation
+  checks, an empty launch through the effect worker, fork replay suites, draft persistence,
+  and scoped typechecks and lint. An isolated browser-created side chat copied its source's
+  label and custom color without starting a provider turn.
+  The original label-only feature passed focused storage, contract, authorization, menu, dialog, and shortcut tests,
   scoped server, web, mobile, contracts, and client-runtime typechecks, formatting, and
   targeted lint. Storage tests cover restart, concurrent writes, failed atomic replacement,
-  corrupt files, unknown fields, updates, and clearing. An isolated dev-server Browser
+  corrupt files, unknown fields, updates, and clearing. Before color customization, an isolated dev-server Browser
   panel pass with copied, stopped threads verified setting, updating, canceling, both
   clearing paths, reload persistence, active/postponed/snoozed labels, project icons,
   breadcrumbs, sidebar and header menus, the command palette, and `mod+alt+t`.

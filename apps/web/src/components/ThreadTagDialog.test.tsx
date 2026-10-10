@@ -45,6 +45,11 @@ vi.mock("./ui/button", () => ({
 }));
 vi.mock("./ui/input", () => ({ Input: (props: ComponentProps<"input">) => <input {...props} /> }));
 vi.mock("./ui/label", () => ({ Label: (props: ComponentProps<"label">) => <label {...props} /> }));
+vi.mock("./ui/popover", () => ({
+  Popover: ({ children }: { children: ReactNode }) => children,
+  PopoverPopup: ({ children }: { children: ReactNode }) => children,
+  PopoverTrigger: ({ render }: { render: ReactNode }) => render,
+}));
 
 import { requestThreadTag, ThreadTagDialogHost } from "./ThreadTagDialog";
 const threadRef = {
@@ -58,9 +63,17 @@ function button(label: string) {
   return renderer.root.findAllByType("button").find((node) => node.children.join("") === label)!;
 }
 
+/** Find the label draft independently of the custom picker's numeric and color fields. */
+function labelInputs() {
+  return renderer.root
+    .findAllByType("input")
+    .filter((node) => node.props.placeholder === "e.g. v3 refactor");
+}
+
 /** Mount the shared host after requesting a particular thread. */
 async function openEditor(): Promise<void> {
   await act(async () => {
+    renderer?.unmount();
     requestThreadTag(threadRef);
     renderer = create(<ThreadTagDialogHost />);
   });
@@ -79,23 +92,21 @@ describe("thread tag editor", () => {
   it("saves a trimmed label to the thread's destination and closes after success", async () => {
     await openEditor();
     await act(async () =>
-      renderer.root.findByType("input").props.onChange({ target: { value: "  v3 refactor  " } }),
+      labelInputs()[0]!.props.onChange({ target: { value: "  v3 refactor  " } }),
     );
     await act(async () => renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }));
     expect(state.save).toHaveBeenCalledWith({
       environmentId: "remote",
-      input: { threadId: "thread", tag: { label: "v3 refactor" } },
+      input: { threadId: "thread", tag: { label: "v3 refactor", color: null } },
     });
-    expect(renderer.root.findAllByType("input")).toHaveLength(0);
+    expect(labelInputs()).toHaveLength(0);
   });
 
   it.each(["clear button", "blank input"])("removes the override through %s", async (method) => {
     await openEditor();
     if (method === "clear button") await act(async () => button("Clear tag").props.onClick());
     else {
-      await act(async () =>
-        renderer.root.findByType("input").props.onChange({ target: { value: "   " } }),
-      );
+      await act(async () => labelInputs()[0]!.props.onChange({ target: { value: "   " } }));
       await act(async () =>
         renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }),
       );
@@ -108,9 +119,12 @@ describe("thread tag editor", () => {
 
   it("cancels without changing the stored tag", async () => {
     await openEditor();
+    await act(async () =>
+      renderer.root.findByProps({ "aria-label": "Teal tag color" }).props.onClick(),
+    );
     await act(async () => button("Cancel").props.onClick());
     expect(state.save).not.toHaveBeenCalled();
-    expect(renderer.root.findAllByType("input")).toHaveLength(0);
+    expect(labelInputs()).toHaveLength(0);
   });
 
   it("keeps the draft and error visible after a failed save", async () => {
@@ -120,18 +134,66 @@ describe("thread tag editor", () => {
     });
     await openEditor();
     await act(async () =>
-      renderer.root.findByType("input").props.onChange({ target: { value: "keep me" } }),
+      renderer.root.findByProps({ "aria-label": "Violet tag color" }).props.onClick(),
+    );
+    await act(async () => labelInputs()[0]!.props.onChange({ target: { value: "keep me" } }));
+    await act(async () => renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }));
+    expect(labelInputs()[0]!.props.value).toBe("keep me");
+    expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toBeTruthy();
+    state.save.mockResolvedValue({ _tag: "Success", value: undefined });
+    await act(async () => renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }));
+    expect(state.save).toHaveBeenLastCalledWith({
+      environmentId: "remote",
+      input: { threadId: "thread", tag: { label: "keep me", color: "#8b5cf6" } },
+    });
+  });
+
+  it("saves a preset color with the label and reloads it when editing again", async () => {
+    await openEditor();
+    await act(async () =>
+      renderer.root.findByProps({ "aria-label": "Teal tag color" }).props.onClick(),
     );
     await act(async () => renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }));
-    expect(renderer.root.findByType("input").props.value).toBe("keep me");
-    expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toBeTruthy();
+    expect(state.save).toHaveBeenLastCalledWith({
+      environmentId: "remote",
+      input: { threadId: "thread", tag: { label: "before", color: "#14b8a6" } },
+    });
+    state.snapshot = { thread: { label: "before", color: "#14b8a6" } };
+    await openEditor();
+    await act(async () => renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }));
+    expect(state.save).toHaveBeenLastCalledWith({
+      environmentId: "remote",
+      input: { threadId: "thread", tag: { label: "before", color: "#14b8a6" } },
+    });
+  });
+
+  it("saves a custom hex color through the theme picker and can reset it", async () => {
+    await openEditor();
+    await act(async () =>
+      renderer.root.findByProps({ "aria-label": "Tag picker hex value" }).props.onChange({
+        currentTarget: { value: "#123ABC" },
+      }),
+    );
+    await act(async () => renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }));
+    expect(state.save).toHaveBeenLastCalledWith({
+      environmentId: "remote",
+      input: { threadId: "thread", tag: { label: "before", color: "#123abc" } },
+    });
+    state.snapshot = { thread: { label: "before", color: "#123abc" } };
+    await openEditor();
+    await act(async () => button("Default").props.onClick());
+    await act(async () => renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }));
+    expect(state.save).toHaveBeenLastCalledWith({
+      environmentId: "remote",
+      input: { threadId: "thread", tag: { label: "before", color: null } },
+    });
   });
 
   it.each(["loading", "read-only"])("does not expose an editable form while %s", async (mode) => {
     if (mode === "loading") state.snapshot = null;
     else state.allowed = false;
     await openEditor();
-    expect(renderer.root.findAllByType("input")).toHaveLength(0);
+    expect(labelInputs()).toHaveLength(0);
     await act(async () => button("Close").props.onClick());
     expect(state.save).not.toHaveBeenCalled();
   });
@@ -147,6 +209,6 @@ describe("thread tag editor", () => {
     await act(async () => renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }));
     await act(async () => requestThreadTag({ ...threadRef, threadId: ThreadId.make("another") }));
     await act(async () => finish({ _tag: "Success", value: undefined }));
-    expect(renderer.root.findAllByType("input")).toHaveLength(1);
+    expect(labelInputs()).toHaveLength(1);
   });
 });

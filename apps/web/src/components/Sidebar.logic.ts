@@ -46,16 +46,20 @@ export function shouldNavigateAfterThreadPark(input: {
 const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
 export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 200;
 
+/** Name a row by its title, status, project, and optional tag, keeping action labels separate. */
 export function resolveSidebarRowAccessibility(input: {
   readonly title: string;
   readonly statusLabel: string | null;
   readonly projectDisplayName: string | null;
+  readonly threadTagLabel?: string | null;
   readonly isActive: boolean;
 }): { readonly label: string; readonly current: "page" | undefined } {
   return {
     // The title is the row's identity and must lead when users scan tasks.
     // Only static context belongs here; nested action labels remain separate controls.
-    label: [input.title, input.statusLabel, input.projectDisplayName].filter(Boolean).join(", "),
+    label: [input.title, input.statusLabel, input.projectDisplayName, input.threadTagLabel]
+      .filter(Boolean)
+      .join(", "),
     current: input.isActive ? "page" : undefined,
   };
 }

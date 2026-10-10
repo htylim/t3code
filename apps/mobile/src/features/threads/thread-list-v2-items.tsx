@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { threadTagEnvironment } from "../../state/thread-tags";
+import { flattenThemeColor, themeColorWithAlpha } from "../../lib/mobileTheme";
 import { ThreadTagDialog } from "./ThreadTagDialog";
 import type { ThreadRowProviderInstance } from "./thread-provider-instance";
 import {
@@ -659,6 +660,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     [thread.environmentId, thread.id],
   );
   const threadTagLabel = useAtomValue(threadTagEnvironment.labelAtom(threadRef));
+  const threadTagColor = useAtomValue(threadTagEnvironment.colorAtom(threadRef));
+  const projectDisplayName = props.projectTitle ?? props.project?.title ?? "";
   const tagsSupported = useAtomValue(threadTagEnvironment.supportedAtom(thread.environmentId));
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [customSnoozeOpen, setCustomSnoozeOpen] = useState(false);
@@ -997,17 +1000,61 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             workspaceRoot={props.project.workspaceRoot}
           />
         ) : null}
-        <Text
-          className={cn(
-            "flex-1 text-sm font-t3-medium",
-            selected
-              ? selectedThreadRowColors.mutedForegroundClassName
-              : rowAppearance.mutedForegroundClassName,
-          )}
-          numberOfLines={1}
-        >
-          {threadTagLabel ?? props.projectTitle ?? props.project?.title ?? ""}
-        </Text>
+        <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+          {projectDisplayName ? (
+            <Text
+              className={cn(
+                "min-w-0 shrink text-sm font-t3-medium",
+                threadTagLabel && "max-w-[50%]",
+                selected
+                  ? selectedThreadRowColors.mutedForegroundClassName
+                  : rowAppearance.mutedForegroundClassName,
+              )}
+              numberOfLines={1}
+            >
+              {projectDisplayName}
+            </Text>
+          ) : null}
+          {threadTagLabel && projectDisplayName ? (
+            <Text
+              className={cn(
+                "text-sm",
+                selected
+                  ? selectedThreadRowColors.mutedForegroundClassName
+                  : rowAppearance.mutedForegroundClassName,
+              )}
+            >
+              /
+            </Text>
+          ) : null}
+          {threadTagLabel ? (
+            <Text
+              className={cn(
+                "min-w-0 max-w-full shrink overflow-hidden rounded-full border border-border bg-foreground/5 px-2 text-sm font-t3-medium",
+                selected
+                  ? selectedThreadRowColors.mutedForegroundClassName
+                  : rowAppearance.mutedForegroundClassName,
+              )}
+              numberOfLines={1}
+              style={
+                threadTagColor
+                  ? {
+                      backgroundColor: themeColorWithAlpha(threadTagColor, 0.14),
+                      borderColor: themeColorWithAlpha(threadTagColor, 0.25),
+                      color: flattenThemeColor(
+                        themeColorWithAlpha(threadTagColor, 0.65),
+                        theme[
+                          selected ? "--color-thread-selected-foreground" : "--color-foreground"
+                        ],
+                      ),
+                    }
+                  : undefined
+              }
+            >
+              {threadTagLabel}
+            </Text>
+          ) : null}
+        </View>
         {props.hasQueuedMessages ? <QueuedMessageIcon selected={selected} /> : null}
         {pinnedRow ? (
           <SymbolView

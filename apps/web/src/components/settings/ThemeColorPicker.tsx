@@ -71,7 +71,8 @@ function themeRgbValue(hex: string) {
   return themeHexToRgb(hex).join(", ");
 }
 
-function ThemeColorPickerPanel({
+/** Share the theme editor's plane, hue slider, and HEX/RGB inputs with other color editors. */
+export function ThemeColorPickerPanel({
   label,
   value,
   onChange,

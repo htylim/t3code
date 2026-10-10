@@ -1320,7 +1320,7 @@ describe("composerDraftStore project draft thread mapping", () => {
       branch: "feature/test",
       worktreePath: "/tmp/worktree-test",
       envMode: "worktree",
-      runtimeMode: "auto",
+      runtimeMode: "full-access",
       interactionMode: "default",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
@@ -1331,10 +1331,36 @@ describe("composerDraftStore project draft thread mapping", () => {
       branch: "feature/test",
       worktreePath: "/tmp/worktree-test",
       envMode: "worktree",
-      runtimeMode: "auto",
+      runtimeMode: "full-access",
       interactionMode: "default",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
+  });
+
+  it("preserves a source thread through draft persistence and can clear it on reuse", async () => {
+    await useComposerDraftStore.persist.clearStorage();
+    vi.useFakeTimers();
+    try {
+      const sourceThreadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, ThreadId.make("tag-source"));
+      useComposerDraftStore.getState().setProjectDraftThreadId(projectRef, draftId, {
+        threadId,
+        sourceThreadRef,
+      });
+      useComposerDraftStore.getState().setDraftThreadContext(draftId, { branch: "feature/tag" });
+      await vi.advanceTimersByTimeAsync(300);
+      resetComposerDraftStore();
+      await useComposerDraftStore.persist.rehydrate();
+      expect(useComposerDraftStore.getState().getDraftThread(draftId)?.sourceThreadRef).toEqual(
+        sourceThreadRef,
+      );
+      useComposerDraftStore.getState().setProjectDraftThreadId(projectRef, draftId, {
+        sourceThreadRef: null,
+      });
+      expect(useComposerDraftStore.getState().getDraftThread(draftId)?.sourceThreadRef).toBeNull();
+    } finally {
+      vi.useRealTimers();
+      await useComposerDraftStore.persist.clearStorage();
+    }
   });
 
   it("removes a draft's previous project mapping when retargeted in place", () => {
