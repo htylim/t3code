@@ -1,4 +1,6 @@
 import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { requestThreadTag } from "../components/ThreadTagDialog";
+import { readThreadTagsSupported } from "../state/threadTags";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import {
   type AtomCommandResult,
@@ -148,6 +150,7 @@ export function useThreadActionMenu(input: {
           snooze: readEnvironmentSupportsSnooze(threadRef.environmentId),
           pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
           titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
+          threadTags: readThreadTagsSupported(threadRef.environmentId),
         };
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const threadKey = scopedThreadKey(threadRef);
@@ -275,6 +278,9 @@ export function useThreadActionMenu(input: {
             await reportFailure("Failed to update auto-settle", () =>
               setThreadAutoSettle(threadRef, action === "auto-settle:enabled"),
             );
+            return;
+          case "tag":
+            requestThreadTag(threadRef);
             return;
           case "rename":
             onStartRename();

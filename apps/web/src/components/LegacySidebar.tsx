@@ -1,3 +1,5 @@
+import { requestThreadTag } from "./ThreadTagDialog";
+import { readThreadTagsSupported } from "../state/threadTags";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
 import { Spinner } from "~/components/ui/spinner";
@@ -2369,6 +2371,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             ? [{ id: "open-in-chat-surface", label: "Open in side surface", icon: "panel-right" }]
             : []),
           { id: "rename", label: "Rename thread", disabled: !canOperateThread },
+          ...(readThreadTagsSupported(thread.environmentId)
+            ? [{ id: "tag", label: "Tag thread...", disabled: !canOperateThread }]
+            : []),
           { id: "mark-unread", label: "Mark unread" },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
@@ -2434,6 +2439,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             void deleteTransientSideChat(replacedTransient);
           }
         }
+        return;
+      }
+
+      if (clicked === "tag") {
+        requestThreadTag(threadRef);
         return;
       }
 

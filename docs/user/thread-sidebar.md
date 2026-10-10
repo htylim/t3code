@@ -52,6 +52,17 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+## Tag a thread
+
+Choose **Tag thread** from a thread's menu to set a label such as "v3 refactor".
+On web and desktop, you can also use the command palette or press `mod+alt+t`.
+Change the shortcut in **Settings → Keybindings** under `thread.tag`.
+
+The tag replaces the project name on the sidebar card and keeps the project's icon.
+The thread breadcrumb shows the tag before the project. Clear the tag to restore the
+project label. Tags stay with the thread on its host and appear on other connected devices.
+Tagging a thread does not change its project.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

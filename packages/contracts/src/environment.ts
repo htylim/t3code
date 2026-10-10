@@ -122,6 +122,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       pre-settlement servers, so clients treat missing as unsupported and
       never send the commands under version skew. */
   threadSettlement: Schema.optionalKey(Schema.Boolean),
+  /** Fork-owned thread label overrides are available without database migrations. */
+  threadTags: Schema.optionalKey(Schema.Boolean),
   /** Server evaluates merge and inactivity settlement without a client. */
   threadAutoSettlement: Schema.optionalKey(Schema.Boolean),
   storageCleanup: Schema.optionalKey(Schema.Boolean),

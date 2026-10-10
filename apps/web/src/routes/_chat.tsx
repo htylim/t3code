@@ -24,6 +24,8 @@ import { isEditableFocused } from "../lib/editableFocus";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { undoLatestThreadAction } from "../hooks/showThreadUndoNotice";
 import { resolveShortcutCommand } from "../keybindings";
+import { requestThreadTag } from "../components/ThreadTagDialog";
+import { readThreadTagsSupported, threadTagEnvironment } from "../state/threadTags";
 import { requestThreadRename } from "../threadRenameBus";
 import {
   handleProjectSwitchShortcut,
@@ -47,6 +49,9 @@ function ChatRouteGlobalShortcuts() {
   const selectedThreadKeysSize = useThreadSelectionStore((state) => state.selectedThreadKeys.size);
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeThreadRef } =
     useHandleNewThread();
+  const canSetThreadTag = useAtomValue(
+    threadTagEnvironment.set.permissionAtom(routeThreadRef?.environmentId ?? null),
+  );
   const canOperatePreview = useEnvironmentScope(
     routeThreadRef?.environmentId ?? null,
     AuthPreviewOperateScope,
@@ -145,6 +150,21 @@ function ChatRouteGlobalShortcuts() {
       if (event.key === "Escape" && selectedThreadKeysSize > 0) {
         event.preventDefault();
         clearSelection();
+        return;
+      }
+
+      if (command === "thread.tag") {
+        if (
+          !canSetThreadTag ||
+          !activeThread ||
+          !routeThreadRef ||
+          event.repeat ||
+          !readThreadTagsSupported(routeThreadRef.environmentId)
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        requestThreadTag(routeThreadRef);
         return;
       }
 
@@ -252,6 +272,7 @@ function ChatRouteGlobalShortcuts() {
     activeThread,
     clearSelection,
     canOperatePreview,
+    canSetThreadTag,
     handleNewThread,
     keybindings,
     defaultProjectRef,

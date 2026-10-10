@@ -41,6 +41,17 @@ function allIds(state: ThreadActionMenuState): string[] {
 }
 
 describe("buildThreadActionMenuItems", () => {
+  it("offers tag editing only on supporting environments and applies thread permissions", () => {
+    expect(ids(baseState)).not.toContain("tag");
+    const supported = { ...baseState, supports: { ...baseState.supports, threadTags: true } };
+    expect(ids(supported)).toContain("tag");
+    expect(
+      buildThreadActionMenuItems({ ...supported, canOperate: false }).find(
+        (action) => action.id === "tag",
+      )?.disabled,
+    ).toBe(true);
+  });
+
   it.each([false, true])(
     "disables both lifecycle directions without permission (reversed: %s)",
     (reversed) => {

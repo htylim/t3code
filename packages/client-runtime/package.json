@@ -390,6 +390,10 @@
     "./state/mcp-apps": {
       "types": "./src/state/mcpApps.ts",
       "default": "./src/state/mcpApps.ts"
+    },
+    "./state/thread-tags": {
+      "types": "./src/state/threadTags.ts",
+      "default": "./src/state/threadTags.ts"
     }
   },
   "scripts": {

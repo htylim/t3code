@@ -9,6 +9,8 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { useAtomValue } from "@effect/atom-react";
+import { threadTagEnvironment } from "../../state/threadTags";
 import { ChevronDownIcon } from "lucide-react";
 import {
   memo,
@@ -96,6 +98,7 @@ export const ChatHeader = memo(function ChatHeader({
     () => scopeThreadRef(activeThreadEnvironmentId, activeThreadId),
     [activeThreadEnvironmentId, activeThreadId],
   );
+  const threadTagLabel = useAtomValue(threadTagEnvironment.labelAtom(activeThreadRef));
   const canOperateThread = useEnvironmentScope(
     activeThreadEnvironmentId,
     AuthOrchestrationOperateScope,
@@ -310,9 +313,26 @@ export const ChatHeader = memo(function ChatHeader({
         ariaLabel="Thread breadcrumb"
         className="flex-1 overflow-clip [overflow-clip-margin:2px]"
       >
-        {/* The project always leads the header: knowing which project a
-            thread lives in is priority zero, and the thread title alone
-            doesn't answer it. */}
+        {isServerThread && threadTagLabel ? (
+          <>
+            <WorkspaceBreadcrumbItem className="shrink">
+              <Tooltip>
+                <TooltipTrigger
+                  render={<span className="inline-flex min-w-0 items-center gap-1.5" />}
+                >
+                  {activeProject ? (
+                    <ProjectFavicon project={activeProject} className="size-3.5" />
+                  ) : null}
+                  <WorkspaceBreadcrumbText className="max-w-40">
+                    {threadTagLabel}
+                  </WorkspaceBreadcrumbText>
+                </TooltipTrigger>
+                <TooltipPopup side="top">{threadTagLabel}</TooltipPopup>
+              </Tooltip>
+            </WorkspaceBreadcrumbItem>
+            <WorkspaceBreadcrumbSeparator />
+          </>
+        ) : null}
         {activeProject ? (
           <>
             <WorkspaceBreadcrumbItem className="shrink">

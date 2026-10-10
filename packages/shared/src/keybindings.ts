@@ -195,6 +195,7 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+shift+arrowdown", command: "modelPicker.nextProvider", when: "modelPickerOpen" },
   { key: "mod+o", command: "editor.openFavorite" },
   { key: "f2", command: "thread.rename", when: "!terminalFocus" },
+  { key: "mod+alt+t", command: "thread.tag", when: "!terminalFocus && !previewFocus" },
   { key: "mod+shift+[", command: "thread.previous" },
   { key: "mod+shift+]", command: "thread.next" },
   { key: "mod+shift+c", command: "thread.copyReference", when: "!terminalFocus" },

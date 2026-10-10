@@ -1,3 +1,7 @@
+import { useAtomValue } from "@effect/atom-react";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { threadTagEnvironment } from "../../state/thread-tags";
+import { ThreadTagDialog } from "./ThreadTagDialog";
 import type { ThreadRowProviderInstance } from "./thread-provider-instance";
 import {
   THREAD_LIST_V2_MONO_FONT as MONO_FONT,
@@ -650,6 +654,13 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     [onRegenerateThreadTitle, thread],
   );
   const handleSettle = useCallback(() => onSettleThread(thread), [onSettleThread, thread]);
+  const threadRef = useMemo(
+    () => scopeThreadRef(thread.environmentId, thread.id),
+    [thread.environmentId, thread.id],
+  );
+  const threadTagLabel = useAtomValue(threadTagEnvironment.labelAtom(threadRef));
+  const tagsSupported = useAtomValue(threadTagEnvironment.supportedAtom(thread.environmentId));
+  const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [customSnoozeOpen, setCustomSnoozeOpen] = useState(false);
   // A recycled cell reassigns this mounted row to a different thread without
   // remounting it, and the render closure stops running while list equality
@@ -663,6 +674,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   if (boundIdentity !== rowIdentity) {
     setBoundIdentity(rowIdentity);
     setCustomSnoozeOpen(false);
+    setTagDialogOpen(false);
   }
   const handleSnooze = useCallback(
     (snoozedUntil: string) => onSnoozeThread(thread, snoozedUntil),
@@ -784,12 +796,13 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const titleMenuItems = useMemo<MenuAction[]>(
     () => [
       { id: "rename", title: "Rename", image: "square.and.pencil" },
+      ...(tagsSupported ? [{ id: "tag", title: "Tag thread", image: "tag" }] : []),
       ...buildThreadTitleRegenerationMenuItems({
         supported: props.titleRegenerationSupported,
         isRegenerating: thread.titleRegeneration != null,
       }),
     ],
-    [props.titleRegenerationSupported, thread.titleRegeneration],
+    [props.titleRegenerationSupported, tagsSupported, thread.titleRegeneration],
   );
   const snoozableCardMenuActions = useMemo<MenuAction[]>(
     () => [
@@ -863,6 +876,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "move-up") handleMoveUp();
       if (nativeEvent.event === "move-down") handleMoveDown();
       if (nativeEvent.event === "archive") handleArchive();
+      if (nativeEvent.event === "tag") setTagDialogOpen(true);
       if (nativeEvent.event === "rename") handleRename();
       if (nativeEvent.event === "regenerate-title") handleRegenerateTitle();
       if (nativeEvent.event === "copy-thread-id") {
@@ -901,6 +915,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       handleUnsettle,
       handleUnsnooze,
       setCustomSnoozeOpen,
+      setTagDialogOpen,
       snoozePresets,
     ],
   );
@@ -991,7 +1006,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           )}
           numberOfLines={1}
         >
-          {props.projectTitle ?? props.project?.title ?? ""}
+          {threadTagLabel ?? props.projectTitle ?? props.project?.title ?? ""}
         </Text>
         {props.hasQueuedMessages ? <QueuedMessageIcon selected={selected} /> : null}
         {pinnedRow ? (
@@ -1305,6 +1320,13 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
 
   return (
     <View collapsable={false}>
+      {tagDialogOpen ? (
+        <ThreadTagDialog
+          key={rowIdentity}
+          threadRef={threadRef}
+          onClose={() => setTagDialogOpen(false)}
+        />
+      ) : null}
       {customSnoozeOpen && (
         <CustomSnoozeSheet onClose={() => setCustomSnoozeOpen(false)} onSnooze={handleSnooze} />
       )}

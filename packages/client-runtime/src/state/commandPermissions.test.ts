@@ -100,6 +100,27 @@ describe("command permissions", () => {
       }),
     ),
   );
+  it.effect("checks the destination grant for setting or clearing a thread tag", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const tags = createCommandPermissions(runtime, WS_METHODS.threadTagsSet);
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        registry.set(sessions(other), AsyncResult.success(grant(false)));
+        expect(registry.get(tags.permissionAtom(env))).toBe(true);
+        expect(registry.get(tags.permissionAtom(other))).toBe(false);
+        yield* tags.authorize(registry, env);
+        expect((yield* tags.authorize(registry, other).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentAuthorizationError",
+        );
+        registry.set(sessions(env), AsyncResult.success(grant(false)));
+        expect((yield* tags.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentAuthorizationError",
+        );
+      }),
+    ),
+  );
+
   it.effect("waits for an initial grant", () =>
     Effect.scoped(
       Effect.gen(function* () {

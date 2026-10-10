@@ -9,6 +9,8 @@ import {
   moveThreadContextDrag as moveThreadContextDragGhost,
 } from "./chat/threadContextDrag";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
+import { requestThreadTag } from "./ThreadTagDialog";
+import { readThreadTagsSupported, threadTagEnvironment } from "../state/threadTags";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
@@ -1213,6 +1215,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     [thread.environmentId, thread.id],
   );
   const threadKey = scopedThreadKey(threadRef);
+  const explicitTagLabel = useAtomValue(threadTagEnvironment.labelAtom(threadRef));
+  const threadTagLabel = explicitTagLabel ?? props.projectDisplayName;
   const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   useEffect(() => {
     if (!canOperateThread && isRenaming) onCancelRename();
@@ -1668,7 +1672,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const accessibility = resolveSidebarRowAccessibility({
     title: thread.title,
     statusLabel: topStatus?.label ?? null,
-    projectDisplayName: props.projectDisplayName,
+    projectDisplayName: threadTagLabel,
     isActive: props.isActive,
   });
 
@@ -2040,14 +2044,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               {props.project ? (
                 <ProjectFavicon project={props.project} className="size-4 shrink-0" />
               ) : null}
-              {props.projectDisplayName ? (
+              {threadTagLabel ? (
                 <span
                   className={cn(
                     "min-w-0 flex-1 truncate text-secondary-label text-xs",
                     shouldRecede ? "font-normal" : "font-medium",
                   )}
                 >
-                  {props.projectDisplayName}
+                  {threadTagLabel}
                 </span>
               ) : (
                 <span className="flex-1" />
@@ -4848,6 +4852,7 @@ export default function Sidebar() {
                   snooze: supportsSnooze,
                   pinning: supportsPinning,
                   titleRegeneration: supportsTitleRegeneration,
+                  threadTags: readThreadTagsSupported(thread.environmentId),
                 },
                 snoozePresets,
               }),
@@ -4969,6 +4974,9 @@ export default function Sidebar() {
             }
             return;
           }
+          case "tag":
+            requestThreadTag(threadRef);
+            return;
           case "rename":
             startThreadRename(threadRef, thread.title);
             return;

@@ -178,6 +178,7 @@ import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
+import * as ThreadTags from "./fork/ThreadTags.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import { withTerminalOutputWindow } from "./terminal/OutputProtocol.ts";
@@ -1286,6 +1287,7 @@ const layerWsRpc = (
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const storageCleanup = yield* StorageCleanup.StorageCleanup;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
+      const threadTags = yield* ThreadTags.ThreadTags;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
@@ -2851,6 +2853,8 @@ const layerWsRpc = (
             .preparePullRequestThread(input)
             .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.vcsListRefs]: (input) => gitWorkflow.listRefs(input),
+        [WS_METHODS.threadTagsSubscribe]: () => threadTags.changes,
+        [WS_METHODS.threadTagsSet]: (input) => threadTags.set(input),
         [WS_METHODS.transientSideChatCleanup]: (input) => cleanupTransientSideChat(input),
         [WS_METHODS.vcsRenameWorktree]: (input) =>
           gitWorkflow.renameWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),

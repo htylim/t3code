@@ -21,6 +21,7 @@ import {
   ChatGptHandoffInput,
   ChatGptHandoffState,
 } from "./providerSetup.ts";
+import { SetThreadTagInput, ThreadTagError, ThreadTags } from "./threadTag.ts";
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
@@ -404,6 +405,8 @@ export const WS_METHODS = {
 
   // Provider methods
   providerUploadFeedback: "provider.uploadFeedback",
+  threadTagsSubscribe: "fork.threadTags.subscribe",
+  threadTagsSet: "fork.threadTags.set",
   transientSideChatCleanup: "transientSideChat.cleanup",
   providerAuthStart: "provider.auth.start",
   providerConsumeResetCredit: "provider.consumeResetCredit",
@@ -642,6 +645,19 @@ const WsProviderConsumeResetCreditRpc = Rpc.make(WS_METHODS.providerConsumeReset
   payload: ProviderConsumeResetCreditInput,
   success: ProviderConsumeResetCreditResult,
   error: Schema.Union([ProviderSetupError, UsageLimitSourceError, EnvironmentAuthorizationError]),
+});
+
+const WsThreadTagsSubscribeRpc = Rpc.make(WS_METHODS.threadTagsSubscribe, {
+  payload: Schema.Struct({}),
+  success: ThreadTags,
+  stream: true,
+  error: Schema.Union([ThreadTagError, EnvironmentAuthorizationError]),
+});
+
+const WsThreadTagsSetRpc = Rpc.make(WS_METHODS.threadTagsSet, {
+  payload: SetThreadTagInput,
+  success: Schema.Void,
+  error: Schema.Union([ThreadTagError, EnvironmentAuthorizationError]),
 });
 
 const WsTransientSideChatCleanupRpc = Rpc.make(WS_METHODS.transientSideChatCleanup, {
@@ -1862,6 +1878,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRefreshProvidersRpc,
   WsServerUpdateProviderRpc,
   WsProviderConsumeResetCreditRpc,
+  WsThreadTagsSubscribeRpc,
+  WsThreadTagsSetRpc,
   WsTransientSideChatCleanupRpc,
   WsProviderAuthStartRpc,
   WsProviderAuthCompleteRpc,

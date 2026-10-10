@@ -20,6 +20,31 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-10 - Thread tags outside SQLite
+
+- Upstream baseline: `a11f464133`.
+- Change: Threads can carry one explicit label. Active and postponed sidebar cards use it
+  instead of the project name. Web and desktop breadcrumbs show it before the project.
+  An unset tag keeps the existing project label and icon. Tag editing is available in
+  thread menus, the command palette, and the configurable `thread.tag` shortcut,
+  defaulting to `mod+alt+t`. Native thread lists also display and edit tags.
+- Reason: Label related work across projects without adding a database migration or
+  modifying upstream's event-sourced thread model.
+- Scope: A fork-owned service persists versioned overrides in
+  `<stateDir>/fork/thread-tags.json`. Atomic, serialized writes preserve unknown future
+  fields. Capability-gated RPCs and shared client atoms follow the destination environment
+  and its thread permissions. Clients share one subscription per environment and observe
+  individual label strings. The project icon remains the fallback. Inheritance, MCP tag
+  metadata, suggestions, custom icons, and project aliases remain future work.
+- Verification: Focused storage, contract, authorization, menu, dialog, and shortcut tests,
+  scoped server, web, mobile, contracts, and client-runtime typechecks, formatting, and
+  targeted lint. Storage tests cover restart, concurrent writes, failed atomic replacement,
+  corrupt files, unknown fields, updates, and clearing. An isolated dev-server Browser
+  panel pass with copied, stopped threads verified setting, updating, canceling, both
+  clearing paths, reload persistence, active/postponed/snoozed labels, project icons,
+  breadcrumbs, sidebar and header menus, the command palette, and `mod+alt+t`.
+  Installed desktop and native-device verification were not run.
+
 ## 2026-10-10 - Integrate upstream through October 10
 
 - Upstream baseline: `a11f464133`, 207 commits since `5e2225671f`.
