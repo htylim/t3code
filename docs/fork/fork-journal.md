@@ -43,8 +43,16 @@ upstream.
   2,162 tests. One Git review-diff rename/statistics test fails identically in a separate,
   untouched `a11f464133` checkout. Three settings symlink-watcher tests passed outside the sandbox.
   Diff checks pass apart from unchanged whitespace in upstream's React Native WebView patch.
-  Browser, installed desktop, native mobile, remote connections, and live provider turns
-  were not run. The main checkout, `fork` branch, installed app, and live data were unchanged.
+  An isolated dev-server Browser panel pass with copied, stopped thread history verified
+  pairing, project creation, low-cost Codex Terra turns, incoming thread search and match
+  cycling, side-chat context reads, live titles, native transient-history cleanup, postpone
+  and restoration through the banner and sidebar, `%` and `%%` references, literal percentages,
+  table wrapping, reload, and a 900-pixel viewport without page overflow. Stop terminated a
+  background command after its provider turn completed and persisted its interrupted status.
+  Codex initially selected the globally configured MCP server for a side-chat read; selecting
+  the dev app's injected `t3-code` server returned the owning thread correctly. Installed
+  desktop, native mobile, and remote connections were not run. The main checkout, `fork`
+  branch, installed app, and live data were unchanged.
 
 ## 2026-10-08 - Add a selectable H3 wordmark to the Fork sidebar
 
