@@ -40,7 +40,22 @@ upstream.
   typechecks, server and web source builds, targeted lint, and formatting passed. Diff checks pass
   outside upstream dependency-patch context whitespace. Three settings symlink-watcher tests
   required a rerun outside the sandbox. Lint retains existing warnings in large UI files.
-  No browser, live provider, native-client, installer, publication, or live-data actions ran.
+  An isolated Browser panel pass with 21 copied, stopped threads verified Personal/Terra
+  low-effort turns, Stop after provider settlement, colored tags and reload persistence,
+  F2 rename, side-chat context reads and selected-text reuse with composer focus, native
+  transient-history deletion with parent history preserved, postpone and both restoration
+  paths, `%` and `%%` references and literal percentages, Cmd+W and Undo, prompt navigation,
+  current and legacy sidebar rendering, account usage exclusion, worktree rename, dirty-removal
+  cancellation, visualization-marker links and HTML source/rendered views. A 900-pixel
+  viewport had no page overflow. No product regression was found in these exercised flows.
+  Six focused Stop regressions passed. Removing only fork terminal-handle tracking during
+  test transformation made both late-handle cases fail because no native termination was sent.
+  Removing the server-resolved client path restored its paginated-history lookup and failed
+  the empty-history regression. These controls did not edit the running app's source.
+  The isolated title-generation preference required a separate correction to Personal/Terra;
+  it initially retained upstream's Astra default. The dev server and Browser panel remain
+  available for inspection. Installed desktop, native mobile, remote clients, and installer
+  behavior were not run. Nothing was published, and live data was read only.
 
 ## 2026-10-10 - Personal provider for live tests
 
