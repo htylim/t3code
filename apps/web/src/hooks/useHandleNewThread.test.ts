@@ -147,6 +147,10 @@ vi.mock("@t3tools/shared/projectSettings", () => ({
     sources: { defaultModelSelection: "environment", defaultThreadEnvMode: "environment" },
     overrides: {},
   }),
+  // The new-project rule has its own tests in projectSettings.test.ts.
+  resolveNewThreadEnvMode: (input: {
+    projectSettings: { settings: { defaultThreadEnvMode: "local" | "worktree" } };
+  }) => input.projectSettings.settings.defaultThreadEnvMode,
 }));
 vi.mock("@tanstack/react-router", () => ({
   useParams: () => null,
@@ -195,6 +199,7 @@ vi.mock("../state/entities", () => ({
     },
   ],
   readThreadShell: () => null,
+  readThreadShells: () => [],
   useProjects: () => [],
   useThread: () => null,
 }));

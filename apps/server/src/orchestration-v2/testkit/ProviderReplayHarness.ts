@@ -247,7 +247,8 @@ export function layerProviderReplay<Transcript extends ProviderReplayTranscript,
   | Orchestrator.OrchestratorV2
   | EffectWorker.OrchestrationEffectWorkerV2
   | EventSink.EventSinkV2
-  | ThreadTags.ThreadTags,
+  | ThreadTags.ThreadTags
+  | ProviderSessionManager.ProviderSessionManagerV2,
   Error | MigrationError | PlatformError.PlatformError | SqlError
 > {
   const layerRegistry = harness.makeProviderAdapterRegistryLayer(

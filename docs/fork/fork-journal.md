@@ -20,6 +20,28 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-11 - Integrate upstream through ed0f7b908b
+
+- Upstream baseline: `ed0f7b908b`, 95 commits since `a11f464133`.
+- Change: Integrate on `integration/upstream-2026-10-11` from fork commit `391ea6f102`.
+  Resolve seven conflicted files while preserving thread-tag authorization, replay layers and
+  exports, legacy fork default-model migration, usage-account exclusion, side chats, and Fork
+  settings search. Adopt upstream's shared attachment-only prompt. Complete a new PR test's
+  shortcut context and compare canonical paths in the incoming Pi usage-discovery test on macOS.
+- Adoption audit: No retained fork feature is fully replaced. Upstream worktree-launch safety
+  and queue handling complement workspace management and completed-subagent busy classification.
+  Claude workflow stopping and OpenCode stop recovery do not replace server-resolved Stop
+  targeting beyond paginated history or late Codex terminal-handle tracking. Source-control
+  settings migration retains the fork's legacy default-model migration. Model-preference sync
+  does not replace account-level usage exclusion. Side chats, transient history cleanup,
+  selected-text actions, tags, postpone, scoped thread references, sidebar hover, custom
+  shortcuts, visualization links, wrapped tables, and Fork identity remain downstream behavior.
+- Verification: Frozen dependency installation, 2,144 focused tests in 66 suites, nine scoped
+  typechecks, server and web source builds, targeted lint, and formatting passed. Diff checks pass
+  outside upstream dependency-patch context whitespace. Three settings symlink-watcher tests
+  required a rerun outside the sandbox. Lint retains existing warnings in large UI files.
+  No browser, live provider, native-client, installer, publication, or live-data actions ran.
+
 ## 2026-10-10 - Personal provider for live tests
 
 - Upstream baseline: `a11f464133`.
