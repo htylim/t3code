@@ -12,12 +12,13 @@ type ThreadPickerShell = Pick<
   | "projectId"
   | "title"
   | "branch"
+  | "lineage"
   | "archivedAt"
   | "createdAt"
   | "latestUserMessageAt"
 >;
 
-/** Browse loaded thread shells for % or %%, returning upstream context-menu items. */
+/** Browse non-subagent thread shells for % or %%, returning upstream context-menu items. */
 export function buildComposerThreadPickerItems(input: {
   shells: ReadonlyArray<ThreadPickerShell>;
   projects: ReadonlyArray<Pick<Project, "environmentId" | "id" | "title">>;
@@ -39,6 +40,7 @@ export function buildComposerThreadPickerItems(input: {
         shell.environmentId !== input.environmentId ||
         shell.id === input.excludeThreadId ||
         shell.archivedAt !== null ||
+        shell.lineage.relationshipToParent === "subagent" ||
         (input.scope === "project" && shell.projectId !== input.projectId)
       ) {
         return false;

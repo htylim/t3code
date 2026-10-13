@@ -36,6 +36,11 @@ function shell(
     archivedAt: null,
     createdAt: "2026-10-01T00:00:00.000Z",
     latestUserMessageAt: null,
+    lineage: {
+      parentThreadId: null,
+      relationshipToParent: null,
+      rootThreadId: ThreadId.make(id),
+    },
     ...overrides,
   };
 }
@@ -75,6 +80,38 @@ describe("composer thread picker", () => {
     expect(items.map((item) => item.thread.threadId)).toEqual(["current-project", "other-project"]);
     expect(items[1]?.description).toBe("Documentation #feature/login");
   });
+
+  it.each([
+    { scope: "project" as const, query: "" },
+    { scope: "project" as const, query: "login" },
+    { scope: "environment" as const, query: "" },
+    { scope: "environment" as const, query: "login" },
+  ])(
+    "excludes subagents while retaining ordinary forks with $scope scope and '$query' query",
+    ({ scope, query }) => {
+      const parentThreadId = ThreadId.make("parent");
+      const items = buildComposerThreadPickerItems({
+        ...pickerInput,
+        scope,
+        query,
+        shells: [
+          shell("parent"),
+          shell("fork", {
+            lineage: { parentThreadId, relationshipToParent: "fork", rootThreadId: parentThreadId },
+          }),
+          shell("subagent", {
+            createdAt: "2026-10-04T00:00:00.000Z",
+            lineage: {
+              parentThreadId,
+              relationshipToParent: "subagent",
+              rootThreadId: parentThreadId,
+            },
+          }),
+        ],
+      });
+      expect(items.map((item) => item.thread.threadId)).toEqual(["fork", "parent"]);
+    },
+  );
 
   it("follows a draft or side chat's composing project instead of the main chat project", () => {
     const items = buildComposerThreadPickerItems({

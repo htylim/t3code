@@ -403,7 +403,8 @@ and guide were removed. Mermaid is no longer downstream drift.
 - Restored `%` for the composing project's threads and `%%` for all projects in the current
   environment. Bare triggers browse recent user activity. Queries accept spaces and search titles,
   project names, branches, and thread IDs. Escape preserves the text; Enter with no results keeps
-  the picker open. Embedded percentages such as `100%` do not open it.
+  the picker open. Embedded percentages such as `100%` do not open it. Both scopes exclude
+  subagent threads while retaining ordinary forks.
 - Selection uses upstream's context chips, draft records, and provider projection through
   `t3_thread_read`. The retired fork URI format and MCP implementation remain removed.
 - Scope: web and desktop main, draft, and side-chat composers. Existing `@` references remain
@@ -415,6 +416,9 @@ and guide were removed. Mermaid is no longer downstream drift.
   project switching, environment scope, current-thread exclusion, Enter and Tab selection,
   Escape and continued typing, empty-search handling, chip persistence after reload, independent
   side-panel drafts, literal percentages, and existing `@` results. Native-client checks were not performed.
+- Subagent exclusion verified on 2026-10-13 with 16 picker tests, web typecheck, and targeted lint.
+  An isolated Browser panel pass checked both scopes, searches, and reference selection in existing
+  and new-thread composers with copied subagent metadata and an ordinary fork fixture.
 
 ## 2026-10-04 - Keep both side-chat roles visible in the sidebar
 
