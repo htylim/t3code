@@ -39,7 +39,7 @@ export function draftTagKey(tag: ThreadTag): string {
   return JSON.stringify([tag.label, tag.color?.toLowerCase() ?? null]);
 }
 
-/** Collect distinct tags from the visible active inbox, including pinned threads. */
+/** Collect distinct tags from active, pinned, postponed, and snoozed threads. */
 export function collectActiveDraftTags(input: {
   readonly threads: readonly EnvironmentThreadShell[];
   readonly tagsByEnvironment: ReadonlyMap<EnvironmentId, ThreadTags>;
@@ -49,14 +49,13 @@ export function collectActiveDraftTags(input: {
   const tagsByKey = new Map<string, ThreadTag>();
   for (const thread of input.threads) {
     const threadKey = scopedThreadKey({ environmentId: thread.environmentId, threadId: thread.id });
-    if (
-      thread.deletedAt !== null ||
-      thread.archivedAt !== null ||
-      thread.settledOverride === "settled" ||
-      input.postponedThreadKeys.has(threadKey) ||
-      effectiveSnoozed(thread, { now: input.now })
-    )
-      continue;
+    // Postponement and snooze outrank settlement in the sidebar. A parked
+    // thread can settle automatically without leaving its parked section.
+    const isSettled =
+      thread.settledOverride === "settled" &&
+      !input.postponedThreadKeys.has(threadKey) &&
+      !effectiveSnoozed(thread, { now: input.now });
+    if (thread.deletedAt !== null || thread.archivedAt !== null || isSettled) continue;
     const tag = input.tagsByEnvironment.get(thread.environmentId)?.[thread.id];
     if (tag)
       tagsByKey.set(draftTagKey(tag), {

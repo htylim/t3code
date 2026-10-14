@@ -23,7 +23,7 @@ upstream.
 ## 2026-10-14 - Start a fresh thread with the current settings
 
 - Upstream baseline: `2a4ee339827e480da6ad0139585cf634a46ff73e`.
-- Change: The web and desktop command palette offers "New Thread (Continue)".
+- Change: The web and desktop command palette offers "Chat: New Local (Continue)".
   It starts an empty draft with the current provider, model options, modes, project,
   environment, branch, workspace, and tag. Existing unsent content stays intact.
 - Reason: Reuse a thread's execution settings without carrying conversation history.
@@ -56,9 +56,10 @@ upstream.
 - Scope: `draftTagStore.ts` keeps selection storage and active-thread choices beside
   the existing draft stores. `components/DraftTagMenu.tsx` and `DraftTagTransfers.tsx`
   own the UI and deferred writes; `hooks/useDraftTagStartTurn.ts` stages sends.
-  Choices include pinned and active threads across connected
-  environments, excluding archived, deleted, settled, postponed, and currently snoozed
-  threads. Label and color pairs deduplicate together. Selections persist separately
+  Choices include active, pinned, postponed, and snoozed threads across connected
+  environments, excluding archived, deleted, and threads classified as settled in the
+  sidebar. Postponed and snoozed threads stay eligible after automatic settlement.
+  Label and color pairs deduplicate together. Selections persist separately
   by stable draft id and follow environment changes. Foreground, background, and
   multi-model sends stage destination-specific transfers before launching; the existing
   guarded tag RPC applies them once the thread appears. Transfers survive promotion,
@@ -76,7 +77,11 @@ upstream.
   environment retargeting, and compact layout without horizontal overflow. Foreground and
   background sends on Personal with Codex Terra and low effort completed and persisted
   the selected label and color on the server. Native mobile, installed Electron, relay,
-  and tunnel were not exercised. Nothing was published.
+  and tunnel were not exercised. The postponed/snoozed inclusion and action-label follow-up
+  passed 126 focused feature and packaging tests, web typecheck, and scoped lint. A further
+  isolated client pass used Postpone and Snooze, selected both threads' tags, confirmed
+  reload persistence and settled-tag exclusion, and invoked the renamed Continue action.
+  No release was published.
 
 ## 2026-10-11 - Integrate upstream through ed0f7b908b
 

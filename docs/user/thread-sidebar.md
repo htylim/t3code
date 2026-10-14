@@ -19,13 +19,13 @@ and mode selections, unless the destination project has its own model default.
 Its branch and workspace mode come from your configured defaults. To continue in
 an existing worktree, use **New thread in this worktree** from the branch toolbar.
 
-To start a fresh conversation with the current thread's settings, choose **New Thread
+To start a fresh conversation with the current thread's settings, choose **Chat: New Local
 (Continue)** in the command palette. It copies the provider, model options including effort,
 permission and interaction modes, project, environment, branch, workspace, and tag. Its
 prompt and history start empty. Unsent work in the source thread or another draft stays intact.
 
 The action has no default shortcut. In **Settings → Keybindings**, choose **Add keybinding**,
-select **New Thread (Continue)**, and assign `mod+n` with `!terminalFocus` to replace ordinary
+select **Chat: New Local (Continue)**, and assign `mod+n` with `!terminalFocus` to replace ordinary
 New Thread on Cmd+N. Newly assigned bindings go last and take precedence over earlier ones.
 
 When you change a new thread's project, T3 Code stays in the current environment
@@ -77,8 +77,9 @@ Tags stay with the thread on its host and appear on other connected devices.
 Tagging a thread does not change its project.
 
 On web and desktop, choose **No Tag** beside the checkout picker before sending a new
-thread. Search tags used by active threads across your connected environments, or choose
-**New tag** to enter a label and color. The selection stays with the draft until you send
+thread. Search tags used by active, pinned, postponed, and snoozed threads across your
+connected environments, or choose **New tag** to enter a label and color.
+The selection stays with the draft until you send
 and applies to each thread you create, including background and multi-model sends.
 Choose **Clear tag** to send without a tag.
 

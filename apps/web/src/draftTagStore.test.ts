@@ -46,7 +46,7 @@ describe("active draft tag choices", () => {
     ]);
   });
 
-  it("excludes archived, deleted, settled, postponed and currently snoozed threads", () => {
+  it("includes postponed and snoozed tags but excludes archived, deleted, and settled threads", () => {
     const threads = [
       makeThreadFixture({ id: ThreadId.make("archived"), environmentId: local, archivedAt: now }),
       makeThreadFixture({ id: ThreadId.make("deleted"), environmentId: local, deletedAt: now }),
@@ -79,7 +79,37 @@ describe("active draft tag choices", () => {
         ]),
         now,
       }),
-    ).toEqual([{ label: "awake", color: null }]);
+    ).toEqual([
+      { label: "awake", color: null },
+      { label: "postponed", color: null },
+      { label: "snoozed", color: null },
+    ]);
+  });
+
+  it("includes parked threads after automatic settlement, matching their sidebar sections", () => {
+    const postponed = makeThreadFixture({
+      id: ThreadId.make("postponed"),
+      environmentId: local,
+      settledOverride: "settled",
+    });
+    const snoozed = makeThreadFixture({
+      id: ThreadId.make("snoozed"),
+      environmentId: remote,
+      settledOverride: "settled",
+      snoozedUntil: "2026-10-15T12:00:00.000Z",
+      snoozedAt: now,
+    });
+    expect(
+      collectActiveDraftTags({
+        threads: [postponed, snoozed],
+        tagsByEnvironment: new Map([
+          [local, { postponed: purpleTag }],
+          [remote, { snoozed: { label: "Later", color: "#14b8a6" } }],
+        ]),
+        postponedThreadKeys: new Set([scopedThreadKey(scopeThreadRef(local, postponed.id))]),
+        now,
+      }),
+    ).toEqual([{ label: "Later", color: "#14b8a6" }, purpleTag]);
   });
 });
 

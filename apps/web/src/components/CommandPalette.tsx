@@ -1910,7 +1910,7 @@ function OpenCommandPaletteDialog(props: {
       kind: "action",
       value: "action:new-thread-continue",
       searchTerms: ["new thread", "continue", "inherit", "same settings", "fresh", "draft"],
-      title: "New Thread (Continue)",
+      title: "Chat: New Local (Continue)",
       icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
       shortcutCommand: "chat.newContinue",
       run: handleContinueThread,

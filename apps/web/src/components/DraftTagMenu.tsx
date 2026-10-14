@@ -165,7 +165,9 @@ function DraftTagPicker({
         <ComboboxPopup align="start" side="top" className="w-72" {...menuProps}>
           <ComboboxSearchInput aria-label="Search tags" placeholder="Search tags..." />
           <ComboboxStatus>
-            {canSetTag ? "From active threads" : "Tags are unavailable on this connection."}
+            {canSetTag
+              ? "Active, postponed, and snoozed"
+              : "Tags are unavailable on this connection."}
           </ComboboxStatus>
           <ComboboxList>
             {filteredTags.map((choice) => (

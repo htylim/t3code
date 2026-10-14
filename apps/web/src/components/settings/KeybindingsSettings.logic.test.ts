@@ -21,7 +21,7 @@ import {
 describe("KeybindingsSettings.logic", () => {
   it("offers the unbound continue action in the command picker", () => {
     expect(buildKeybindingCommandOptions([])).toContain("chat.newContinue");
-    expect(commandLabel("chat.newContinue")).toBe("New Thread (Continue)");
+    expect(commandLabel("chat.newContinue")).toBe("Chat: New Local (Continue)");
     expect(
       buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, "").some(
         (row) => row.command === "chat.newContinue",
