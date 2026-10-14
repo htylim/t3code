@@ -1,5 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
-import { THREAD_TAG_LABEL_MAX_LENGTH, type ScopedThreadRef } from "@t3tools/contracts";
+import {
+  THREAD_TAG_LABEL_MAX_LENGTH,
+  type ScopedThreadRef,
+  type ThreadTag,
+} from "@t3tools/contracts";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { useId, useState } from "react";
@@ -11,6 +15,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { ThreadTagColorPicker } from "./ThreadTagColorPicker";
 import { ThreadTagPill } from "./ThreadTagPill";
+import { DraftTagTransfers } from "./DraftTagTransfers";
 import {
   Dialog,
   DialogPopup,
@@ -34,12 +39,17 @@ function closeThreadTagDialog(request: TagRequest): void {
   if (useTagRequest.getState().request === request) useTagRequest.setState({ request: null });
 }
 
-/** Mount one editor above every chat layout, including responsive and legacy sidebars. */
+/** Host the tag editor and pending draft transfers above every chat layout. */
 export function ThreadTagDialogHost() {
   const request = useTagRequest((state) => state.request);
-  return request ? (
-    <ThreadTagDialog key={scopedThreadKey(request.threadRef)} request={request} />
-  ) : null;
+  return (
+    <>
+      <DraftTagTransfers />
+      {request ? (
+        <ThreadTagDialog key={scopedThreadKey(request.threadRef)} request={request} />
+      ) : null}
+    </>
+  );
 }
 
 /** Wait for the server snapshot before editing, so loading cannot erase an existing tag. */
@@ -98,31 +108,62 @@ function ThreadTagForm({
   initialColor: string | null;
   onClose: () => void;
 }) {
+  const setTag = useAtomCommand(threadTagEnvironment.set, { reportFailure: false });
+  return (
+    <ThreadTagEditor
+      initialLabel={initialLabel}
+      initialColor={initialColor}
+      onClose={onClose}
+      onSave={async (tag) => {
+        const saved = await setTag({
+          environmentId: threadRef.environmentId,
+          input: { threadId: threadRef.threadId, tag },
+        });
+        if (saved._tag === "Success") return null;
+        const failure = squashAtomCommandFailure(saved);
+        return failure instanceof Error ? failure.message : "Failed to save thread tag.";
+      }}
+    />
+  );
+}
+
+/** Share label and color editing. onSave returns null on success or an error message to keep editing. */
+export function ThreadTagEditor({
+  initialLabel,
+  initialColor,
+  onClose,
+  onSave,
+  submitLabel = "Save",
+  requireLabel = false,
+}: {
+  readonly initialLabel: string;
+  readonly initialColor: string | null;
+  readonly onClose: () => void;
+  readonly onSave: (tag: ThreadTag | null) => Promise<string | null>;
+  readonly submitLabel?: string;
+  readonly requireLabel?: boolean;
+}) {
   const inputId = useId();
   const [label, setLabel] = useState(initialLabel);
   const [color, setColor] = useState(initialColor);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const setTag = useAtomCommand(threadTagEnvironment.set, { reportFailure: false });
 
-  /** Close only after the destination server commits the label or removal. */
+  /** Close after the caller saves the label and color; keep failed edits intact. */
   async function saveTag(nextLabel: string): Promise<void> {
     if (saving) return;
+    const trimmedLabel = nextLabel.trim();
+    if (requireLabel && !trimmedLabel) return;
     setSaving(true);
     setError(null);
-    const trimmedLabel = nextLabel.trim();
-    const saved = await setTag({
-      environmentId: threadRef.environmentId,
-      input: {
-        threadId: threadRef.threadId,
-        tag: trimmedLabel ? { label: trimmedLabel, color } : null,
-      },
-    });
-    setSaving(false);
-    if (saved._tag === "Success") onClose();
-    else {
-      const failure = squashAtomCommandFailure(saved);
+    try {
+      const failure = await onSave(trimmedLabel ? { label: trimmedLabel, color } : null);
+      if (failure === null) onClose();
+      else setError(failure);
+    } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Failed to save thread tag.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -163,7 +204,7 @@ function ThreadTagForm({
         </div>
       </DialogPanel>
       <DialogFooter>
-        {initialLabel ? (
+        {initialLabel && !requireLabel ? (
           <Button type="button" variant="ghost" disabled={saving} onClick={() => void saveTag("")}>
             Clear tag
           </Button>
@@ -171,8 +212,8 @@ function ThreadTagForm({
         <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={saving}>
-          {saving ? "Saving..." : "Save"}
+        <Button type="submit" disabled={saving || (requireLabel && !label.trim())}>
+          {saving ? "Saving..." : submitLabel}
         </Button>
       </DialogFooter>
     </form>

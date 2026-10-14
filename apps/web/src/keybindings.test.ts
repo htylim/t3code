@@ -37,6 +37,30 @@ import {
   type ShortcutEventLike,
 } from "./keybindings";
 
+it("lets an appended Continue binding override Cmd+N while keeping ordinary New Thread available", () => {
+  const custom = compileResolvedKeybindingsConfig([
+    { key: "mod+n", command: "chat.newContinue", when: "!terminalFocus" },
+  ]);
+  const bindings = mergeWithDefaultKeybindings(custom);
+  const options = { platform: "MacIntel", context: { terminalFocus: false } };
+  assert.strictEqual(
+    resolveShortcutCommand(event({ key: "n", metaKey: true }), bindings, options),
+    "chat.newContinue",
+  );
+  assert.strictEqual(
+    resolveShortcutCommand(event({ key: "o", metaKey: true, shiftKey: true }), bindings, options),
+    "chat.new",
+  );
+  assert.strictEqual(
+    resolveShortcutCommand(event({ key: "n", metaKey: true }), bindings, {
+      ...options,
+      context: { terminalFocus: true },
+    }),
+    "terminal.new",
+  );
+  assert.strictEqual(shortcutLabelForCommand(bindings, "chat.newContinue", options), "⌘N");
+});
+
 function event(overrides: Partial<ShortcutEventLike> = {}): ShortcutEventLike {
   return {
     key: "j",

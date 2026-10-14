@@ -1,4 +1,5 @@
 import { ComposerContextLabel } from "./ComposerContextLabel";
+import { DraftTagMenu } from "./DraftTagMenu";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { readLocalApi } from "../localApi";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -700,9 +701,12 @@ export const BranchToolbar = memo(function BranchToolbar({
             onEnvModeChange={onEnvModeChange}
             workspaceProps={workspaceProps}
           />
+          {draftThread && !serverThread ? (
+            <DraftTagMenu draftId={draftId} threadRef={threadRef} />
+          ) : null}
         </div>
       ) : null}
-      {showGitControls || showEnvironmentIndicator ? (
+      {showGitControls || showEnvironmentIndicator || (draftThread && !serverThread) ? (
         <div
           className={cn(
             "min-h-7 min-w-10 items-center gap-1 sm:min-h-6",
@@ -730,6 +734,9 @@ export const BranchToolbar = memo(function BranchToolbar({
             </>
           )}
           {showGitControls ? <WorkspaceMenu {...workspaceProps} /> : null}
+          {draftThread && !serverThread ? (
+            <DraftTagMenu draftId={draftId} threadRef={threadRef} />
+          ) : null}
         </div>
       ) : null}
 

@@ -19,6 +19,15 @@ and mode selections, unless the destination project has its own model default.
 Its branch and workspace mode come from your configured defaults. To continue in
 an existing worktree, use **New thread in this worktree** from the branch toolbar.
 
+To start a fresh conversation with the current thread's settings, choose **New Thread
+(Continue)** in the command palette. It copies the provider, model options including effort,
+permission and interaction modes, project, environment, branch, workspace, and tag. Its
+prompt and history start empty. Unsent work in the source thread or another draft stays intact.
+
+The action has no default shortcut. In **Settings → Keybindings**, choose **Add keybinding**,
+select **New Thread (Continue)**, and assign `mod+n` with `!terminalFocus` to replace ordinary
+New Thread on Cmd+N. Newly assigned bindings go last and take precedence over earlier ones.
+
 When you change a new thread's project, T3 Code stays in the current environment
 if that project exists there. Otherwise it selects an environment that has it.
 
@@ -67,9 +76,15 @@ The thread breadcrumb shows project / tag / thread. Clear the tag to remove its 
 Tags stay with the thread on its host and appear on other connected devices.
 Tagging a thread does not change its project.
 
+On web and desktop, choose **No Tag** beside the checkout picker before sending a new
+thread. Search tags used by active threads across your connected environments, or choose
+**New tag** to enter a label and color. The selection stays with the draft until you send
+and applies to each thread you create, including background and multi-model sends.
+Choose **Clear tag** to send without a tag.
+
 When an agent creates a thread through MCP tools, the new thread inherits the calling
-thread's label and color. Threads you create interactively start without a tag,
-including keyboard shortcuts and forks. You can edit or clear an inherited tag
+thread's label and color. Ordinary interactive drafts start without a tag until you select one.
+Interactive forks do not inherit a source tag. You can edit or clear an inherited tag
 independently; later changes to the source tag do not update it.
 
 ## Pin and reorder threads

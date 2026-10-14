@@ -99,6 +99,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useContinueThread } from "../hooks/useContinueThread";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { useClientSettings, useLegacySidebarEnabled } from "../hooks/useSettings";
@@ -659,6 +660,7 @@ function OpenCommandPaletteDialog(props: {
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
+  const { canContinueThread, handleContinueThread } = useContinueThread();
   const canSetThreadTag = useAtomValue(
     threadTagEnvironment.set.permissionAtom(activeThread?.environmentId ?? null),
   );
@@ -1902,6 +1904,18 @@ function OpenCommandPaletteDialog(props: {
   ]);
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
+
+  if (canContinueThread) {
+    actionItems.push({
+      kind: "action",
+      value: "action:new-thread-continue",
+      searchTerms: ["new thread", "continue", "inherit", "same settings", "fresh", "draft"],
+      title: "New Thread (Continue)",
+      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "chat.newContinue",
+      run: handleContinueThread,
+    });
+  }
 
   if (projects.length > 0) {
     const activeProjectTitle =

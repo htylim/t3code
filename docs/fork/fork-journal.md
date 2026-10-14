@@ -20,6 +20,64 @@ upstream.
 - Verification: How the change was checked.
 ```
 
+## 2026-10-14 - Start a fresh thread with the current settings
+
+- Upstream baseline: `2a4ee339827e480da6ad0139585cf634a46ff73e`.
+- Change: The web and desktop command palette offers "New Thread (Continue)".
+  It starts an empty draft with the current provider, model options, modes, project,
+  environment, branch, workspace, and tag. Existing unsent content stays intact.
+- Reason: Reuse a thread's execution settings without carrying conversation history.
+- Scope: `hooks/useContinueThread.ts` creates the draft through the existing composer
+  store and separate fork tag store. The command palette and chat shortcut handler call
+  that hook. Contracts recognize `chat.newContinue`; Settings labels it for assignment.
+  The action is unbound by default. Settings already appends custom bindings, so assigning
+  `mod+n` overrides the earlier New Thread rule. Default shortcut ordering is unchanged.
+  No provider session, history link, server behavior, or draft schema was added.
+  Native mobile does not expose this palette or desktop shortcut action.
+- Verification: 194 focused tests passed across continuation, shortcut resolution,
+  Settings command choices, and keybinding contracts. Web typecheck and scoped lint
+  passed; existing palette and route warnings remain. Formatting and diff checks passed.
+  An isolated real-client pass confirmed palette invocation, visible effort and permission
+  overrides, fresh draft identity, inherited workspace and tag, and preservation of source
+  and older draft prompts. Assigning Cmd+N through Settings saved the rule last and invoked
+  Continue instead of ordinary New Thread. A Personal/Codex Terra low-effort turn completed
+  in the new conversation with the inherited tag. Native mobile and installed Electron
+  were not exercised.
+
+## 2026-10-14 - Choose thread tags before sending a draft
+
+- Upstream baseline: `2a4ee339827e480da6ad0139585cf634a46ff73e`.
+- Change: Web and desktop drafts have a searchable tag picker beside checkout.
+  The trigger reads "No Tag" until selected, then shows a soft colored pill.
+  Menu choices use a color dot and plain label. New tag opens the existing label,
+  color, and preview editor; Clear tag removes the draft selection.
+- Reason: Group new work before the first prompt while keeping upstream draft schemas,
+  database projections, and wire contracts unchanged.
+- Scope: `draftTagStore.ts` keeps selection storage and active-thread choices beside
+  the existing draft stores. `components/DraftTagMenu.tsx` and `DraftTagTransfers.tsx`
+  own the UI and deferred writes; `hooks/useDraftTagStartTurn.ts` stages sends.
+  Choices include pinned and active threads across connected
+  environments, excluding archived, deleted, settled, postponed, and currently snoozed
+  threads. Label and color pairs deduplicate together. Selections persist separately
+  by stable draft id and follow environment changes. Foreground, background, and
+  multi-model sends stage destination-specific transfers before launching; the existing
+  guarded tag RPC applies them once the thread appears. Transfers survive promotion,
+  reconnects, and reloads, preserve existing remote edits, and offer Retry on a failed write.
+  Clearing remains available after switching to an unsupported destination. Native mobile
+  draft UI, providers, server services, and contracts are unchanged.
+- Upstream merge seams: `BranchToolbar.tsx` adds the control to both composer layouts.
+  `ChatView.tsx` uses the fork send hook and retains the draft strip for non-Git projects.
+  The already fork-owned `ThreadTagDialog.tsx` shares its editor and hosts pending transfers.
+- Verification: 136 focused tests passed, including real combobox search, keyboard
+  selection, clearing, tag creation, persistence, destination permissions, multi-model
+  sends, and reconnect races. Web typecheck, focused lint, formatting, and diff checks
+  passed. An isolated real-client Browser panel pass confirmed search, keyboard selection,
+  new tags, clearing, reload persistence, active-thread filtering across two environments,
+  environment retargeting, and compact layout without horizontal overflow. Foreground and
+  background sends on Personal with Codex Terra and low effort completed and persisted
+  the selected label and color on the server. Native mobile, installed Electron, relay,
+  and tunnel were not exercised. Nothing was published.
+
 ## 2026-10-11 - Integrate upstream through ed0f7b908b
 
 - Upstream baseline: `ed0f7b908b`, 95 commits since `a11f464133`.
@@ -95,7 +153,8 @@ upstream.
   including in row accessibility names. Threads created through MCP copy their source's
   label and color through a durable creation effect before the provider starts. This
   covers MCP launches, batch creation, forks, and delegated threads. Interactive creation
-  starts without a tag, including keyboard shortcuts, drafts, side chats, and forks.
+  starts without an inherited tag, including keyboard shortcuts, drafts, side chats, and forks.
+  Web and desktop drafts can explicitly select a tag before sending.
   Reused drafts clear source references persisted by older clients.
   A persisted inheritance marker preserves later edits and
   clears when the effect replays after a restart. MCP tag

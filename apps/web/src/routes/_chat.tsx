@@ -16,6 +16,7 @@ import { selectProjectGroupingSettings } from "../logicalProject";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import { dispatchPreviewAction } from "../components/preview/previewActionBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useContinueThread } from "../hooks/useContinueThread";
 import { useScratchProject } from "../hooks/useScratchProject";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { isPreviewFocused } from "../lib/previewFocus";
@@ -49,6 +50,7 @@ function ChatRouteGlobalShortcuts() {
   const selectedThreadKeysSize = useThreadSelectionStore((state) => state.selectedThreadKeys.size);
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeThreadRef } =
     useHandleNewThread();
+  const { handleContinueThread } = useContinueThread();
   const canSetThreadTag = useAtomValue(
     threadTagEnvironment.set.permissionAtom(routeThreadRef?.environmentId ?? null),
   );
@@ -176,6 +178,14 @@ function ChatRouteGlobalShortcuts() {
         return;
       }
 
+      if (command === "chat.newContinue") {
+        if (event.repeat) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void handleContinueThread();
+        return;
+      }
+
       if (command === "chat.newLocal") {
         event.preventDefault();
         event.stopPropagation();
@@ -274,6 +284,7 @@ function ChatRouteGlobalShortcuts() {
     canOperatePreview,
     canSetThreadTag,
     handleNewThread,
+    handleContinueThread,
     keybindings,
     defaultProjectRef,
     previewOpen,

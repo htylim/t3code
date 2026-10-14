@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   allowed: true,
   save: vi.fn(),
 }));
+vi.mock("./DraftTagTransfers", () => ({ DraftTagTransfers: () => null }));
 vi.mock("../state/threadTags", () => ({
   threadTagEnvironment: {
     snapshotAtom: () => "snapshot",
