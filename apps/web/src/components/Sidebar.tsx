@@ -1220,9 +1220,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const threadKey = scopedThreadKey(threadRef);
   const threadTagLabel = useAtomValue(threadTagEnvironment.labelAtom(threadRef));
   const threadTagColor = useAtomValue(threadTagEnvironment.colorAtom(threadRef));
-  const canEditThreadTag = useAtomValue(
-    threadTagEnvironment.set.permissionAtom(thread.environmentId),
-  );
   const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   useEffect(() => {
     if (!canOperateThread && isRenaming) onCancelRename();
@@ -2076,7 +2073,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                       label={threadTagLabel}
                       color={threadTagColor}
                       className="min-w-0 shrink"
-                      onEdit={canEditThreadTag ? () => requestThreadTag(threadRef) : undefined}
                     />
                   </>
                 ) : null}

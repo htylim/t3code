@@ -64,9 +64,15 @@ and worktree while you stay in the new thread composer. This requires a Git proj
 ## Tag a thread
 
 Choose **Tag thread** from a thread's menu to set a label such as "v3 refactor".
-On web and desktop, you can also use the command palette or press `mod+alt+t`.
-Double-click an existing tag pill in the sidebar or breadcrumb to edit it.
-Change the shortcut in **Settings → Keybindings** under `thread.tag`.
+On web and desktop, press `mod+shift+t` or choose **Choose tag** in the command palette
+to open the tag picker. Search for an existing tag, or confirm an unmatched label to
+create it with the default color. Change this shortcut in **Settings → Keybindings**
+under `thread.tag`.
+
+Click a tag's color dot in the picker to choose and apply a color. Right-click a tag
+or open its three-dot menu and choose **Rename tag** to edit it in the tag dialog.
+You can also open the dialog from the sidebar's thread menu or by clicking the tag
+in the breadcrumb. Edits apply only to the current thread or draft.
 
 Choose a preset color for the tag's pill, or use **Custom color** to pick your own.
 **Default** removes the custom color without clearing the label.
@@ -78,7 +84,7 @@ Tagging a thread does not change its project.
 
 On web and desktop, choose **No Tag** beside the checkout picker before sending a new
 thread. Search tags used by active, pinned, postponed, and snoozed threads across your
-connected environments, or choose **New tag** to enter a label and color.
+connected environments, or type a new label and confirm to create it.
 The selection stays with the draft until you send
 and applies to each thread you create, including background and multi-model sends.
 Choose **Clear tag** to send without a tag.

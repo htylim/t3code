@@ -61,6 +61,39 @@ it("lets an appended Continue binding override Cmd+N while keeping ordinary New 
   assert.strictEqual(shortcutLabelForCommand(bindings, "chat.newContinue", options), "⌘N");
 });
 
+it("opens the tag picker with Mod+Shift+T and leaves Reopen Closed Tab unbound", () => {
+  for (const platform of ["MacIntel", "Win32"]) {
+    const shortcut = event({
+      key: "T",
+      shiftKey: true,
+      metaKey: platform === "MacIntel",
+      ctrlKey: platform === "Win32",
+    });
+    assert.strictEqual(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, { platform }),
+      "thread.tag",
+    );
+    assert.deepEqual(
+      effectiveShortcutsForCommand(DEFAULT_RESOLVED_KEYBINDINGS, "view.reopenClosed", { platform }),
+      [],
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform,
+        context: { terminalFocus: true },
+      }),
+      null,
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform,
+        context: { previewFocus: true },
+      }),
+      null,
+    );
+  }
+});
+
 function event(overrides: Partial<ShortcutEventLike> = {}): ShortcutEventLike {
   return {
     key: "j",

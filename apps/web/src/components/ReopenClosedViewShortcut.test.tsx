@@ -1,5 +1,8 @@
 import type { ResolvedKeybindingsConfig, ScopedThreadRef } from "@t3tools/contracts";
-import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
+import {
+  compileResolvedKeybindingsConfig,
+  mergeWithDefaultKeybindings,
+} from "@t3tools/shared/keybindings";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import { act } from "react";
@@ -105,7 +108,9 @@ function press(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   Object.assign(state, {
-    keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
+    keybindings: mergeWithDefaultKeybindings(
+      compileResolvedKeybindingsConfig([{ key: "mod+shift+t", command: "view.reopenClosed" }]),
+    ),
     params: {},
     paletteOpen: false,
     workspaceAvailable: true,

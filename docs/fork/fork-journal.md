@@ -44,17 +44,20 @@ upstream.
   in the new conversation with the inherited tag. Native mobile and installed Electron
   were not exercised.
 
-## 2026-10-14 - Choose thread tags before sending a draft
+## 2026-10-15 - Choose and edit thread tags in the picker
 
 - Upstream baseline: `2a4ee339827e480da6ad0139585cf634a46ff73e`.
-- Change: Web and desktop drafts have a searchable tag picker beside checkout.
-  The trigger reads "No Tag" until selected, then shows a soft colored pill.
-  Menu choices use a color dot and plain label. New tag opens the existing label,
-  color, and preview editor; Clear tag removes the draft selection.
-- Reason: Group new work before the first prompt while keeping upstream draft schemas,
-  database projections, and wire contracts unchanged.
+- Change: Web and desktop drafts and saved threads share a searchable tag picker.
+  Confirming an unmatched search creates the trimmed label with the default color.
+  Color dots open the existing chooser; right-click and three-dot menus open the tag
+  editor for renaming. Edits affect only the current thread or draft. The list heading
+  is "Tags". `thread.tag` opens the picker and defaults to `mod+shift+t`, replacing
+  Reopen Closed Tab's default binding. The tag dialog has no shortcut or palette action;
+  thread menus and breadcrumb tags still open it. Sidebar pills no longer open the editor.
+- Reason: Group work before or after the first prompt, with quick creation and deliberate
+  editing, while keeping upstream draft schemas, database projections, and wire contracts unchanged.
 - Scope: `draftTagStore.ts` keeps selection storage and active-thread choices beside
-  the existing draft stores. `components/DraftTagMenu.tsx` and `DraftTagTransfers.tsx`
+  the existing draft stores. `components/ThreadTagMenu.tsx` and `DraftTagTransfers.tsx`
   own the UI and deferred writes; `hooks/useDraftTagStartTurn.ts` stages sends.
   Choices include active, pinned, postponed, and snoozed threads across connected
   environments, excluding archived, deleted, and threads classified as settled in the
@@ -67,6 +70,8 @@ upstream.
   Clearing remains available after switching to an unsupported destination. Native mobile
   draft UI, providers, server services, and contracts are unchanged.
 - Upstream merge seams: `BranchToolbar.tsx` adds the control to both composer layouts.
+  The picker shortcut temporarily reveals hidden composer controls and restores the
+  layout on close. Saved-thread edits use the existing guarded tag command.
   `ChatView.tsx` uses the fork send hook and retains the draft strip for non-Git projects.
   The already fork-owned `ThreadTagDialog.tsx` shares its editor and hosts pending transfers.
 - Verification: 136 focused tests passed, including real combobox search, keyboard
@@ -81,7 +86,19 @@ upstream.
   passed 126 focused feature and packaging tests, web typecheck, and scoped lint. A further
   isolated client pass used Postpone and Snooze, selected both threads' tags, confirmed
   reload persistence and settled-tag exclusion, and invoked the renamed Continue action.
-  No release was published.
+  The picker interaction update passed 361 focused tests, including creation by Enter
+  and click, default colors, row actions, destination-only writes, failed-save retry,
+  loading guards, draft promotion, shortcuts, and explicitly rebound Reopen Closed Tab behavior.
+  Web typecheck, scoped lint, formatting, and diff checks passed. An isolated Browser
+  panel pass confirmed creation by Enter and click, default colors, preset and custom
+  colors, rename through right-click and three-dot menus, clearing, reload persistence,
+  and unchanged source tags after editing the current thread. Native Cmd+Shift+T and the
+  palette open the picker; sidebar menus and breadcrumb clicks open the editor. Closing
+  restores hidden composer controls, and the picker fits at 700px without horizontal
+  overflow. This pass caught and fixed combobox pointer cancellation suppressing the
+  three-dot menu's mousedown, and added the palette action's visible title to its search
+  terms. No provider turn, installed Electron, native mobile, relay, or tunnel test ran
+  for this interaction update. No release was published.
 
 ## 2026-10-11 - Integrate upstream through ed0f7b908b
 
@@ -140,9 +157,8 @@ upstream.
   when tagged. The label and separator share the title's existing muted color without a pill.
   Web and desktop breadcrumbs show project / tag / thread, with the icon beside the project.
   An unset tag keeps the existing project label and icon. Tag editing is available in
-  thread menus, single-clicking a breadcrumb pill, double-clicking a sidebar pill,
-  the command palette, and the configurable `thread.tag` shortcut,
-  defaulting to `mod+alt+t`. Web and desktop editors offer preset swatches and the theme
+  thread menus and single-clicking a breadcrumb pill. The picker also offers tag editing,
+  as described above. Web and desktop editors offer preset swatches and the theme
   editor's custom picker, with a live pill preview. Native editors offer the same presets
   and custom hex input. Tags use soft colored pills without a tag icon. The tag action
   uses a label icon in browser menus and the command palette; text-only menus keep their style.

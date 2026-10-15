@@ -29,7 +29,7 @@ import {
 type TagRequest = { readonly threadRef: ScopedThreadRef };
 const useTagRequest = create<{ request: TagRequest | null }>(() => ({ request: null }));
 
-/** Open the shared editor from a tag pill, menu, command palette, or keyboard shortcut. */
+/** Open the shared editor from a thread menu or breadcrumb tag. */
 export function requestThreadTag(threadRef: ScopedThreadRef): void {
   useTagRequest.setState({ request: { threadRef } });
 }

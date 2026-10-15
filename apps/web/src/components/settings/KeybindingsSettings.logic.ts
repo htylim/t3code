@@ -372,6 +372,7 @@ export function commandLabel(command: KeybindingCommand): string {
   if (usageMetric) return `Usage: ${usageMetric.label}`;
   const usagePeriod = WINDOW_OPTIONS.find((option) => option.command === command);
   if (usagePeriod) return `Usage: Period: ${usagePeriod.label}`;
+  if (command === "thread.tag") return "Thread: Open Tag Picker";
   if (command === "view.reopenClosed") return "Reopen Closed Tab";
   const raw = String(command);
   if (raw.startsWith("script.") && raw.endsWith(".run")) {

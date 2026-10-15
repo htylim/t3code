@@ -149,7 +149,7 @@ import {
   requestSidebarProjectFilterScope,
   requestSidebarProjectFilterScopeIfFiltered,
 } from "../sidebarProjectFilterBus";
-import { requestThreadTag } from "./ThreadTagDialog";
+import { requestThreadTagPicker } from "../threadTagPickerBus";
 import { threadTagEnvironment } from "../state/threadTags";
 import { requestThreadRename } from "../threadRenameBus";
 import { isPreviewFocused } from "../lib/previewFocus";
@@ -661,9 +661,9 @@ function OpenCommandPaletteDialog(props: {
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
   const { canContinueThread, handleContinueThread } = useContinueThread();
-  const canSetThreadTag = useAtomValue(
-    threadTagEnvironment.set.permissionAtom(activeThread?.environmentId ?? null),
-  );
+  const tagEnvironmentId = activeThread?.environmentId ?? activeDraftThread?.environmentId ?? null;
+  const canSetThreadTag = useAtomValue(threadTagEnvironment.set.permissionAtom(tagEnvironmentId));
+  const tagServerConfig = useServerConfigs().get(tagEnvironmentId ?? ("" as EnvironmentId));
   const projects = useProjects();
   const referenceThreadRef =
     pathname === "/pull-requests"
@@ -1974,19 +1974,21 @@ function OpenCommandPaletteDialog(props: {
   }
 
   if (
-    activeThread &&
+    (activeThread || activeDraftThread) &&
     canSetThreadTag &&
-    activeThreadServerConfig?.environment.capabilities.threadTags === true
+    tagServerConfig?.environment.capabilities.threadTags === true
   ) {
     actionItems.push({
       kind: "action",
       value: "action:tag-thread",
-      searchTerms: ["tag thread", "label thread", "clear tag"],
-      title: "Tag thread...",
+      searchTerms: ["choose tag", "tag thread", "label thread", "clear tag", "tag picker"],
+      title: "Choose tag...",
       icon: <TagIcon className={ITEM_ICON_CLASS} />,
       shortcutCommand: "thread.tag",
-      run: async () =>
-        requestThreadTag(scopeThreadRef(activeThread.environmentId, activeThread.id)),
+      run: async () => {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+        requestThreadTagPicker();
+      },
     });
   }
 

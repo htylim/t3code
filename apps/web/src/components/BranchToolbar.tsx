@@ -1,5 +1,5 @@
 import { ComposerContextLabel } from "./ComposerContextLabel";
-import { DraftTagMenu } from "./DraftTagMenu";
+import { ThreadTagMenu } from "./ThreadTagMenu";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { readLocalApi } from "../localApi";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -79,6 +79,7 @@ interface BranchToolbarProps {
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
   composerControlsHostRef?: (element: HTMLDivElement | null) => void;
   contextStripVisible?: boolean;
+  onTagPickerOpenChange?: (open: boolean) => void;
 }
 
 /** Offers the existing checkout path through the native or web context menu. */
@@ -505,6 +506,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   onEnvironmentChange,
   composerControlsHostRef,
   contextStripVisible = true,
+  onTagPickerOpenChange,
 }: BranchToolbarProps) {
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = useMemo(
@@ -515,6 +517,10 @@ export const BranchToolbar = memo(function BranchToolbar({
     draftId ? store.getDraftSession(draftId) : store.getDraftThreadByRef(threadRef),
   );
   const serverThread = useThreadShell(threadRef);
+  const tagDraftId = useComposerDraftStore((store) => {
+    if (serverThread) return undefined;
+    return draftId ?? store.getDraftIdByRef(threadRef) ?? undefined;
+  });
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const activeProjectRef = serverThread
     ? scopeProjectRef(serverThread.environmentId, serverThread.projectId)
@@ -701,12 +707,14 @@ export const BranchToolbar = memo(function BranchToolbar({
             onEnvModeChange={onEnvModeChange}
             workspaceProps={workspaceProps}
           />
-          {draftThread && !serverThread ? (
-            <DraftTagMenu draftId={draftId} threadRef={threadRef} />
-          ) : null}
+          <ThreadTagMenu
+            draftId={tagDraftId}
+            threadRef={threadRef}
+            onOpenChange={onTagPickerOpenChange}
+          />
         </div>
       ) : null}
-      {showGitControls || showEnvironmentIndicator || (draftThread && !serverThread) ? (
+      {showGitControls || showEnvironmentIndicator || draftThread || serverThread ? (
         <div
           className={cn(
             "min-h-7 min-w-10 items-center gap-1 sm:min-h-6",
@@ -734,9 +742,11 @@ export const BranchToolbar = memo(function BranchToolbar({
             </>
           )}
           {showGitControls ? <WorkspaceMenu {...workspaceProps} /> : null}
-          {draftThread && !serverThread ? (
-            <DraftTagMenu draftId={draftId} threadRef={threadRef} />
-          ) : null}
+          <ThreadTagMenu
+            draftId={tagDraftId}
+            threadRef={threadRef}
+            onOpenChange={onTagPickerOpenChange}
+          />
         </div>
       ) : null}
 

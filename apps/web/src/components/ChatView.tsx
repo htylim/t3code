@@ -1,3 +1,4 @@
+import { requestThreadTagPicker, subscribeThreadTagPicker } from "../threadTagPickerBus";
 import { usePostponedThreadBanner } from "./chat/usePostponedThreadBanner";
 import { isThreadSettledForActions, usePostponedThreadStore } from "../postponedThreadStore";
 import { ThreadFind, ThreadFindCanvas, type ThreadFindControls } from "./chat/ThreadFindProvider";
@@ -4318,14 +4319,33 @@ export default function ChatView(props: ChatViewProps) {
           providerSubagentModels,
           reportedModelSelection,
         );
+  const [tagPickerRequestedFor, setTagPickerRequestedFor] = useState<string | null>(null);
+  const tagPickerRequested = tagPickerRequestedFor === routeThreadKey;
+  const onTagPickerOpenChange = useCallback(
+    (open: boolean) => {
+      setTagPickerRequestedFor(open ? routeThreadKey : null);
+    },
+    [routeThreadKey],
+  );
   const hasDraftTag = useHasDraftTag(composerDraftTarget);
-  const draftTagContextStrip =
-    isDraftHeroState &&
+  const tagContextStrip =
+    !showProviderSubagentBar &&
     activeProject !== null &&
     (hasDraftTag ||
       (canOperateThread && serverConfig?.environment.capabilities.threadTags === true));
+  useEffect(() => {
+    if (!tagContextStrip) return;
+    const unsubscribe = subscribeThreadTagPicker(() => {
+      flushSync(() => setTagPickerRequestedFor(routeThreadKey));
+      composerRef.current?.openControl("thread.tag");
+    });
+    return () => {
+      unsubscribe();
+      setTagPickerRequestedFor(null);
+    };
+  }, [composerRef, routeThreadKey, tagContextStrip]);
   const mountComposerContextStrip =
-    draftTagContextStrip ||
+    (tagContextStrip && (isDraftHeroState || tagPickerRequested)) ||
     shouldShowComposerContextStrip({
       isDraftHeroState,
       persistInActiveThreads: settings.persistComposerContextStrip,
@@ -4335,7 +4355,7 @@ export default function ChatView(props: ChatViewProps) {
       hostsRestingComposerControls: routeKind === "server",
     });
   const showComposerContextStrip =
-    draftTagContextStrip ||
+    (tagContextStrip && (isDraftHeroState || tagPickerRequested)) ||
     shouldShowComposerContextStrip({
       isDraftHeroState,
       persistInActiveThreads: settings.persistComposerContextStrip,
@@ -8502,6 +8522,13 @@ export default function ChatView(props: ChatViewProps) {
         return;
       }
 
+      if (command === "thread.tag") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) requestThreadTagPicker();
+        return;
+      }
+
       if (
         command === "composer.host" ||
         command === "composer.effort" ||
@@ -12193,6 +12220,7 @@ export default function ChatView(props: ChatViewProps) {
                                 availableEnvironments={logicalProjectEnvironments}
                                 composerControlsHostRef={setRestingComposerControlsHost}
                                 contextStripVisible={showComposerContextStrip}
+                                onTagPickerOpenChange={onTagPickerOpenChange}
                               />
                             </div>
                           )}
