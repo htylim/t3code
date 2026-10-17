@@ -137,13 +137,14 @@ it.each([
 );
 
 it.each([
-  ["/tmp/billing-fix", "#14b8a6", "billing-fix"],
-  ["/tmp/billing-fix", null, "billing-fix"],
-  ["/tmp/t3-1234abcd", null, null],
-  [null, null, null],
+  ["/tmp/billing-fix", "#14b8a6", "billing-fix", true],
+  ["/tmp/billing-fix", null, "billing-fix", true],
+  ["/tmp/billing-fix", null, "billing-fix", false],
+  ["/tmp/t3-1234abcd", null, null, true],
+  [null, null, null, true],
 ] as const)(
-  "shows only a named worktree below the branch for %s with saved color %s",
-  async (worktreePath, savedColor, expectedName) => {
+  "shows only a named worktree below the branch for %s with saved color %s, named %s, Git controls %s",
+  async (worktreePath, savedColor, expectedName, showGitControls) => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     state.worktreePath = worktreePath;
     const projectRef = {
@@ -168,7 +169,7 @@ it.each([
             panelSection="branch"
             environmentId={projectRef.environmentId}
             threadId={ThreadId.make("thread")}
-            showGitControls
+            showGitControls={showGitControls}
             envMode="worktree"
             envLocked
             startFromOrigin={false}

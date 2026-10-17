@@ -1,6 +1,7 @@
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import { NewWorktreeRow } from "./NewWorktreeRow";
 import { Menu, MenuPopup, MenuRadioGroup, MenuTrigger } from "./ui/menu";
@@ -10,7 +11,7 @@ let container: HTMLDivElement;
 const onSelect = vi.fn();
 
 /** Exercise real menu focus and closing behavior around the editable controls. */
-function Picker() {
+function Picker({ nameRequired = false }: { nameRequired?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <Menu open={open} onOpenChange={setOpen}>
@@ -20,6 +21,7 @@ function Picker() {
           <NewWorktreeRow
             selection={null}
             disabled={false}
+            nameRequired={nameRequired}
             onSelect={(selection) => {
               onSelect(selection);
               setOpen(false);
@@ -93,6 +95,31 @@ it("returns to automatic creation after clearing the name", async () => {
   );
   await selectRow();
   expect(onSelect).toHaveBeenCalledWith(null);
+});
+
+it("requires a name during workspace editing while leaving the name input usable", async () => {
+  await act(async () => root.render(<Picker nameRequired />));
+  const row = document.querySelector<HTMLElement>('[role="menuitemradio"]')!;
+  const input = document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')!;
+  expect(input.disabled).toBe(false);
+  expect(input.placeholder).toBe("Name (required)");
+  await act(async () => userEvent.click(row));
+  await act(async () =>
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+  );
+  expect(onSelect).not.toHaveBeenCalled();
+  await act(async () => userEvent.fill(page.getByLabelText("Worktree name"), "billing-fix"));
+  await selectRow();
+  expect(onSelect).toHaveBeenCalledWith({ name: "billing-fix", color: "#8b5cf6" });
+});
+
+it("blocks creation again when a required name is cleared", async () => {
+  await act(async () => root.render(<Picker nameRequired />));
+  await typeName("billing-fix");
+  await typeName(" ");
+  await act(async () => userEvent.click(page.getByRole("menuitemradio")));
+  expect(onSelect).not.toHaveBeenCalled();
+  expect(document.querySelector('[aria-label="Worktree name"]')).not.toBeNull();
 });
 
 it("rejects traversal without closing or selecting the row", async () => {

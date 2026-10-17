@@ -334,6 +334,7 @@ export const ChatHeader = memo(function ChatHeader({
                 <TooltipTrigger render={<span className="inline-flex min-w-0 items-center" />}>
                   <WorkspaceBreadcrumbText className="max-w-40">
                     <NamedWorktreePill
+                      threadRef={activeThreadRef}
                       projectRef={
                         activeProject
                           ? scopeProjectRef(activeThreadEnvironmentId, activeProject.id)

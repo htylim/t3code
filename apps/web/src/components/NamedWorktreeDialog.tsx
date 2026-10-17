@@ -240,19 +240,17 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
                   value={name}
                   disabled={saving || worktreePath !== request.worktreePath}
                   aria-invalid={!!validationMessage}
-                  aria-describedby={helpId}
+                  aria-describedby={validationMessage ? helpId : undefined}
                   onChange={(event) => {
                     setName(event.target.value);
                     setSaveError(null);
                   }}
                 />
-                <p
-                  id={helpId}
-                  role={validationMessage ? "status" : undefined}
-                  className="text-sm text-muted-foreground"
-                >
-                  {validationMessage ?? parentPath}
-                </p>
+                {validationMessage ? (
+                  <p id={helpId} role="status" className="text-sm text-muted-foreground">
+                    {validationMessage}
+                  </p>
+                ) : null}
               </div>
               <SoftPillColorPicker
                 label="Worktree"

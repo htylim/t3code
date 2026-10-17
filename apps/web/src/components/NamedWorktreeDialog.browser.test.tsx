@@ -1,10 +1,10 @@
 import "../index.css";
-import { EnvironmentId, GitCommandError, ProjectId } from "@t3tools/contracts";
+import { EnvironmentId, GitCommandError, ProjectId, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 type TestThread = {
   id: string;
@@ -23,11 +23,32 @@ const state = vi.hoisted(() => ({
   draftStore: { draftThreadsByThreadKey: {}, setDraftThreadContext: vi.fn() },
 }));
 vi.mock("../state/entities", () => ({
-  useThreadShellsForProjectRefs: () => state.live.map((source) => ({ source })),
+  useThreadShellsForProjectRefs: () =>
+    state.live.map((source) => ({
+      source: { ...source, lineage: { relationshipToParent: null } },
+    })),
+  useThreadShell: () => ({
+    ...state.live[0],
+    environmentId: "remote",
+    projectId: "project",
+    branch: "feature",
+    runtime: null,
+  }),
+  readThreadShell: () => ({ ...state.live[0], runtime: null }),
+  useProject: () => ({ workspaceRoot: "/repo" }),
 }));
 vi.mock("../lib/archivedThreadsState", () => ({
   useArchivedThreadSnapshots: () => ({
-    snapshots: [{ snapshot: { threads: state.archived } }],
+    snapshots: [
+      {
+        snapshot: {
+          threads: state.archived.map((thread) => ({
+            ...thread,
+            lineage: { relationshipToParent: null },
+          })),
+        },
+      },
+    ],
     isLoading: false,
     error: null,
   }),
@@ -44,7 +65,14 @@ vi.mock("../state/query", () => ({
 }));
 vi.mock("../state/vcs", async () => {
   const { Atom } = await import("effect/reactivity");
-  return { vcsEnvironment: { renameWorktree: { permissionAtom: () => Atom.make(state.allowed) } } };
+  return {
+    vcsEnvironment: {
+      renameWorktree: { permissionAtom: () => Atom.make(state.allowed) },
+      createWorktree: { permissionAtom: () => Atom.make(state.allowed) },
+      listRefs: () => null,
+      status: () => null,
+    },
+  };
 });
 vi.mock("../state/session", () => ({ useEnvironmentScope: () => state.allowed }));
 vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => state.rename }));
@@ -54,11 +82,16 @@ vi.mock("../state/use-orchestration-command", () => ({
 vi.mock("../state/threads", () => ({ threadEnvironment: { updateMetadata: {} } }));
 vi.mock("../composerDraftStore", () => ({
   DraftId: { make: (draftId: string) => draftId },
-  useComposerDraftStore: { getState: () => state.draftStore },
+  useComposerDraftStore: Object.assign(
+    (select: (store: { getDraftThreadByRef: () => null }) => unknown) =>
+      select({ getDraftThreadByRef: () => null }),
+    { getState: () => state.draftStore },
+  ),
 }));
 
 import { NamedWorktreeDialogHost, requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
 import { NamedWorktreePill } from "./NamedWorktreePill";
+import { ThreadWorkspaceMenuHost } from "./ThreadWorkspaceMenu";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
 const projectRef = {
   environmentId: EnvironmentId.make("remote"),
@@ -77,9 +110,7 @@ function button(label: string): HTMLButtonElement {
 
 /** Edit through the native input so validation processes the browser's input events. */
 async function renameTo(name: string) {
-  await act(async () =>
-    userEvent.fill(document.querySelector<HTMLInputElement>("input[aria-describedby]")!, name),
-  );
+  await act(async () => userEvent.fill(page.getByLabelText("Worktree directory name"), name));
 }
 
 /** Open the application-owned editor with a real dialog and filesystem fixtures. */
@@ -119,22 +150,24 @@ it("opens from a pill without activating its containing sidebar row", async () =
     root.render(
       <div onClick={activateThread}>
         <NamedWorktreePill
+          threadRef={{ environmentId: projectRef.environmentId, threadId: ThreadId.make("live") }}
           projectRef={projectRef}
           projectCwd="/repo"
           worktreePath={worktreePath}
           worktree={{ name: "alpha", color: "#8b5cf6" }}
         />
-        <NamedWorktreeDialogHost />
+        <ThreadWorkspaceMenuHost />
       </div>,
     ),
   );
   await act(async () =>
     userEvent.click(
-      document.querySelector<HTMLButtonElement>('[aria-label="Edit worktree alpha"]')!,
+      document.querySelector<HTMLButtonElement>('[aria-label="Edit workspace alpha"]')!,
     ),
   );
   expect(activateThread).not.toHaveBeenCalled();
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Rename worktree");
+  expect(document.querySelector('[role="menu"]')?.textContent).toContain("Workspace");
+  expect(document.querySelector('[aria-current="true"]')?.textContent).toContain("alpha");
 });
 
 it("disables Save for a sibling collision and recovers when the name changes", async () => {

@@ -8,7 +8,14 @@ import type {
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { ChevronDownIcon, FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode, type MouseEventHandler } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+  type MouseEventHandler,
+} from "react";
 import { requestConfirmDialog } from "../confirmDialog";
 import {
   namedWorktreeKey,
@@ -64,22 +71,40 @@ export interface WorkspaceMenuProps {
   forceNewWorktree?: boolean;
   canUseWorktree: boolean;
   effectiveEnvMode: EnvMode;
-  onEnvModeChange: (mode: EnvMode) => void;
+  onEnvModeChange: (mode: EnvMode) => void | Promise<boolean>;
   namedWorktreeSelection?: NamedWorktreeSelection | null;
   activeWorktreeColor?: string | null;
-  onNewWorktreeSelect: (selection: NamedWorktreeSelection | null) => void;
-  onUseWorktree: (seed: PreviousWorktreeSeed) => void;
+  onNewWorktreeSelect: (selection: NamedWorktreeSelection | null) => void | Promise<boolean>;
+  onUseWorktree: (seed: PreviousWorktreeSeed) => void | Promise<boolean>;
   trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  anchor?: ComponentProps<typeof MenuPopup>["anchor"];
+  ariaLabel?: string;
+  allowOpenWhenLocked?: boolean;
+  selectionHint?: string | null;
+  canCreateWorktree?: boolean;
+  requireWorktreeName?: boolean;
+  /** Standalone editing stays open until selection, Escape, or an outside click. */
+  interactionMode?: "composer" | "standalone";
   environmentItems?: ReactNode;
   canChooseEnvironment?: boolean;
   displayMode?: "toolbar" | "panel";
   onContextMenu?: MouseEventHandler | undefined;
 }
-/** Shares the workspace popup between the wide and narrow composer controls. */
+/** Share the Workspace picker across composer controls and existing-thread entry points. */
 export function WorkspaceMenu(props: WorkspaceMenuProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
-  const [open, setOpen] = useState(false);
-  const initialFocusPending = useRef(false);
+  const standalone = props.interactionMode === "standalone";
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = props.open ?? internalOpen;
+  const initialFocusPending = useRef(open);
+  /** Controlled menus let thread context actions open this same picker at their click position. */
+  function setOpen(nextOpen: boolean) {
+    initialFocusPending.current = nextOpen;
+    setInternalOpen(nextOpen);
+    props.onOpenChange?.(nextOpen);
+  }
   const triggerContent = props.trigger ?? (
     <>
       {props.activeWorktreePath ? (
@@ -105,7 +130,7 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
       </span>
     </>
   );
-  if (props.envLocked && !props.canChooseEnvironment) {
+  if (props.envLocked && !props.canChooseEnvironment && !props.allowOpenWhenLocked) {
     return (
       <span
         className="inline-flex h-7 min-w-0 items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
@@ -120,39 +145,57 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
   return (
     <Menu
       open={open}
-      onOpenChange={(nextOpen) => {
-        initialFocusPending.current = nextOpen;
+      onOpenChange={(nextOpen, details) => {
+        if (
+          standalone &&
+          !nextOpen &&
+          (details.reason === "trigger-hover" || details.reason === "focus-out")
+        ) {
+          details.cancel();
+          return;
+        }
         setOpen(nextOpen);
       }}
     >
-      <MenuTrigger
-        render={
-          props.displayMode === "panel" ? (
-            <ThreadDetailsControl part="select" />
-          ) : (
-            <ComposerControl size="xs" />
-          )
-        }
-        aria-label={props.displayMode === "panel" ? "Run context" : "Workspace"}
-        onContextMenu={props.onContextMenu}
-        onMouseDownCapture={(event) => {
-          if (props.displayMode === "panel" && event.ctrlKey && event.button === 0) {
-            event.preventDefault();
-            event.stopPropagation();
+      {!props.anchor ? (
+        <MenuTrigger
+          render={
+            props.displayMode === "panel" ? (
+              <ThreadDetailsControl part="select" />
+            ) : (
+              <ComposerControl size="xs" />
+            )
           }
-        }}
-        data-composer-shortcut="composer.workspace"
-        className={props.displayMode === "panel" ? undefined : "min-w-0 shrink"}
-        data-composer-context-control
-      >
-        {triggerContent}
-        <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
-      </MenuTrigger>
+          aria-label={
+            props.ariaLabel ?? (props.displayMode === "panel" ? "Run context" : "Workspace")
+          }
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+          onContextMenu={props.onContextMenu}
+          onMouseDownCapture={(event) => {
+            if (props.displayMode === "panel" && event.ctrlKey && event.button === 0) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
+          data-composer-shortcut="composer.workspace"
+          className={props.displayMode === "panel" ? undefined : "min-w-0 shrink"}
+          data-composer-context-control
+        >
+          {triggerContent}
+          {props.displayMode !== "panel" ? (
+            <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
+          ) : null}
+        </MenuTrigger>
+      ) : null}
       <MenuPopup
         align="start"
         side="top"
+        anchor={props.anchor}
         className="w-[440px] max-w-[calc(100vw-24px)]"
-        {...composerFloatingLayerProps}
+        {...(standalone ? {} : composerFloatingLayerProps)}
         onFocusCapture={(event) => {
           if (!initialFocusPending.current) return;
           initialFocusPending.current = false;
@@ -226,22 +269,29 @@ function WorkspaceMenuContents(
   return (
     <>
       {props.environmentItems}
+      {props.selectionHint ? (
+        <p role="status" className="px-3 py-2 text-xs text-muted-foreground">
+          {props.selectionHint}
+        </p>
+      ) : null}
       <MenuRadioGroup value={props.activeWorktreePath ?? props.effectiveEnvMode}>
         <MenuGroup>
           <MenuGroupLabel>Workspace</MenuGroupLabel>
           <MenuRadioItem
             value="local"
+            closeOnClick={false}
             data-workspace-initial-focus={
               !props.activeWorktreePath && props.effectiveEnvMode === "local" ? "" : undefined
             }
             disabled={props.envLocked}
-            onClick={() => {
-              if (props.activeWorktreePath)
-                props.onUseWorktree({
-                  branch: localRef?.isDetached ? null : (localRef?.name ?? null),
-                  worktreePath: props.projectCwd,
-                });
-              else props.onEnvModeChange("local");
+            onClick={async () => {
+              const accepted = props.activeWorktreePath
+                ? await props.onUseWorktree({
+                    branch: localRef?.isDetached ? null : (localRef?.name ?? null),
+                    worktreePath: props.projectCwd,
+                  })
+                : await props.onEnvModeChange("local");
+              if (accepted !== false) props.close();
             }}
           >
             <span className="flex items-center gap-2">
@@ -256,10 +306,11 @@ function WorkspaceMenuContents(
           <NewWorktreeRow
             active={!props.activeWorktreePath && props.effectiveEnvMode === "worktree"}
             selection={props.namedWorktreeSelection ?? null}
-            disabled={props.envLocked}
-            onSelect={(selection) => {
-              props.onNewWorktreeSelect(selection);
-              props.close();
+            disabled={props.envLocked || props.canCreateWorktree === false}
+            nameRequired={props.requireWorktreeName ?? false}
+            onSelect={async (selection) => {
+              const accepted = await props.onNewWorktreeSelect(selection);
+              if (accepted !== false) props.close();
             }}
           />
         </MenuGroup>
@@ -429,14 +480,17 @@ function WorkspaceRow(
       aria-current={props.current || undefined}
       data-workspace-initial-focus={props.current ? "" : undefined}
       aria-disabled={!props.canUseWorktree}
-      onClick={(event) => {
+      onClick={async (event) => {
         if (
           !props.canUseWorktree ||
           (event.target instanceof Element && event.target.closest("button"))
         )
           return;
-        props.onUseWorktree({ branch: row.refName, worktreePath: row.worktreePath });
-        props.close();
+        const accepted = await props.onUseWorktree({
+          branch: row.refName,
+          worktreePath: row.worktreePath,
+        });
+        if (accepted !== false) props.close();
       }}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -487,7 +541,7 @@ function WorkspaceRow(
             align="end"
             onClick={(event) => event.stopPropagation()}
             onMouseUp={(event) => event.stopPropagation()}
-            {...composerFloatingLayerProps}
+            {...(props.interactionMode === "standalone" ? {} : composerFloatingLayerProps)}
           >
             <WorktreeAction
               reason={renameReason}

@@ -1,8 +1,8 @@
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 vi.mock("../state/entities", () => ({ useThreadShellsForProjectRefs: () => [] }));
 vi.mock("../lib/archivedThreadsState", () => ({
@@ -105,6 +105,62 @@ it("allows keyboard navigation after focusing the current option", async () => {
   await act(async () => userEvent.click(container.querySelector<HTMLButtonElement>("button")!));
   await vi.waitFor(() => expect(document.activeElement?.textContent).toContain("local checkout"));
 });
+
+/** Match a breadcrumb request's controlled popup and virtual anchor, without a menu trigger. */
+function StandaloneWorkspaceFixture({ onSelect }: { onSelect: () => void }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <WorkspaceMenu
+      environmentId={environmentId}
+      projectRef={projectRef}
+      projectCwd="/tmp/project"
+      activeWorktreePath={null}
+      activeBranch="main"
+      envLocked={false}
+      canUseWorktree
+      effectiveEnvMode="local"
+      requireWorktreeName
+      interactionMode="standalone"
+      open={open}
+      onOpenChange={setOpen}
+      anchor={{ getBoundingClientRect: () => new DOMRect(180, 180) }}
+      onEnvModeChange={onSelect}
+      onNewWorktreeSelect={onSelect}
+      onUseWorktree={onSelect}
+    />
+  );
+}
+
+it("keeps a standalone picker open on pointer leave and discards edits on Escape", async () => {
+  const onSelect = vi.fn();
+  await act(async () => root.render(<StandaloneWorkspaceFixture onSelect={onSelect} />));
+  const input = page.getByLabelText("Worktree name");
+  await act(async () => userEvent.fill(input, "uncommitted-workspace"));
+  await act(async () => userEvent.hover(input));
+  await act(async () => userEvent.hover(document.body));
+  expect(document.querySelector('[role="menu"]')).not.toBeNull();
+  expect(document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')?.value).toBe(
+    "uncommitted-workspace",
+  );
+  await act(async () => userEvent.keyboard("{Escape}"));
+  await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  expect(onSelect).not.toHaveBeenCalled();
+});
+
+it.each(["Escape", "outside click", "selection"])(
+  "dismisses a standalone picker through %s",
+  async (action) => {
+    const onSelect = vi.fn();
+    await act(async () => root.render(<StandaloneWorkspaceFixture onSelect={onSelect} />));
+    await act(async () => {
+      if (action === "Escape") await userEvent.keyboard("{Escape}");
+      else if (action === "outside click") await userEvent.click(document.body);
+      else await userEvent.click(page.getByRole("menuitemradio").first());
+    });
+    await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+    expect(onSelect).toHaveBeenCalledTimes(action === "selection" ? 1 : 0);
+  },
+);
 
 /** Read the visible worktree names independently of their selected or status labels. */
 function worktreeNames() {

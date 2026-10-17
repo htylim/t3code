@@ -20,6 +20,7 @@ import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
 import { TransientSideChatCleanup } from "../components/TransientSideChatCleanup";
 import { NamedWorktreeDialogHost } from "../components/NamedWorktreeDialog";
+import { ThreadWorkspaceMenuHost } from "../components/ThreadWorkspaceMenu";
 import { CustomSnoozeDialogHost } from "../components/CustomSnoozeDialog";
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
 import { KeybindingsConfigWarning } from "../components/KeybindingsConfigWarning";
@@ -189,6 +190,7 @@ function RootRouteView() {
           <ProviderAuthCallbackCoordinator />
           <CustomSnoozeDialogHost />
           <NamedWorktreeDialogHost />
+          <ThreadWorkspaceMenuHost />
           <CommandPalette>
             <AppSidebarLayout>
               <Outlet />
@@ -245,6 +247,7 @@ function RootRouteView() {
           <ConfirmDialogHost />
           <CustomSnoozeDialogHost />
           <NamedWorktreeDialogHost />
+          <ThreadWorkspaceMenuHost />
           <SlowRpcRequestToastCoordinator />
           <PermissionUpdateNotice />
           {primaryEnvironmentAuthenticated ? <LegacyThreadMigrationToast /> : null}

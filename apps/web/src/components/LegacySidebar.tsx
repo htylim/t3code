@@ -1,5 +1,4 @@
-import { requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
-import { readNamedWorktree } from "../namedWorktreeStore";
+import { requestThreadWorkspaceEdit } from "./ThreadWorkspaceMenu";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
 import { Spinner } from "~/components/ui/spinner";
@@ -2193,9 +2192,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       const threadProject = memberProjectByScopedKey.get(
         scopedProjectKey(scopeProjectRef(thread.environmentId, thread.projectId)),
       );
-      const projectRef = scopeProjectRef(thread.environmentId, thread.projectId);
       const projectCwd = threadProject?.workspaceRoot ?? null;
-      const namedWorktree = readNamedWorktree(projectRef, thread.worktreePath, projectCwd);
       const threadWorkspacePath =
         thread.worktreePath ?? projectCwd ?? project.workspaceRoot ?? null;
       const canOperateThread = readEnvironmentScope(
@@ -2211,11 +2208,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             ? [{ id: "open-in-chat-surface", label: "Open in side surface", icon: "panel-right" }]
             : []),
           { id: "rename", label: "Rename thread", icon: "pencil", disabled: !canOperateThread },
-          ...(namedWorktree
+          ...(projectCwd
             ? [
                 {
-                  id: "rename-worktree",
-                  label: "Rename worktree",
+                  id: "edit-workspace",
+                  label: "Edit workspace",
                   icon: "pencil",
                   disabled: !canOperateThread,
                 },
@@ -2290,11 +2287,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         return;
       }
 
-      if (clicked === "rename-worktree") {
+      if (clicked === "edit-workspace") {
         if (!checkTaskPermission(threadRef.environmentId)) return;
-        if (namedWorktree && projectCwd && thread.worktreePath) {
-          requestNamedWorktreeEdit({ projectRef, projectCwd, worktreePath: thread.worktreePath });
-        }
+        if (projectCwd) requestThreadWorkspaceEdit({ threadRef, position });
         return;
       }
 

@@ -15,14 +15,30 @@
   same pill. Settled and compact rows prefix their thread title with the worktree pill.
   Sidebar card and search-result tooltips show the named-worktree pill on its own row below the branch.
   Main checkouts and automatic directories have no pill in these locations.
-  Clicking a pill opens one shared color and directory editor. Workspace-menu Rename uses
-  that same Rename worktree dialog. Breadcrumb and sidebar context menus place Rename worktree
-  directly below Rename thread with the same pencil icon, only for named worktrees.
+  Clicking a pill opens the existing Workspace picker with the current checkout selected
+  and focused. Breadcrumb and sidebar context menus offer Edit workspace below Rename thread
+  for both local and worktree threads. The details-panel worktree row includes a dropdown arrow.
+  Threads in the project's root checkout show Local checkout in that same row, with the existing
+  folder icon and access to workspace editing. Drafts awaiting a new worktree do not show that label.
+  Existing-thread selection adopts the destination checkout's actual branch; named creation
+  uses a same-named new branch based on the thread's original branch. Workspace edits require
+  an explicit name for new worktrees, while draft creation keeps the automatic-name option.
+  The creation row retains its normal appearance when the name is empty; clicks and Enter
+  cannot create a worktree until a required name is supplied.
+  Existing-thread pickers ignore hover and focus-loss dismissal, and omit composer floating-layer
+  behavior. Escape and outside clicks discard unsubmitted name and color edits, and selection
+  closes the picker. Composer pickers retain their original dismissal behavior.
+  Only the selected thread moves, through the normal metadata update and provider-session detach.
+  Manual moves require an idle thread and compare its original branch and path on the server.
+  The picker's Rename action retains the shared color and directory editor for every thread
+  using that checkout.
   Sibling directory checks disable colliding names, and server rejections
   preserve the draft. Stopped worktrees can be renamed while active in the client; running
   agents block a directory move while color editing remains available. Successful moves
   update live, archived, and draft thread paths. Failed reference updates can be retried
   without moving the directory twice. Directory listings refresh on opening and after moves.
+  Assigned worktrees that Git no longer recognizes show an unavailable-checkout error instead
+  of Initialize Git. Their named-worktree pill stays visible independently of Git status.
 - Reason: A useful directory name must exist before checkout and setup scripts run. The launch
   passes an optional `directoryName` through the existing worktree creation service. Git branch
   generation and renaming continue independently, and managed worktree cleanup is unchanged.
@@ -30,6 +46,8 @@
   environment, project, and actual path. Named-worktree metadata needs no database migration.
   Existing named directories appear with a default color on clients without saved metadata;
   automatic directory names use the existing temporary-name detector and stay out of the list.
+  `ThreadWorkspaceMenu.tsx` owns existing-thread picker requests and selection. It composes
+  the existing Git creation, status, and metadata commands without adding a separate workspace API.
   Manual directory renames preserve local colors, and manual removal forgets them.
   Generic color presets and soft-pill components belong to worktree labels. The former tag
   feature is retired across clients and server code.
@@ -68,10 +86,34 @@
   Tooltip pills passed the scoped web typecheck and sidebar lint. The isolated Browser panel
   verified their placement below the branch, color, editor entry point, and absence on local and
   automatic checkouts.
+  The unavailable-checkout guard passed 83 focused Git-action tests, web typecheck, and lint.
+  The isolated Browser panel verified the error and retained pill for a missing checkout,
+  and normal Git controls for a healthy checkout. Automated panel browser tests still hit
+  the existing mocked-project fixture failures in this checkout.
+  Existing-thread workspace editing passed 190 focused tests and all four scoped typechecks.
+  Targeted lint passed with one existing server warning. The isolated Browser panel verified
+  sidebar and breadcrumb pills, Edit workspace on a local thread, the panel arrow, selected-row
+  focus, same-named branch creation from the original branch, actual-branch adoption, moving
+  back to the root checkout, and directory renaming through the existing editor. Other threads
+  kept their checkout assignments. Automated Chromium suites still have mocked-state fixture
+  failures in this checkout; the creation-row suite and picker focus cases passed.
+  Required-name editing passed 15 controller tests, eight Chromium creation-row tests,
+  scoped web typecheck, and targeted lint. The isolated Browser panel verified that typing
+  allows creation and clearing the name blocks it while the row and editor stay usable.
+  Standalone dismissal passed five focused Chromium checks, scoped web typecheck, and targeted
+  lint. The isolated Browser panel reproduced pointer-leave dismissal from a breadcrumb and
+  verified that both breadcrumb and details-panel editing remain open after pointer leave.
+  Dismissal discarded an entered name without changing the selected checkout. The Cancel footer
+  was removed; the focused dismissal checks still pass using Escape and outside clicks.
+  The Local checkout row passed scoped web typecheck and targeted lint. The isolated Browser
+  panel verified its folder icon, dropdown arrow, picker access, and selected local checkout;
+  the named-worktree pill still renders on a worktree thread.
 - Upstream conflict map: Preserve the optional directory-name field in contracts, client launch
   forwarding, and `ThreadLaunchService`; path validation and initial path choice stay in
   `GitVcsDriverCore`. The picker row, palette, and metadata store are separate fork-owned modules.
   `BranchToolbar`, `WorkspaceMenu`, and the first-send bootstrap in `ChatView` are the web seams.
+  Existing-thread editing adds only the optional idle guard to metadata updates in contracts,
+  client command forwarding, and the orchestrator; automatic provisioning does not opt into it.
 
 This journal explains the fork differences that we still maintain. Features replaced by upstream
 keep only a short adoption note. Git preserves their removed implementation details and verification

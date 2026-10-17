@@ -16,21 +16,25 @@ export function NewWorktreeRow({
   selection,
   active = false,
   disabled,
+  nameRequired = false,
   onSelect,
 }: {
   selection: NamedWorktreeSelection | null;
   active?: boolean;
   disabled: boolean;
+  nameRequired?: boolean;
   onSelect: (selection: NamedWorktreeSelection | null) => void;
 }) {
   const [name, setName] = useState(selection?.name ?? "");
   const [color, setColor] = useState(selection?.color ?? SOFT_PILL_COLOR_PRESETS[0].color);
   const directoryName = name.trim();
   const invalid = directoryName.length > 0 && !isWorktreeDirectoryName(directoryName);
+  const missingRequiredName = nameRequired && !directoryName;
+  const selectionBlocked = disabled || invalid || missingRequiredName;
 
   /** Commit the current values only when the row is selected. */
   function select() {
-    if (disabled || invalid) return;
+    if (selectionBlocked) return;
     onSelect(directoryName ? { name: directoryName, color } : null);
   }
 
@@ -38,6 +42,7 @@ export function NewWorktreeRow({
     <>
       <MenuRadioItem
         value="worktree"
+        closeOnClick={false}
         data-workspace-initial-focus={active && !selection?.name.trim() ? "" : undefined}
         disabled={disabled}
         onClick={select}
@@ -63,7 +68,8 @@ export function NewWorktreeRow({
               size="compact"
               aria-label="Worktree name"
               data-workspace-initial-focus={active && selection?.name.trim() ? "" : undefined}
-              placeholder="Name (optional)"
+              placeholder={nameRequired ? "Name (required)" : "Name (optional)"}
+              aria-required={nameRequired}
               value={name}
               disabled={disabled}
               aria-invalid={invalid}

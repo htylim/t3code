@@ -1,6 +1,5 @@
 import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { requestNamedWorktreeEdit } from "../components/NamedWorktreeDialog";
-import { readNamedWorktree } from "../namedWorktreeStore";
+import { requestThreadWorkspaceEdit } from "../components/ThreadWorkspaceMenu";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import {
   type AtomCommandResult,
@@ -130,13 +129,11 @@ export function useThreadActionMenu(input: {
       if (!api) return;
       const thread = readThreadShell(threadRef);
       if (!thread) return;
-      const projectRef = scopeProjectRef(thread.environmentId, thread.projectId);
       const threadProject = projects.find(
         (project) =>
           project.environmentId === thread.environmentId && project.id === thread.projectId,
       );
       const worktreeProjectCwd = threadProject?.workspaceRoot ?? projectCwd;
-      const namedWorktree = readNamedWorktree(projectRef, thread.worktreePath, worktreeProjectCwd);
       const now = new Date();
       const supports = {
         settlement: readEnvironmentSupportsSettlement(threadRef.environmentId),
@@ -152,7 +149,7 @@ export function useThreadActionMenu(input: {
       const items = buildThreadActionMenuItems({
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
         branch: thread.branch ?? null,
-        hasNamedWorktree: namedWorktree !== null,
+        canEditWorkspace: !!worktreeProjectCwd,
         projectFilter: null,
         isPinned: thread.pinnedAt != null,
         isSettled:
@@ -273,14 +270,8 @@ export function useThreadActionMenu(input: {
         case "rename":
           onStartRename();
           return;
-        case "rename-worktree":
-          if (namedWorktree && worktreeProjectCwd && thread.worktreePath) {
-            requestNamedWorktreeEdit({
-              projectRef,
-              projectCwd: worktreeProjectCwd,
-              worktreePath: thread.worktreePath,
-            });
-          }
+        case "edit-workspace":
+          if (worktreeProjectCwd) requestThreadWorkspaceEdit({ threadRef, position });
           return;
         case "regenerate-title":
           if (isRegeneratingTitle) return;

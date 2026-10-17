@@ -128,6 +128,9 @@ export interface UpdateThreadMetadataInput extends ThreadCommandInput {
   readonly regenerateTitle?: boolean;
   readonly linkedPullRequest?: ThreadLinkedPullRequest | null;
   readonly expectedEmpty?: boolean;
+  readonly expectedIdle?: boolean;
+  readonly expectedWorktreePath?: string | null;
+  readonly expectedBranch?: string | null;
 }
 
 export interface SetThreadRuntimeModeInput extends ThreadCommandInput {
@@ -576,6 +579,11 @@ export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadM
         ...(input.branch === undefined ? {} : { branch: input.branch }),
         ...(input.worktreePath === undefined ? {} : { worktreePath: input.worktreePath }),
         ...(input.expectedEmpty === true ? { expectedEmpty: true } : {}),
+        ...(input.expectedIdle === true ? { expectedIdle: true } : {}),
+        ...(input.expectedWorktreePath === undefined
+          ? {}
+          : { expectedWorktreePath: input.expectedWorktreePath }),
+        ...(input.expectedBranch === undefined ? {} : { expectedBranch: input.expectedBranch }),
         ...(input.regenerateTitle === undefined ? {} : { regenerateTitle: input.regenerateTitle }),
         ...(input.linkedPullRequest === undefined
           ? {}

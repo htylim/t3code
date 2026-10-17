@@ -1,17 +1,19 @@
-import type { ScopedProjectRef } from "@t3tools/contracts";
+import type { ScopedProjectRef, ScopedThreadRef } from "@t3tools/contracts";
 import type { NamedWorktreeSelection } from "../namedWorktreeStore";
-import { requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
+import { requestThreadWorkspaceEdit } from "./ThreadWorkspaceMenu";
 import { SoftPill } from "./ui/soft-pill";
 
-/** Open the same worktree editor from navigation without activating its containing thread. */
+/** Open the Workspace picker without activating the pill's containing thread. */
 export function NamedWorktreePill({
   projectRef,
+  threadRef,
   projectCwd,
   worktreePath,
   worktree,
   className,
 }: {
   projectRef: ScopedProjectRef | null;
+  threadRef: ScopedThreadRef;
   projectCwd: string | null | undefined;
   worktreePath: string | null;
   worktree: NamedWorktreeSelection;
@@ -22,13 +24,14 @@ export function NamedWorktreePill({
     <SoftPill
       color={worktree.color}
       className={className}
-      render={<button type="button" aria-label={`Edit worktree ${worktree.name}`} />}
+      render={<button type="button" aria-label={`Edit workspace ${worktree.name}`} />}
       onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
-        requestNamedWorktreeEdit({ projectRef, projectCwd, worktreePath });
+        const bounds = event.currentTarget.getBoundingClientRect();
+        requestThreadWorkspaceEdit({ threadRef, position: { x: bounds.left, y: bounds.bottom } });
       }}
     >
       {worktree.name}

@@ -10,8 +10,7 @@ import {
   moveThreadContextDrag as moveThreadContextDragGhost,
 } from "./chat/threadContextDrag";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
-import { requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
-import { readNamedWorktree } from "../namedWorktreeStore";
+import { requestThreadWorkspaceEdit } from "./ThreadWorkspaceMenu";
 import { NamedWorktreePill } from "./NamedWorktreePill";
 import { useNamedWorktree } from "../hooks/useNamedWorktree";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
@@ -1047,6 +1046,7 @@ function SidebarThreadTooltip({
             <FolderGitIcon className="size-3 shrink-0 stroke-muted-foreground" />
             <div className="pointer-events-auto min-w-0">
               <NamedWorktreePill
+                threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
                 projectRef={projectRef}
                 projectCwd={project?.workspaceRoot}
                 worktreePath={thread.worktreePath}
@@ -2097,6 +2097,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         {variant === "slim" && namedWorktree ? (
           <>
             <NamedWorktreePill
+              threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
               projectRef={
                 thread.projectId ? scopeProjectRef(thread.environmentId, thread.projectId) : null
               }
@@ -2431,6 +2432,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       </span>
                     ) : null}
                     <NamedWorktreePill
+                      threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
                       projectRef={
                         thread.projectId
                           ? scopeProjectRef(thread.environmentId, thread.projectId)
@@ -4476,11 +4478,9 @@ export default function Sidebar() {
         }
         const thread = threadByKeyRef.current.get(threadKey);
         if (!thread) return;
-        const projectRef = scopeProjectRef(thread.environmentId, thread.projectId);
         const projectCwd =
           projectByKey.get(`${thread.environmentId}:${thread.projectId}`)?.workspaceRoot ?? null;
         const threadWorkspacePath = thread.worktreePath ?? projectCwd;
-        const namedWorktree = readNamedWorktree(projectRef, thread.worktreePath, projectCwd);
         const supportsSettlement =
           serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSettlement ===
           true;
@@ -4516,7 +4516,7 @@ export default function Sidebar() {
                   AuthOrchestrationOperateScope,
                 ),
                 branch: thread.branch ?? null,
-                hasNamedWorktree: namedWorktree !== null,
+                canEditWorkspace: !!projectCwd,
                 canOpenInChatSurface:
                   rightPanelOwnerRef !== null && scopedThreadKey(rightPanelOwnerRef) !== threadKey,
                 projectFilter: threadProjectGroup
@@ -4662,14 +4662,8 @@ export default function Sidebar() {
           case "rename":
             startThreadRename(threadRef, thread.title);
             return;
-          case "rename-worktree":
-            if (namedWorktree && projectCwd && thread.worktreePath) {
-              requestNamedWorktreeEdit({
-                projectRef,
-                projectCwd,
-                worktreePath: thread.worktreePath,
-              });
-            }
+          case "edit-workspace":
+            if (projectCwd) requestThreadWorkspaceEdit({ threadRef, position });
             return;
           case "regenerate-title": {
             if (isRegeneratingTitle) return;

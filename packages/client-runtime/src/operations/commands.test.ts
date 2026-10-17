@@ -798,6 +798,34 @@ describe("V2 environment commands", () => {
     }).pipe(Effect.provide(layerTestCrypto)),
   );
 
+  it.effect("forwards workspace race guards with metadata updates", () =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const supervisor = yield* makeSupervisor({ commands, projects: [] });
+      yield* updateThreadMetadata({
+        commandId: CommandId.make("move-workspace"),
+        threadId: v2ThreadId,
+        worktreePath: "/new-worktree",
+        branch: "new-branch",
+        expectedWorktreePath: null,
+        expectedBranch: "main",
+        expectedIdle: true,
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+      expect(commands).toEqual([
+        {
+          type: "thread.metadata.update",
+          commandId: "move-workspace",
+          threadId: v2ThreadId,
+          worktreePath: "/new-worktree",
+          branch: "new-branch",
+          expectedWorktreePath: null,
+          expectedBranch: "main",
+          expectedIdle: true,
+        },
+      ]);
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
   it.effect("retains provider-switch shaping for servers without command context support", () =>
     Effect.gen(function* () {
       const commands: OrchestrationV2Command[] = [];

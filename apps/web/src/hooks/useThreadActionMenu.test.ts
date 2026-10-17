@@ -41,10 +41,10 @@ function recordEffect(action: string) {
   state.completed.resolve();
 }
 
-vi.mock("../components/NamedWorktreeDialog", () => ({
-  requestNamedWorktreeEdit: (request: unknown) => {
+vi.mock("../components/ThreadWorkspaceMenu", () => ({
+  requestThreadWorkspaceEdit: (request: unknown) => {
     state.requestWorktreeEdit(request);
-    recordEffect("rename-worktree");
+    recordEffect("edit-workspace");
   },
 }));
 vi.mock("../components/CustomSnoozeDialog", () => ({ requestCustomSnooze: vi.fn() }));
@@ -207,12 +207,12 @@ describe("postponed thread menu", () => {
 
 describe("named-worktree menu", () => {
   it.each([null, "/project", "/worktrees/t3-173504f2"])(
-    "hides worktree renaming for an unnamed checkout: %s",
+    "offers workspace editing for every checkout: %s",
     (worktreePath) => {
       state.worktreePath = worktreePath;
       createMenu().openMenu(position);
-      expect(state.show.mock.calls[0]![0].some((action) => action.id === "rename-worktree")).toBe(
-        false,
+      expect(state.show.mock.calls[0]![0].some((action) => action.id === "edit-workspace")).toBe(
+        true,
       );
     },
   );
@@ -220,15 +220,14 @@ describe("named-worktree menu", () => {
   it("opens the editor for the selected worktree in its own environment", async () => {
     state.granted.add("secondary");
     state.worktreePath = "/worktrees/named-feature";
-    state.show.mockResolvedValue("rename-worktree");
+    state.show.mockResolvedValue("edit-workspace");
     createMenu().openMenu(position);
     await state.completed.promise;
     expect(state.requestWorktreeEdit).toHaveBeenCalledWith({
-      projectRef: { environmentId: "secondary", projectId: "project" },
-      projectCwd: "/project",
-      worktreePath: "/worktrees/named-feature",
+      threadRef: target,
+      position,
     });
-    expect(state.effects).toEqual(["rename-worktree"]);
+    expect(state.effects).toEqual(["edit-workspace"]);
   });
 });
 
@@ -262,7 +261,7 @@ describe("thread menu permissions", () => {
 
   it.each([
     "rename",
-    "rename-worktree",
+    "edit-workspace",
     "regenerate-title",
     "delete",
     "pin",
