@@ -368,7 +368,7 @@ describe("V2 environment commands", () => {
     }).pipe(Effect.provide(layerTestCrypto)),
   );
 
-  it.effect("provisions an origin-based worktree for an existing empty thread", () =>
+  it.effect("provisions an origin-based named worktree for an existing empty thread", () =>
     Effect.gen(function* () {
       const launches: OrchestrationV2ThreadLaunchInput[] = [];
       const supervisor = yield* makeSupervisor({ commands: [], projects: [], launches });
@@ -389,6 +389,7 @@ describe("V2 environment commands", () => {
             projectCwd: "/workspace/project",
             baseBranch: "main",
             branch: "feature",
+            directoryName: "billing-fix",
             startFromOrigin: true,
           },
         },
@@ -402,6 +403,7 @@ describe("V2 environment commands", () => {
           type: "worktree",
           baseRef: "main",
           branch: "feature",
+          directoryName: "billing-fix",
           startFromOrigin: true,
         },
       });

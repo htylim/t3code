@@ -7,10 +7,17 @@ import type {
   ScopedProjectRef,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import { ChevronDownIcon, FolderGit2Icon, FolderGitIcon, FolderIcon, PlusIcon } from "lucide-react";
-import { useMemo, useState, type ReactNode, type MouseEventHandler } from "react";
+import { ChevronDownIcon, FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode, type MouseEventHandler } from "react";
 
 import { requestConfirmDialog } from "../confirmDialog";
+import {
+  namedWorktreeKey,
+  resolveNamedWorktreeColor,
+  useNamedWorktreeStore,
+  type NamedWorktreeSelection,
+} from "../namedWorktreeStore";
+import { NewWorktreeRow } from "./NewWorktreeRow";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import {
   useArchivedThreadSnapshots,
@@ -66,6 +73,9 @@ export interface WorkspaceMenuProps {
   canUseWorktree: boolean;
   effectiveEnvMode: EnvMode;
   onEnvModeChange: (mode: EnvMode) => void;
+  namedWorktreeSelection?: NamedWorktreeSelection | null;
+  activeWorktreeColor?: string | null;
+  onNewWorktreeSelect: (selection: NamedWorktreeSelection | null) => void;
   onUseWorktree: (seed: PreviousWorktreeSeed) => void;
   trigger?: ReactNode;
   environmentItems?: ReactNode;
@@ -186,6 +196,10 @@ function WorkspaceMenuContents(
     for (const thread of liveThreads) byId.set(thread.id, thread.source);
     return [...byId.values()];
   }, [archived.snapshots, liveThreads, props.projectRef.projectId]);
+  const namedWorktrees = useNamedWorktreeStore((state) => state.worktrees);
+  useEffect(() => {
+    useNamedWorktreeStore.getState().record(props.projectRef, threads);
+  }, [props.projectRef, threads]);
   const rows = resolveWorktreeRows({
     refs,
     threads: threads.map((thread) => ({
@@ -197,7 +211,12 @@ function WorkspaceMenuContents(
     })),
     activeProjectCwd: props.projectCwd,
     activeWorktreePath: props.activeWorktreePath,
-  });
+  }).filter((row) =>
+    resolveNamedWorktreeColor(
+      row.worktreePath,
+      namedWorktrees[namedWorktreeKey(props.projectRef, row.worktreePath)]?.color,
+    ),
+  );
   const localRef = refs.find((ref) => ref.worktreePath === props.projectCwd);
   const currentRow: WorktreeRow | null = props.activeWorktreePath
     ? {
@@ -244,16 +263,14 @@ function WorkspaceMenuContents(
               <span className="text-muted-foreground text-3xs">local checkout</span>
             </span>
           </MenuRadioItem>
-          <MenuRadioItem
-            value="worktree"
+          <NewWorktreeRow
+            selection={props.namedWorktreeSelection ?? null}
             disabled={props.envLocked}
-            onClick={() => props.onEnvModeChange("worktree")}
-          >
-            <span className="flex items-center gap-2">
-              <PlusIcon className="size-3" />
-              New worktree
-            </span>
-          </MenuRadioItem>
+            onSelect={(selection) => {
+              props.onNewWorktreeSelect(selection);
+              props.close();
+            }}
+          />
         </MenuGroup>
       </MenuRadioGroup>
       <MenuSeparator />
@@ -272,7 +289,7 @@ function WorkspaceMenuContents(
           <div className="px-3 py-2 text-xs text-destructive">{refsQuery.error}</div>
         ) : null}
         {!rows.length && !refsQuery.isPending ? (
-          <div className="px-3 py-2 text-xs text-muted-foreground">No other worktrees</div>
+          <div className="px-3 py-2 text-xs text-muted-foreground">No named worktrees</div>
         ) : null}
       </MenuGroup>
     </>
@@ -333,6 +350,10 @@ function WorkspaceRow(
   },
 ) {
   const { row } = props;
+  const metadata = useNamedWorktreeStore(
+    (state) => state.worktrees[namedWorktreeKey(props.projectRef, row.worktreePath)],
+  );
+  const color = resolveNamedWorktreeColor(row.worktreePath, metadata?.color);
   const composerFloatingLayerProps = useComposerMenuProps();
   const [actionsOpen, setActionsOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -397,6 +418,9 @@ function WorkspaceRow(
       setPending(false);
       return;
     }
+    useNamedWorktreeStore
+      .getState()
+      .move(props.projectRef, row.worktreePath, renamed.value.worktree.path);
     for (const thread of props.threads) {
       if (thread.worktreePath !== row.worktreePath) continue;
       await updateMetadata({
@@ -470,6 +494,7 @@ function WorkspaceRow(
       });
       return;
     }
+    useNamedWorktreeStore.getState().forget(props.projectRef, row.worktreePath);
     await refreshStatus({ environmentId: props.environmentId, input: { cwd: props.projectCwd } });
     props.close();
   }
@@ -540,7 +565,15 @@ function WorkspaceRow(
         setActionsOpen(true);
       }}
     >
-      <FolderGitIcon className="size-3 shrink-0" />
+      {color ? (
+        <span
+          aria-hidden
+          className="size-3 shrink-0 rounded-full"
+          style={{ backgroundColor: color }}
+        />
+      ) : (
+        <FolderGitIcon className="size-3 shrink-0" />
+      )}
       <span className="min-w-0 truncate">{row.dirName}</span>
       <span className="min-w-0 truncate text-right text-xs text-muted-foreground">
         {row.refName ?? "(detached)"}

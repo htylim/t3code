@@ -20,6 +20,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import {
   GitCommandError,
+  WorktreeDirectoryName,
   type GitCommandFailureReason,
   T3_PROJECT_FILE_NAME,
   type ReviewDiffFileContentsInput,
@@ -46,6 +47,7 @@ import {
 import * as ServerConfig from "../config.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const isWorktreeDirectoryName = Schema.is(WorktreeDirectoryName);
 const gitProcesses = Semaphore.makeUnsafe(8);
 // `git worktree add` checks out the full tree, so on large repositories it can
 // take well beyond the default 30s (e.g. a 375k-file repo takes ~40s on an idle
@@ -3444,6 +3446,17 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   )(function* (input, options) {
     const targetBranch = input.newRefName ?? input.refName;
     const sanitizedBranch = targetBranch.replace(/\//g, "-");
+    if (
+      input.directoryName !== undefined &&
+      (!isWorktreeDirectoryName(input.directoryName) || input.path !== null)
+    ) {
+      return yield* new GitCommandError({
+        operation: "GitVcsDriver.createWorktree",
+        command: "git worktree add",
+        cwd: input.cwd,
+        detail: "Use a single directory name without path separators and leave path unset.",
+      });
+    }
     const repoName = path.basename(input.cwd);
     let worktreePath = input.path;
     if (worktreePath == null) {
@@ -3461,7 +3474,19 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           detail: `The worktree location "${options?.worktreesDirectory}" must be an absolute folder on this machine, not a drive root. Change it in Settings → Storage.`,
         });
       }
-      worktreePath = path.join(parentDir, repoName, sanitizedBranch);
+      // A chosen directory name is independent of the generated Git branch.
+      worktreePath = path.join(parentDir, repoName, input.directoryName ?? sanitizedBranch);
+    }
+    if (
+      input.directoryName !== undefined &&
+      (yield* fileSystem.exists(worktreePath).pipe(Effect.orElseSucceed(() => false)))
+    ) {
+      return yield* new GitCommandError({
+        operation: "GitVcsDriver.createWorktree",
+        command: "git worktree add",
+        cwd: input.cwd,
+        detail: `The directory "${input.directoryName}" already exists. Choose another worktree name.`,
+      });
     }
     const args = input.newRefName
       ? ["worktree", "add", "-b", input.newRefName, worktreePath, input.refName]

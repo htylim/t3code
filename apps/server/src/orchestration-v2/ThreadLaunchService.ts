@@ -60,6 +60,7 @@ export type ThreadLaunchWorkspaceStrategy =
       readonly type: "worktree";
       readonly baseRef: string;
       readonly branch?: string | undefined;
+      readonly directoryName?: string | undefined;
       readonly startFromOrigin?: boolean | undefined;
     };
 
@@ -366,8 +367,9 @@ const make = Effect.gen(function* () {
         });
 
       // The server owns worktree naming: without an explicit branch, provision
-      // under a temporary `t3/<hash>` name so the worktree never waits on
-      // name generation, then rename in the background below.
+      // with a temporary `t3/<hash>` branch so the worktree never waits on
+      // name generation, then rename in the background below. An explicit
+      // directory name is independent of this branch and never needs moving.
       const requestedBranch = input.workspaceStrategy.branch;
       let branch: string | null;
       if (input.workspaceStrategy.type === "worktree" && requestedBranch === undefined) {
@@ -450,6 +452,9 @@ const make = Effect.gen(function* () {
               refName: startRef,
               newRefName: branch!,
               baseRefName: input.workspaceStrategy.baseRef,
+              ...(input.workspaceStrategy.directoryName === undefined
+                ? {}
+                : { directoryName: input.workspaceStrategy.directoryName }),
               path: null,
             },
             {

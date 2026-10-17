@@ -19,6 +19,11 @@ import {
 } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
+import {
+  namedWorktreeKey,
+  resolveNamedWorktreeColor,
+  useNamedWorktreeStore,
+} from "../namedWorktreeStore";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThreadShellsForProjectRefs, useThreadShell } from "../state/entities";
 import {
@@ -161,24 +166,35 @@ const RunContextSelector = memo(function RunContextSelector({
     ? resolveEnvModeLabel("worktree")
     : envModeLocked
       ? resolveLockedWorkspaceLabel(activeWorktreePath, effectiveEnvMode)
-      : effectiveEnvMode === "worktree"
-        ? resolveEnvModeLabel("worktree")
+      : effectiveEnvMode === "worktree" && !activeWorktreePath
+        ? (workspaceProps.namedWorktreeSelection?.name ?? resolveEnvModeLabel("worktree"))
         : resolveCurrentWorkspaceLabel(activeWorktreePath);
   const isPanel = displayMode === "panel";
   const workspacePath =
     forceNewWorktree || (effectiveEnvMode === "worktree" && !activeWorktreePath)
       ? null
       : (activeWorktreePath ?? workspaceRoot);
+  const workspaceColor = activeWorktreePath
+    ? workspaceProps.activeWorktreeColor
+    : workspaceProps.namedWorktreeSelection?.color;
   const workspaceIcon = (
     <Tooltip>
       <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-        <WorkspaceIcon
-          className={
-            isPanel
-              ? THREAD_DETAILS_PANEL_ICON_CLASS
-              : cn("size-3 shrink-0", showEnvironmentIndicator && "mx-0!")
-          }
-        />
+        {workspaceColor && effectiveEnvMode === "worktree" && !forceNewWorktree ? (
+          <span
+            aria-hidden
+            className="size-3 shrink-0 rounded-full"
+            style={{ backgroundColor: workspaceColor }}
+          />
+        ) : (
+          <WorkspaceIcon
+            className={
+              isPanel
+                ? THREAD_DETAILS_PANEL_ICON_CLASS
+                : cn("size-3 shrink-0", showEnvironmentIndicator && "mx-0!")
+            }
+          />
+        )}
       </TooltipTrigger>
       <TooltipPopup>
         {isPanel
@@ -525,6 +541,23 @@ export const BranchToolbar = memo(function BranchToolbar({
   const activeWorktreePath = forceNewWorktree
     ? null
     : (serverThread?.worktreePath ?? draftThread?.worktreePath ?? null);
+  const namedWorktreeSelection = useNamedWorktreeStore((state) =>
+    activeProjectRef
+      ? (state.selections[namedWorktreeKey(activeProjectRef, threadId)] ?? null)
+      : null,
+  );
+  const namedWorktreeMetadata = useNamedWorktreeStore((state) =>
+    activeProjectRef && activeWorktreePath
+      ? (state.worktrees[namedWorktreeKey(activeProjectRef, activeWorktreePath)] ?? null)
+      : null,
+  );
+  useEffect(() => {
+    if (activeProjectRef && activeWorktreePath && namedWorktreeSelection) {
+      useNamedWorktreeStore
+        .getState()
+        .record(activeProjectRef, [{ id: threadId, worktreePath: activeWorktreePath }]);
+    }
+  }, [activeProjectRef, activeWorktreePath, namedWorktreeSelection, threadId]);
   const effectiveEnvMode = forceNewWorktree ? "worktree" : envMode;
   const envModeLocked = envLocked || (serverThread !== null && activeWorktreePath !== null);
 
@@ -535,6 +568,7 @@ export const BranchToolbar = memo(function BranchToolbar({
         return;
       const worktreePath =
         seed.worktreePath === activeProject?.workspaceRoot ? null : seed.worktreePath;
+      useNamedWorktreeStore.getState().select(activeProjectRef, threadId, null);
       setDraftThreadContext(draftId ?? threadRef, {
         branch: seed.branch,
         worktreePath,
@@ -552,6 +586,7 @@ export const BranchToolbar = memo(function BranchToolbar({
       draftId,
       setDraftThreadContext,
       threadRef,
+      threadId,
     ],
   );
   // "Previous worktree" hops a draft into the most recently active worktree
@@ -612,6 +647,9 @@ export const BranchToolbar = memo(function BranchToolbar({
   const labelsOverflow = useLabelsOverflow(stripElement);
 
   if (!hasActiveThread || !activeProject || !activeProjectRef) return null;
+  const activeWorktreeColor = activeWorktreePath
+    ? resolveNamedWorktreeColor(activeWorktreePath, namedWorktreeMetadata?.color)
+    : null;
   const workspaceProps: WorkspaceMenuProps = {
     environmentId,
     projectRef: activeProjectRef,
@@ -623,6 +661,12 @@ export const BranchToolbar = memo(function BranchToolbar({
     canUseWorktree: draftThread !== null && serverThread === null && !envModeLocked,
     effectiveEnvMode,
     onEnvModeChange,
+    namedWorktreeSelection,
+    activeWorktreeColor,
+    onNewWorktreeSelect: (selection) => {
+      useNamedWorktreeStore.getState().select(activeProjectRef, threadId, selection);
+      onEnvModeChange("worktree");
+    },
     onUseWorktree,
   };
 

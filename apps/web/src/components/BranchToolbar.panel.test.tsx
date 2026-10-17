@@ -73,6 +73,9 @@ it("keeps machine choices usable when the combined row's workspace is locked", a
     });
     expect(document.querySelector('[role="menu"]')).toBeNull();
     await act(async () => trigger.click());
+    expect(document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')?.value).toBe(
+      "",
+    );
     const items = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
     expect(
       items.find((item) => item.textContent === "New worktree")?.getAttribute("aria-disabled"),

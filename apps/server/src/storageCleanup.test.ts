@@ -362,6 +362,19 @@ const runCleanupTest = <A, E>(
 ) => effect.pipe(Effect.provide(cleanupTestLayer), Effect.scoped);
 
 describe("storage cleanup reports and local file policies", () => {
+  it.live("automatically removes a named directory whose Git branch has a different name", () =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        const { service, fs, worktree, setThreads, command, config } = yield* cleanupFixture;
+        const namedPath = `${config.worktreesDir}/billing-fix`;
+        yield* command(worktree, ["worktree", "move", worktree, namedPath]);
+        setThreads([shell({ branch: "feature", worktreePath: namedPath })]);
+        const report = yield* service.runNow;
+        expect(report.entries[0]).toMatchObject({ path: namedPath, outcome: "removed" });
+        expect(yield* fs.exists(namedPath)).toBe(false);
+      }),
+    ),
+  );
   it.live("measures nested regular files without following symlinks", () =>
     runCleanupTest(
       Effect.gen(function* () {

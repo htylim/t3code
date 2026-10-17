@@ -155,11 +155,18 @@ export const VcsListRefsInput = Schema.Struct({
 });
 export type VcsListRefsInput = typeof VcsListRefsInput.Type;
 
+/** A single folder name inside the configured managed worktree directory. */
+export const WorktreeDirectoryName = TrimmedNonEmptyStringSchema.check(
+  // eslint-disable-next-line no-control-regex -- Filesystem names must reject NUL and other control characters.
+  Schema.isPattern(/^(?!\.{1,2}$)[^/\\\u0000-\u001f]+$/u),
+);
+
 export const VcsCreateWorktreeInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   refName: TrimmedNonEmptyStringSchema,
   newRefName: Schema.optional(TrimmedNonEmptyStringSchema),
   baseRefName: Schema.optional(TrimmedNonEmptyStringSchema),
+  directoryName: Schema.optional(WorktreeDirectoryName),
   path: Schema.NullOr(TrimmedNonEmptyStringSchema),
 });
 export type VcsCreateWorktreeInput = typeof VcsCreateWorktreeInput.Type;

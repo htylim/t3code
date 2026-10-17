@@ -1146,6 +1146,46 @@ it.effect("runs a Scratch thread launched at the root in its own folder", () =>
   }),
 );
 
+it.effect("uses the chosen directory from creation through setup", () =>
+  Effect.gen(function* () {
+    const setupStarted = yield* Deferred.make<void>();
+    const harness = makeHarness({
+      createWorktree: (input) =>
+        Effect.succeed({
+          worktree: {
+            path: `/repo-worktrees/${input.directoryName}`,
+            refName: input.newRefName,
+            headSha: "abc",
+          },
+        } as never),
+      runSetup: () =>
+        Deferred.succeed(setupStarted, undefined).pipe(Effect.as({ status: "no-script" as const })),
+    });
+    yield* Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      const threads = yield* ThreadManagement.ThreadManagementService;
+      const launched = yield* launches.launch(
+        launchInput({
+          command: "command:launch:named-directory",
+          thread: "thread:launch:named-directory",
+          message: "Fix billing",
+          workspace: { type: "worktree", baseRef: "main", directoryName: "billing-fix" },
+        }),
+      );
+      yield* Deferred.await(setupStarted);
+      assert.equal(harness.createWorktree.mock.calls[0]?.[0]?.directoryName, "billing-fix");
+      assert.match(
+        harness.createWorktree.mock.calls[0]?.[0]?.newRefName ?? "",
+        /^t3\/[0-9a-f]{8}$/u,
+      );
+      assert.equal(
+        (yield* threads.getThreadProjection(launched.threadId)).thread.worktreePath,
+        "/repo-worktrees/billing-fix",
+      );
+    }).pipe(Effect.provide(harness.layer));
+  }),
+);
+
 it.effect("names the worktree itself when the client provides no branch", () =>
   Effect.gen(function* () {
     const harness = makeHarness();

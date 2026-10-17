@@ -14,7 +14,12 @@ to keep a large paste editable in the composer instead.
 
 ## Choose a workspace
 
-The Workspace picker lists existing worktrees by directory and branch, with busy or dirty status.
+Choose **New worktree** to create a separate checkout when you send the first message. Leave its
+name empty for automatic naming, or enter a directory name and choose a color. The Git branch
+still gets its normal generated name. Named worktrees use the same automatic cleanup rules.
+
+The Workspace picker lists named worktrees by directory and branch, with busy or dirty status.
+Colors are saved in this browser or desktop profile and do not sync between devices.
 Use a row's menu to rename an available worktree, copy its path, or remove it while keeping the branch.
 Choose the workspace before starting a thread. The picker locks once the thread has messages or an
 active session, or a saved thread has an assigned worktree.

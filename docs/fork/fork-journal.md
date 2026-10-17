@@ -1,5 +1,33 @@
 # Fork journal
 
+## 2026-10-17 - Named worktree directories and local colors
+
+- Upstream baseline: `2a4ee33982`.
+- Change: The web and desktop Workspace picker accepts an optional directory name and color
+  on the existing New worktree row. An empty name preserves automatic creation and disables
+  color selection. Editing keeps the picker open; selecting the row commits the choice.
+- Reason: A useful directory name must exist before checkout and setup scripts run. The launch
+  passes an optional `directoryName` through the existing worktree creation service. Git branch
+  generation and renaming continue independently, and managed worktree cleanup is unchanged.
+- Scope: `namedWorktreeStore.ts` owns fork-only localStorage choices and colors, scoped by
+  environment, project, and actual path. No database migration or native mobile UI changes.
+  Existing named directories appear with a default color on clients without saved metadata;
+  automatic directory names use the existing temporary-name detector and stay out of the list.
+  Manual directory renames preserve local colors, and manual removal forgets them. Tags remain
+  separate for later removal; only their shared preset palette is reused.
+- Verification: Scoped web, server, contracts, and client-runtime typechecks and targeted lint
+  passed. Picker DOM tests, persistence tests, launch forwarding, real Git worktree creation,
+  branch renaming, collisions, and automatic named-directory cleanup passed. The full touched
+  server test files also reported two failures in unchanged tests, unusual diff paths and expired
+  artifact/log cleanup. An isolated browser pass with Personal GPT-5.6-Terra at low reasoning
+  verified named and unnamed creation, setup's initial working directory, generated branch
+  renaming, color persistence after reload, reuse, directory renaming, and removal with the
+  branch retained. No live database writes or desktop install was used.
+- Upstream conflict map: Preserve the optional directory-name field in contracts, client launch
+  forwarding, and `ThreadLaunchService`; path validation and initial path choice stay in
+  `GitVcsDriverCore`. The picker row, palette, and metadata store are separate fork-owned modules.
+  `BranchToolbar`, `WorkspaceMenu`, and the first-send bootstrap in `ChatView` are the web seams.
+
 This journal explains the fork differences that we still maintain. Features replaced by upstream
 keep only a short adoption note. Git preserves their removed implementation details and verification
 history. Dated merge checks describe what was tested at that time, not additional features to restore.

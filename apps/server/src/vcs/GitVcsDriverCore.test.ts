@@ -3240,6 +3240,85 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
       }),
     );
 
+    it.effect("creates named directories directly and keeps them through branch renames", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const pathService = yield* Path.Path;
+        const cwd = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(cwd);
+        const worktreesDirectory = yield* makeTmpDir("named-worktrees-");
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        const created = yield* driver.createWorktree(
+          {
+            cwd,
+            path: null,
+            refName: initialBranch,
+            newRefName: "t3/abcd1234",
+            directoryName: "billing-fix",
+          },
+          { worktreesDirectory },
+        );
+        const expected = pathService.join(
+          worktreesDirectory,
+          pathService.basename(cwd),
+          "billing-fix",
+        );
+        assert.equal(created.worktree.path, expected);
+        assert.equal(yield* fs.exists(pathService.join(expected, ".git")), true);
+        assert.equal(
+          yield* fs.exists(pathService.join(pathService.dirname(expected), "t3-abcd1234")),
+          false,
+        );
+        yield* driver.renameBranch({
+          cwd: expected,
+          oldBranch: "t3/abcd1234",
+          newBranch: "generated-feature",
+        });
+        const refs = yield* driver.listRefs({ cwd, worktreesOnly: true });
+        assert.equal(
+          refs.refs.find((ref) => ref.name === "generated-feature")?.worktreePath,
+          yield* fs.realPath(expected),
+        );
+
+        const collision = yield* driver
+          .createWorktree(
+            {
+              cwd,
+              path: null,
+              refName: initialBranch,
+              newRefName: "t3/other123",
+              directoryName: "billing-fix",
+            },
+            { worktreesDirectory },
+          )
+          .pipe(Effect.flip);
+        assert.match(collision.detail, /already exists/);
+        assert.equal(yield* fs.exists(expected), true);
+        yield* driver.removeWorktree({ cwd, path: expected, force: false });
+        assert.equal(yield* fs.exists(expected), false);
+      }),
+    );
+
+    it.effect("rejects directory traversal before creating a worktree", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        for (const directoryName of ["..", "../outside", "nested\\folder"]) {
+          const failure = yield* driver
+            .createWorktree({
+              cwd,
+              path: null,
+              refName: initialBranch,
+              newRefName: "feature",
+              directoryName,
+            })
+            .pipe(Effect.flip);
+          assert.match(failure.detail, /single directory name/);
+        }
+      }),
+    );
+
     it.effect("creates worktrees under the configured worktrees directory", () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
