@@ -16,8 +16,8 @@ export type ThreadActionMenuId =
   | "snooze"
   | `snooze:${string}`
   | "unsnooze"
-  | "tag"
   | "rename"
+  | "edit-workspace"
   | "regenerate-title"
   | "mark-unread"
   | "copy"
@@ -69,6 +69,7 @@ export interface ThreadActionMenuState {
   readonly canOperate: boolean;
   readonly branch: string | null;
   readonly canOpenInChatSurface?: boolean;
+  readonly canEditWorkspace?: boolean;
   /**
    * Project scoping for the thread list. Null on surfaces with no scoped
    * list behind the menu (the chat header), where the item must not show.
@@ -91,7 +92,6 @@ export interface ThreadActionMenuState {
     readonly snooze: boolean;
     readonly pinning: boolean;
     readonly titleRegeneration: boolean;
-    readonly threadTags?: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
 }
@@ -167,8 +167,8 @@ export function buildThreadActionMenuItems(
         ]
       : []),
     { id: "rename", label: "Rename thread", icon: "pencil", separatorBefore: true },
-    ...(state.supports.threadTags
-      ? [{ id: "tag" as const, label: "Tag thread...", icon: "tag" }]
+    ...(state.canEditWorkspace !== false
+      ? [{ id: "edit-workspace" as const, label: "Edit workspace", icon: "pencil" }]
       : []),
     ...(state.supports.titleRegeneration
       ? [

@@ -24,6 +24,32 @@ const decodeResolvePullRequestResult = Schema.decodeUnknownSync(GitResolvePullRe
 const decodeVcsStatusLocalResult = Schema.decodeUnknownSync(VcsStatusLocalResult);
 
 describe("VcsCreateWorktreeInput", () => {
+  it("accepts a directory name independently of the branch", () => {
+    expect(
+      decodeCreateWorktreeInput({
+        cwd: "/repo",
+        refName: "main",
+        newRefName: "t3/abcd1234",
+        path: null,
+        directoryName: "billing-fix",
+      }).directoryName,
+    ).toBe("billing-fix");
+  });
+
+  it.each([
+    ".",
+    "..",
+    "../outside",
+    "nested/folder",
+    "nested\\folder",
+    "/absolute",
+    "bad\u0000name",
+    " ",
+  ])("rejects an invalid worktree directory name %j", (directoryName) => {
+    expect(() =>
+      decodeCreateWorktreeInput({ cwd: "/repo", refName: "main", path: null, directoryName }),
+    ).toThrow();
+  });
   it("accepts omitted newRefName for existing-refName worktrees", () => {
     const parsed = decodeCreateWorktreeInput({
       cwd: "/repo",

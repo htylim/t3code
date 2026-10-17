@@ -1,5 +1,5 @@
-/** Shared preset swatches for web, desktop, and native tag editors. */
-export const THREAD_TAG_COLOR_PRESETS = [
+/** Preset swatches for colored soft-pill labels. */
+export const SOFT_PILL_COLOR_PRESETS = [
   { label: "Violet", color: "#8b5cf6" },
   { label: "Blue", color: "#3b82f6" },
   { label: "Cyan", color: "#06b6d4" },

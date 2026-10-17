@@ -61,6 +61,7 @@ export type ThreadLaunchWorkspaceStrategy =
       readonly type: "worktree";
       readonly baseRef: string;
       readonly branch?: string | undefined;
+      readonly directoryName?: string | undefined;
       readonly startFromOrigin?: boolean | undefined;
     };
 
@@ -77,7 +78,6 @@ export interface ThreadLaunchInitialMessage {
 export interface ThreadLaunchInput {
   readonly commandId: CommandId;
   readonly threadId?: ThreadId;
-  readonly sourceThreadId?: ThreadId;
   readonly reuseExistingThread?: boolean;
   readonly projectId: ProjectId;
   readonly title: string;
@@ -363,6 +363,7 @@ const make = Effect.gen(function* () {
             );
         });
 
+      // A chosen directory is independent of branch generation and never needs moving.
       const requestedBranch = input.workspaceStrategy.branch;
       let branch: string | null;
       if (input.workspaceStrategy.type === "worktree" && requestedBranch === undefined) {
@@ -443,6 +444,9 @@ const make = Effect.gen(function* () {
               refName: startRef,
               newRefName: branch!,
               baseRefName: input.workspaceStrategy.baseRef,
+              ...(input.workspaceStrategy.directoryName === undefined
+                ? {}
+                : { directoryName: input.workspaceStrategy.directoryName }),
               path: null,
             },
             {
@@ -899,7 +903,6 @@ const make = Effect.gen(function* () {
         const initialBranch = workspaceStrategy.branch ?? null;
         const initialWorktreePath =
           workspaceStrategy.type === "existing_worktree" ? workspaceStrategy.worktreePath : null;
-        const sourceThreadId = input.sourceThreadId ?? input.initialMessage?.senderThreadId;
         const claimDispatch =
           input.reuseExistingThread === true
             ? threads.dispatch({
@@ -913,7 +916,6 @@ const make = Effect.gen(function* () {
                 commandId: input.commandId,
                 threadId: candidateThreadId,
                 projectId: input.projectId,
-                ...(sourceThreadId === undefined ? {} : { sourceThreadId }),
                 title: input.title,
                 modelSelection: input.modelSelection,
                 runtimeMode: input.runtimeMode,

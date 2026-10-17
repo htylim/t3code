@@ -10,9 +10,9 @@ import {
   moveThreadContextDrag as moveThreadContextDragGhost,
 } from "./chat/threadContextDrag";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
-import { requestThreadTag } from "./ThreadTagDialog";
-import { ThreadTagPill } from "./ThreadTagPill";
-import { readThreadTagsSupported, threadTagEnvironment } from "../state/threadTags";
+import { requestThreadWorkspaceEdit } from "./ThreadWorkspaceMenu";
+import { NamedWorktreePill } from "./NamedWorktreePill";
+import { useNamedWorktree } from "../hooks/useNamedWorktree";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
@@ -78,6 +78,7 @@ import {
   CircleDotDashedIcon,
   ClockIcon,
   FolderIcon,
+  FolderGitIcon,
   GitBranchIcon,
   ListFilterIcon,
   MessageCircleQuestionIcon,
@@ -965,6 +966,7 @@ function SidebarProviderStack(props: {
   );
 }
 
+/** Show thread details with the same named-worktree identity as its sidebar card. */
 function SidebarThreadTooltip({
   thread,
   project,
@@ -997,6 +999,10 @@ function SidebarThreadTooltip({
   terminalStatus: TerminalStatusIndicator | null;
   terminalProcessCount: number;
 }) {
+  const projectRef = thread.projectId
+    ? scopeProjectRef(thread.environmentId, thread.projectId)
+    : null;
+  const namedWorktree = useNamedWorktree(projectRef, thread.worktreePath, project?.workspaceRoot);
   const driverKind = providerEntry?.driverKind ?? null;
   const previousProviderNames = thread.providerInstanceHistory
     .filter((instanceId) => instanceId !== modelInstanceId)
@@ -1033,6 +1039,20 @@ function SidebarThreadTooltip({
           <div className="flex min-w-0 items-center gap-2">
             <GitBranchIcon className="size-3 shrink-0 stroke-muted-foreground" />
             <MiddleTruncate value={thread.branch} className="flex" />
+          </div>
+        ) : null}
+        {namedWorktree ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <FolderGitIcon className="size-3 shrink-0 stroke-muted-foreground" />
+            <div className="pointer-events-auto min-w-0">
+              <NamedWorktreePill
+                threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
+                projectRef={projectRef}
+                projectCwd={project?.workspaceRoot}
+                worktreePath={thread.worktreePath}
+                worktree={namedWorktree}
+              />
+            </div>
           </div>
         ) : null}
         {branchMismatch ? (
@@ -1672,10 +1692,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   } = props;
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const threadKey = scopedThreadKey(threadRef);
-  const threadTagLabel = useAtomValue(threadTagEnvironment.labelAtom(threadRef));
-  const threadTagColor = useAtomValue(threadTagEnvironment.colorAtom(threadRef));
-  const canEditThreadTag = useAtomValue(
-    threadTagEnvironment.set.permissionAtom(thread.environmentId),
+  const namedWorktree = useNamedWorktree(
+    thread.projectId ? scopeProjectRef(thread.environmentId, thread.projectId) : null,
+    thread.worktreePath,
+    props.project?.workspaceRoot,
   );
   const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   useEffect(() => {
@@ -2026,7 +2046,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     title: thread.title,
     statusLabel: topStatus?.label ?? null,
     projectDisplayName: props.projectDisplayName,
-    threadTagLabel,
+    worktreeName: namedWorktree?.name ?? null,
     isActive: props.isActive,
   });
 
@@ -2046,7 +2066,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       />
     ) : (
       <span
-        aria-hidden
+        aria-hidden={variant === "slim" && namedWorktree ? undefined : true}
         className={cn(
           "min-w-0 flex-1 text-sm transition-opacity motion-reduce:transition-none",
           shouldRecede ? "font-normal" : "font-medium",
@@ -2074,9 +2094,21 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           isRegeneratingTitle && "opacity-55",
         )}
       >
-        {variant === "slim" && variantAction === "unsettle" && threadTagLabel
-          ? `${threadTagLabel} / `
-          : null}
+        {variant === "slim" && namedWorktree ? (
+          <>
+            <NamedWorktreePill
+              threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
+              projectRef={
+                thread.projectId ? scopeProjectRef(thread.environmentId, thread.projectId) : null
+              }
+              projectCwd={props.project?.workspaceRoot}
+              worktreePath={thread.worktreePath}
+              worktree={namedWorktree}
+              className="max-w-1/2"
+            />
+            {" / "}
+          </>
+        ) : null}
         {thread.title}
       </span>
     );
@@ -2388,22 +2420,28 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 )}
               >
                 {props.projectDisplayName ? (
-                  <span className={cn("min-w-0 truncate", threadTagLabel && "max-w-1/2")}>
+                  <span className={cn("min-w-0 truncate", namedWorktree && "max-w-1/2")}>
                     {props.projectDisplayName}
                   </span>
                 ) : null}
-                {threadTagLabel ? (
+                {namedWorktree ? (
                   <>
                     {props.projectDisplayName ? (
                       <span aria-hidden className="shrink-0 text-icon-muted">
                         /
                       </span>
                     ) : null}
-                    <ThreadTagPill
-                      label={threadTagLabel}
-                      color={threadTagColor}
+                    <NamedWorktreePill
+                      threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
+                      projectRef={
+                        thread.projectId
+                          ? scopeProjectRef(thread.environmentId, thread.projectId)
+                          : null
+                      }
+                      projectCwd={props.project?.workspaceRoot}
+                      worktreePath={thread.worktreePath}
+                      worktree={namedWorktree}
                       className="min-w-0 shrink"
-                      onEdit={canEditThreadTag ? () => requestThreadTag(threadRef) : undefined}
                     />
                   </>
                 ) : null}
@@ -4440,10 +4478,9 @@ export default function Sidebar() {
         }
         const thread = threadByKeyRef.current.get(threadKey);
         if (!thread) return;
-        const threadWorkspacePath =
-          thread.worktreePath ??
-          projectByKey.get(`${thread.environmentId}:${thread.projectId}`)?.workspaceRoot ??
-          null;
+        const projectCwd =
+          projectByKey.get(`${thread.environmentId}:${thread.projectId}`)?.workspaceRoot ?? null;
+        const threadWorkspacePath = thread.worktreePath ?? projectCwd;
         const supportsSettlement =
           serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSettlement ===
           true;
@@ -4479,6 +4516,7 @@ export default function Sidebar() {
                   AuthOrchestrationOperateScope,
                 ),
                 branch: thread.branch ?? null,
+                canEditWorkspace: !!projectCwd,
                 canOpenInChatSurface:
                   rightPanelOwnerRef !== null && scopedThreadKey(rightPanelOwnerRef) !== threadKey,
                 projectFilter: threadProjectGroup
@@ -4500,7 +4538,6 @@ export default function Sidebar() {
                   snooze: supportsSnooze,
                   pinning: supportsPinning,
                   titleRegeneration: supportsTitleRegeneration,
-                  threadTags: readThreadTagsSupported(thread.environmentId),
                 },
                 snoozePresets,
               }),
@@ -4622,11 +4659,11 @@ export default function Sidebar() {
             }
             return;
           }
-          case "tag":
-            requestThreadTag(threadRef);
-            return;
           case "rename":
             startThreadRename(threadRef, thread.title);
+            return;
+          case "edit-workspace":
+            if (projectCwd) requestThreadWorkspaceEdit({ threadRef, position });
             return;
           case "regenerate-title": {
             if (isRegeneratingTitle) return;

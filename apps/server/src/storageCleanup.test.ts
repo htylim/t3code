@@ -1176,6 +1176,19 @@ describe("orphan worktree reports", () => {
 });
 
 describe("storage cleanup reports and local file policies", () => {
+  it.live("automatically removes a named directory whose Git branch has a different name", () =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        const { service, fs, worktree, setThreads, command, config } = yield* cleanupFixture();
+        const namedPath = `${config.worktreesDir}/billing-fix`;
+        yield* command(worktree, ["worktree", "move", worktree, namedPath]);
+        setThreads([shell({ branch: "feature", worktreePath: namedPath })]);
+        const report = yield* service.runNow;
+        expect(report.entries[0]).toMatchObject({ path: namedPath, outcome: "removed" });
+        expect(yield* fs.exists(namedPath)).toBe(false);
+      }),
+    ),
+  );
   it.live.each(["before-check", "while-measuring"] as const)(
     "keeps a worktree protected by a missing project root (%s)",
     (timing) =>

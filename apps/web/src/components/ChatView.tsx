@@ -367,6 +367,7 @@ import {
   serverEnvironment,
 } from "../state/server";
 import { threadEnvironment } from "../state/threads";
+import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
 import { vcsEnvironment } from "../state/vcs";
 import { sourceControlEnvironment } from "../state/sourceControl";
@@ -6587,6 +6588,10 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     const threadIdForSend = activeThread.id;
+    const namedWorktreeSelection =
+      useNamedWorktreeStore.getState().selections[
+        namedWorktreeKey(scopeProjectRef(environmentId, activeProject.id), threadIdForSend)
+      ];
     const isFirstMessage = !sendQueuesBehindSetup && (!isServerThread || activeMessageCount === 0);
     const baseBranchForWorktree =
       isFirstMessage && sendEnvMode === "worktree" && !activeThread.worktreePath
@@ -7212,6 +7217,9 @@ export default function ChatView(props: ChatViewProps) {
                     prepareWorktree: {
                       projectCwd: activeProject.workspaceRoot,
                       baseBranch: baseBranchForWorktree,
+                      ...(namedWorktreeSelection
+                        ? { directoryName: namedWorktreeSelection.name }
+                        : {}),
                       ...(startFromOrigin ? { startFromOrigin: true } : {}),
                     },
                     runSetupScript: true,
@@ -8210,6 +8218,7 @@ export default function ChatView(props: ChatViewProps) {
             activeThreadId={activeThread.id}
             isServerThread={isServerThread}
             activeThreadTitle={activeThread.title}
+            activeWorktreePath={multipleModelSelections !== null ? null : activeThread.worktreePath}
             activeProject={activeProject ?? null}
             parentThreadLink={parentThreadLink}
             onOpenThread={onOpenRelatedThreadStable}

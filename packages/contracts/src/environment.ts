@@ -89,7 +89,6 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   requiredWorktreeBootstrap: Schema.optionalKey(Schema.Boolean),
   threadSettlement: Schema.optionalKey(Schema.Boolean),
   /** Fork-owned thread label overrides are available without database migrations. */
-  threadTags: Schema.optionalKey(Schema.Boolean),
   /** Server evaluates merge and inactivity settlement without a client. */
   threadAutoSettlement: Schema.optionalKey(Schema.Boolean),
   storageCleanup: Schema.optionalKey(Schema.Boolean),

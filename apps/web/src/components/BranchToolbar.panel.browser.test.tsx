@@ -28,6 +28,7 @@ vi.mock("../state/entities", () => ({
 }));
 
 import { BranchToolbar } from "./BranchToolbar";
+import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
 
 it("keeps machine choices usable when the combined row's workspace is locked", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -68,6 +69,9 @@ it("keeps machine choices usable when the combined row's workspace is locked", a
     });
     expect(document.querySelector('[role="menu"]')).toBeNull();
     await act(async () => trigger.click());
+    expect(document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')?.value).toBe(
+      "",
+    );
     const items = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
     expect(
       items.find((item) => item.textContent === "New worktree")?.getAttribute("aria-disabled"),
@@ -127,6 +131,69 @@ it.each([
       await act(async () => root.unmount());
       container.remove();
       state.worktreePath = "/tmp/worktree";
+      vi.unstubAllGlobals();
+    }
+  },
+);
+
+it.each([
+  ["/tmp/billing-fix", "#14b8a6", "billing-fix", true],
+  ["/tmp/billing-fix", null, "billing-fix", true],
+  ["/tmp/billing-fix", null, "billing-fix", false],
+  ["/tmp/t3-1234abcd", null, null, true],
+  [null, null, null, true],
+] as const)(
+  "shows only a named worktree below the branch for %s with saved color %s, named %s, Git controls %s",
+  async (worktreePath, savedColor, expectedName, showGitControls) => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    state.worktreePath = worktreePath;
+    const projectRef = {
+      environmentId: EnvironmentId.make("local"),
+      projectId: ProjectId.make("project"),
+    };
+    useNamedWorktreeStore.setState({
+      selections: {},
+      worktrees:
+        worktreePath && savedColor
+          ? { [namedWorktreeKey(projectRef, worktreePath)]: { color: savedColor } }
+          : {},
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => {
+        root.render(
+          <BranchToolbar
+            layout="panel"
+            panelSection="branch"
+            environmentId={projectRef.environmentId}
+            threadId={ThreadId.make("thread")}
+            showGitControls={showGitControls}
+            envMode="worktree"
+            envLocked
+            startFromOrigin={false}
+            onStartFromOriginChange={vi.fn()}
+            onEnvModeChange={vi.fn()}
+          />,
+        );
+      });
+      const worktreeLabel = container.querySelector('[aria-label="Named worktree"]');
+      if (expectedName) {
+        expect(worktreeLabel?.textContent).toBe(expectedName);
+        const worktreePill = worktreeLabel?.querySelector<HTMLElement>('[data-slot="soft-pill"]');
+        expect(worktreePill?.textContent).toBe(expectedName);
+        expect(worktreePill?.style.backgroundColor).toContain(
+          savedColor ? "20, 184, 166" : "139, 92, 246",
+        );
+      } else {
+        expect(worktreeLabel).toBeNull();
+      }
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+      state.worktreePath = "/tmp/worktree";
+      useNamedWorktreeStore.setState({ selections: {}, worktrees: {} });
       vi.unstubAllGlobals();
     }
   },

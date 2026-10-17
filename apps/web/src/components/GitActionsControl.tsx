@@ -1622,6 +1622,16 @@ export default function GitActionsControl({
 
   if (!gitCwd) return null;
 
+  const assignedWorktreePath = activeServerThread?.worktreePath ?? activeDraftThread?.worktreePath;
+  if (!isRepo && assignedWorktreePath) {
+    return (
+      <div role="alert" className="px-3 py-2 text-xs text-destructive">
+        <p className="font-medium">Worktree unavailable</p>
+        <p>The assigned directory is missing or is no longer a Git checkout.</p>
+      </div>
+    );
+  }
+
   return (
     <>
       {presentation === "menu" ? (

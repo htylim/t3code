@@ -7,20 +7,30 @@ import type {
   ScopedProjectRef,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import { ChevronDownIcon, FolderGit2Icon, FolderGitIcon, FolderIcon, PlusIcon } from "lucide-react";
-import { useState, type ReactNode, type MouseEventHandler } from "react";
-import { requestConfirmDialog } from "../confirmDialog";
-import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
+import { ChevronDownIcon, FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
 import {
-  useArchivedThreadSnapshots,
-  refreshArchivedThreadsForEnvironment,
-} from "../lib/archivedThreadsState";
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+  type MouseEventHandler,
+} from "react";
+import { requestConfirmDialog } from "../confirmDialog";
+import {
+  namedWorktreeKey,
+  resolveNamedWorktreeColor,
+  useNamedWorktreeStore,
+  type NamedWorktreeSelection,
+} from "../namedWorktreeStore";
+import { NewWorktreeRow } from "./NewWorktreeRow";
+import { requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
+import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
+import { useArchivedThreadSnapshots } from "../lib/archivedThreadsState";
 import { readLocalApi } from "../localApi";
 import { useThreadShellsForProjectRefs } from "../state/entities";
 import { useEnvironmentQuery } from "../state/query";
-import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
-import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { vcsEnvironment } from "../state/vcs";
 import {
   resolveCurrentWorkspaceLabel,
@@ -37,7 +47,6 @@ import { revealInFileExplorerLabelForOs } from "./preview/fileExplorerLabel";
 import { Button } from "./ui/button";
 import { ComposerControl } from "./chat/ComposerControl";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
-import { Input } from "./ui/input";
 import {
   Menu,
   MenuGroup,
@@ -62,19 +71,40 @@ export interface WorkspaceMenuProps {
   forceNewWorktree?: boolean;
   canUseWorktree: boolean;
   effectiveEnvMode: EnvMode;
-  onEnvModeChange: (mode: EnvMode) => void;
-  onUseWorktree: (seed: PreviousWorktreeSeed) => void;
+  onEnvModeChange: (mode: EnvMode) => void | Promise<boolean>;
+  namedWorktreeSelection?: NamedWorktreeSelection | null;
+  activeWorktreeColor?: string | null;
+  onNewWorktreeSelect: (selection: NamedWorktreeSelection | null) => void | Promise<boolean>;
+  onUseWorktree: (seed: PreviousWorktreeSeed) => void | Promise<boolean>;
   trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  anchor?: ComponentProps<typeof MenuPopup>["anchor"];
+  ariaLabel?: string;
+  allowOpenWhenLocked?: boolean;
+  selectionHint?: string | null;
+  canCreateWorktree?: boolean;
+  requireWorktreeName?: boolean;
+  /** Standalone editing stays open until selection, Escape, or an outside click. */
+  interactionMode?: "composer" | "standalone";
   environmentItems?: ReactNode;
   canChooseEnvironment?: boolean;
   displayMode?: "toolbar" | "panel";
   onContextMenu?: MouseEventHandler | undefined;
 }
-/** Shares the workspace popup between the wide and narrow composer controls. */
+/** Share the Workspace picker across composer controls and existing-thread entry points. */
 export function WorkspaceMenu(props: WorkspaceMenuProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const standalone = props.interactionMode === "standalone";
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = props.open ?? internalOpen;
+  const initialFocusPending = useRef(open);
+  /** Controlled menus let thread context actions open this same picker at their click position. */
+  function setOpen(nextOpen: boolean) {
+    initialFocusPending.current = nextOpen;
+    setInternalOpen(nextOpen);
+    props.onOpenChange?.(nextOpen);
+  }
   const triggerContent = props.trigger ?? (
     <>
       {props.activeWorktreePath ? (
@@ -100,7 +130,7 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
       </span>
     </>
   );
-  if (props.envLocked && !props.canChooseEnvironment) {
+  if (props.envLocked && !props.canChooseEnvironment && !props.allowOpenWhenLocked) {
     return (
       <span
         className="inline-flex h-7 min-w-0 items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
@@ -115,42 +145,72 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
   return (
     <Menu
       open={open}
-      onOpenChange={(nextOpen) => {
-        if (!editing) setOpen(nextOpen);
+      onOpenChange={(nextOpen, details) => {
+        if (
+          standalone &&
+          !nextOpen &&
+          (details.reason === "trigger-hover" || details.reason === "focus-out")
+        ) {
+          details.cancel();
+          return;
+        }
+        setOpen(nextOpen);
       }}
     >
-      <MenuTrigger
-        render={
-          props.displayMode === "panel" ? (
-            <ThreadDetailsControl part="select" />
-          ) : (
-            <ComposerControl size="xs" />
-          )
-        }
-        aria-label={props.displayMode === "panel" ? "Run context" : "Workspace"}
-        onContextMenu={props.onContextMenu}
-        onMouseDownCapture={(event) => {
-          if (props.displayMode === "panel" && event.ctrlKey && event.button === 0) {
-            event.preventDefault();
-            event.stopPropagation();
+      {!props.anchor ? (
+        <MenuTrigger
+          render={
+            props.displayMode === "panel" ? (
+              <ThreadDetailsControl part="select" />
+            ) : (
+              <ComposerControl size="xs" />
+            )
           }
-        }}
-        data-composer-shortcut="composer.workspace"
-        className={props.displayMode === "panel" ? undefined : "min-w-0 shrink"}
-        data-composer-context-control
-      >
-        {triggerContent}
-        <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
-      </MenuTrigger>
+          aria-label={
+            props.ariaLabel ?? (props.displayMode === "panel" ? "Run context" : "Workspace")
+          }
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+          onContextMenu={props.onContextMenu}
+          onMouseDownCapture={(event) => {
+            if (props.displayMode === "panel" && event.ctrlKey && event.button === 0) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
+          data-composer-shortcut="composer.workspace"
+          className={props.displayMode === "panel" ? undefined : "min-w-0 shrink"}
+          data-composer-context-control
+        >
+          {triggerContent}
+          {props.displayMode !== "panel" ? (
+            <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
+          ) : null}
+        </MenuTrigger>
+      ) : null}
       <MenuPopup
         align="start"
         side="top"
+        anchor={props.anchor}
         className="w-[440px] max-w-[calc(100vw-24px)]"
-        {...composerFloatingLayerProps}
+        {...(standalone ? {} : composerFloatingLayerProps)}
+        onFocusCapture={(event) => {
+          if (!initialFocusPending.current) return;
+          initialFocusPending.current = false;
+          // Menu's default focus chooses the editor before its selectable rows.
+          const selectedOption = event.currentTarget.querySelector<HTMLElement>(
+            "[data-workspace-initial-focus]",
+          );
+          if (selectedOption && selectedOption !== event.target) {
+            // Ignore the original focus event after redirecting to the selected option.
+            event.stopPropagation();
+            selectedOption.focus({ preventScroll: true });
+          }
+        }}
       >
-        {open ? (
-          <WorkspaceMenuContents {...props} setEditing={setEditing} close={() => setOpen(false)} />
-        ) : null}
+        {open ? <WorkspaceMenuContents {...props} close={() => setOpen(false)} /> : null}
       </MenuPopup>
     </Menu>
   );
@@ -158,7 +218,6 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
 /** Loads only checked-out local refs while the workspace popup is open. */
 function WorkspaceMenuContents(
   props: WorkspaceMenuProps & {
-    setEditing: (editing: boolean) => void;
     close: () => void;
   },
 ) {
@@ -182,6 +241,10 @@ function WorkspaceMenuContents(
     for (const thread of liveThreads) byId.set(thread.id, thread.source);
     return [...byId.values()];
   })();
+  const namedWorktrees = useNamedWorktreeStore((state) => state.worktrees);
+  useEffect(() => {
+    useNamedWorktreeStore.getState().record(props.projectRef, threads);
+  }, [props.projectRef, threads]);
   const rows = resolveWorktreeRows({
     refs,
     threads: threads.map((thread) => ({
@@ -193,42 +256,42 @@ function WorkspaceMenuContents(
     })),
     activeProjectCwd: props.projectCwd,
     activeWorktreePath: props.activeWorktreePath,
-  });
+    activeBranch: props.activeBranch,
+  }).filter(
+    (row) =>
+      row.worktreePath === props.activeWorktreePath ||
+      resolveNamedWorktreeColor(
+        row.worktreePath,
+        namedWorktrees[namedWorktreeKey(props.projectRef, row.worktreePath)]?.color,
+      ),
+  );
   const localRef = refs.find((ref) => ref.worktreePath === props.projectCwd);
-  const currentRow: WorktreeRow | null = props.activeWorktreePath
-    ? {
-        worktreePath: props.activeWorktreePath,
-        dirName: props.activeWorktreePath.split(/[\\/]/).at(-1) ?? props.activeWorktreePath,
-        refName: props.activeBranch,
-        isBusy: false,
-        isIdle: false,
-      }
-    : null;
   return (
     <>
       {props.environmentItems}
+      {props.selectionHint ? (
+        <p role="status" className="px-3 py-2 text-xs text-muted-foreground">
+          {props.selectionHint}
+        </p>
+      ) : null}
       <MenuRadioGroup value={props.activeWorktreePath ?? props.effectiveEnvMode}>
         <MenuGroup>
           <MenuGroupLabel>Workspace</MenuGroupLabel>
-          {currentRow ? (
-            <WorkspaceRow
-              {...props}
-              row={currentRow}
-              threads={threads}
-              current
-              archivedReady={!archived.isLoading && !archived.error}
-            />
-          ) : null}
           <MenuRadioItem
             value="local"
+            closeOnClick={false}
+            data-workspace-initial-focus={
+              !props.activeWorktreePath && props.effectiveEnvMode === "local" ? "" : undefined
+            }
             disabled={props.envLocked}
-            onClick={() => {
-              if (props.activeWorktreePath)
-                props.onUseWorktree({
-                  branch: localRef?.isDetached ? null : (localRef?.name ?? null),
-                  worktreePath: props.projectCwd,
-                });
-              else props.onEnvModeChange("local");
+            onClick={async () => {
+              const accepted = props.activeWorktreePath
+                ? await props.onUseWorktree({
+                    branch: localRef?.isDetached ? null : (localRef?.name ?? null),
+                    worktreePath: props.projectCwd,
+                  })
+                : await props.onEnvModeChange("local");
+              if (accepted !== false) props.close();
             }}
           >
             <span className="flex items-center gap-2">
@@ -240,37 +303,38 @@ function WorkspaceMenuContents(
               <span className="text-muted-foreground text-3xs">local checkout</span>
             </span>
           </MenuRadioItem>
-          <MenuRadioItem
-            value="worktree"
-            disabled={props.envLocked}
-            onClick={() => props.onEnvModeChange("worktree")}
-          >
-            <span className="flex items-center gap-2">
-              <PlusIcon className="size-3" />
-              New worktree
-            </span>
-          </MenuRadioItem>
+          <NewWorktreeRow
+            active={!props.activeWorktreePath && props.effectiveEnvMode === "worktree"}
+            selection={props.namedWorktreeSelection ?? null}
+            disabled={props.envLocked || props.canCreateWorktree === false}
+            nameRequired={props.requireWorktreeName ?? false}
+            onSelect={async (selection) => {
+              const accepted = await props.onNewWorktreeSelect(selection);
+              if (accepted !== false) props.close();
+            }}
+          />
+        </MenuGroup>
+        <MenuSeparator />
+        <MenuGroup>
+          <MenuGroupLabel>Worktrees</MenuGroupLabel>
+          {rows.map((row) => (
+            <WorkspaceRow
+              key={row.worktreePath}
+              {...props}
+              row={row}
+              current={row.worktreePath === props.activeWorktreePath}
+              threads={threads}
+              archivedReady={!archived.isLoading && !archived.error}
+            />
+          ))}
+          {refsQuery.error ? (
+            <div className="px-3 py-2 text-xs text-destructive">{refsQuery.error}</div>
+          ) : null}
+          {!rows.length && !refsQuery.isPending ? (
+            <div className="px-3 py-2 text-xs text-muted-foreground">No named worktrees</div>
+          ) : null}
         </MenuGroup>
       </MenuRadioGroup>
-      <MenuSeparator />
-      <MenuGroup>
-        <MenuGroupLabel>Worktrees</MenuGroupLabel>
-        {rows.map((row) => (
-          <WorkspaceRow
-            key={row.worktreePath}
-            {...props}
-            row={row}
-            threads={threads}
-            archivedReady={!archived.isLoading && !archived.error}
-          />
-        ))}
-        {refsQuery.error ? (
-          <div className="px-3 py-2 text-xs text-destructive">{refsQuery.error}</div>
-        ) : null}
-        {!rows.length && !refsQuery.isPending ? (
-          <div className="px-3 py-2 text-xs text-muted-foreground">No other worktrees</div>
-        ) : null}
-      </MenuGroup>
     </>
   );
 }
@@ -314,91 +378,35 @@ function WorktreeRowStatus({
     </span>
   );
 }
-/** Keeps row actions independent of selection and preserves inline errors after rename. */
+/** Keep workspace actions independent of selection, using the shared editor for renaming. */
 function WorkspaceRow(
   props: WorkspaceMenuProps & {
     row: WorktreeRow;
     threads: readonly OrchestrationV2ThreadShell[];
     current?: boolean;
     archivedReady: boolean;
-    setEditing: (editing: boolean) => void;
     close: () => void;
   },
 ) {
   const { row } = props;
+  const metadata = useNamedWorktreeStore(
+    (state) => state.worktrees[namedWorktreeKey(props.projectRef, row.worktreePath)],
+  );
+  const color = resolveNamedWorktreeColor(row.worktreePath, metadata?.color);
   const composerFloatingLayerProps = useComposerMenuProps();
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [newName, setNewName] = useState(row.dirName);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
   const statusQuery = useEnvironmentQuery(
     vcsEnvironment.status({ environmentId: props.environmentId, input: { cwd: row.worktreePath } }),
   );
-  const renameWorktree = useAtomCommand(vcsEnvironment.renameWorktree, { reportFailure: false });
   const removeWorktree = useAtomCommand(vcsEnvironment.removeWorktree, { reportFailure: false });
   const refreshStatus = useAtomCommand(vcsEnvironment.refreshStatus);
-  const updateMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata);
   const localApi = readLocalApi();
-  let renameReason: string | null = null;
-  let removeReason: string | null = null;
-  if (props.current) {
-    renameReason = "Can't change the workspace you're in";
-    removeReason = renameReason;
-  } else {
-    if (row.isBusy) renameReason = "Settle its threads first";
-    if (!row.isIdle) removeReason = "An agent is running here";
-    if (!props.archivedReady) {
-      if (renameReason === null) renameReason = "Loading thread history";
-      if (removeReason === null) removeReason = "Loading thread history";
-    }
-  }
-  /** Leaves the row intact when focus moves away or Escape cancels editing. */
-  function cancelRename() {
-    if (pending) return;
-    setRenaming(false);
-    props.setEditing(false);
-    setError(null);
-  }
-  /** Moves the worktree first, then updates every loaded live and archived thread. */
-  async function commitRename() {
-    if (pending) return;
-    if (renameReason) {
-      setError(renameReason);
-      return;
-    }
-    if (
-      !newName.trim() ||
-      /[/\\]/.test(newName) ||
-      newName === "." ||
-      newName === ".." ||
-      newName === row.dirName
-    ) {
-      setError("Enter a different directory name without path separators.");
-      return;
-    }
-    setPending(true);
-    const renamed = await renameWorktree({
-      environmentId: props.environmentId,
-      input: { cwd: props.projectCwd, path: row.worktreePath, newDirName: newName },
-    });
-    if (renamed._tag === "Failure") {
-      const failure = Cause.squash(renamed.cause);
-      setError(isGitCommandError(failure) ? failure.detail : String(failure));
-      setPending(false);
-      return;
-    }
-    for (const thread of props.threads) {
-      if (thread.worktreePath !== row.worktreePath) continue;
-      await updateMetadata({
-        environmentId: props.environmentId,
-        input: { threadId: thread.id, worktreePath: renamed.value.worktree.path },
-      });
-    }
-    refreshArchivedThreadsForEnvironment(props.environmentId);
-    setPending(false);
-    setRenaming(false);
-    props.setEditing(false);
+  let renameReason: string | null = row.isIdle ? null : "An agent is running here";
+  let removeReason: string | null = props.current ? "Can't remove the workspace you're in" : null;
+  if (!row.isIdle && !removeReason) removeReason = "An agent is running here";
+  if (!props.archivedReady) {
+    if (!renameReason) renameReason = "Loading thread history";
+    if (!removeReason) removeReason = "Loading thread history";
   }
   /** Offers force removal only after Git refuses the initial non-force request. */
   async function remove() {
@@ -460,67 +468,29 @@ function WorkspaceRow(
       });
       return;
     }
+    useNamedWorktreeStore.getState().forget(props.projectRef, row.worktreePath);
     await refreshStatus({ environmentId: props.environmentId, input: { cwd: props.projectCwd } });
     props.close();
   }
-  if (renaming)
-    return (
-      <div
-        className="flex items-center gap-1 px-2 py-1"
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <span className="max-w-36 truncate text-xs text-muted-foreground">
-          {row.worktreePath.slice(0, -row.dirName.length)}
-        </span>
-        <Tooltip open={!!error}>
-          <TooltipTrigger
-            render={
-              <Input
-                autoFocus
-                aria-label={`Rename ${row.dirName}`}
-                value={newName}
-                readOnly={pending}
-                aria-invalid={!!error}
-                onChange={(event) => {
-                  setNewName(event.target.value);
-                  setError(null);
-                }}
-                onBlur={cancelRename}
-                onKeyDown={(event) => {
-                  event.stopPropagation();
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void commitRename();
-                  }
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    cancelRename();
-                  }
-                }}
-              />
-            }
-          />
-          <TooltipPopup>{error}</TooltipPopup>
-        </Tooltip>
-      </div>
-    );
   return (
-    <MenuItem
+    <MenuRadioItem
       closeOnClick={false}
-      className={`group/worktree grid items-center ${
-        props.current
-          ? "grid-cols-[0.75rem_minmax(0,1fr)_minmax(0,8rem)_2.5rem_1.25rem]"
-          : "grid-cols-[0.75rem_minmax(0,1fr)_minmax(0,8rem)_1.5rem_1.25rem]"
-      }`}
+      value={row.worktreePath}
+      className="group/worktree"
+      aria-current={props.current || undefined}
+      data-workspace-initial-focus={props.current ? "" : undefined}
       aria-disabled={!props.canUseWorktree}
-      onClick={(event) => {
+      onClick={async (event) => {
         if (
           !props.canUseWorktree ||
           (event.target instanceof Element && event.target.closest("button"))
         )
           return;
-        props.onUseWorktree({ branch: row.refName, worktreePath: row.worktreePath });
-        props.close();
+        const accepted = await props.onUseWorktree({
+          branch: row.refName,
+          worktreePath: row.worktreePath,
+        });
+        if (accepted !== false) props.close();
       }}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -528,81 +498,101 @@ function WorkspaceRow(
         setActionsOpen(true);
       }}
     >
-      <FolderGitIcon className="size-3 shrink-0" />
-      <span className="min-w-0 truncate">{row.dirName}</span>
-      <span className="min-w-0 truncate text-right text-xs text-muted-foreground">
-        {row.refName ?? "(detached)"}
-      </span>
-      <span className="min-w-0 text-left">
-        {props.current ? (
-          <span className="text-3xs text-muted-foreground">current</span>
+      <span
+        className={`grid items-center gap-2 ${
+          props.current
+            ? "grid-cols-[0.75rem_minmax(0,1fr)_minmax(0,8rem)_2.5rem_1.25rem]"
+            : "grid-cols-[0.75rem_minmax(0,1fr)_minmax(0,8rem)_1.5rem_1.25rem]"
+        }`}
+      >
+        {color ? (
+          <span
+            aria-hidden
+            className="size-3 shrink-0 rounded-full"
+            style={{ backgroundColor: color }}
+          />
         ) : (
-          <WorktreeRowStatus isBusy={row.isBusy} status={statusQuery.data} />
+          <FolderGitIcon className="size-3 shrink-0" />
         )}
-      </span>
-      <Menu open={actionsOpen} onOpenChange={setActionsOpen}>
-        <MenuTrigger
-          aria-label={`Actions for ${row.dirName}`}
-          render={<Button size="icon-micro" variant="ghost-muted" />}
-          onPointerDown={(event) => event.stopPropagation()}
-          onPointerUp={(event) => event.stopPropagation()}
-          onMouseUp={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          ···
-        </MenuTrigger>
-        <MenuPopup
-          align="end"
-          onClick={(event) => event.stopPropagation()}
-          onMouseUp={(event) => event.stopPropagation()}
-          {...composerFloatingLayerProps}
-        >
-          <WorktreeAction
-            reason={renameReason}
-            onClick={() => {
-              props.setEditing(true);
-              setActionsOpen(false);
-              setRenaming(true);
-            }}
+        <span className="min-w-0 truncate">{row.dirName}</span>
+        <span className="min-w-0 truncate text-right text-xs text-muted-foreground">
+          {row.refName ?? "(detached)"}
+        </span>
+        <span className="min-w-0 text-left">
+          {props.current ? (
+            <span className="text-3xs text-muted-foreground">current</span>
+          ) : (
+            <WorktreeRowStatus isBusy={row.isBusy} status={statusQuery.data} />
+          )}
+        </span>
+        <Menu open={actionsOpen} onOpenChange={setActionsOpen}>
+          <MenuTrigger
+            aria-label={`Actions for ${row.dirName}`}
+            render={<Button size="icon-micro" variant="ghost-muted" />}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onMouseUp={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
           >
-            Rename…
-          </WorktreeAction>
-          <MenuItem
-            onClick={() => {
-              void writeTextToClipboard(row.worktreePath, "path").then(
-                () => toastManager.add({ type: "success", title: "Path copied" }),
-                (cause: unknown) => toastManager.add({ type: "error", title: String(cause) }),
-              );
-            }}
+            ···
+          </MenuTrigger>
+          <MenuPopup
+            align="end"
+            onClick={(event) => event.stopPropagation()}
+            onMouseUp={(event) => event.stopPropagation()}
+            {...(props.interactionMode === "standalone" ? {} : composerFloatingLayerProps)}
           >
-            Copy path
-          </MenuItem>
-          {localApi?.shell.revealPath ? (
-            <MenuItem
+            <WorktreeAction
+              reason={renameReason}
               onClick={() => {
-                void localApi.shell.revealPath?.(row.worktreePath);
+                setActionsOpen(false);
+                props.close();
+                requestNamedWorktreeEdit({
+                  projectRef: props.projectRef,
+                  projectCwd: props.projectCwd,
+                  worktreePath: row.worktreePath,
+                });
               }}
             >
-              {revealInFileExplorerLabelForOs(
-                navigator.platform.includes("Mac")
-                  ? "darwin"
-                  : navigator.platform.includes("Win")
-                    ? "windows"
-                    : "linux",
-              )}
+              Rename…
+            </WorktreeAction>
+            <MenuItem
+              onClick={() => {
+                void writeTextToClipboard(row.worktreePath, "path").then(
+                  () => toastManager.add({ type: "success", title: "Path copied" }),
+                  (cause: unknown) => toastManager.add({ type: "error", title: String(cause) }),
+                );
+              }}
+            >
+              Copy path
             </MenuItem>
-          ) : null}
-          <WorktreeAction
-            reason={removeReason}
-            onClick={() => {
-              void remove();
-            }}
-          >
-            Remove worktree…
-          </WorktreeAction>
-        </MenuPopup>
-      </Menu>
-    </MenuItem>
+            {localApi?.shell.revealPath ? (
+              <MenuItem
+                onClick={() => {
+                  void localApi.shell.revealPath?.(row.worktreePath);
+                }}
+              >
+                {revealInFileExplorerLabelForOs(
+                  navigator.platform.includes("Mac")
+                    ? "darwin"
+                    : navigator.platform.includes("Win")
+                      ? "windows"
+                      : "linux",
+                )}
+              </MenuItem>
+            ) : null}
+            <WorktreeAction
+              reason={removeReason}
+              onClick={() => {
+                void remove();
+              }}
+            >
+              Remove worktree…
+            </WorktreeAction>
+          </MenuPopup>
+        </Menu>
+      </span>
+    </MenuRadioItem>
   );
 }

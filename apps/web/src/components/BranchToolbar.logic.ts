@@ -342,7 +342,7 @@ export interface WorktreeRow {
 }
 
 /** Keeps workspace actions blocked while a turn is queued, starting or executing. */
-function isWorktreeThreadRunning(thread: WorktreeThreadState): boolean {
+export function isWorktreeThreadRunning(thread: Pick<WorktreeThreadState, "status">): boolean {
   return (
     thread.status === "preparing" ||
     thread.status === "queued" ||
@@ -352,12 +352,13 @@ function isWorktreeThreadRunning(thread: WorktreeThreadState): boolean {
   );
 }
 
-/** Lists local worktrees once, excluding the main checkout and current row. */
+/** Keeps all local worktrees in directory order, including the selected checkout. */
 export function resolveWorktreeRows(input: {
   refs: readonly VcsRef[];
   threads: readonly WorktreeThreadState[];
   activeProjectCwd: string;
   activeWorktreePath: string | null;
+  activeBranch?: string | null;
 }): WorktreeRow[] {
   const rows = new Map<string, WorktreeRow>();
   for (const ref of input.refs) {
@@ -366,7 +367,6 @@ export function resolveWorktreeRows(input: {
       ref.isRemote ||
       !worktreePath ||
       worktreePath === input.activeProjectCwd ||
-      worktreePath === input.activeWorktreePath ||
       rows.has(worktreePath)
     )
       continue;
@@ -387,6 +387,20 @@ export function resolveWorktreeRows(input: {
             !isThreadSettled(thread),
         ),
       isIdle: !hasRunningThread,
+    });
+  }
+  // Keep the selected checkout visible while its ref is missing or still loading.
+  if (
+    input.activeWorktreePath &&
+    input.activeWorktreePath !== input.activeProjectCwd &&
+    !rows.has(input.activeWorktreePath)
+  ) {
+    rows.set(input.activeWorktreePath, {
+      worktreePath: input.activeWorktreePath,
+      dirName: resolveWorktreeDirectoryName(input.activeWorktreePath),
+      refName: input.activeBranch ?? null,
+      isBusy: false,
+      isIdle: false,
     });
   }
   return [...rows.values()].sort((left, right) => left.dirName.localeCompare(right.dirName));

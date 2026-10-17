@@ -14,7 +14,6 @@ import type { SqlError } from "effect/sql/SqlError";
 
 import * as CheckpointStore from "../../checkpointing/CheckpointStore.ts";
 import * as ServerConfig from "../../config.ts";
-import * as ThreadTags from "../../fork/ThreadTags.ts";
 import * as SqlitePersistence from "../../persistence/Sqlite.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import * as ThreadManagementService from "../ThreadManagementService.ts";
@@ -245,7 +244,6 @@ export function layerProviderReplay<Transcript extends ProviderReplayTranscript,
   | Orchestrator.OrchestratorV2
   | EffectWorker.OrchestrationEffectWorkerV2
   | EventSink.EventSinkV2
-  | ThreadTags.ThreadTags
   | CommandOutputRecorder.CommandOutputRecorder
   | ProviderSessionManager.ProviderSessionManagerV2,
   Error | MigrationError | PlatformError.PlatformError | SqlError
@@ -279,7 +277,6 @@ export function layerWithRegistry<Error>(
   | EffectWorker.OrchestrationEffectWorkerV2
   | EventSink.EventSinkV2
   | ProviderSessionManager.ProviderSessionManagerV2
-  | ThreadTags.ThreadTags
   | CommandOutputRecorder.CommandOutputRecorder,
   Error | MigrationError | PlatformError.PlatformError | SqlError
 > {
@@ -493,12 +490,6 @@ export function layerWithRegistry<Error>(
           ),
         )
       : Layer.empty;
-  const layerThreadTags = ThreadTags.layer.pipe(
-    Layer.provide(ProjectionStore.layer),
-    Layer.provide(layerDatabase),
-    Layer.provide(layerServerConfig),
-    Layer.provide(NodeServices.layer),
-  );
   const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -511,7 +502,6 @@ export function layerWithRegistry<Error>(
         layerThreadTitleRegenerationTest,
         layerServerSettings,
         layerThreadManagementProvided,
-        layerThreadTags,
       ),
     ),
   );
@@ -519,7 +509,6 @@ export function layerWithRegistry<Error>(
     Layer.provide(Layer.merge(layerStores, layerEffectExecutorProvided)),
   );
   const layerReplayRuntime = Layer.mergeAll(
-    layerThreadTags,
     layerOrchestratorProvided,
     layerProviderSessionManagerProvided,
     layerEffectWorkerProvided,

@@ -1,4 +1,5 @@
 import { OrchestrationMessageContext } from "./composerContext.ts";
+import { WorktreeDirectoryName } from "./git.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaAST from "effect/SchemaAST";
@@ -509,6 +510,7 @@ export const OrchestrationV2ThreadLaunchWorkspaceStrategy = Schema.Union([
     type: Schema.Literal("worktree"),
     baseRef: TrimmedNonEmptyString,
     branch: Schema.optional(TrimmedNonEmptyString),
+    directoryName: Schema.optional(WorktreeDirectoryName),
     startFromOrigin: Schema.optional(Schema.Boolean),
   }),
 ]);
@@ -2550,8 +2552,6 @@ export const OrchestrationV2Command = Schema.Union([
     ...OrchestrationV2CreationFields,
     commandId: CommandId,
     threadId: ThreadId,
-    /** MCP creation copies its source's tag without changing the new thread's lineage. */
-    sourceThreadId: Schema.optional(ThreadId),
     projectId: ProjectId,
     title: TrimmedNonEmptyString,
     modelSelection: ModelSelection,
@@ -2673,6 +2673,8 @@ export const OrchestrationV2Command = Schema.Union([
     expectedBranch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
     /** Reject unless no message or run has landed on this thread. */
     expectedEmpty: Schema.optional(Schema.Boolean),
+    /** Manual checkout moves must not race a queued, active, or blocked turn. */
+    expectedIdle: Schema.optional(Schema.Boolean),
     limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecoveryUpdate)),
     /** Link (object) or unlink (null) a pull request (#8160); absent leaves it unchanged. */
     linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -3137,7 +3139,6 @@ export const OrchestrationV2ThreadLaunchInput = Schema.Struct({
   commandId: CommandId,
   creationSource: Schema.optional(OrchestrationV2CreationSource),
   threadId: Schema.optional(ThreadId),
-  sourceThreadId: Schema.optional(ThreadId),
   reuseExistingThread: Schema.optional(Schema.Boolean),
   projectId: ProjectId,
   title: TrimmedNonEmptyString,

@@ -41,13 +41,19 @@ function allIds(state: ThreadActionMenuState): string[] {
 }
 
 describe("buildThreadActionMenuItems", () => {
-  it("offers tag editing only on supporting environments and applies thread permissions", () => {
-    expect(ids(baseState)).not.toContain("tag");
-    const supported = { ...baseState, supports: { ...baseState.supports, threadTags: true } };
-    expect(ids(supported)).toContain("tag");
+  it("offers workspace editing for local and worktree threads directly below thread renaming", () => {
+    expect(ids(baseState)).toContain("edit-workspace");
+    expect(ids({ ...baseState, canEditWorkspace: false })).not.toContain("edit-workspace");
+    const items = buildThreadActionMenuItems({ ...baseState, canEditWorkspace: true });
+    const renameIndex = items.findIndex((action) => action.id === "rename");
+    expect(items[renameIndex + 1]).toMatchObject({
+      id: "edit-workspace",
+      label: "Edit workspace",
+      icon: items[renameIndex]?.icon,
+    });
     expect(
-      buildThreadActionMenuItems({ ...supported, canOperate: false }).find(
-        (action) => action.id === "tag",
+      buildThreadActionMenuItems({ ...baseState, canEditWorkspace: true, canOperate: false }).find(
+        (action) => action.id === "edit-workspace",
       )?.disabled,
     ).toBe(true);
   });
@@ -68,6 +74,7 @@ describe("buildThreadActionMenuItems", () => {
             "unsettle",
             "unsnooze",
             "rename",
+            "edit-workspace",
             "regenerate-title",
             "auto-settle",
             "archive",
@@ -78,6 +85,7 @@ describe("buildThreadActionMenuItems", () => {
             "settle",
             "snooze",
             "rename",
+            "edit-workspace",
             "regenerate-title",
             "auto-settle",
             "archive",
@@ -115,7 +123,15 @@ describe("buildThreadActionMenuItems", () => {
           titleRegeneration: false,
         },
       }),
-    ).toEqual(["rename", "mark-unread", "copy", "project-settings", "archive", "delete"]);
+    ).toEqual([
+      "rename",
+      "edit-workspace",
+      "mark-unread",
+      "copy",
+      "project-settings",
+      "archive",
+      "delete",
+    ]);
   });
 
   it("groups project settings with utility actions before archive", () => {

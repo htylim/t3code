@@ -1,5 +1,120 @@
 # Fork journal
 
+## 2026-10-17 - Named worktree directories and local colors
+
+- Upstream baseline: `da7c4f234db3`, merged from fork `9a1a98c554` after initial implementation.
+- Change: The web and desktop Workspace picker accepts an optional directory name and color
+  on the existing New worktree row. An empty name preserves automatic creation and disables
+  color selection. Editing keeps the picker open; selecting the row commits the choice.
+  Opening focuses the selected workspace row, or the name editor when named creation is active.
+  Existing worktrees stay in directory order when selected. The New worktree selection
+  covers its full row while name and color editing keep the menu open.
+  The details panel shows the named directory as a colored soft pill below the branch,
+  with a worktree icon beside the pill and in the top workspace row. Web and desktop
+  breadcrumbs show project / worktree pill / thread, and sidebar project labels use the
+  same pill. Settled and compact rows prefix their thread title with the worktree pill.
+  Sidebar card and search-result tooltips show the named-worktree pill on its own row below the branch.
+  Main checkouts and automatic directories have no pill in these locations.
+  Clicking a pill opens the existing Workspace picker with the current checkout selected
+  and focused. Breadcrumb and sidebar context menus offer Edit workspace below Rename thread
+  for both local and worktree threads. The details-panel worktree row includes a dropdown arrow.
+  Threads in the project's root checkout show Local checkout in that same row, with the existing
+  folder icon and access to workspace editing. Drafts awaiting a new worktree do not show that label.
+  Existing-thread selection adopts the destination checkout's actual branch; named creation
+  uses a same-named new branch based on the thread's original branch. Workspace edits require
+  an explicit name for new worktrees, while draft creation keeps the automatic-name option.
+  The creation row retains its normal appearance when the name is empty; clicks and Enter
+  cannot create a worktree until a required name is supplied.
+  Existing-thread pickers ignore hover and focus-loss dismissal, and omit composer floating-layer
+  behavior. Escape and outside clicks discard unsubmitted name and color edits, and selection
+  closes the picker. Composer pickers retain their original dismissal behavior.
+  Only the selected thread moves, through the normal metadata update and provider-session detach.
+  Manual moves require an idle thread and compare its original branch and path on the server.
+  The picker's Rename action retains the shared color and directory editor for every thread
+  using that checkout.
+  Sibling directory checks disable colliding names, and server rejections
+  preserve the draft. Stopped worktrees can be renamed while active in the client; running
+  agents block a directory move while color editing remains available. Successful moves
+  update live, archived, and draft thread paths. Failed reference updates can be retried
+  without moving the directory twice. Directory listings refresh on opening and after moves.
+  Assigned worktrees that Git no longer recognizes show an unavailable-checkout error instead
+  of Initialize Git. Their named-worktree pill stays visible independently of Git status.
+- Reason: A useful directory name must exist before checkout and setup scripts run. The launch
+  passes an optional `directoryName` through the existing worktree creation service. Git branch
+  generation and renaming continue independently, and managed worktree cleanup is unchanged.
+- Scope: `namedWorktreeStore.ts` owns fork-only localStorage choices and colors, scoped by
+  environment, project, and actual path. Named-worktree metadata needs no database migration.
+  Existing named directories appear with a default color on clients without saved metadata;
+  automatic directory names use the existing temporary-name detector and stay out of the list.
+  `ThreadWorkspaceMenu.tsx` owns existing-thread picker requests and selection. It composes
+  the existing Git creation, status, and metadata commands without adding a separate workspace API.
+  Manual directory renames preserve local colors, and manual removal forgets them.
+  Generic color presets and soft-pill components belong to worktree labels. The former tag
+  feature is retired across clients and server code.
+- Verification: Scoped web, server, contracts, and client-runtime typechecks and targeted lint
+  passed. Picker DOM tests, persistence tests, launch forwarding, real Git worktree creation,
+  branch renaming, collisions, and automatic named-directory cleanup passed. The full touched
+  server test files also reported two failures in unchanged tests, unusual diff paths and expired
+  artifact/log cleanup. An isolated browser pass with Personal GPT-5.6-Terra at low reasoning
+  verified named and unnamed creation, setup's initial working directory, generated branch
+  renaming, color persistence after reload, reuse, directory renaming, and removal with the
+  branch retained. No live database writes or desktop install was used.
+  After the upstream merge, 261 focused tests and all four scoped typechecks passed.
+  Targeted lint passed with one existing warning. Picker tests use Chromium and the
+  upstream React Compiler; real Git tests cover direct creation and automatic cleanup.
+  Dropdown focus and the details label passed the scoped web typecheck, targeted lint,
+  and 101 toolbar logic tests. All 20 Chromium tests passed across
+  the workspace focus, creation row, and panel suites, covering selection focus, keyboard
+  navigation, name and color editing, and named-directory visibility and color.
+  An isolated dev Browser panel pass verified all four selected workspace states and the
+  named-worktree label below the branch, including hiding it for automatic worktrees.
+  The follow-up pass verified stable worktree positions, selection in the existing list,
+  and the full-width creation highlight with named-input focus preserved.
+  Pill integration passed 159 focused unit tests, 30 Chromium tests, scoped web typecheck,
+  and targeted lint with three existing unused-import warnings in sidebar logic tests.
+  The Browser panel verified matching default and custom colors across the panel, breadcrumb,
+  and sidebar, the restored worktree icon, and absence of pills for local and automatic checkouts.
+  Shared-editor verification passed 118 focused unit tests and 36 Chromium tests covering
+  collisions, server rejection, color-only saves, running-thread guards, and reference-update
+  retries. The isolated Browser panel verified all three pill entry points, disabled collision
+  submission, real directory moves and restoration, custom-color updates, unchanged branch
+  names, draft path updates, and sidebar clicks that preserve the current conversation.
+  Rename-menu verification passed 49 focused unit tests, six Chromium dialog tests,
+  scoped web typecheck, and targeted lint. The Browser panel verified both right-click
+  entry points, matching pencil icons, the dialog title, and no worktree action on local
+  or automatically named checkouts.
+  Tooltip pills passed the scoped web typecheck and sidebar lint. The isolated Browser panel
+  verified their placement below the branch, color, editor entry point, and absence on local and
+  automatic checkouts.
+  The unavailable-checkout guard passed 83 focused Git-action tests, web typecheck, and lint.
+  The isolated Browser panel verified the error and retained pill for a missing checkout,
+  and normal Git controls for a healthy checkout. Automated panel browser tests still hit
+  the existing mocked-project fixture failures in this checkout.
+  Existing-thread workspace editing passed 190 focused tests and all four scoped typechecks.
+  Targeted lint passed with one existing server warning. The isolated Browser panel verified
+  sidebar and breadcrumb pills, Edit workspace on a local thread, the panel arrow, selected-row
+  focus, same-named branch creation from the original branch, actual-branch adoption, moving
+  back to the root checkout, and directory renaming through the existing editor. Other threads
+  kept their checkout assignments. Automated Chromium suites still have mocked-state fixture
+  failures in this checkout; the creation-row suite and picker focus cases passed.
+  Required-name editing passed 15 controller tests, eight Chromium creation-row tests,
+  scoped web typecheck, and targeted lint. The isolated Browser panel verified that typing
+  allows creation and clearing the name blocks it while the row and editor stay usable.
+  Standalone dismissal passed five focused Chromium checks, scoped web typecheck, and targeted
+  lint. The isolated Browser panel reproduced pointer-leave dismissal from a breadcrumb and
+  verified that both breadcrumb and details-panel editing remain open after pointer leave.
+  Dismissal discarded an entered name without changing the selected checkout. The Cancel footer
+  was removed; the focused dismissal checks still pass using Escape and outside clicks.
+  The Local checkout row passed scoped web typecheck and targeted lint. The isolated Browser
+  panel verified its folder icon, dropdown arrow, picker access, and selected local checkout;
+  the named-worktree pill still renders on a worktree thread.
+- Upstream conflict map: Preserve the optional directory-name field in contracts, client launch
+  forwarding, and `ThreadLaunchService`; path validation and initial path choice stay in
+  `GitVcsDriverCore`. The picker row, palette, and metadata store are separate fork-owned modules.
+  `BranchToolbar`, `WorkspaceMenu`, and the first-send bootstrap in `ChatView` are the web seams.
+  Existing-thread editing adds only the optional idle guard to metadata updates in contracts,
+  client command forwarding, and the orchestrator; automatic provisioning does not opt into it.
+
 This journal explains the fork differences that we still maintain. Features replaced by upstream
 keep only a short adoption note. Git preserves their removed implementation details and verification
 history. Dated merge checks describe what was tested at that time, not additional features to restore.
@@ -68,81 +183,24 @@ upstream.
 - Verification: Confirmed `codex_personal` in the live provider catalog. The isolated dev
   configuration enables only Personal. Instructions passed formatting and diff checks.
 
-## 2026-10-10 - Thread tags outside SQLite
+## 2026-10-17 - Retire thread tags
 
-- Upstream baseline: `a11f464133`.
-- Change: Threads can carry one explicit label and an optional color. Active and postponed
-  sidebar cards show the project icon and name followed by / and the tag pill.
-  Settled rows on web, desktop, and mobile show the project icon followed by tag / thread
-  when tagged. The label and separator share the title's existing muted color without a pill.
-  Web and desktop breadcrumbs show project / tag / thread, with the icon beside the project.
-  An unset tag keeps the existing project label and icon. Tag editing is available in
-  thread menus, single-clicking a breadcrumb pill, double-clicking a sidebar pill,
-  the command palette, and the configurable `thread.tag` shortcut,
-  defaulting to `mod+alt+t`. Web and desktop editors offer preset swatches and the theme
-  editor's custom picker, with a live pill preview. Native editors offer the same presets
-  and custom hex input. Tags use soft colored pills without a tag icon. The tag action
-  uses a label icon in browser menus and the command palette; text-only menus keep their style.
-  Browser context menus use the available window height so actions scroll only when they cannot fit.
-- Reason: Label related work across projects without adding a database migration or
-  modifying upstream's event-sourced thread model.
-- Scope: A fork-owned service persists versioned overrides in
-  `<stateDir>/fork/thread-tags.json`. Atomic, serialized writes preserve unknown future
-  fields. Capability-gated RPCs and shared client atoms follow the destination environment
-  and its thread permissions. Clients share one subscription per environment and observe
-  individual label and color values. Omitted colors preserve existing colors for older
-  clients; null resets the color. Project labels and optional tag pills remain separate,
-  including in row accessibility names. Threads created through MCP copy their source's
-  label and color through a durable creation effect before the provider starts. This
-  covers MCP launches, batch creation, forks, and delegated threads. Interactive creation
-  starts without a tag, including keyboard shortcuts, drafts, side chats, and forks.
-  Reused drafts clear source references persisted by older clients.
-  A persisted inheritance marker preserves later edits and
-  clears when the effect replays after a restart. MCP tag
-  metadata, suggestions, custom icons, and project aliases remain future work.
-- Verification: Settled tag labels passed 159 focused sidebar and mobile appearance tests,
-  web and mobile typechecks, targeted lint with existing warnings, formatting, and diff checks.
-  An isolated dev-server Browser panel pass verified tagged and untagged settled rows use
-  the same muted text color and transparent background. Long tags truncate without widening
-  the row. Native verification was not run for that rendering change.
-  Color customization passed 38 focused storage, contract, editor, and picker
-  tests, affected typechecks, targeted lint, formatting, and diff checks. An isolated
-  Browser panel pass with a synthetic thread verified presets, custom hex and RGB sync,
-  reset, cancel, reload persistence, and matching sidebar and breadcrumb pills without
-  tag icons. The menu icon passed a Browser panel right-click check, 29 focused menu
-  tests, web typecheck, and targeted lint. Native UI checks were not run for the color controls.
-  Browser menu sizing checks showed every action without scrolling in a 559px-tall window
-  and kept scrolling actions inside a 400px-tall window; all eight fallback-menu tests passed.
-  The project-first layout passed 160 focused header, sidebar, and mobile appearance tests,
-  web and mobile typechecks, and targeted lint. Browser checks confirmed breadcrumb order,
-  project-only cards, project/tag cards, and long-name truncation without row overflow.
-  Cleanup passed 160 focused sidebar, header, and tag-editor tests, web typecheck, and lint;
-  a browser reload confirmed the same layout with separate project and tag accessibility labels.
-  The breadcrumb single-click change passed 13 existing header/editor tests, web typecheck,
-  targeted lint with existing warnings, and formatting. An isolated Browser panel pass verified
-  one breadcrumb click opens the editor before and after reload. Sidebar single-click leaves
-  the editor closed; double-click opens it. Saving updates the settled label and survives reload.
-  Editable sidebar pills passed double-click checks, including an inactive
-  thread without navigation or title rename, keyboard activation, and cancel. The same
-  160 focused tests, web typecheck, and targeted lint passed after adding the gesture.
-  Inheritance passed storage restart and replay checks, real MCP creation and delegation
-  checks, an empty launch through the effect worker, fork replay suites, draft persistence,
-  and scoped typechecks and lint. The MCP-only inheritance correction passed 99 focused
-  launch, fork, draft, and MCP integration tests, web and server typechecks, and targeted lint.
-  An isolated Browser panel pass dispatched the Cmd+N and Cmd+Shift+N DOM key events,
-  verified untagged threads after sending, and cleared a persisted draft source on reuse.
-  A real Terra turn called `t3_thread_launch` and created an empty thread with its caller's
-  label and custom color. Native Browser panel input reached the main app's command
-  palette instead of the hidden test tab. The completed verification used DOM input
-  through `preview_evaluate` in the isolated tab.
-  The original label-only feature passed focused storage, contract, authorization, menu, dialog, and shortcut tests,
-  scoped server, web, mobile, contracts, and client-runtime typechecks, formatting, and
-  targeted lint. Storage tests cover restart, concurrent writes, failed atomic replacement,
-  corrupt files, unknown fields, updates, and clearing. Before color customization, an isolated dev-server Browser
-  panel pass with copied, stopped threads verified setting, updating, canceling, both
-  clearing paths, reload persistence, active/postponed/snoozed labels, project icons,
-  breadcrumbs, sidebar and header menus, the command palette, and `mod+alt+t`.
-  Installed desktop and native-device verification were not run.
+- Upstream baseline: `da7c4f234db3`, merged into the named-worktree branch.
+- Change: Remove thread tag UI, keyboard and palette actions, subscriptions, RPC contracts,
+  server storage, and inheritance across web, desktop, and mobile. Named-worktree labels keep
+  the generic soft-pill components and palette without depending on tag code.
+- Reason: Named worktrees identify the working directory and replace the separate thread label.
+- Scope: Existing tag sidecar files remain untouched. Migration 63 removes obsolete inheritance
+  effects, including completed records, so old outbox payloads do not require a tag decoder.
+  Thread messages, worktree metadata, and unrelated queued provider effects remain unchanged.
+- Verification: All six changed packages passed scoped typechecks. Focused suites passed
+  397 unit/server tests and 26 Chromium tests. Chromium tests ran against an identical temporary
+  web-source copy because Vitest's browser mocks fail under the checkout's spaced path.
+  Targeted lint passed with existing warnings. The isolated Browser panel verified both context
+  menus, the worktree dialog and palette, and absence of tag commands from the command palette.
+- Upstream conflict map: Preserve the removed tag entry points when merging. The palette now
+  lives in `softPillColors.ts`. Reconcile migration 63 with any new upstream migration before
+  upgrading a database written by this build.
 
 ## 2026-10-10 - Integrate upstream through October 10
 

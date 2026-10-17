@@ -58,8 +58,6 @@ import * as EffectOutbox from "./EffectOutbox.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ThreadLaunch from "./ThreadLaunchService.ts";
-import { ThreadTags } from "../fork/ThreadTags.ts";
-import { OrchestrationEffectWorkerV2 } from "./EffectWorker.ts";
 import * as OrchestratorMcpService from "../mcp/OrchestratorMcpService.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
@@ -373,43 +371,6 @@ it.effect.each(
       assert.equal(turnItem?.text, task.prompt);
       assert.equal(turnItem?.scheduledTaskId, task.id);
     }).pipe(Effect.provide(Layer.mergeAll(harness.layer, layerScheduledTasks)));
-  },
-);
-
-it.effect.each([
-  { createdBy: "agent", creationSource: "mcp", inheritsTag: true },
-  { createdBy: "user", creationSource: "web", inheritsTag: false },
-  { createdBy: "user", creationSource: "mobile", inheritsTag: false },
-  { createdBy: "agent", creationSource: "provider", inheritsTag: false },
-] as const)(
-  "inherits source tags only for MCP launches, source $creationSource",
-  ({ createdBy, creationSource, inheritsTag }) => {
-    const harness = makeHarness();
-    return Effect.gen(function* () {
-      const launches = yield* ThreadLaunch.ThreadLaunchService;
-      const threadTags = yield* ThreadTags;
-      const worker = yield* OrchestrationEffectWorkerV2;
-      const parent = yield* launches.launch(
-        launchInput({ command: "tag-parent", thread: "tag-parent" }),
-      );
-      const parentTag = { label: "launch group", color: "#8b5cf6" };
-      yield* threadTags.set({ threadId: parent.threadId, tag: parentTag });
-      const child = yield* launches.launch({
-        ...launchInput({ command: "tag-child", thread: "tag-child" }),
-        sourceThreadId: parent.threadId,
-        createdBy,
-        creationSource,
-      });
-      yield* worker.drain();
-      const tags = Option.getOrThrow(yield* Stream.runHead(threadTags.changes));
-      assert.deepEqual(tags[child.threadId], inheritsTag ? parentTag : undefined);
-      assert.deepEqual(child.projection.thread.lineage, {
-        parentThreadId: null,
-        relationshipToParent: null,
-        rootThreadId: child.threadId,
-      });
-      assert.lengthOf(child.projection.messages, 0);
-    }).pipe(Effect.provide(harness.layer));
   },
 );
 
@@ -1160,6 +1121,46 @@ it.effect("runs a Scratch thread launched at the root in its own folder", () =>
       });
       assert.lengthOf(claimed, 1);
       assert.isNull(other.projection.thread.worktreePath);
+    }).pipe(Effect.provide(harness.layer));
+  }),
+);
+
+it.effect("uses the chosen directory from creation through setup", () =>
+  Effect.gen(function* () {
+    const setupStarted = yield* Deferred.make<void>();
+    const harness = makeHarness({
+      createWorktree: (input) =>
+        Effect.succeed({
+          worktree: {
+            path: `/repo-worktrees/${input.directoryName}`,
+            refName: input.newRefName,
+            headSha: "abc",
+          },
+        } as never),
+      runSetup: () =>
+        Deferred.succeed(setupStarted, undefined).pipe(Effect.as({ status: "no-script" as const })),
+    });
+    yield* Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      const threads = yield* ThreadManagement.ThreadManagementService;
+      const launched = yield* launches.launch(
+        launchInput({
+          command: "command:launch:named-directory",
+          thread: "thread:launch:named-directory",
+          message: "Fix billing",
+          workspace: { type: "worktree", baseRef: "main", directoryName: "billing-fix" },
+        }),
+      );
+      yield* Deferred.await(setupStarted);
+      assert.equal(harness.createWorktree.mock.calls[0]?.[0]?.directoryName, "billing-fix");
+      assert.match(
+        harness.createWorktree.mock.calls[0]?.[0]?.newRefName ?? "",
+        /^t3\/[0-9a-f]{8}$/u,
+      );
+      assert.equal(
+        (yield* threads.getThreadProjection(launched.threadId)).thread.worktreePath,
+        "/repo-worktrees/billing-fix",
+      );
     }).pipe(Effect.provide(harness.layer));
   }),
 );

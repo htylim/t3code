@@ -1,5 +1,4 @@
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
-import * as ThreadTags from "../fork/ThreadTags.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as Layer from "effect/Layer";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
@@ -305,7 +304,6 @@ const layerThreadTitleRegenerationProvided = ThreadTitleRegenerationService.laye
     Layer.mergeAll(layerThreadManagementProvided, ProjectStore.layer, TextGeneration.layer),
   ),
 );
-export const layerThreadTags = ThreadTags.layer.pipe(Layer.provide(ProjectionStore.layer));
 
 const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
   Layer.provide(
@@ -318,7 +316,6 @@ const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
       layerRuntimeRequestServiceProvided,
       layerThreadTitleRegenerationProvided,
       layerThreadManagementProvided,
-      layerThreadTags,
     ),
   ),
 );

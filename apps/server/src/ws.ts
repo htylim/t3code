@@ -179,7 +179,6 @@ import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
-import * as ThreadTags from "./fork/ThreadTags.ts";
 import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
@@ -1267,7 +1266,6 @@ const layerWsRpc = (
       const storageCleanup = yield* StorageCleanup.StorageCleanup;
       const databaseStorage = yield* DatabaseStorage.DatabaseStorage;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
-      const threadTags = yield* ThreadTags.ThreadTags;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
@@ -1939,9 +1937,6 @@ const layerWsRpc = (
                   ThreadMessageIntake.launchThread({
                     commandId: input.commandId,
                     ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
-                    ...(input.sourceThreadId === undefined
-                      ? {}
-                      : { sourceThreadId: input.sourceThreadId }),
                     ...(input.reuseExistingThread === undefined
                       ? {}
                       : { reuseExistingThread: input.reuseExistingThread }),
@@ -2841,8 +2836,6 @@ const layerWsRpc = (
             .preparePullRequestThread(input)
             .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.vcsListRefs]: (input) => gitWorkflow.listRefs(input),
-        [WS_METHODS.threadTagsSubscribe]: () => threadTags.changes,
-        [WS_METHODS.threadTagsSet]: (input) => threadTags.set(input),
         [WS_METHODS.transientSideChatCleanup]: (input) => cleanupTransientSideChat(input),
         [WS_METHODS.vcsRenameWorktree]: (input) =>
           gitWorkflow.renameWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),

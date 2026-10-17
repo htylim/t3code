@@ -156,6 +156,16 @@ it.effect(
             resolvedAt: null,
           },
         });
+        const blockedMove = yield* Effect.exit(
+          orchestrator.dispatch({
+            type: "thread.metadata.update",
+            commandId: CommandId.make(`blocked-workspace:${mode}`),
+            threadId,
+            worktreePath: "/must-not-move",
+            expectedIdle: true,
+          }),
+        );
+        assert.equal(blockedMove._tag, "Failure");
         const nodeId = NodeId.make(`node:${mode}`);
         yield* projections.apply({
           id: EventId.make(`node:${mode}`),
@@ -234,6 +244,7 @@ it.effect(
         commandId: CommandId.make("workspace-control"),
         threadId,
         worktreePath: "/new-repo",
+        expectedIdle: true,
       });
       const thread = yield* projections.getThread(threadId);
       assert.equal(thread.title, "After");
@@ -269,6 +280,17 @@ it.effect(
         turnItemTypes: ["user_message"],
       });
       assert.isAbove(fresh.turnItems.at(-1)!.ordinal, 900);
+      const queuedMove = yield* Effect.exit(
+        orchestrator.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make("blocked-workspace:queued"),
+          threadId,
+          worktreePath: "/must-not-move",
+          expectedIdle: true,
+        }),
+      );
+      assert.equal(queuedMove._tag, "Failure");
+      assert.equal((yield* projections.getThread(threadId)).worktreePath, "/new-repo");
       yield* orchestrator.dispatch({
         type: "thread.archive",
         commandId: CommandId.make("archive-with-old-history"),

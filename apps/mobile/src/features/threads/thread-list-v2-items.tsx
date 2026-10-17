@@ -1,8 +1,3 @@
-import { useAtomValue } from "@effect/atom-react";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { threadTagEnvironment } from "../../state/thread-tags";
-import { flattenThemeColor, themeColorWithAlpha } from "../../lib/mobileTheme";
-import { ThreadTagDialog } from "./ThreadTagDialog";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ThreadRowProviderInstance } from "./thread-provider-instance";
 import {
@@ -582,17 +577,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     [onRegenerateThreadTitle, thread],
   );
   const handleSettle = useCallback(() => onSettleThread(thread), [onSettleThread, thread]);
-  const threadRef = useMemo(
-    () => scopeThreadRef(thread.environmentId, thread.id),
-    [thread.environmentId, thread.id],
-  );
-  const threadTagLabel = useAtomValue(threadTagEnvironment.labelAtom(threadRef));
-  const threadTagColor = useAtomValue(threadTagEnvironment.colorAtom(threadRef));
-  const slimThreadTitle =
-    !snoozedRow && threadTagLabel ? `${threadTagLabel} / ${thread.title}` : thread.title;
   const projectDisplayName = props.projectTitle ?? props.project?.title ?? "";
-  const tagsSupported = useAtomValue(threadTagEnvironment.supportedAtom(thread.environmentId));
-  const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [customSnoozeOpen, setCustomSnoozeOpen] = useState(false);
   // A recycled cell reassigns this mounted row to a different thread without
   // remounting it, and the render closure stops running while list equality
@@ -603,7 +588,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   if (boundIdentity !== rowIdentity) {
     setBoundIdentity(rowIdentity);
     setCustomSnoozeOpen(false);
-    setTagDialogOpen(false);
   }
   const handleSnooze = useCallback(
     (snoozedUntil: string) => onSnoozeThread(thread, snoozedUntil),
@@ -718,13 +702,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const titleMenuItems = useMemo<MenuAction[]>(
     () => [
       { id: "rename", title: "Rename", image: "square.and.pencil" },
-      ...(tagsSupported ? [{ id: "tag", title: "Tag thread", image: "tag" }] : []),
       ...buildThreadTitleRegenerationMenuItems({
         supported: props.titleRegenerationSupported,
         isRegenerating: thread.titleRegeneration != null,
       }),
     ],
-    [props.titleRegenerationSupported, tagsSupported, thread.titleRegeneration],
+    [props.titleRegenerationSupported, thread.titleRegeneration],
   );
   const snoozableCardMenuActions = useMemo<MenuAction[]>(
     () => [
@@ -796,7 +779,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "move-up") handleMoveUp();
       if (nativeEvent.event === "move-down") handleMoveDown();
       if (nativeEvent.event === "archive") handleArchive();
-      if (nativeEvent.event === "tag") setTagDialogOpen(true);
       if (nativeEvent.event === "rename") handleRename();
       if (nativeEvent.event === "regenerate-title") handleRegenerateTitle();
       if (nativeEvent.event === "copy-thread-id") {
@@ -838,7 +820,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       handleUnsettle,
       handleUnsnooze,
       setCustomSnoozeOpen,
-      setTagDialogOpen,
       snoozePresets,
     ],
   );
@@ -921,7 +902,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             <Text
               className={cn(
                 "min-w-0 shrink text-sm font-t3-medium",
-                threadTagLabel && "max-w-[50%]",
                 selected
                   ? selectedThreadRowColors.mutedForegroundClassName
                   : rowAppearance.mutedForegroundClassName,
@@ -929,45 +909,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               numberOfLines={1}
             >
               {projectDisplayName}
-            </Text>
-          ) : null}
-          {threadTagLabel && projectDisplayName ? (
-            <Text
-              className={cn(
-                "text-sm",
-                selected
-                  ? selectedThreadRowColors.mutedForegroundClassName
-                  : rowAppearance.mutedForegroundClassName,
-              )}
-            >
-              /
-            </Text>
-          ) : null}
-          {threadTagLabel ? (
-            <Text
-              className={cn(
-                "min-w-0 max-w-full shrink overflow-hidden rounded-full border border-border bg-foreground/5 px-2 text-sm font-t3-medium",
-                selected
-                  ? selectedThreadRowColors.mutedForegroundClassName
-                  : rowAppearance.mutedForegroundClassName,
-              )}
-              numberOfLines={1}
-              style={
-                threadTagColor
-                  ? {
-                      backgroundColor: themeColorWithAlpha(threadTagColor, 0.14),
-                      borderColor: themeColorWithAlpha(threadTagColor, 0.25),
-                      color: flattenThemeColor(
-                        themeColorWithAlpha(threadTagColor, 0.65),
-                        theme[
-                          selected ? "--color-thread-selected-foreground" : "--color-foreground"
-                        ],
-                      ),
-                    }
-                  : undefined
-              }
-            >
-              {threadTagLabel}
             </Text>
           ) : null}
         </View>
@@ -1192,7 +1133,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         interactionOpacity={rowAppearance.interactionOpacity}
         accessibilityHint={swipeAccessibilityHint}
         accessibilityLabel={
-          props.hasQueuedMessages ? `${slimThreadTitle}, messages queued to send` : slimThreadTitle
+          props.hasQueuedMessages ? `${thread.title}, messages queued to send` : thread.title
         }
         accessibilityRole="button"
         accessibilityState={{ selected }}
@@ -1231,7 +1172,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               )}
               numberOfLines={1}
             >
-              {slimThreadTitle}
+              {thread.title}
             </Text>
             {props.searchMatch ? (
               <ThreadSearchMatchExcerpt
@@ -1266,13 +1207,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
 
   return (
     <View collapsable={false}>
-      {tagDialogOpen ? (
-        <ThreadTagDialog
-          key={rowIdentity}
-          threadRef={threadRef}
-          onClose={() => setTagDialogOpen(false)}
-        />
-      ) : null}
       {customSnoozeOpen && (
         <CustomSnoozeSheet onClose={() => setCustomSnoozeOpen(false)} onSnooze={handleSnooze} />
       )}

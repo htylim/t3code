@@ -904,7 +904,7 @@ describe("workspace rows", () => {
     };
   }
 
-  it("deduplicates local paths, sorts directory names and excludes current and main", () => {
+  it("deduplicates local paths, keeps the selected worktree sorted and excludes main", () => {
     const rows = resolveWorktreeRows({
       refs: [
         ref("z", "/trees/zeta"),
@@ -918,8 +918,20 @@ describe("workspace rows", () => {
       activeProjectCwd: "/repo",
       activeWorktreePath: "/current",
     });
-    expect(rows.map((row) => row.dirName)).toEqual(["alpha", "zeta"]);
+    expect(rows.map((row) => row.dirName)).toEqual(["alpha", "current", "zeta"]);
     expect(rows.every((row) => !row.isBusy && row.isIdle)).toBe(true);
+  });
+
+  it("keeps a selected worktree visible in order while its ref is unavailable", () => {
+    const rows = resolveWorktreeRows({
+      refs: [ref("z", "/trees/zeta"), ref("a", "/trees/alpha")],
+      threads: [],
+      activeProjectCwd: "/repo",
+      activeWorktreePath: "/trees/billing-fix",
+      activeBranch: "feature/billing",
+    });
+    expect(rows.map((row) => row.dirName)).toEqual(["alpha", "billing-fix", "zeta"]);
+    expect(rows[1]?.refName).toBe("feature/billing");
   });
 
   it("keeps detached worktrees at the same commit distinct without assigning a branch", () => {

@@ -12,10 +12,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 const state = vi.hoisted(() => ({
   scopes: new Set<string>(),
   primaryScopes: new Set<string>(),
-  shell: { branch: "main" } as { branch: string } | null,
+  shell: { branch: "main" } as { branch: string; worktreePath?: string | null } | null,
   detail: null as { branch: string } | null,
   draft: null as { branch: string; worktreePath: null; envMode: "local" } | null,
   branch: "main",
+  isRepo: true,
   commits: 0,
   metadataRequests: [] as { environmentId: string; branch: string }[],
   afterGitAction: undefined as (() => void) | undefined,
@@ -65,7 +66,7 @@ vi.mock("~/state/query", () => ({
   useEnvironmentQuery: () => ({
     data: {
       sourceControlProviders: [],
-      isRepo: true,
+      isRepo: state.isRepo,
       refName: state.branch,
       isDefaultRef: false,
       hasPrimaryRemote: true,
@@ -217,10 +218,37 @@ describe("Git actions while thread details load", () => {
     state.detail = null;
     state.draft = null;
     state.branch = "main";
+    state.isRepo = true;
     state.commits = 0;
     state.metadataRequests = [];
     state.afterGitAction = undefined;
   });
+
+  it.each(["toolbar", "panel", "menu"] as const)(
+    "explains an unavailable worktree instead of offering Git initialization in %s",
+    async (presentation) => {
+      state.isRepo = false;
+      state.shell = { branch: "feature", worktreePath: "/missing-worktree" };
+      await act(async () => {
+        renderer = create(
+          createElement(GitActionsControl, {
+            gitCwd: "/missing-worktree",
+            activeThreadRef: {
+              environmentId: EnvironmentId.make("environment"),
+              threadId: ThreadId.make("thread"),
+            },
+            displayMode: presentation === "panel" ? "panel" : "toolbar",
+            presentation: presentation === "menu" ? "menu" : "toolbar",
+          }),
+        );
+      });
+      const paragraphs = renderer!.root.findByProps({ role: "alert" }).findAllByType("p");
+      expect(paragraphs.map((paragraph) => paragraph.children.join(""))).toEqual([
+        "Worktree unavailable",
+        "The assigned directory is missing or is no longer a Git checkout.",
+      ]);
+    },
+  );
 
   it("does not create a feature branch for a server thread without task permission", async () => {
     await (

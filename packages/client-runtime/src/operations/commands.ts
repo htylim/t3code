@@ -128,6 +128,9 @@ export interface UpdateThreadMetadataInput extends ThreadCommandInput {
   readonly regenerateTitle?: boolean;
   readonly linkedPullRequest?: ThreadLinkedPullRequest | null;
   readonly expectedEmpty?: boolean;
+  readonly expectedIdle?: boolean;
+  readonly expectedWorktreePath?: string | null;
+  readonly expectedBranch?: string | null;
 }
 
 export interface SetThreadRuntimeModeInput extends ThreadCommandInput {
@@ -155,6 +158,7 @@ interface StartThreadBootstrap {
     readonly projectCwd: string;
     readonly baseBranch: string;
     readonly branch?: string;
+    readonly directoryName?: string;
     readonly startFromOrigin?: boolean;
   };
   readonly runSetupScript?: boolean;
@@ -575,6 +579,11 @@ export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadM
         ...(input.branch === undefined ? {} : { branch: input.branch }),
         ...(input.worktreePath === undefined ? {} : { worktreePath: input.worktreePath }),
         ...(input.expectedEmpty === true ? { expectedEmpty: true } : {}),
+        ...(input.expectedIdle === true ? { expectedIdle: true } : {}),
+        ...(input.expectedWorktreePath === undefined
+          ? {}
+          : { expectedWorktreePath: input.expectedWorktreePath }),
+        ...(input.expectedBranch === undefined ? {} : { expectedBranch: input.expectedBranch }),
         ...(input.regenerateTitle === undefined ? {} : { regenerateTitle: input.regenerateTitle }),
         ...(input.linkedPullRequest === undefined
           ? {}
@@ -646,6 +655,9 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
         ? {
             type: "worktree" as const,
             baseRef: prepareWorktree.baseBranch,
+            ...(prepareWorktree.directoryName === undefined
+              ? {}
+              : { directoryName: prepareWorktree.directoryName }),
             ...(prepareWorktree.branch === undefined ? {} : { branch: prepareWorktree.branch }),
             ...(prepareWorktree.startFromOrigin === undefined
               ? {}

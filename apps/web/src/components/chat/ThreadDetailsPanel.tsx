@@ -154,9 +154,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
               separated={density === "full"}
             >
               <div className="flex flex-col">
-                {props.isGitRepo ? (
-                  <BranchToolbar layout="panel" panelSection="branch" {...branchToolbarProps} />
-                ) : null}
+                <BranchToolbar layout="panel" panelSection="branch" {...branchToolbarProps} />
                 {props.activeProjectName ? (
                   <GitActionsControl
                     displayMode="panel"

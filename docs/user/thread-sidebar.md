@@ -52,25 +52,16 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
-## Tag a thread
+## Identify a named worktree
 
-Choose **Tag thread** from a thread's menu to set a label such as "v3 refactor".
-On web and desktop, you can also use the command palette or press `mod+alt+t`.
-Double-click an existing tag pill in the sidebar or breadcrumb to edit it.
-Change the shortcut in **Settings → Keybindings** under `thread.tag`.
-
-Choose a preset color for the tag's pill, or use **Custom color** to pick your own.
-**Default** removes the custom color without clearing the label.
-
-The sidebar card shows the project's icon and name, followed by the tag's pill.
-The thread breadcrumb shows project / tag / thread. Clear the tag to remove its pill.
-Tags stay with the thread on its host and appear on other connected devices.
-Tagging a thread does not change its project.
-
-When an agent creates a thread through MCP tools, the new thread inherits the calling
-thread's label and color. Threads you create interactively start without a tag,
-including keyboard shortcuts and forks. You can edit or clear an inherited tag
-independently; later changes to the source tag do not update it.
+On web and desktop, a colored worktree pill identifies the named directory in the
+sidebar, thread breadcrumb, and details panel. The breadcrumb reads project / worktree /
+thread. The main checkout and automatically named worktrees have no worktree pill.
+Choose a directory name and color in the Workspace picker when starting a new worktree.
+Click a worktree pill in the sidebar, breadcrumb, or details panel to edit its color or
+rename its directory. You can also choose **Rename worktree** below **Rename thread**
+in the breadcrumb or sidebar context menu. The Git branch keeps its name. Save stays disabled for invalid names
+or an existing sibling directory. Stop agents using the worktree before renaming it.
 
 ## Pin and reorder threads
 

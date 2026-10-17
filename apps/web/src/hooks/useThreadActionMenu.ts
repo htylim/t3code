@@ -1,6 +1,5 @@
 import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { requestThreadTag } from "../components/ThreadTagDialog";
-import { readThreadTagsSupported } from "../state/threadTags";
+import { requestThreadWorkspaceEdit } from "../components/ThreadWorkspaceMenu";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import {
   type AtomCommandResult,
@@ -130,6 +129,11 @@ export function useThreadActionMenu(input: {
       if (!api) return;
       const thread = readThreadShell(threadRef);
       if (!thread) return;
+      const threadProject = projects.find(
+        (project) =>
+          project.environmentId === thread.environmentId && project.id === thread.projectId,
+      );
+      const worktreeProjectCwd = threadProject?.workspaceRoot ?? projectCwd;
       const now = new Date();
       const supports = {
         settlement: readEnvironmentSupportsSettlement(threadRef.environmentId),
@@ -137,7 +141,6 @@ export function useThreadActionMenu(input: {
         snooze: readEnvironmentSupportsSnooze(threadRef.environmentId),
         pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
         titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
-        threadTags: readThreadTagsSupported(threadRef.environmentId),
       };
       const isRegeneratingTitle = thread.titleRegeneration != null;
       const threadKey = scopedThreadKey(threadRef);
@@ -146,6 +149,7 @@ export function useThreadActionMenu(input: {
       const items = buildThreadActionMenuItems({
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
         branch: thread.branch ?? null,
+        canEditWorkspace: !!worktreeProjectCwd,
         projectFilter: null,
         isPinned: thread.pinnedAt != null,
         isSettled:
@@ -263,11 +267,11 @@ export function useThreadActionMenu(input: {
             setThreadAutoSettle(threadRef, action === "auto-settle:enabled"),
           );
           return;
-        case "tag":
-          requestThreadTag(threadRef);
-          return;
         case "rename":
           onStartRename();
+          return;
+        case "edit-workspace":
+          if (worktreeProjectCwd) requestThreadWorkspaceEdit({ threadRef, position });
           return;
         case "regenerate-title":
           if (isRegeneratingTitle) return;
