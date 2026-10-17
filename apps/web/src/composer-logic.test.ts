@@ -279,6 +279,17 @@ describe("detectComposerTrigger", () => {
     });
   });
 
+  it.each(["Use ", "Use\t", "Use\n  "])("detects inline slash skills after %j", (prefix) => {
+    const text = `${prefix}/skill:review later`;
+    const cursor = `${prefix}/skill:review`.length;
+    expect(detectComposerTrigger(text, cursor)).toEqual({
+      kind: "slash-command",
+      query: "skill:review",
+      rangeStart: prefix.length,
+      rangeEnd: cursor,
+    });
+  });
+
   it.each(["@src", "$skill", "#123"])(
     "keeps %s suggestions ahead of an earlier % query",
     (token) => {
@@ -294,6 +305,20 @@ describe("detectComposerTrigger", () => {
     expect(detectComposerTrigger(text, text.length)).toBeNull();
     expect(detectComposerTrigger(`${text} %%`, text.length + 3)?.threadScope).toBe("environment");
   });
+
+  it.each(["Use /", "Use /review"])("detects the inline slash token in %j", (text) => {
+    expect(detectComposerTrigger(text, text.length)).toEqual({
+      kind: "slash-command",
+      query: text.slice(5),
+      rangeStart: 4,
+      rangeEnd: text.length,
+    });
+  });
+
+  it.each(["Use/review", "https://example.com/review", "Use /review "])(
+    "does not trigger for %j",
+    (text) => expect(detectComposerTrigger(text, text.length)).toBeNull(),
+  );
 
   it("detects @path trigger at cursor", () => {
     const text = "Please check @src/com";
@@ -427,7 +452,6 @@ describe("detectComposerTrigger", () => {
   });
 
   it("detects @path trigger in the middle of existing text", () => {
-    // User typed @ between "inspect " and "in this sentence"
     const text = "Please inspect @in this sentence";
     const cursorAfterAt = "Please inspect @".length;
 
@@ -441,7 +465,6 @@ describe("detectComposerTrigger", () => {
   });
 
   it("detects @path trigger with query typed mid-text", () => {
-    // User typed @sr between "inspect " and "in this sentence"
     const text = "Please inspect @srin this sentence";
     const cursorAfterQuery = "Please inspect @sr".length;
 
@@ -455,8 +478,6 @@ describe("detectComposerTrigger", () => {
   });
 
   it("detects trigger with true cursor even when regex-based mention detection would false-match", () => {
-    // MENTION_TOKEN_REGEX can false-match plain text like "@in" as a mention.
-    // The fix bypasses it by computing the expanded cursor from the Lexical node tree.
     const text = "Please inspect @in this sentence";
     const cursorAfterAt = "Please inspect @".length;
 
@@ -784,18 +805,13 @@ describe("assistant citation cursor offsets", () => {
 
 describe("replaceTextRange trailing space consumption", () => {
   it("double space after insertion when replacement ends with space", () => {
-    // Simulates: "and then |@AG| summarize" where | marks replacement range
-    // The replacement is "@AGENTS.md " (with trailing space)
-    // But if we don't extend rangeEnd, the existing space stays
     const text = "and then @AG summarize";
     const rangeStart = "and then ".length;
     const rangeEnd = "and then @AG".length;
 
-    // Without consuming trailing space: double space
     const withoutConsume = replaceTextRange(text, rangeStart, rangeEnd, "@AGENTS.md ");
     expect(withoutConsume.text).toBe("and then @AGENTS.md  summarize");
 
-    // With consuming trailing space: single space
     const extendedEnd = text[rangeEnd] === " " ? rangeEnd + 1 : rangeEnd;
     const withConsume = replaceTextRange(text, rangeStart, extendedEnd, "@AGENTS.md ");
     expect(withConsume.text).toBe("and then @AGENTS.md summarize");

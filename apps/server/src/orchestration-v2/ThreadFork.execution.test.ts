@@ -119,8 +119,6 @@ it.effect.each(forkCases)(
           },
         ],
       });
-      // A cancelled queue entry has no provider turn; an early interruption
-      // can have a turn but no native assistant cursor.
       if (status === "interrupted") {
         yield* eventSink.write({
           events: [

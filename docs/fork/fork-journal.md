@@ -2,7 +2,7 @@
 
 ## 2026-10-17 - Named worktree directories and local colors
 
-- Upstream baseline: `2a4ee33982`.
+- Upstream baseline: `da7c4f234db3`, merged from fork `9a1a98c554` after initial implementation.
 - Change: The web and desktop Workspace picker accepts an optional directory name and color
   on the existing New worktree row. An empty name preserves automatic creation and disables
   color selection. Editing keeps the picker open; selecting the row commits the choice.
@@ -23,6 +23,9 @@
   verified named and unnamed creation, setup's initial working directory, generated branch
   renaming, color persistence after reload, reuse, directory renaming, and removal with the
   branch retained. No live database writes or desktop install was used.
+  After the upstream merge, 261 focused tests and all four scoped typechecks passed.
+  Targeted lint passed with one existing warning. Picker tests use Chromium and the
+  upstream React Compiler; real Git tests cover direct creation and automatic cleanup.
 - Upstream conflict map: Preserve the optional directory-name field in contracts, client launch
   forwarding, and `ThreadLaunchService`; path validation and initial path choice stay in
   `GitVcsDriverCore`. The picker row, palette, and metadata store are separate fork-owned modules.
@@ -1158,3 +1161,66 @@ The fork-specific implementation was removed.
   Sonnet checks verified side-chat cleanup, selection reuse, workspace
   management, thread references, and the affected shortcuts. Browser screenshot capture failed;
   native device access was disabled. Desktop installers and live user data were not touched.
+
+## 2026-10-17 - Integrate the reviewed upstream snapshot
+
+- Upstream baseline: `da7c4f234db3`, following `ed0f7b908b2e`. Integrates the 775 reviewed
+  upstream commits on `t3/review-upstream-feature-changes`, starting from fork commit
+  `11ae5e35f83c`. Shared branches and published artifacts are unchanged.
+- Adopted upstream's viewport height limit for fallback context menus. Removed the fork's
+  equivalent height calculation. Upstream worktree retention rules complement the fork's
+  workspace chooser, reuse, and rename actions, so those controls remain.
+- Preserved side chats, selected-text chat actions, transient provider-history deletion,
+  thread references and tags, postponed threads, project navigation, custom shortcuts,
+  usage exclusions, appearance settings, and Fork desktop identity. Side chats now use the
+  extracted upstream panel renderer and close hook. Provider selectors read the upstream
+  provider catalog rather than the retired server-config field.
+- Adapted fork handlers to React Compiler, retained upstream's smaller sidebar subscriptions,
+  and migrated the fork's rendered React tests into upstream's headless-browser projects.
+  Canonical temporary roots keep macOS filesystem fixtures consistent with Git and realpath.
+- Verification: 203 focused Chromium tests, 89 compiler coverage cases for fork source files,
+  1,168 focused web unit tests, and 397 contracts/shared/client/packaging tests passed.
+  Focused server checks cover provider startup, transient deletion, tags, authorization,
+  workspace rename, retention, and usage. Two existing symlink-target settings watcher tests
+  still time out on macOS; their watcher implementation is unchanged by this integration.
+  Scoped web, mobile, desktop, server, contracts, shared, and client-runtime typechecks,
+  targeted lint, and web/server bundles passed.
+- The authorized integrated browser pass used an isolated copy of stopped-thread data.
+  Personal with Codex Terra at low effort completed main and side-chat turns. Verified tag
+  saving, a scrolling context menu in a 400px viewport, side-chat rendering, temporary-thread
+  cleanup, removal of its native provider history, and preservation of the main thread.
+  No native device or installer checks were run. Nothing was published.
+
+## 2026-10-17 - Verify all retained fork feature groups
+
+- Upstream baseline: `da7c4f234db3`, integrated in `415aa0dfa4`.
+- Extended the audit to every active feature group recorded in this journal. Another 709 focused
+  tests passed, including MCP creation and tag inheritance, provider context, late Codex command
+  handles, installed-provider deletion safety, desktop identity and menus, public Connect build
+  defaults, mobile tag appearance, selection, references, and Undo notices. These supplement the
+  earlier 203 Chromium cases, compiler coverage, focused unit tests, typechecks, and builds.
+- The isolated browser pass verified tags and custom hex/RGB colors, reload persistence,
+  postponed cards and notices, settlement/Undo restoration, restoration on a new message,
+  existing-thread side surfaces, both sidebar indicators and parent navigation, transient
+  side-chat creation and cleanup, owner-context reads, selected-text new-thread drafts,
+  repeated side-chat citation reuse and focus, `%` and `%%` insertion, F2, project switching,
+  filter clearing, Cmd+W for panels and settle/new, and first/last prompt navigation.
+  Both sidebar layouts passed hover reveal and dismissal.
+- A disposable Git repository verified worktree rename, reuse, current-workspace guards, and
+  refreshed dirty-file counts before force removal. Cancelling preserved the uncommitted file.
+  Account usage inclusion toggled both ways in isolated settings and was restored. Automated
+  usage tests cover shared directories and aggregate filtering.
+- The real Fork header and settings ran in a browser-only component fixture. H3/T3 switching,
+  reset, reload persistence, and light/dark Forge artwork passed. Wrapped tables fit 160, 320,
+  and 600 pixel containers. Visualization markers became file links and opened the HTML fixture;
+  rendered/source switching passed. The final chat page had no horizontal overflow.
+- All live prompts in this extended pass used Personal with Luna at low reasoning effort.
+  Background text-generation defaults used the same selection. Updated the current fork
+  guidance to require cheap models, such as Luna or Sonnet, while preserving the Personal-account
+  restriction. No other account ran a live turn. Credential-free Codex and OpenCode deletion
+  fixtures used disposable homes; Claude cleanup and account filtering used automated fixtures.
+- Limits: Native device access reports "Agent device access is turned off for this environment."
+  Native mobile UI, the installed Electron shell, installers, and remote/tunnel connections were
+  not exercised. Mobile appearance and desktop packaging behavior have automated coverage.
+  The two unchanged upstream macOS symlink-watcher timeouts recorded above remain unresolved.
+  No new product regression was found in the exercised fork behavior. Nothing was published.

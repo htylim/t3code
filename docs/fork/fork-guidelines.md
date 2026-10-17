@@ -76,8 +76,9 @@ home is `~/.codex-t3/personal`. Never use another provider instance or account f
 including the ShipHero ChatGPT or Claude accounts. If Personal is unavailable, stop live
 provider testing and report the blocker. Do not fall back to another provider.
 
-Never use expensive models for live provider tests. Select **Codex Terra** on Personal with low
-reasoning effort where available. Keep test prompts and responses short.
+Never use expensive models for live provider tests. Use cheap models such as Luna or Sonnet.
+With the required Personal provider, select Luna with low reasoning effort. Keep test prompts
+and responses short, including background title-generation prompts.
 
 Explicitly select and verify the Personal provider instance and test model before sending a turn;
 do not rely on app defaults or inherit a provider or expensive model from an existing conversation.

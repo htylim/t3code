@@ -8,8 +8,7 @@ import type {
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { ChevronDownIcon, FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode, type MouseEventHandler } from "react";
-
+import { useEffect, useState, type ReactNode, type MouseEventHandler } from "react";
 import { requestConfirmDialog } from "../confirmDialog";
 import {
   namedWorktreeKey,
@@ -59,9 +58,7 @@ import {
 } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { toastManager } from "./ui/toast";
-
 const isGitCommandError = Schema.is(GitCommandError);
-
 export interface WorkspaceMenuProps {
   environmentId: EnvironmentId;
   projectRef: ScopedProjectRef;
@@ -83,7 +80,6 @@ export interface WorkspaceMenuProps {
   displayMode?: "toolbar" | "panel";
   onContextMenu?: MouseEventHandler | undefined;
 }
-
 /** Shares the workspace popup between the wide and narrow composer controls. */
 export function WorkspaceMenu(props: WorkspaceMenuProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
@@ -114,7 +110,6 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
       </span>
     </>
   );
-
   if (props.envLocked && !props.canChooseEnvironment) {
     return (
       <span
@@ -127,7 +122,6 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
       </span>
     );
   }
-
   return (
     <Menu
       open={open}
@@ -171,10 +165,12 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
     </Menu>
   );
 }
-
 /** Loads only checked-out local refs while the workspace popup is open. */
 function WorkspaceMenuContents(
-  props: WorkspaceMenuProps & { setEditing: (editing: boolean) => void; close: () => void },
+  props: WorkspaceMenuProps & {
+    setEditing: (editing: boolean) => void;
+    close: () => void;
+  },
 ) {
   const refsQuery = useEnvironmentQuery(
     vcsEnvironment.listRefs({
@@ -183,10 +179,10 @@ function WorkspaceMenuContents(
     }),
   );
   const refs = refsQuery.data?.refs ?? [];
-  const projectRefs = useMemo(() => [props.projectRef], [props.projectRef]);
+  const projectRefs = [props.projectRef];
   const liveThreads = useThreadShellsForProjectRefs(projectRefs);
   const archived = useArchivedThreadSnapshots([props.environmentId]);
-  const threads = useMemo(() => {
+  const threads = (() => {
     const byId = new Map<string, OrchestrationV2ThreadShell>();
     for (const snapshot of archived.snapshots) {
       for (const thread of snapshot.snapshot.threads) {
@@ -195,7 +191,7 @@ function WorkspaceMenuContents(
     }
     for (const thread of liveThreads) byId.set(thread.id, thread.source);
     return [...byId.values()];
-  }, [archived.snapshots, liveThreads, props.projectRef.projectId]);
+  })();
   const namedWorktrees = useNamedWorktreeStore((state) => state.worktrees);
   useEffect(() => {
     useNamedWorktreeStore.getState().record(props.projectRef, threads);
@@ -295,7 +291,6 @@ function WorkspaceMenuContents(
     </>
   );
 }
-
 /** Explains disabled actions without letting the containing row select. */
 function WorktreeAction(props: {
   reason: string | null;
@@ -317,7 +312,6 @@ function WorktreeAction(props: {
     </Tooltip>
   );
 }
-
 /** Gives busy precedence over the status fetched by its mounted worktree row. */
 function WorktreeRowStatus({
   isBusy,
@@ -337,7 +331,6 @@ function WorktreeRowStatus({
     </span>
   );
 }
-
 /** Keeps row actions independent of selection and preserves inline errors after rename. */
 function WorkspaceRow(
   props: WorkspaceMenuProps & {
@@ -377,11 +370,10 @@ function WorkspaceRow(
     if (row.isBusy) renameReason = "Settle its threads first";
     if (!row.isIdle) removeReason = "An agent is running here";
     if (!props.archivedReady) {
-      renameReason ??= "Loading thread history";
-      removeReason ??= "Loading thread history";
+      if (renameReason === null) renameReason = "Loading thread history";
+      if (removeReason === null) removeReason = "Loading thread history";
     }
   }
-
   /** Leaves the row intact when focus moves away or Escape cancels editing. */
   function cancelRename() {
     if (pending) return;
@@ -389,7 +381,6 @@ function WorkspaceRow(
     props.setEditing(false);
     setError(null);
   }
-
   /** Moves the worktree first, then updates every loaded live and archived thread. */
   async function commitRename() {
     if (pending) return;
@@ -433,7 +424,6 @@ function WorkspaceRow(
     setRenaming(false);
     props.setEditing(false);
   }
-
   /** Offers force removal only after Git refuses the initial non-force request. */
   async function remove() {
     setActionsOpen(false);
@@ -498,7 +488,6 @@ function WorkspaceRow(
     await refreshStatus({ environmentId: props.environmentId, input: { cwd: props.projectCwd } });
     props.close();
   }
-
   if (renaming)
     return (
       <div
@@ -540,7 +529,6 @@ function WorkspaceRow(
         </Tooltip>
       </div>
     );
-
   return (
     <MenuItem
       closeOnClick={false}

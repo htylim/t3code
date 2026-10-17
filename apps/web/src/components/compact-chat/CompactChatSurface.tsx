@@ -1,3 +1,4 @@
+import { observeResize } from "~/lib/observeResize";
 import { usePostponedThreadBanner } from "~/components/chat/usePostponedThreadBanner";
 import { useNavigate } from "@tanstack/react-router";
 import { buildThreadRouteParams } from "~/threadRoutes";
@@ -32,8 +33,7 @@ import { useAtomValue } from "@effect/atom-react";
 import type { LegendListRef } from "@legendapp/list/react";
 import * as Option from "effect/Option";
 import { ChevronDownIcon, CircleAlertIcon, MessageSquareIcon, WifiOffIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
+import { useEffect, useRef, useState } from "react";
 import { useAssetUrls } from "~/assets/assetUrls";
 import {
   getStartedThreadModelChangeBlockReason,
@@ -78,7 +78,7 @@ import {
   derivePendingApprovals,
   derivePendingUserInputs,
 } from "~/session-logic";
-import { useEnvironment } from "~/state/environments";
+import { useEnvironment, useEnvironmentProviders } from "~/state/environments";
 import {
   useProject,
   useThreadProjection,
@@ -115,21 +115,18 @@ import {
   clearQuestionAttachmentDraft,
   useQuestionAttachmentPreparation,
 } from "~/questionAttachments";
-
 import {
   buildCompactChatApprovalCommand,
   buildCompactChatInterruptCommand,
   buildCompactChatStartTurnCommand,
   buildCompactChatUserInputCommand,
 } from "./CompactChatSurface.logic";
-
 interface CompactChatSurfaceProps {
   owner: ScopedThreadRef;
   target: ScopedThreadRef;
   /** Changes when a selection action has updated this target's draft. */
   focusRequestId: number;
 }
-
 function commandFailureMessage(
   result: AtomCommandResult<unknown, unknown>,
   fallback: string,
@@ -138,7 +135,6 @@ function commandFailureMessage(
   const error = squashAtomCommandFailure(result);
   return error instanceof Error ? error.message : fallback;
 }
-
 function formatOutgoingPrompt(input: {
   provider: Parameters<typeof getProviderModelCapabilities>[2];
   model: string | null;
@@ -152,7 +148,6 @@ function formatOutgoingPrompt(input: {
     resolvePromptInjectedEffort(capabilities, input.effort),
   );
 }
-
 function CompactState(props: { icon: typeof MessageSquareIcon; title: string; detail: string }) {
   const Icon = props.icon;
   return (
@@ -165,7 +160,6 @@ function CompactState(props: { icon: typeof MessageSquareIcon; title: string; de
     </div>
   );
 }
-
 export function CompactChatSurface({ owner, target, focusRequestId }: CompactChatSurfaceProps) {
   const navigate = useNavigate();
   const { resolvedTheme } = useTheme();
@@ -216,7 +210,6 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   const respondToUserInput = useOrchestrationCommand(threadEnvironment.respondToUserInput, {
     reportFailure: false,
   });
-
   const dismissUserInput = useOrchestrationCommand(threadEnvironment.dismissUserInput, {
     reportFailure: false,
   });
@@ -244,51 +237,36 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   const [timelineLiveFollowEnabled, setTimelineLiveFollowEnabled] = useState(true);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [timelineOverflows, setTimelineOverflows] = useState(false);
-
   const messages = threadProjection?.messages ?? [];
-
-  const attachmentIds = useMemo(
-    () => [
-      ...new Set(
-        messages.flatMap((message) =>
-          (message.attachments ?? []).map((attachment) => attachment.id),
-        ),
-      ),
-    ],
-    [messages],
-  );
-  const attachmentResources = useMemo(
-    () => attachmentIds.map((attachmentId) => ({ _tag: "attachment" as const, attachmentId })),
-    [attachmentIds],
-  );
+  const attachmentIds = [
+    ...new Set(
+      messages.flatMap((message) => (message.attachments ?? []).map((attachment) => attachment.id)),
+    ),
+  ];
+  const attachmentResources = attachmentIds.map((attachmentId) => ({
+    _tag: "attachment" as const,
+    attachmentId,
+  }));
   const attachmentUrls = useAssetUrls(target.environmentId, attachmentResources);
-  const attachmentUrlById = useMemo(
-    () =>
-      new Map(
-        attachmentIds.flatMap((id, index) => {
-          const url = attachmentUrls[index];
-          return url ? [[id, url] as const] : [];
-        }),
-      ),
-    [attachmentIds, attachmentUrls],
+  const attachmentUrlById = new Map(
+    attachmentIds.flatMap((id, index) => {
+      const url = attachmentUrls[index];
+      return url ? [[id, url] as const] : [];
+    }),
   );
-  const timelineEntries = useMemo(
-    () =>
-      deriveTimelineEntriesFromVisibleTurnItems({
-        visibleTurnItems,
-        optimisticMessages: [],
-        attachmentUrlById,
-        ...(threadProjection
-          ? {
-              attempts: threadProjection.attempts,
-              nodes: threadProjection.nodes,
-              plans: threadProjection.plans,
-            }
-          : {}),
-      }),
-    [visibleTurnItems, attachmentUrlById, threadProjection],
-  );
-  const { approvals: pendingApprovals, userInputs: pendingUserInputs } = useMemo(() => {
+  const timelineEntries = deriveTimelineEntriesFromVisibleTurnItems({
+    visibleTurnItems,
+    optimisticMessages: [],
+    attachmentUrlById,
+    ...(threadProjection
+      ? {
+          attempts: threadProjection.attempts,
+          nodes: threadProjection.nodes,
+          plans: threadProjection.plans,
+        }
+      : {}),
+  });
+  const { approvals: pendingApprovals, userInputs: pendingUserInputs } = (() => {
     const requests = threadProjection
       ? derivePendingThreadRequests(threadProjection)
       : { approvals: [], userInputs: [] };
@@ -296,25 +274,21 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       approvals: derivePendingApprovals(requests.approvals),
       userInputs: derivePendingUserInputs(requests.userInputs),
     };
-  }, [threadProjection]);
+  })();
   const activePendingApproval = pendingApprovals[0] ?? null;
   const activePendingUserInput = pendingUserInputs[0] ?? null;
-  const pendingQuestionDraftKeys = useMemo(
-    () =>
-      target.threadId
-        ? pendingUserInputs.flatMap((request) =>
-            request.questions.map((question) =>
-              questionAttachmentDraftId(
-                target.environmentId,
-                target.threadId,
-                request.requestId,
-                question.id,
-              ),
-            ),
-          )
-        : [],
-    [target.threadId, target.environmentId, pendingUserInputs],
-  );
+  const pendingQuestionDraftKeys = target.threadId
+    ? pendingUserInputs.flatMap((request) =>
+        request.questions.map((question) =>
+          questionAttachmentDraftId(
+            target.environmentId,
+            target.threadId,
+            request.requestId,
+            question.id,
+          ),
+        ),
+      )
+    : [];
   const questionComposerDrafts = useComposerDraftStore(
     useShallow((state) =>
       Object.fromEntries(
@@ -370,7 +344,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
         clearQuestionAttachmentDraft(DraftId.make(key));
     }
   }, [target.environmentId, threadState.data, threadState.status]);
-  const activePendingDraftAnswers = useMemo(() => {
+  const activePendingDraftAnswers = (() => {
     if (!activePendingUserInput || !target.threadId) return {};
     return Object.fromEntries(
       activePendingUserInput.questions.map((question) => {
@@ -395,39 +369,22 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
         ];
       }),
     );
-  }, [
-    activePendingUserInput,
-    target.threadId,
-    target.environmentId,
-    questionComposerDrafts,
-    questionUploadsBlocked,
-    supportsQuestionAttachments,
-    questionPreparations,
-    pendingInputAnswers,
-  ]);
+  })();
   const activePendingQuestionIndex = activePendingUserInput
     ? (pendingInputQuestionIndexes[activePendingUserInput.requestId] ?? 0)
     : 0;
-  const activePendingProgress = useMemo(
-    () =>
-      activePendingUserInput
-        ? derivePendingUserInputProgress(
-            activePendingUserInput.questions,
-            activePendingDraftAnswers,
-            activePendingQuestionIndex,
-          )
-        : null,
-    [activePendingDraftAnswers, activePendingQuestionIndex, activePendingUserInput],
-  );
-  const activePendingResolvedAnswers = useMemo(
-    () =>
-      activePendingUserInput
-        ? buildPendingUserInputAnswers(activePendingUserInput.questions, activePendingDraftAnswers)
-        : null,
-    [activePendingDraftAnswers, activePendingUserInput],
-  );
-
-  const providerStatuses = environment?.serverConfig?.providers ?? [];
+  const activePendingProgress = activePendingUserInput
+    ? derivePendingUserInputProgress(
+        activePendingUserInput.questions,
+        activePendingDraftAnswers,
+        activePendingQuestionIndex,
+      )
+    : null;
+  const activePendingResolvedAnswers = activePendingUserInput
+    ? buildPendingUserInputAnswers(activePendingUserInput.questions, activePendingDraftAnswers)
+    : null;
+  const providersByEnvironment = useEnvironmentProviders();
+  const providerStatuses = providersByEnvironment.get(target.environmentId) ?? [];
   const attachmentUploadsCapabilityKnown = environment?.serverConfig !== null;
   const supportsAttachmentUploads =
     environment?.serverConfig?.environment.capabilities.attachmentUploads === true;
@@ -451,10 +408,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
   const interactionMode: ProviderInteractionMode = settings.planModeEnabled
     ? (composerDraft.interactionMode ?? thread?.interactionMode ?? "default")
     : "default";
-  const activeContextWindow = useMemo(
-    () => deriveLatestContextWindowSnapshot(visibleTurnItems),
-    [visibleTurnItems],
-  );
+  const activeContextWindow = deriveLatestContextWindowSnapshot(visibleTurnItems);
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     thread?.latestRun ?? null,
     thread?.runtime ?? null,
@@ -471,16 +425,12 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       ? { label: environment.label, connection: environment.connection }
       : null;
   const lockedProvider = thread?.runtime ? (selectedProviderStatus?.driver ?? null) : null;
-
   useEffect(() => {
     if (!composerOverlayElement) return;
-    const measure = () => setComposerOverlayHeight(composerOverlayElement.offsetHeight);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(composerOverlayElement);
-    return () => observer.disconnect();
+    return observeResize(composerOverlayElement, () => {
+      setComposerOverlayHeight(composerOverlayElement.offsetHeight);
+    });
   }, [composerOverlayElement]);
-
   const pageScrollControllerRef = useRef<ReturnType<typeof createPageScrollController> | null>(
     null,
   );
@@ -498,26 +448,25 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       if (pageScrollControllerRef.current === controller) pageScrollControllerRef.current = null;
     };
   }, [composerOverlayHeight]);
-  const handlePageScrollKeyDown = useCallback((key: PageScrollKey) => {
+  const handlePageScrollKeyDown = (key: PageScrollKey) => {
     pageScrollControllerRef.current?.handleKeyDown(key);
-  }, []);
-  const handlePageScrollKeyUp = useCallback((key: string) => {
+  };
+  const handlePageScrollKeyUp = (key: string) => {
     pageScrollControllerRef.current?.handleKeyUp(key);
-  }, []);
-  const handlePageScrollRelease = useCallback(() => {
+  };
+  const handlePageScrollRelease = () => {
     pageScrollControllerRef.current?.releaseActiveKey();
-  }, []);
-
-  useEffect(() => {
+  };
+  const [previousTargetKey, setPreviousTargetKey] = useState(routeThreadKey);
+  if (previousTargetKey !== routeThreadKey) {
+    setPreviousTargetKey(routeThreadKey);
     setError(null);
     setTimelineLiveFollowEnabled(true);
     setShowScrollToBottom(false);
-  }, [target.environmentId, target.threadId]);
-
-  const scheduleComposerFocus = useCallback(() => {
+  }
+  const scheduleComposerFocus = () => {
     window.requestAnimationFrame(() => composerRef.current?.focusAtEnd());
-  }, []);
-
+  };
   useEffect(() => {
     if (!thread?.id) return;
     // Wait for the citation update to reach the editor before placing the caret.
@@ -525,75 +474,51 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
     return () => window.cancelAnimationFrame(frame);
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Each selection request must refocus the same target thread.
   }, [focusRequestId, thread?.id]);
-
-  const handleRuntimeModeChange = useCallback(
-    (mode: RuntimeMode) => {
-      setComposerDraftRuntimeMode(target, mode);
-      scheduleComposerFocus();
-    },
-    [scheduleComposerFocus, setComposerDraftRuntimeMode, target],
-  );
-
-  const handleInteractionModeChange = useCallback(
-    (mode: ProviderInteractionMode) => {
-      setComposerDraftInteractionMode(target, mode);
-      scheduleComposerFocus();
-    },
-    [scheduleComposerFocus, setComposerDraftInteractionMode, target],
-  );
-
-  const handleProviderModelSelect = useCallback(
-    (instanceId: ProviderInstanceId, model: string) => {
-      if (!thread) return;
-      const resolvedModel = resolveAppModelSelectionForInstance(
-        instanceId,
-        settings,
-        providerStatuses,
-        model,
-      );
-      if (!resolvedModel) return;
-      const nextModelSelection: ModelSelection = { instanceId, model: resolvedModel };
-      const blocked = getStartedThreadModelChangeBlockReason({
-        providers: providerStatuses,
-        hasStartedSession: thread.runtime !== null,
-        currentModelSelection: thread.modelSelection,
-        currentProviderInstanceId: thread.runtime?.providerInstanceId,
-        nextModelSelection,
-      });
-      if (blocked) {
-        setError(blocked.description);
-        scheduleComposerFocus();
-        return;
-      }
-      setComposerDraftModelSelection(target, nextModelSelection);
-      scheduleComposerFocus();
-    },
-    [
-      providerStatuses,
-      scheduleComposerFocus,
-      setComposerDraftModelSelection,
+  const handleRuntimeModeChange = (mode: RuntimeMode) => {
+    setComposerDraftRuntimeMode(target, mode);
+    scheduleComposerFocus();
+  };
+  const handleInteractionModeChange = (mode: ProviderInteractionMode) => {
+    setComposerDraftInteractionMode(target, mode);
+    scheduleComposerFocus();
+  };
+  const handleProviderModelSelect = (instanceId: ProviderInstanceId, model: string) => {
+    if (!thread) return;
+    const resolvedModel = resolveAppModelSelectionForInstance(
+      instanceId,
       settings,
-      target,
-      thread,
-    ],
-  );
-
-  const getModelDisabledReason = useCallback(
-    (instanceId: ProviderInstanceId, model: string) => {
-      if (!thread) return null;
-      const blocked = getStartedThreadModelChangeBlockReason({
-        providers: providerStatuses,
-        hasStartedSession: thread.runtime !== null,
-        currentModelSelection: thread.modelSelection,
-        currentProviderInstanceId: thread.runtime?.providerInstanceId,
-        nextModelSelection: { instanceId, model },
-      });
-      return blocked ? `${blocked.description} Start a new thread to use this model.` : null;
-    },
-    [providerStatuses, thread],
-  );
-
-  const handleInterrupt = useCallback(async () => {
+      providerStatuses,
+      model,
+    );
+    if (!resolvedModel) return;
+    const nextModelSelection: ModelSelection = { instanceId, model: resolvedModel };
+    const blocked = getStartedThreadModelChangeBlockReason({
+      providers: providerStatuses,
+      hasStartedSession: thread.runtime !== null,
+      currentModelSelection: thread.modelSelection,
+      currentProviderInstanceId: thread.runtime?.providerInstanceId,
+      nextModelSelection,
+    });
+    if (blocked) {
+      setError(blocked.description);
+      scheduleComposerFocus();
+      return;
+    }
+    setComposerDraftModelSelection(target, nextModelSelection);
+    scheduleComposerFocus();
+  };
+  const getModelDisabledReason = (instanceId: ProviderInstanceId, model: string) => {
+    if (!thread) return null;
+    const blocked = getStartedThreadModelChangeBlockReason({
+      providers: providerStatuses,
+      hasStartedSession: thread.runtime !== null,
+      currentModelSelection: thread.modelSelection,
+      currentProviderInstanceId: thread.runtime?.providerInstanceId,
+      nextModelSelection: { instanceId, model },
+    });
+    return blocked ? `${blocked.description} Start a new thread to use this model.` : null;
+  };
+  const handleInterrupt = async () => {
     if (!thread || !connected || !running) return;
     setError(null);
     const result = await interruptTurn(
@@ -601,90 +526,74 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
     );
     const failure = commandFailureMessage(result, "Failed to interrupt the current turn.");
     if (failure) setError(failure);
-  }, [connected, interruptTurn, running, target, thread]);
-
-  const handleApproval = useCallback(
-    async (requestId: RuntimeRequestId, decision: ProviderApprovalDecision) => {
-      if (!connected) return;
-      setRespondingRequestIds((current) => [...new Set([...current, requestId])]);
-      setError(null);
-      const result = await respondToApproval(
-        buildCompactChatApprovalCommand({ target, requestId, decision }),
+  };
+  const handleApproval = async (
+    requestId: RuntimeRequestId,
+    decision: ProviderApprovalDecision,
+  ) => {
+    if (!connected) return;
+    setRespondingRequestIds((current) => [...new Set([...current, requestId])]);
+    setError(null);
+    const result = await respondToApproval(
+      buildCompactChatApprovalCommand({ target, requestId, decision }),
+    );
+    const failure = commandFailureMessage(result, "Failed to submit approval decision.");
+    if (failure) setError(failure);
+    setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
+    return result;
+  };
+  const handleUserInput = async (requestId: RuntimeRequestId, answers: Record<string, unknown>) => {
+    const request = pendingUserInputs.find((request) => request.requestId === requestId);
+    if (!connected || !request || userInputInFlight.current.has(requestId)) return;
+    const attachmentsByQuestionId: Record<string, UserInputAttachments[string]> = {};
+    for (const question of request.questions) {
+      const draftId = questionAttachmentDraftId(
+        target.environmentId,
+        target.threadId,
+        requestId,
+        question.id,
       );
-      const failure = commandFailureMessage(result, "Failed to submit approval decision.");
-      if (failure) setError(failure);
-      setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
-      return result;
-    },
-    [connected, respondToApproval, target],
-  );
-
-  const handleUserInput = useCallback(
-    async (requestId: RuntimeRequestId, answers: Record<string, unknown>) => {
-      const request = pendingUserInputs.find((request) => request.requestId === requestId);
-      if (!connected || !request || userInputInFlight.current.has(requestId)) return;
-      const attachmentsByQuestionId: Record<string, UserInputAttachments[string]> = {};
-      for (const question of request.questions) {
-        const draftId = questionAttachmentDraftId(
-          target.environmentId,
-          target.threadId,
-          requestId,
-          question.id,
-        );
-        if ((useQuestionAttachmentPreparation.getState().counts[draftId] ?? 0) > 0) return;
-        const draft = useComposerDraftStore.getState().getComposerDraft(draftId);
-        const attachments = draft ? [...draft.images, ...draft.files] : [];
-        if (attachments.length === 0) continue;
-        const uploaded = getUploadedAttachments({
-          environmentId: target.environmentId,
-          images: attachments,
-        });
-        if (!supportsQuestionAttachments || !uploaded) {
-          setError("Wait for attachments to finish uploading, or remove failed uploads.");
-          return;
-        }
-        attachmentsByQuestionId[question.id] = uploaded as UserInputAttachments[string];
+      if ((useQuestionAttachmentPreparation.getState().counts[draftId] ?? 0) > 0) return;
+      const draft = useComposerDraftStore.getState().getComposerDraft(draftId);
+      const attachments = draft ? [...draft.images, ...draft.files] : [];
+      if (attachments.length === 0) continue;
+      const uploaded = getUploadedAttachments({
+        environmentId: target.environmentId,
+        images: attachments,
+      });
+      if (!supportsQuestionAttachments || !uploaded) {
+        setError("Wait for attachments to finish uploading, or remove failed uploads.");
+        return;
       }
-      userInputInFlight.current.add(requestId);
-      setRespondingRequestIds((current) => [...new Set([...current, requestId])]);
-      setError(null);
-      try {
-        const result = await respondToUserInput(
-          buildCompactChatUserInputCommand({ target, requestId, answers, attachmentsByQuestionId }),
-        );
-        const failure = commandFailureMessage(result, "Failed to submit answers.");
-        if (failure) setError(failure);
-        return result;
-      } finally {
-        userInputInFlight.current.delete(requestId);
-        setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
-      }
-    },
-    [connected, pendingUserInputs, respondToUserInput, supportsQuestionAttachments, target],
-  );
-
-  const handleDismissUserInput = useCallback(
-    async (requestId: RuntimeRequestId) => {
-      if (!connected || userInputInFlight.current.has(requestId)) return;
-      userInputInFlight.current.add(requestId);
-      setRespondingRequestIds((current) => [...new Set([...current, requestId])]);
-      try {
-        const result = await dismissUserInput({
-          environmentId: target.environmentId,
-          input: { threadId: target.threadId, requestId },
-        });
-        const failure = commandFailureMessage(result, "Failed to dismiss the question.");
-        if (failure) setError(failure);
-        return result;
-      } finally {
-        userInputInFlight.current.delete(requestId);
-        setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
-      }
-    },
-    [connected, dismissUserInput, target],
-  );
-
-  const advancePendingUserInput = useCallback(() => {
+      attachmentsByQuestionId[question.id] = uploaded as UserInputAttachments[string];
+    }
+    userInputInFlight.current.add(requestId);
+    setRespondingRequestIds((current) => [...new Set([...current, requestId])]);
+    setError(null);
+    const result = await respondToUserInput(
+      buildCompactChatUserInputCommand({ target, requestId, answers, attachmentsByQuestionId }),
+    );
+    const failure = commandFailureMessage(result, "Failed to submit answers.");
+    if (failure) setError(failure);
+    userInputInFlight.current.delete(requestId);
+    setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
+    return result;
+  };
+  const handleDismissUserInput = async (requestId: RuntimeRequestId) => {
+    if (!connected || userInputInFlight.current.has(requestId)) return;
+    userInputInFlight.current.add(requestId);
+    setRespondingRequestIds((current) => [...new Set([...current, requestId])]);
+    const result = await dismissUserInput({
+      environmentId: target.environmentId,
+      input: { threadId: target.threadId, requestId },
+    });
+    const failure = commandFailureMessage(result, "Failed to dismiss the question.");
+    if (failure) setError(failure);
+    userInputInFlight.current.delete(requestId);
+    setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
+    return result;
+  };
+  const advancePendingUserInput = () => {
     if (!activePendingUserInput || !activePendingProgress?.canAdvance) return;
     if (activePendingProgress.isLastQuestion) {
       if (activePendingResolvedAnswers) {
@@ -696,14 +605,8 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       ...current,
       [activePendingUserInput.requestId]: activePendingProgress.questionIndex + 1,
     }));
-  }, [
-    activePendingProgress,
-    activePendingResolvedAnswers,
-    activePendingUserInput,
-    handleUserInput,
-  ]);
-
-  const handleSend = useCallback(async () => {
+  };
+  const handleSend = async () => {
     if (!thread || !connected || sendInFlightRef.current) return;
     if (activePendingProgress) {
       advancePendingUserInput();
@@ -723,7 +626,6 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       .trim();
     const composerAttachments = [...sendContext.images, ...sendContext.files];
     if (prompt.length === 0 && composerAttachments.length === 0) return;
-
     const outgoingText = formatOutgoingPrompt({
       provider: sendContext.selectedProvider,
       model: sendContext.selectedModel,
@@ -732,7 +634,10 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       text: prompt || "Describe the attached file.",
     });
     if (!composerRef.current?.validateProviderInput(outgoingText)) return;
-
+    if (!supportsAttachmentUploads && sendContext.files.length > 0) {
+      setError("This server cannot upload file attachments.");
+      return;
+    }
     sendInFlightRef.current = true;
     if (supportsAttachmentUploads && composerAttachments.length > 0) {
       for (const image of composerAttachments) {
@@ -753,99 +658,83 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
     setSending(true);
     setSendingStartedAt(new Date().toISOString());
     setError(null);
-    try {
-      const attachments: Array<UploadChatAttachment | ChatAttachment> = supportsAttachmentUploads
-        ? (getUploadedAttachments({
-            environmentId: target.environmentId,
-            images: composerAttachments,
-          }) ?? [])
-        : await Promise.all(
-            sendContext.images.map(async (image) => ({
-              type: "image" as const,
-              id: image.id,
-              ...(image.source ? { source: image.source } : {}),
-              name: image.name,
-              mimeType: image.mimeType,
-              sizeBytes: image.sizeBytes,
-              dataUrl: await readFileAsDataUrl(image.file),
-            })),
-          );
-      if (!supportsAttachmentUploads && sendContext.files.length > 0) {
-        throw new Error("This server cannot upload file attachments.");
-      }
-      const context = buildMessageContext({
-        terminalContexts,
-        reviewComments: sendContext.reviewComments,
-        threadContexts: sendContext.threadContexts,
-        previewAnnotations: sendContext.previewAnnotations,
-        attachments: composerAttachments.map((attachment, index) => ({
-          attachment,
-          attachmentId:
-            (attachments[index] && "id" in attachments[index]
-              ? attachments[index].id
-              : undefined) ?? attachment.id,
-        })),
-      });
-      const supportsInlineMessageContext =
-        appAtomRegistry.get(environmentServerConfigsAtom).get(target.environmentId)?.environment
-          .capabilities.inlineMessageContext === true;
-      const text =
-        context && !supportsInlineMessageContext
-          ? serializeLegacyContextMessage({ text: outgoingText, records: context.records })
-          : outgoingText;
-      if (!composerRef.current?.validateProviderInput(text)) return;
-      const result = await startTurn(
-        buildCompactChatStartTurnCommand({
-          owner,
-          target,
-          thread,
-          text,
-          ...(supportsInlineMessageContext && context ? { context } : {}),
-          attachments,
-          modelSelection: sendContext.selectedModelSelection,
-          runtimeMode,
-          interactionMode,
-          messageId: newMessageId(),
-          createdAt: new Date().toISOString(),
-        }),
-      );
-      const failure = commandFailureMessage(result, "Failed to send message.");
-      if (failure) {
-        setError(failure);
-      } else if (result._tag === "Success") {
-        if (supportsAttachmentUploads) {
-          releaseDraftAttachments(composerAttachments);
-        }
-        clearComposerDraftContent(target);
-        composerRef.current?.resetCursorState();
-        setTimelineLiveFollowEnabled(true);
-        setShowScrollToBottom(false);
-        window.requestAnimationFrame(() => {
-          void legendListRef.current?.scrollToEnd?.({ animated: false });
+    await (async () => {
+      try {
+        const attachments: Array<UploadChatAttachment | ChatAttachment> = supportsAttachmentUploads
+          ? (getUploadedAttachments({
+              environmentId: target.environmentId,
+              images: composerAttachments,
+            }) ?? [])
+          : await Promise.all(
+              sendContext.images.map(async (image) => ({
+                type: "image" as const,
+                id: image.id,
+                ...(image.source ? { source: image.source } : {}),
+                name: image.name,
+                mimeType: image.mimeType,
+                sizeBytes: image.sizeBytes,
+                dataUrl: await readFileAsDataUrl(image.file),
+              })),
+            );
+        const context = buildMessageContext({
+          terminalContexts,
+          reviewComments: sendContext.reviewComments,
+          threadContexts: sendContext.threadContexts,
+          previewAnnotations: sendContext.previewAnnotations,
+          attachments: composerAttachments.map((attachment, index) => ({
+            attachment,
+            attachmentId:
+              (attachments[index] && "id" in attachments[index]
+                ? attachments[index].id
+                : undefined) ?? attachment.id,
+          })),
         });
+        const supportsInlineMessageContext =
+          appAtomRegistry.get(environmentServerConfigsAtom).get(target.environmentId)?.environment
+            .capabilities.inlineMessageContext === true;
+        const text =
+          context && !supportsInlineMessageContext
+            ? serializeLegacyContextMessage({ text: outgoingText, records: context.records })
+            : outgoingText;
+        if (!composerRef.current?.validateProviderInput(text)) return;
+        const result = await startTurn(
+          buildCompactChatStartTurnCommand({
+            owner,
+            target,
+            thread,
+            text,
+            ...(supportsInlineMessageContext && context ? { context } : {}),
+            attachments,
+            modelSelection: sendContext.selectedModelSelection,
+            runtimeMode,
+            interactionMode,
+            messageId: newMessageId(),
+            createdAt: new Date().toISOString(),
+          }),
+        );
+        const failure = commandFailureMessage(result, "Failed to send message.");
+        if (failure) {
+          setError(failure);
+        } else if (result._tag === "Success") {
+          if (supportsAttachmentUploads) {
+            releaseDraftAttachments(composerAttachments);
+          }
+          clearComposerDraftContent(target);
+          composerRef.current?.resetCursorState();
+          setTimelineLiveFollowEnabled(true);
+          setShowScrollToBottom(false);
+          window.requestAnimationFrame(() => {
+            void legendListRef.current?.scrollToEnd?.({ animated: false });
+          });
+        }
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Failed to prepare attachments.");
       }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to prepare attachments.");
-    } finally {
-      sendInFlightRef.current = false;
-      setSending(false);
-      setSendingStartedAt(null);
-    }
-  }, [
-    activePendingProgress,
-    advancePendingUserInput,
-    clearComposerDraftContent,
-    connected,
-    interactionMode,
-    owner,
-    running,
-    runtimeMode,
-    startTurn,
-    supportsAttachmentUploads,
-    target,
-    thread,
-  ]);
-
+    })();
+    sendInFlightRef.current = false;
+    setSending(false);
+    setSendingStartedAt(null);
+  };
   if (!environment) {
     return (
       <div data-compact-chat-surface className="flex min-h-0 flex-1 flex-col">
@@ -857,7 +746,6 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       </div>
     );
   }
-
   if (threadState.status === "deleted") {
     return (
       <div data-compact-chat-surface className="flex min-h-0 flex-1 flex-col">
@@ -869,7 +757,6 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       </div>
     );
   }
-
   if (!thread) {
     const unavailable = threadState.status === "live" || threadStateError !== null;
     return (
@@ -887,7 +774,6 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
       </div>
     );
   }
-
   return (
     <div
       data-compact-chat-surface
@@ -922,7 +808,6 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
           key={routeThreadKey}
           isWorking={isWorking}
           activeTurnInProgress={running}
-          providerStatuses={providerStatuses}
           runs={threadProjection?.runs ?? []}
           onAnchorSizeChanged={() => {}}
           onOpenThread={(threadId) => {
@@ -1058,7 +943,9 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
                   activeThreadEnvironmentId={thread.environmentId}
                   activeThread={thread}
                   activeThreadShell={threadShell}
-                  composerProjectId={thread.projectId}
+                  activeProjectId={thread.projectId}
+                  threadPullRequests={thread.pullRequests}
+                  isCompacting={false}
                   isServerThread
                   isLocalDraftThread={false}
                   forceExpandedOnMobile={false}
