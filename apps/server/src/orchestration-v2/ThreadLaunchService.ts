@@ -78,7 +78,6 @@ export interface ThreadLaunchInitialMessage {
 export interface ThreadLaunchInput {
   readonly commandId: CommandId;
   readonly threadId?: ThreadId;
-  readonly sourceThreadId?: ThreadId;
   readonly reuseExistingThread?: boolean;
   readonly projectId: ProjectId;
   readonly title: string;
@@ -904,7 +903,6 @@ const make = Effect.gen(function* () {
         const initialBranch = workspaceStrategy.branch ?? null;
         const initialWorktreePath =
           workspaceStrategy.type === "existing_worktree" ? workspaceStrategy.worktreePath : null;
-        const sourceThreadId = input.sourceThreadId ?? input.initialMessage?.senderThreadId;
         const claimDispatch =
           input.reuseExistingThread === true
             ? threads.dispatch({
@@ -918,7 +916,6 @@ const make = Effect.gen(function* () {
                 commandId: input.commandId,
                 threadId: candidateThreadId,
                 projectId: input.projectId,
-                ...(sourceThreadId === undefined ? {} : { sourceThreadId }),
                 title: input.title,
                 modelSelection: input.modelSelection,
                 runtimeMode: input.runtimeMode,

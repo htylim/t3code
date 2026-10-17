@@ -1,3 +1,5 @@
+import { NamedWorktreePill } from "./NamedWorktreePill";
+import { useNamedWorktree } from "../hooks/useNamedWorktree";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { readLocalApi } from "../localApi";
@@ -18,11 +20,7 @@ import {
 } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
-import {
-  namedWorktreeKey,
-  resolveNamedWorktreeColor,
-  useNamedWorktreeStore,
-} from "../namedWorktreeStore";
+import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThreadShellsForProjectRefs, useThreadShell } from "../state/entities";
 import {
@@ -43,7 +41,10 @@ import {
 import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
 import { WorkspaceMenu, type WorkspaceMenuProps } from "./WorkspaceMenu";
 import { MenuGroup, MenuGroupLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "./ui/menu";
-import { THREAD_DETAILS_PANEL_ICON_CLASS } from "./chat/threadDetailsPanelStyles";
+import {
+  THREAD_DETAILS_PANEL_ICON_CLASS,
+  THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS,
+} from "./chat/threadDetailsPanelStyles";
 import { Separator } from "./ui/separator";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ComposerSurface } from "./chat/ComposerSurface";
@@ -175,7 +176,7 @@ const RunContextSelector = memo(function RunContextSelector({
   const workspaceIcon = (
     <Tooltip>
       <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-        {workspaceColor && effectiveEnvMode === "worktree" && !forceNewWorktree ? (
+        {!isPanel && workspaceColor && effectiveEnvMode === "worktree" && !forceNewWorktree ? (
           <span
             aria-hidden
             className="size-3 shrink-0 rounded-full"
@@ -506,10 +507,10 @@ export const BranchToolbar = memo(function BranchToolbar({
       ? (state.selections[namedWorktreeKey(activeProjectRef, threadId)] ?? null)
       : null,
   );
-  const namedWorktreeMetadata = useNamedWorktreeStore((state) =>
-    activeProjectRef && activeWorktreePath
-      ? (state.worktrees[namedWorktreeKey(activeProjectRef, activeWorktreePath)] ?? null)
-      : null,
+  const namedWorktree = useNamedWorktree(
+    activeProjectRef,
+    activeWorktreePath,
+    activeProject?.workspaceRoot,
   );
   useEffect(() => {
     if (activeProjectRef && activeWorktreePath && namedWorktreeSelection) {
@@ -584,9 +585,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
   if (!hasActiveThread || !activeProject || !activeProjectRef) return null;
-  const activeWorktreeColor = activeWorktreePath
-    ? resolveNamedWorktreeColor(activeWorktreePath, namedWorktreeMetadata?.color)
-    : null;
+  const activeWorktreeColor = namedWorktree?.color ?? null;
   const workspaceProps: WorkspaceMenuProps = {
     environmentId,
     projectRef: activeProjectRef,
@@ -630,21 +629,47 @@ export const BranchToolbar = memo(function BranchToolbar({
           />
         ) : null}
         {panelSection !== "workspace" ? (
-          <BranchToolbarBranchSelector
-            displayMode="panel"
-            className="w-full"
-            environmentId={environmentId}
-            threadId={threadId}
-            {...(draftId ? { draftId } : {})}
-            envLocked={envLocked}
-            effectiveEnvModeOverride={effectiveEnvMode}
-            {...(activeThreadBranchOverride !== undefined ? { activeThreadBranchOverride } : {})}
-            {...(onActiveThreadBranchOverrideChange ? { onActiveThreadBranchOverrideChange } : {})}
-            startFromOrigin={startFromOrigin}
-            onStartFromOriginChange={onStartFromOriginChange}
-            {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
-            {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
-          />
+          <>
+            <BranchToolbarBranchSelector
+              displayMode="panel"
+              className="w-full"
+              environmentId={environmentId}
+              threadId={threadId}
+              {...(draftId ? { draftId } : {})}
+              envLocked={envLocked}
+              effectiveEnvModeOverride={effectiveEnvMode}
+              {...(activeThreadBranchOverride !== undefined ? { activeThreadBranchOverride } : {})}
+              {...(onActiveThreadBranchOverrideChange
+                ? { onActiveThreadBranchOverrideChange }
+                : {})}
+              startFromOrigin={startFromOrigin}
+              onStartFromOriginChange={onStartFromOriginChange}
+              {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
+              {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
+            />
+            {namedWorktree ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <div
+                      className={cn("flex items-center", THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS)}
+                      aria-label="Named worktree"
+                    />
+                  }
+                >
+                  <FolderGitIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+                  <NamedWorktreePill
+                    projectRef={activeProjectRef}
+                    projectCwd={activeProject.workspaceRoot}
+                    worktreePath={activeWorktreePath}
+                    worktree={namedWorktree}
+                    className="min-w-0"
+                  />
+                </TooltipTrigger>
+                <TooltipPopup>{activeWorktreePath}</TooltipPopup>
+              </Tooltip>
+            ) : null}
+          </>
         ) : null}
       </div>
     );

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   namedWorktreeKey,
   resolveNamedWorktreeColor,
+  resolveNamedWorktree,
   useNamedWorktreeStore,
 } from "./namedWorktreeStore";
 
@@ -39,6 +40,22 @@ describe("named worktree metadata", () => {
     expect(resolveNamedWorktreeColor("/worktrees/t3code-abcd1234")).toBeNull();
     expect(resolveNamedWorktreeColor("/worktrees/t3-abcd1234", "#14b8a6")).toBe("#14b8a6");
   });
+  it("shows pills only for named worktrees, using the directory and saved color", () => {
+    expect(resolveNamedWorktree({ worktreePath: null })).toBeNull();
+    expect(resolveNamedWorktree({ worktreePath: "/repo", projectCwd: "/repo" })).toBeNull();
+    expect(resolveNamedWorktree({ worktreePath: "/trees/t3-abcd1234" })).toBeNull();
+    expect(resolveNamedWorktree({ worktreePath: "/trees/billing-fix" })).toEqual({
+      name: "billing-fix",
+      color: "#8b5cf6",
+    });
+    expect(
+      resolveNamedWorktree({
+        worktreePath: "C:\\trees\\billing-fix",
+        savedColor: "#14b8a6",
+      }),
+    ).toEqual({ name: "billing-fix", color: "#14b8a6" });
+  });
+
   it("keeps independent choices for different projects and machines", () => {
     const otherMachine = scopeProjectRef(EnvironmentId.make("remote"), projectRef.projectId);
     const otherProject = scopeProjectRef(projectRef.environmentId, ProjectId.make("other"));

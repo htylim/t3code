@@ -41,13 +41,18 @@ function allIds(state: ThreadActionMenuState): string[] {
 }
 
 describe("buildThreadActionMenuItems", () => {
-  it("offers tag editing only on supporting environments and applies thread permissions", () => {
-    expect(ids(baseState)).not.toContain("tag");
-    const supported = { ...baseState, supports: { ...baseState.supports, threadTags: true } };
-    expect(ids(supported)).toContain("tag");
+  it("places named-worktree renaming directly below thread renaming with the same pencil", () => {
+    expect(ids(baseState)).not.toContain("rename-worktree");
+    const items = buildThreadActionMenuItems({ ...baseState, hasNamedWorktree: true });
+    const renameIndex = items.findIndex((action) => action.id === "rename");
+    expect(items[renameIndex + 1]).toMatchObject({
+      id: "rename-worktree",
+      label: "Rename worktree",
+      icon: items[renameIndex]?.icon,
+    });
     expect(
-      buildThreadActionMenuItems({ ...supported, canOperate: false }).find(
-        (action) => action.id === "tag",
+      buildThreadActionMenuItems({ ...baseState, hasNamedWorktree: true, canOperate: false }).find(
+        (action) => action.id === "rename-worktree",
       )?.disabled,
     ).toBe(true);
   });

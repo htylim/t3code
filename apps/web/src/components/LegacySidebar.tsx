@@ -1,5 +1,5 @@
-import { requestThreadTag } from "./ThreadTagDialog";
-import { readThreadTagsSupported } from "../state/threadTags";
+import { requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
+import { readNamedWorktree } from "../namedWorktreeStore";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
 import { Spinner } from "~/components/ui/spinner";
@@ -2193,8 +2193,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       const threadProject = memberProjectByScopedKey.get(
         scopedProjectKey(scopeProjectRef(thread.environmentId, thread.projectId)),
       );
+      const projectRef = scopeProjectRef(thread.environmentId, thread.projectId);
+      const projectCwd = threadProject?.workspaceRoot ?? null;
+      const namedWorktree = readNamedWorktree(projectRef, thread.worktreePath, projectCwd);
       const threadWorkspacePath =
-        thread.worktreePath ?? threadProject?.workspaceRoot ?? project.workspaceRoot ?? null;
+        thread.worktreePath ?? projectCwd ?? project.workspaceRoot ?? null;
       const canOperateThread = readEnvironmentScope(
         thread.environmentId,
         AuthOrchestrationOperateScope,
@@ -2207,9 +2210,16 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           ...(ownerThreadRef && scopedThreadKey(ownerThreadRef) !== threadKey
             ? [{ id: "open-in-chat-surface", label: "Open in side surface", icon: "panel-right" }]
             : []),
-          { id: "rename", label: "Rename thread", disabled: !canOperateThread },
-          ...(readThreadTagsSupported(thread.environmentId)
-            ? [{ id: "tag", label: "Tag thread...", disabled: !canOperateThread }]
+          { id: "rename", label: "Rename thread", icon: "pencil", disabled: !canOperateThread },
+          ...(namedWorktree
+            ? [
+                {
+                  id: "rename-worktree",
+                  label: "Rename worktree",
+                  icon: "pencil",
+                  disabled: !canOperateThread,
+                },
+              ]
             : []),
           { id: "mark-unread", label: "Mark unread" },
           { id: "copy-path", label: "Copy Path" },
@@ -2275,13 +2285,16 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         }
         return;
       }
-      if (clicked === "tag") {
-        requestThreadTag(threadRef);
+      if (clicked === "rename") {
+        startThreadRename(threadKey, thread.title);
         return;
       }
 
-      if (clicked === "rename") {
-        startThreadRename(threadKey, thread.title);
+      if (clicked === "rename-worktree") {
+        if (!checkTaskPermission(threadRef.environmentId)) return;
+        if (namedWorktree && projectCwd && thread.worktreePath) {
+          requestNamedWorktreeEdit({ projectRef, projectCwd, worktreePath: thread.worktreePath });
+        }
         return;
       }
 

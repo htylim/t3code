@@ -1,4 +1,4 @@
-import { THREAD_TAG_COLOR_PRESETS } from "@t3tools/client-runtime/thread-tag-colors";
+import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
 import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -40,7 +40,7 @@ export function WorktreeColorPicker({
           }}
         >
           <div className="flex items-center gap-2">
-            {THREAD_TAG_COLOR_PRESETS.map((preset) => (
+            {SOFT_PILL_COLOR_PRESETS.map((preset) => (
               <button
                 key={preset.color}
                 type="button"

@@ -113,3 +113,13 @@ it("dismisses editing with Escape without committing the name", async () => {
     true,
   );
 });
+
+it("lets an invalid name be corrected before selecting the full creation row", async () => {
+  await typeName("../outside");
+  await typeName("billing-fix");
+  const row = document.querySelector<HTMLElement>('[role="menuitemradio"]')!;
+  expect(row.contains(document.querySelector('[aria-label="Worktree name"]'))).toBe(true);
+  expect(row.contains(document.querySelector('[aria-label="Worktree color"]'))).toBe(true);
+  await selectRow();
+  expect(onSelect).toHaveBeenCalledWith({ name: "billing-fix", color: "#8b5cf6" });
+});

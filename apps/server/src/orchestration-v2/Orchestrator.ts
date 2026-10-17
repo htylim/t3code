@@ -10951,27 +10951,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       default:
         return yield* dispatchUnsupported(command);
     }
-    const plannedEvents = yield* Ref.get(events);
-    const tagInheritanceEffects: Array<PendingOrchestrationEffectV2> = [];
-    for (const event of plannedEvents) {
-      // A viewed thread is not a parent. Only MCP creation inherits its caller's tag.
-      if (event.type !== "thread.created" || event.payload.creationSource !== "mcp") continue;
-      const sourceThreadId =
-        command.type === "thread.create"
-          ? command.sourceThreadId
-          : event.payload.lineage.parentThreadId;
-      if (sourceThreadId == null || sourceThreadId === event.threadId) continue;
-      tagInheritanceEffects.push({
-        id: `effect:${command.commandId}:thread-tag.inherit:${event.threadId}`,
-        commandId: command.commandId,
-        threadId: event.threadId,
-        request: { type: "thread-tag.inherit", sourceThreadId },
-      });
-    }
     return {
-      events: plannedEvents,
-      // The outbox runs each thread's rows in insertion order. Copy metadata before agents start.
-      effects: [...tagInheritanceEffects, ...(yield* Ref.get(effects))],
+      events: yield* Ref.get(events),
+      effects: yield* Ref.get(effects),
       ...(cancelUnsettledEffects === undefined ? {} : { cancelUnsettledEffects }),
     };
   });

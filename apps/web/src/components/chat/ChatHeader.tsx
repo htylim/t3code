@@ -1,18 +1,16 @@
+import { NamedWorktreePill } from "../NamedWorktreePill";
+import { useNamedWorktree } from "../../hooks/useNamedWorktree";
 import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
   type ThreadId,
 } from "@t3tools/contracts";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { useAtomValue } from "@effect/atom-react";
-import { threadTagEnvironment } from "../../state/threadTags";
-import { ThreadTagPill } from "../ThreadTagPill";
-import { requestThreadTag } from "../ThreadTagDialog";
 import { ChevronDownIcon } from "lucide-react";
 import {
   memo,
@@ -45,6 +43,7 @@ interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   activeThreadTitle: string;
+  activeWorktreePath: string | null;
   isServerThread: boolean;
   activeProject: EnvironmentProject | null;
   parentThreadLink: {
@@ -86,6 +85,7 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadEnvironmentId,
   activeThreadId,
   activeThreadTitle,
+  activeWorktreePath,
   isServerThread,
   activeProject,
   parentThreadLink,
@@ -100,10 +100,10 @@ export const ChatHeader = memo(function ChatHeader({
   const breadcrumbContainerRef = useRef<HTMLDivElement>(null);
   const [collapseParentTitle, setCollapseParentTitle] = useState(false);
   const activeThreadRef = scopeThreadRef(activeThreadEnvironmentId, activeThreadId);
-  const threadTagLabel = useAtomValue(threadTagEnvironment.labelAtom(activeThreadRef));
-  const threadTagColor = useAtomValue(threadTagEnvironment.colorAtom(activeThreadRef));
-  const canEditThreadTag = useAtomValue(
-    threadTagEnvironment.set.permissionAtom(activeThreadEnvironmentId),
+  const namedWorktree = useNamedWorktree(
+    activeProject ? scopeProjectRef(activeThreadEnvironmentId, activeProject.id) : null,
+    activeWorktreePath,
+    activeProjectCwd,
   );
   const canOperateThread = useEnvironmentScope(
     activeThreadEnvironmentId,
@@ -167,7 +167,7 @@ export const ChatHeader = memo(function ChatHeader({
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Title, font and rename changes resize the breadcrumb text without resizing the list, so it re-measures.
     activeProjectName,
     activeThreadTitle,
-    threadTagLabel,
+    namedWorktree?.name,
     parentThreadLink,
     interfaceFont,
     isRenamingTitle,
@@ -327,23 +327,25 @@ export const ChatHeader = memo(function ChatHeader({
             </WorkspaceBreadcrumbSeparator>
           </>
         ) : null}
-        {isServerThread && threadTagLabel ? (
+        {namedWorktree ? (
           <>
             <WorkspaceBreadcrumbItem className="shrink">
               <Tooltip>
                 <TooltipTrigger render={<span className="inline-flex min-w-0 items-center" />}>
                   <WorkspaceBreadcrumbText className="max-w-40">
-                    <ThreadTagPill
-                      label={threadTagLabel}
-                      color={threadTagColor}
-                      editGesture="single-click"
-                      onEdit={
-                        canEditThreadTag ? () => requestThreadTag(activeThreadRef) : undefined
+                    <NamedWorktreePill
+                      projectRef={
+                        activeProject
+                          ? scopeProjectRef(activeThreadEnvironmentId, activeProject.id)
+                          : null
                       }
+                      projectCwd={activeProjectCwd}
+                      worktreePath={activeWorktreePath}
+                      worktree={namedWorktree}
                     />
                   </WorkspaceBreadcrumbText>
                 </TooltipTrigger>
-                <TooltipPopup side="top">{threadTagLabel}</TooltipPopup>
+                <TooltipPopup side="top">{activeWorktreePath}</TooltipPopup>
               </Tooltip>
             </WorkspaceBreadcrumbItem>
             <WorkspaceBreadcrumbSeparator />

@@ -77,7 +77,6 @@ import {
   SettingsIcon,
   SquarePenIcon,
   SunIcon,
-  TagIcon,
   TextSearchIcon,
 } from "lucide-react";
 import { requestThreadFindOpen } from "./chat/threadFindActionBus";
@@ -157,8 +156,6 @@ import {
   requestSidebarProjectFilterScope,
   requestSidebarProjectFilterScopeIfFiltered,
 } from "../sidebarProjectFilterBus";
-import { requestThreadTag } from "./ThreadTagDialog";
-import { threadTagEnvironment } from "../state/threadTags";
 import { requestThreadRename } from "../threadRenameBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
@@ -780,9 +777,6 @@ function OpenCommandPaletteDialog(props: {
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
-  const canSetThreadTag = useAtomValue(
-    threadTagEnvironment.set.permissionAtom(activeThread?.environmentId ?? null),
-  );
   const paletteRouteTarget = useThreadRouteTarget();
   const projects = useProjects();
   const referenceThreadRef =
@@ -1724,22 +1718,6 @@ function OpenCommandPaletteDialog(props: {
   }
   if (shouldMountDefaultSidebar({ legacySidebarEnabled, pathname })) {
     actionItems.push({ ...showAllProjectsItem, title: "Show all projects" });
-  }
-  if (
-    activeThread &&
-    canSetThreadTag &&
-    activeThreadServerConfig?.environment.capabilities.threadTags === true
-  ) {
-    actionItems.push({
-      kind: "action",
-      value: "action:tag-thread",
-      searchTerms: ["tag thread", "label thread", "clear tag"],
-      title: "Tag thread...",
-      icon: <TagIcon className={ITEM_ICON_CLASS} />,
-      shortcutCommand: "thread.tag",
-      run: async () =>
-        requestThreadTag(scopeThreadRef(activeThread.environmentId, activeThread.id)),
-    });
   }
   if (activeThread) {
     actionItems.push({

@@ -1,27 +1,29 @@
-import { THREAD_TAG_COLOR_PRESETS } from "@t3tools/client-runtime/thread-tag-colors";
+import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
 import { ThemeColorPickerPanel } from "./settings/ThemeColorPicker";
 import { Button } from "./ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 
-/** Choose a preset or a custom color without committing the tag editor's draft. */
-export function ThreadTagColorPicker({
+/** Choose a preset or a custom color without committing the editor's draft. */
+export function SoftPillColorPicker({
   color,
+  label,
   disabled,
   onChange,
 }: {
   readonly color: string | null;
+  readonly label: string;
   readonly disabled: boolean;
   readonly onChange: (color: string | null) => void;
 }) {
   return (
     <fieldset disabled={disabled} className="grid gap-3">
-      <legend className="mb-2 text-sm font-medium">Tag color</legend>
+      <legend className="mb-2 text-sm font-medium">{label} color</legend>
       <div className="flex flex-wrap items-center gap-2">
-        {THREAD_TAG_COLOR_PRESETS.map((preset) => (
+        {SOFT_PILL_COLOR_PRESETS.map((preset) => (
           <button
             key={preset.color}
             type="button"
-            aria-label={`${preset.label} tag color`}
+            aria-label={`${preset.label} ${label.toLowerCase()} color`}
             aria-pressed={color?.toLowerCase() === preset.color}
             disabled={disabled}
             onClick={() => onChange(preset.color)}
@@ -48,7 +50,7 @@ export function ThreadTagColorPicker({
                 <span
                   aria-hidden
                   className="size-3.5 rounded-full border border-foreground/15"
-                  style={{ backgroundColor: color ?? THREAD_TAG_COLOR_PRESETS[0].color }}
+                  style={{ backgroundColor: color ?? SOFT_PILL_COLOR_PRESETS[0].color }}
                 />
                 Custom color
               </Button>
@@ -56,8 +58,8 @@ export function ThreadTagColorPicker({
           />
           <PopoverPopup align="start" side="bottom" padding="none" sideOffset={8}>
             <ThemeColorPickerPanel
-              label="Tag"
-              value={color ?? THREAD_TAG_COLOR_PRESETS[0].color}
+              label={label}
+              value={color ?? SOFT_PILL_COLOR_PRESETS[0].color}
               onChange={onChange}
             />
           </PopoverPopup>

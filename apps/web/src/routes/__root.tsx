@@ -19,7 +19,7 @@ import { resolveServerBackedAppDisplayName } from "../branding.logic";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
 import { TransientSideChatCleanup } from "../components/TransientSideChatCleanup";
-import { ThreadTagDialogHost } from "../components/ThreadTagDialog";
+import { NamedWorktreeDialogHost } from "../components/NamedWorktreeDialog";
 import { CustomSnoozeDialogHost } from "../components/CustomSnoozeDialog";
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
 import { KeybindingsConfigWarning } from "../components/KeybindingsConfigWarning";
@@ -188,7 +188,7 @@ function RootRouteView() {
           <FontAppearanceSync />
           <ProviderAuthCallbackCoordinator />
           <CustomSnoozeDialogHost />
-          <ThreadTagDialogHost />
+          <NamedWorktreeDialogHost />
           <CommandPalette>
             <AppSidebarLayout>
               <Outlet />
@@ -244,7 +244,7 @@ function RootRouteView() {
           <ReopenClosedViewShortcut />
           <ConfirmDialogHost />
           <CustomSnoozeDialogHost />
-          <ThreadTagDialogHost />
+          <NamedWorktreeDialogHost />
           <SlowRpcRequestToastCoordinator />
           <PermissionUpdateNotice />
           {primaryEnvironmentAuthenticated ? <LegacyThreadMigrationToast /> : null}

@@ -1,5 +1,5 @@
 import type { ScopedProjectRef, ThreadId } from "@t3tools/contracts";
-import { THREAD_TAG_COLOR_PRESETS } from "@t3tools/client-runtime/thread-tag-colors";
+import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
 import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
 import * as Schema from "effect/Schema";
 import { create } from "zustand";
@@ -29,6 +29,8 @@ interface NamedWorktreeState {
     projectRef: ScopedProjectRef,
     threads: readonly { id: ThreadId; worktreePath: string | null }[],
   ) => void;
+  /** Save the color of an existing named worktree. */
+  setColor: (projectRef: ScopedProjectRef, worktreePath: string, color: string) => void;
   /** Keep the saved color when the workspace menu moves a directory. */
   move: (projectRef: ScopedProjectRef, oldPath: string, newPath: string) => void;
   /** Remove the saved color after successful manual removal. */
@@ -47,7 +49,35 @@ export function resolveNamedWorktreeColor(
 ): string | null {
   if (savedColor) return savedColor;
   const directoryName = worktreePath.split(/[\\/]/).at(-1) ?? worktreePath;
-  return isTemporaryWorktreeBranch(directoryName) ? null : THREAD_TAG_COLOR_PRESETS[0].color;
+  return isTemporaryWorktreeBranch(directoryName) ? null : SOFT_PILL_COLOR_PRESETS[0].color;
+}
+
+/** Describe an existing named worktree, excluding the main checkout and automatic folders. */
+export function resolveNamedWorktree({
+  worktreePath,
+  projectCwd,
+  savedColor,
+}: {
+  worktreePath: string | null;
+  projectCwd?: string | null | undefined;
+  savedColor?: string | undefined;
+}): NamedWorktreeSelection | null {
+  if (!worktreePath || worktreePath === projectCwd) return null;
+  const color = resolveNamedWorktreeColor(worktreePath, savedColor);
+  if (!color) return null;
+  return { name: worktreePath.split(/[\\/]/).at(-1) ?? worktreePath, color };
+}
+
+/** Read the same named-worktree identity as the pills when opening a context menu. */
+export function readNamedWorktree(
+  projectRef: ScopedProjectRef,
+  worktreePath: string | null,
+  projectCwd: string | null,
+): NamedWorktreeSelection | null {
+  if (!worktreePath || !projectCwd) return null;
+  const savedColor =
+    useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, worktreePath)]?.color;
+  return resolveNamedWorktree({ worktreePath, projectCwd, savedColor });
 }
 
 /** Keep color outside server state while the ordinary launch owns Git and cleanup. */
@@ -83,6 +113,11 @@ export const useNamedWorktreeStore = create<NamedWorktreeState>()(
           changed = true;
         }
         if (changed) set({ selections, worktrees });
+      },
+      setColor: (projectRef, worktreePath, color) => {
+        const key = namedWorktreeKey(projectRef, worktreePath);
+        if (get().worktrees[key]?.color === color) return;
+        set({ worktrees: { ...get().worktrees, [key]: { color } } });
       },
       move: (projectRef, oldPath, newPath) => {
         const oldKey = namedWorktreeKey(projectRef, oldPath);

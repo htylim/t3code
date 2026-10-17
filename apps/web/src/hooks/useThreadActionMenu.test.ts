@@ -25,6 +25,8 @@ const state = vi.hoisted(() => ({
   granted: new Set<string>(),
   effects: [] as string[],
   settledOverride: null as "settled" | null,
+  worktreePath: null as string | null,
+  requestWorktreeEdit: vi.fn<(request: unknown) => void>(),
   completed: deferred<void>(),
   show: vi.fn<
     (
@@ -39,8 +41,12 @@ function recordEffect(action: string) {
   state.completed.resolve();
 }
 
-vi.mock("../state/threadTags", () => ({ readThreadTagsSupported: () => true }));
-vi.mock("../components/ThreadTagDialog", () => ({ requestThreadTag: () => recordEffect("tag") }));
+vi.mock("../components/NamedWorktreeDialog", () => ({
+  requestNamedWorktreeEdit: (request: unknown) => {
+    state.requestWorktreeEdit(request);
+    recordEffect("rename-worktree");
+  },
+}));
 vi.mock("../components/CustomSnoozeDialog", () => ({ requestCustomSnooze: vi.fn() }));
 vi.mock("react", () => ({
   useCallback: (callback: unknown) => callback,
@@ -65,7 +71,7 @@ vi.mock("../state/entities", () => ({
     projectId: "project",
     title: "Thread",
     branch: "main",
-    worktreePath: null,
+    worktreePath: state.worktreePath,
     runtime: null,
     latestRun: null,
     settledOverride: state.settledOverride,
@@ -173,6 +179,8 @@ beforeEach(() => {
   state.completed = deferred<void>();
   state.show.mockReset().mockResolvedValue(null);
   state.settledOverride = null;
+  state.worktreePath = null;
+  state.requestWorktreeEdit.mockReset();
   usePostponedThreadStore.setState({ byThreadKey: {} });
 });
 
@@ -194,6 +202,33 @@ describe("postponed thread menu", () => {
     expect(actions.find((action) => action.id === "unsettle")).toBeUndefined();
     await state.completed.promise;
     expect(state.effects).toEqual(["settleThread"]);
+  });
+});
+
+describe("named-worktree menu", () => {
+  it.each([null, "/project", "/worktrees/t3-173504f2"])(
+    "hides worktree renaming for an unnamed checkout: %s",
+    (worktreePath) => {
+      state.worktreePath = worktreePath;
+      createMenu().openMenu(position);
+      expect(state.show.mock.calls[0]![0].some((action) => action.id === "rename-worktree")).toBe(
+        false,
+      );
+    },
+  );
+
+  it("opens the editor for the selected worktree in its own environment", async () => {
+    state.granted.add("secondary");
+    state.worktreePath = "/worktrees/named-feature";
+    state.show.mockResolvedValue("rename-worktree");
+    createMenu().openMenu(position);
+    await state.completed.promise;
+    expect(state.requestWorktreeEdit).toHaveBeenCalledWith({
+      projectRef: { environmentId: "secondary", projectId: "project" },
+      projectCwd: "/project",
+      worktreePath: "/worktrees/named-feature",
+    });
+    expect(state.effects).toEqual(["rename-worktree"]);
   });
 });
 
@@ -225,19 +260,25 @@ describe("thread menu permissions", () => {
     );
   });
 
-  it.each(["tag", "rename", "regenerate-title", "delete", "pin", "settle", "archive"] as const)(
-    "%s rechecks after the native menu closes",
-    async (action) => {
-      state.granted.add("secondary");
-      const choice = deferred<ThreadActionMenuId | null>();
-      state.show.mockReturnValue(choice.promise);
-      createMenu().openMenu(position);
-      state.granted.delete("secondary");
-      choice.resolve(action);
-      await state.completed.promise;
-      expect(state.effects).toEqual([]);
-    },
-  );
+  it.each([
+    "rename",
+    "rename-worktree",
+    "regenerate-title",
+    "delete",
+    "pin",
+    "settle",
+    "archive",
+  ] as const)("%s rechecks after the native menu closes", async (action) => {
+    state.granted.add("secondary");
+    state.worktreePath = "/worktrees/named-feature";
+    const choice = deferred<ThreadActionMenuId | null>();
+    state.show.mockReturnValue(choice.promise);
+    createMenu().openMenu(position);
+    state.granted.delete("secondary");
+    choice.resolve(action);
+    await state.completed.promise;
+    expect(state.effects).toEqual([]);
+  });
 
   it.each([
     ["new-thread-on-branch", "draft"],

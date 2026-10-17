@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./thread-tag-colors": {
-      "types": "./src/threadTagColors.ts",
-      "default": "./src/threadTagColors.ts"
+    "./soft-pill-colors": {
+      "types": "./src/softPillColors.ts",
+      "default": "./src/softPillColors.ts"
     },
     "./composerThreadItems": {
       "types": "./src/composerThreadItems.ts",
@@ -410,10 +410,6 @@
     "./state/mcp-apps": {
       "types": "./src/state/mcpApps.ts",
       "default": "./src/state/mcpApps.ts"
-    },
-    "./state/thread-tags": {
-      "types": "./src/state/threadTags.ts",
-      "default": "./src/state/threadTags.ts"
     },
     "./source-control-clients": {
       "types": "./src/sourceControlClients.ts",

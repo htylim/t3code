@@ -47,7 +47,6 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       deletedAt: null,
     } as OrchestrationV2ThreadShell;
     let launchedSender: ThreadId | undefined;
-    const launchSources: Array<ThreadId | undefined> = [];
     const layerDependencies = Layer.mergeAll(
       ServerSettings.layerTest(),
       NodeCrypto.layer,
@@ -69,7 +68,6 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       Layer.mock(ThreadLaunch.ThreadLaunchService)({
         launch: (input) => {
           launchedSender = input.initialMessage?.senderThreadId;
-          launchSources.push(input.sourceThreadId);
           return Effect.succeed({
             threadId: input.threadId,
             projection: {
@@ -100,10 +98,6 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(layerDependencies));
     expect(result.at(-1)?.result).toMatchObject({ projectId, modelSelection });
     expect(launchedSender).toBe(sourceThreadId);
-    yield* toolkit
-      .handle("t3_thread_launch", { title: "Empty conversation" })
-      .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(layerDependencies));
-    expect(launchSources).toEqual([sourceThreadId, sourceThreadId]);
   }),
 );
 
