@@ -796,6 +796,30 @@ describe("chat/editor shortcuts", () => {
     );
   });
 
+  it("lets the continue-workspace action override Cmd+N outside terminals", () => {
+    const bindings = mergeWithDefaultKeybindings([
+      ...DEFAULT_RESOLVED_KEYBINDINGS,
+      ...compileResolvedKeybindingsConfig([
+        { key: "mod+n", command: "chat.newLocalContinueWorkspace", when: "!terminalFocus" },
+      ]),
+    ]);
+
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "n", metaKey: true }), bindings, {
+        platform: "MacIntel",
+        context: { terminalFocus: false },
+      }),
+      "chat.newLocalContinueWorkspace",
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "n", metaKey: true }), bindings, {
+        platform: "MacIntel",
+        context: { terminalFocus: true },
+      }),
+      "terminal.new",
+    );
+  });
+
   it("matches chat.newSide outside terminal focus", () => {
     assert.strictEqual(
       resolveShortcutCommand(event({ key: "t", metaKey: true }), DEFAULT_BINDINGS, {

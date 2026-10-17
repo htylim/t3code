@@ -1692,6 +1692,25 @@ function OpenCommandPaletteDialog(props: {
           });
         },
       });
+      actionItems.push({
+        kind: "action",
+        value: "action:new-thread-continue-workspace",
+        searchTerms: ["chat", "new local", "new thread", "continue workspace", "worktree"],
+        title: "Chat: New Local (Continue Workspace)",
+        icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+        shortcutCommand: "chat.newLocalContinueWorkspace",
+        run: async () => {
+          await startNewThreadFromContext(
+            {
+              activeDraftThread,
+              activeThread: activeThread ?? undefined,
+              defaultProjectRef,
+              handleNewThread,
+            },
+            { continueWorkspace: true },
+          );
+        },
+      });
     }
 
     actionItems.push({

@@ -20,6 +20,17 @@ import {
 } from "./KeybindingsSettings.logic";
 
 describe("KeybindingsSettings.logic", () => {
+  it("offers the continue-workspace action without a default shortcut", () => {
+    expect(buildKeybindingCommandOptions([])).toContain("chat.newLocalContinueWorkspace");
+    expect(commandLabel("chat.newLocalContinueWorkspace")).toBe(
+      "Chat: New Local (Continue Workspace)",
+    );
+    expect(
+      DEFAULT_RESOLVED_KEYBINDINGS.some(
+        (binding) => binding.command === "chat.newLocalContinueWorkspace",
+      ),
+    ).toBe(false);
+  });
   it("records modified Escape and reserves plain Escape for cancel", () => {
     const event = {
       code: "Escape",

@@ -58,6 +58,7 @@ function pickExplicitWorkspaceOptions(options: NewThreadWorkspaceOptions | undef
   };
 }
 
+/** Create or reuse a project draft with explicit workspace choices above project defaults. */
 export function useNewThreadHandler() {
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const router = useRouter();
@@ -68,11 +69,12 @@ export function useNewThreadHandler() {
 
   return (
     projectRef: ScopedProjectRef,
-    options?: {
+    requestedOptions?: {
       branch?: string | null;
       worktreePath?: string | null;
       envMode?: DraftThreadEnvMode;
       startFromOrigin?: boolean;
+      continueWorkspace?: boolean;
       replace?: boolean;
     },
   ): Promise<{
@@ -102,6 +104,21 @@ export function useNewThreadHandler() {
       currentRouteTarget?.kind === "server" ? readThreadShell(currentRouteTarget.threadRef) : null;
     const carrySourceDraft =
       currentRouteTarget?.kind === "draft" ? getDraftSession(currentRouteTarget.draftId) : null;
+    const workspaceSource = carrySourceShell ?? carrySourceDraft;
+    const canContinueWorkspace =
+      requestedOptions?.continueWorkspace === true &&
+      workspaceSource?.environmentId === projectRef.environmentId &&
+      workspaceSource?.projectId === projectRef.projectId;
+    const options = canContinueWorkspace
+      ? {
+          ...requestedOptions,
+          branch: workspaceSource.branch,
+          worktreePath: workspaceSource.worktreePath,
+          envMode:
+            carrySourceDraft?.envMode ?? (workspaceSource.worktreePath ? "worktree" : "local"),
+          startFromOrigin: carrySourceDraft?.startFromOrigin ?? false,
+        }
+      : requestedOptions;
     const carrySourceComposer = currentRouteTarget
       ? getComposerDraft(
           currentRouteTarget.kind === "server"

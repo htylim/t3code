@@ -25,6 +25,7 @@ interface NewThreadHandler {
       worktreePath?: string | null;
       envMode?: DraftThreadEnvMode;
       startFromOrigin?: boolean;
+      continueWorkspace?: boolean;
     },
   ): Promise<unknown>;
 }
@@ -82,14 +83,20 @@ export function resolveThreadActionProjectRef(
   return context.defaultProjectRef;
 }
 
+/** Open the current project's draft, optionally carrying the current workspace choice. */
 export async function startNewThreadFromContext(
   context: ChatThreadActionContext,
+  options?: { continueWorkspace: boolean },
 ): Promise<boolean> {
   const projectRef = resolveThreadActionProjectRef(context);
   if (!projectRef) {
     return false;
   }
 
-  await context.handleNewThread(projectRef);
+  if (options?.continueWorkspace) {
+    await context.handleNewThread(projectRef, options);
+  } else {
+    await context.handleNewThread(projectRef);
+  }
   return true;
 }

@@ -161,6 +161,11 @@ through the pages you have visited, like a browser's back and forward buttons.
 [new-thread defaults](./thread-sidebar.md#start-a-thread). `chat.newWithoutProject`
 (`mod+alt+n`) starts a thread [without a project](./thread-sidebar.md#start-without-a-project).
 
+To keep the current thread's checkout or worktree, bind **Chat: New Local (Continue Workspace)**
+to `mod+n` in **Settings → Keybindings**. Its command ID is `chat.newLocalContinueWorkspace`,
+and it has no default shortcut. When launched from a draft, it keeps that draft's workspace choice.
+With no current thread or draft, it uses the project's new-thread defaults.
+
 `thread.rename` starts renaming the active thread and defaults to `f2` outside the terminal.
 
 `chat.newSide` creates a transient blank chat in the current thread's right panel. It defaults to

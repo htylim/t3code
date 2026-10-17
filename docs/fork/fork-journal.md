@@ -1,5 +1,26 @@
 # Fork journal
 
+## 2026-10-17 - Continue the current workspace in a new local chat
+
+- Upstream baseline: `da7c4f234db3`.
+- Change: Added the unbound `chat.newLocalContinueWorkspace` action, labeled
+  Chat: New Local (Continue Workspace) in Keybindings and the command palette.
+  It opens the current project's draft with the source thread's branch and checkout path.
+  Draft sources also carry their workspace mode and start-from-origin choice.
+  Without a current thread or draft, project defaults apply. Ordinary New Local is unchanged.
+- Reason: Starting another chat in the same worktree should not require selecting it again.
+- Scope: Shared command catalog, web and desktop shortcuts, command palette, and draft creation.
+  Native mobile has its own command palette and does not expose this configurable action.
+  Provider adapters, server creation, and connection transports are unchanged.
+- Verification: 233 focused draft, shortcut, Settings, action, and contract tests passed,
+  plus the web typecheck and targeted lint. Tests cover new and reusable drafts, local and
+  detached checkouts, draft workspace choices, remote environment context, and Cmd+N precedence.
+  An isolated dev Browser panel pass verified command-palette launch, assigning Cmd+N in
+  Settings, worktree inheritance through Cmd+N, empty-draft reuse, local-checkout continuation,
+  and creation from a draft containing an unsent prompt without losing that prompt.
+  Ordinary New Local still selected project defaults. No installed desktop app or provider
+  turn was used; the live database was only read to seed the isolated stopped-thread snapshot.
+
 ## 2026-10-17 - Named worktree directories and local colors
 
 - Upstream baseline: `da7c4f234db3`, merged from fork `9a1a98c554` after initial implementation.

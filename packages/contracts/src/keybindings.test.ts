@@ -109,6 +109,13 @@ it.effect("parses keybinding rules", () =>
     });
     assert.strictEqual(parsedLocal.command, "chat.newLocal");
 
+    const parsedContinueWorkspace = yield* decode(KeybindingRule, {
+      key: "mod+n",
+      command: "chat.newLocalContinueWorkspace",
+      when: "!terminalFocus",
+    });
+    assert.strictEqual(parsedContinueWorkspace.command, "chat.newLocalContinueWorkspace");
+
     const parsedSide = yield* decode(KeybindingRule, {
       key: "mod+t",
       command: "chat.newSide",

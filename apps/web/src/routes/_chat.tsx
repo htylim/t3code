@@ -153,15 +153,18 @@ function ChatRouteGlobalShortcuts() {
         return;
       }
 
-      if (command === "chat.newLocal") {
+      if (command === "chat.newLocal" || command === "chat.newLocalContinueWorkspace") {
         event.preventDefault();
         event.stopPropagation();
-        void startNewThreadFromContext({
-          activeDraftThread,
-          activeThread: activeThread ?? undefined,
-          defaultProjectRef,
-          handleNewThread,
-        });
+        void startNewThreadFromContext(
+          {
+            activeDraftThread,
+            activeThread: activeThread ?? undefined,
+            defaultProjectRef,
+            handleNewThread,
+          },
+          { continueWorkspace: command === "chat.newLocalContinueWorkspace" },
+        );
         return;
       }
 

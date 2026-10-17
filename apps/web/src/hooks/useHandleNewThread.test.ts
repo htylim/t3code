@@ -7,6 +7,12 @@ const testState = vi.hoisted(() => {
   let projectFileRead = Promise.resolve<null>(null);
   let routeTarget: ThreadRouteTarget | null = null;
   let projectRemoved = false;
+  let sourceThread: {
+    environmentId: string;
+    projectId: string;
+    branch: string | null;
+    worktreePath: string | null;
+  } | null = null;
   let targetSettings = {
     defaultThreadEnvMode: "local" as "local" | "worktree",
     newWorktreesStartFromOrigin: false,
@@ -19,6 +25,11 @@ const testState = vi.hoisted(() => {
     readonly promotedTo: null;
     readonly threadId: string;
     readonly sourceThreadRef?: ScopedThreadRef | null;
+    readonly projectId?: string;
+    readonly branch?: string | null;
+    readonly worktreePath?: string | null;
+    readonly envMode?: "local" | "worktree";
+    readonly startFromOrigin?: boolean;
   } | null = null;
   const router = {
     state: {
@@ -81,6 +92,7 @@ const testState = vi.hoisted(() => {
       storedDraft = nextStoredDraft;
       routeTarget = null;
       projectRemoved = false;
+      sourceThread = null;
       targetSettings = {
         defaultThreadEnvMode: workspaceDefaults.envMode,
         newWorktreesStartFromOrigin: workspaceDefaults.startFromOrigin,
@@ -104,6 +116,12 @@ const testState = vi.hoisted(() => {
     },
     get storedDraft() {
       return storedDraft;
+    },
+    get sourceThread() {
+      return sourceThread;
+    },
+    set sourceThread(nextSourceThread: typeof sourceThread) {
+      sourceThread = nextSourceThread;
     },
   };
 });
@@ -210,7 +228,8 @@ vi.mock("../state/entities", () => {
   return {
     readProject: () => (testState.projectRemoved ? null : project),
     readProjects: () => (testState.projectRemoved ? [] : [project]),
-    readThreadShell: () => null,
+    readThreadShell: (threadRef: { threadId: string }) =>
+      threadRef.threadId === "source-thread" ? testState.sourceThread : null,
     readThreadShells: () => [],
     useProjects: () => [],
     useThread: () => null,
@@ -241,11 +260,70 @@ describe.each([
     },
   ],
 ])("useNewThreadHandler with a %s draft", (_, draft) => {
+  it.each([
+    { branch: "feature", worktreePath: "/remote/worktrees/feature", envMode: "worktree" },
+    { branch: "main", worktreePath: null, envMode: "local" },
+    { branch: null, worktreePath: "/remote/worktrees/detached", envMode: "worktree" },
+  ] as const)(
+    "continues the current workspace $worktreePath above project defaults",
+    async (workspace) => {
+      testState.reset(draft, { envMode: "worktree", startFromOrigin: true });
+      const projectRef = {
+        environmentId: "environment-ssh",
+        projectId: "project-remote",
+      };
+      testState.sourceThread = {
+        ...projectRef,
+        branch: workspace.branch,
+        worktreePath: workspace.worktreePath,
+      };
+      testState.routeTarget = {
+        kind: "server",
+        threadRef: { environmentId: projectRef.environmentId, threadId: "source-thread" },
+      } as ThreadRouteTarget;
+
+      const opened = await useNewThreadHandler()(projectRef as never, { continueWorkspace: true });
+
+      expect(testState.storedDraft).toMatchObject({
+        ...workspace,
+        startFromOrigin: false,
+        sourceThreadRef: null,
+      });
+      expect(testState.router.state.location.href).toBe(`/draft/${opened!.draftId}`);
+    },
+  );
+
+  it("uses project defaults when continuing without a source thread", async () => {
+    testState.reset(draft, { envMode: "worktree", startFromOrigin: true });
+    const pendingOpen = useNewThreadHandler()(
+      {
+        environmentId: "environment-ssh",
+        projectId: "project-remote",
+      } as never,
+      { continueWorkspace: true },
+    );
+    testState.completeProjectFileRead(null);
+    await pendingOpen;
+
+    expect(testState.storedDraft).toMatchObject({
+      branch: null,
+      worktreePath: null,
+      envMode: "worktree",
+      startFromOrigin: true,
+    });
+  });
+
   it("does not use the viewed thread as the source for interactive creation", async () => {
     testState.reset(draft);
+    testState.sourceThread = {
+      environmentId: "environment-ssh",
+      projectId: "project-remote",
+      branch: "feature",
+      worktreePath: "/remote/worktrees/feature",
+    };
     testState.routeTarget = {
       kind: "server",
-      threadRef: { environmentId: "environment-ssh", threadId: "tagged-parent" },
+      threadRef: { environmentId: "environment-ssh", threadId: "source-thread" },
     } as ThreadRouteTarget;
     const projectRef = {
       environmentId: "environment-ssh",
@@ -258,6 +336,11 @@ describe.each([
 
     expect(testState.storedDraft?.draftId).toBe(opened!.draftId);
     expect(testState.storedDraft?.sourceThreadRef).toBeNull();
+    expect(testState.storedDraft).toMatchObject({
+      branch: null,
+      worktreePath: null,
+      envMode: "local",
+    });
   });
 
   it.each(["approval-required", "auto-accept-edits", "auto", "full-access"] as const)(
@@ -367,6 +450,37 @@ describe.each([
       );
     },
   );
+});
+
+it.each([
+  { branch: "main", worktreePath: null, envMode: "local", startFromOrigin: false },
+  {
+    branch: "feature",
+    worktreePath: "/remote/worktrees/feature",
+    envMode: "worktree",
+    startFromOrigin: false,
+  },
+  { branch: "base", worktreePath: null, envMode: "worktree", startFromOrigin: true },
+] as const)("continues an open draft's $envMode workspace choice", async (workspace) => {
+  const sourceDraft = {
+    draftId: "draft-source",
+    threadId: "thread-source",
+    environmentId: "environment-ssh",
+    projectId: "project-remote",
+    promotedTo: null,
+    ...workspace,
+  };
+  testState.reset(sourceDraft);
+  testState.routeTarget = { kind: "draft", draftId: sourceDraft.draftId } as ThreadRouteTarget;
+  testState.router.state.location.href = `/draft/${sourceDraft.draftId}`;
+
+  await useNewThreadHandler()(
+    { environmentId: sourceDraft.environmentId, projectId: sourceDraft.projectId } as never,
+    { continueWorkspace: true },
+  );
+
+  expect(testState.storedDraft).toMatchObject(workspace);
+  expect(testState.router.navigate).not.toHaveBeenCalled();
 });
 
 it("clears a persisted source when the empty draft is already open", async () => {
