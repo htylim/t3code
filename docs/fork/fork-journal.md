@@ -1130,3 +1130,32 @@ The fork-specific implementation was removed.
   Sonnet checks verified side-chat cleanup, selection reuse, workspace
   management, thread references, and the affected shortcuts. Browser screenshot capture failed;
   native device access was disabled. Desktop installers and live user data were not touched.
+
+## 2026-10-17 - Integrate the reviewed upstream snapshot
+
+- Upstream baseline: `da7c4f234db3`, following `ed0f7b908b2e`. Integrates the 775 reviewed
+  upstream commits on `t3/review-upstream-feature-changes`, starting from fork commit
+  `11ae5e35f83c`. Shared branches and published artifacts are unchanged.
+- Adopted upstream's viewport height limit for fallback context menus. Removed the fork's
+  equivalent height calculation. Upstream worktree retention rules complement the fork's
+  workspace chooser, reuse, and rename actions, so those controls remain.
+- Preserved side chats, selected-text chat actions, transient provider-history deletion,
+  thread references and tags, postponed threads, project navigation, custom shortcuts,
+  usage exclusions, appearance settings, and Fork desktop identity. Side chats now use the
+  extracted upstream panel renderer and close hook. Provider selectors read the upstream
+  provider catalog rather than the retired server-config field.
+- Adapted fork handlers to React Compiler, retained upstream's smaller sidebar subscriptions,
+  and migrated the fork's rendered React tests into upstream's headless-browser projects.
+  Canonical temporary roots keep macOS filesystem fixtures consistent with Git and realpath.
+- Verification: 203 focused Chromium tests, 89 compiler coverage cases for fork source files,
+  1,168 focused web unit tests, and 397 contracts/shared/client/packaging tests passed.
+  Focused server checks cover provider startup, transient deletion, tags, authorization,
+  workspace rename, retention, and usage. Two existing symlink-target settings watcher tests
+  still time out on macOS; their watcher implementation is unchanged by this integration.
+  Scoped web, mobile, desktop, server, contracts, shared, and client-runtime typechecks,
+  targeted lint, and web/server bundles passed.
+- The authorized integrated browser pass used an isolated copy of stopped-thread data.
+  Personal with Codex Terra at low effort completed main and side-chat turns. Verified tag
+  saving, a scrolling context menu in a 400px viewport, side-chat rendering, temporary-thread
+  cleanup, removal of its native provider history, and preservation of the main thread.
+  No native device or installer checks were run. Nothing was published.

@@ -1,8 +1,7 @@
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { useCallback, useEffect, useRef } from "react";
-
+import { useEffect, useRef } from "react";
 import { useEnvironments } from "../state/environments";
 import { cleanupTransientSideChatCommand } from "../state/transientSideChat";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -11,27 +10,21 @@ import {
   selectStartupTransientSideChats,
   useTransientSideChatStore,
 } from "../transientSideChatStore";
-
 export function useDeleteTransientSideChat() {
   const deleteThread = useAtomCommand(cleanupTransientSideChatCommand, { reportFailure: false });
-
-  return useCallback(
-    async (ref: ScopedThreadRef) => {
-      const result = await deleteTransientSideChat(ref, deleteThread);
-      if (result._tag === "Failure") {
-        const error = squashAtomCommandFailure(result);
-        console.warn("Failed to delete transient side chat; cleanup will retry later.", {
-          environmentId: ref.environmentId,
-          threadId: ref.threadId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-      return result;
-    },
-    [deleteThread],
-  );
+  return async (ref: ScopedThreadRef) => {
+    const result = await deleteTransientSideChat(ref, deleteThread);
+    if (result._tag === "Failure") {
+      const error = squashAtomCommandFailure(result);
+      console.warn("Failed to delete transient side chat; cleanup will retry later.", {
+        environmentId: ref.environmentId,
+        threadId: ref.threadId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return result;
+  };
 }
-
 export function TransientSideChatCleanup() {
   const pendingByThreadKey = useTransientSideChatStore((state) => state.byThreadKey);
   const { environments } = useEnvironments();
@@ -41,14 +34,12 @@ export function TransientSideChatCleanup() {
   if (startupThreadKeysRef.current === null) {
     startupThreadKeysRef.current = new Set(Object.keys(pendingByThreadKey));
   }
-
   useEffect(() => {
     const connectedEnvironmentIds = new Set(
       environments
         .filter((environment) => environment.connection.phase === "connected")
         .map((environment) => environment.environmentId),
     );
-
     const ready = selectStartupTransientSideChats({
       startupThreadKeys: startupThreadKeysRef.current ?? new Set(),
       pendingByThreadKey,
@@ -63,6 +54,5 @@ export function TransientSideChatCleanup() {
       });
     }
   }, [deleteSideChat, environments, pendingByThreadKey]);
-
   return null;
 }

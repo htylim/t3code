@@ -3,17 +3,18 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as HostProcess from "../HostProcess.ts";
 
-// GitHub's Windows runners hand out the temp directory by its 8.3 short name
-// (C:\Users\RUNNER~1\...). Anything that canonicalises a path, such as git or
-// realpath, reports the long form, so equality checks between a temp path and
-// its canonical form fail. Node reads TEMP/TMP on every os.tmpdir() call, so
-// pointing them at the long form fixes every temp directory the suite makes.
-if (HostProcess.Platform.defaultValue() === "win32") {
+// Windows runners may use an 8.3 short path, and macOS exposes /var through
+// /private/var. Use the canonical temporary root so Git and realpath agree
+// with the fixture paths. Explicit symlink fixtures still exercise aliases.
+const platform = HostProcess.Platform.defaultValue();
+if (platform === "win32" || platform === "darwin") {
   try {
-    const longForm = NodeFS.realpathSync.native(NodeOS.tmpdir());
-    process.env.TEMP = longForm;
-    process.env.TMP = longForm;
-  } catch {
-    // Leave the host's value alone if it cannot be resolved.
-  }
+    const canonicalTempDirectory = NodeFS.realpathSync.native(NodeOS.tmpdir());
+    if (platform === "win32") {
+      process.env.TEMP = canonicalTempDirectory;
+      process.env.TMP = canonicalTempDirectory;
+    } else {
+      process.env.TMPDIR = canonicalTempDirectory;
+    }
+  } catch {}
 }

@@ -1,13 +1,10 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { PauseIcon } from "lucide-react";
-import { useMemo } from "react";
-
 import { useMovePostponedThreadToActive } from "../../hooks/useMovePostponedThreadToActive";
 import { usePostponedThreadStore } from "../../postponedThreadStore";
 import { Button } from "../ui/button";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
-
 /** Explain manual restoration and the same send-to-resume behavior as Snooze. */
 export function usePostponedThreadBanner(
   threadRef: ScopedThreadRef | null,
@@ -16,7 +13,7 @@ export function usePostponedThreadBanner(
     (state) => threadRef !== null && state.byThreadKey[scopedThreadKey(threadRef)] !== undefined,
   );
   const moveToActive = useMovePostponedThreadToActive();
-  return useMemo<ComposerBannerStackItem | null>(() => {
+  return (() => {
     if (!isPostponed || threadRef === null) return null;
     return {
       id: `thread-postponed:${scopedThreadKey(threadRef)}`,
@@ -30,5 +27,5 @@ export function usePostponedThreadBanner(
         </Button>
       ),
     };
-  }, [isPostponed, moveToActive, threadRef]);
+  })();
 }

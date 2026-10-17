@@ -17,7 +17,6 @@ vi.mock("./useScopedSettings", () => ({
     ...DEFAULT_UNIFIED_SETTINGS,
     sourceControlWritingStyle: state.styles[0],
   }),
-  // Review guides stay off and agreed here, so their rows do not render beside the style's.
   useScopedSettingsMixed: (keys: ReadonlyArray<string>) =>
     !keys.includes("reviewGuidesEnabled") &&
     JSON.stringify(state.styles[0]) !== JSON.stringify(state.styles[1]),
@@ -38,6 +37,7 @@ vi.mock("./useScopedModelAvailability", () => ({
 }));
 vi.mock("../ui/toast", () => ({ toastManager: { add: vi.fn() } }));
 vi.mock("../../state/server", () => ({ EMPTY_SERVER_PROVIDERS: [] }));
+vi.mock("../../state/environments", () => ({ useEnvironmentProviders: () => new Map() }));
 vi.mock("../chat/ProviderModelPicker", () => ({ ProviderModelPicker: () => null }));
 vi.mock("./settingsSearch", () => ({ searchableSetting: (id: string) => ({ id, title: id }) }));
 vi.mock("./settingsLayout", () => ({
@@ -216,8 +216,6 @@ describe("mixed source control instructions", () => {
       "Shared instructions",
       "Shared instructions",
     ]);
-    // Template preferences still differ, but that is the templates row's
-    // concern: the instructions editor is no longer a bulk draft.
     expect(button("Write custom instructions for all")).toBeUndefined();
     expect(renderer!.root.findByType("textarea").props.defaultValue).toBe("Shared instructions");
   });

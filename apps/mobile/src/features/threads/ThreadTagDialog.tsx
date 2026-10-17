@@ -4,7 +4,7 @@ import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime"
 import { THREAD_TAG_COLOR_PRESETS } from "@t3tools/client-runtime/thread-tag-colors";
 import { useState } from "react";
 import { Modal, Pressable, TextInput, View } from "react-native";
-import { AppText } from "../../components/AppText";
+import { AppText } from "../../components/ui/AppText";
 import { threadTagEnvironment } from "../../state/thread-tags";
 import { useAtomCommand } from "../../state/use-atom-command";
 
