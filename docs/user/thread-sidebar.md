@@ -146,6 +146,21 @@ device keeps its own choice.
 While this is on, the active list is ordered by when each thread last came back to you, so you
 cannot drag or move threads within it. Your saved order returns when you turn it off.
 
+## Group threads by workspace
+
+In the fork's web and desktop app, **Settings → Fork → Group threads by workspace** combines
+threads in the same project and workspace into a shared sidebar card. Grouping is on by default
+and applies separately within Pinned, Active, Working, Postponed, and Snoozed. Settled keeps its
+usual list. The legacy sidebar does not use grouping.
+
+Each thread keeps its own selection, status, and actions. Right-click a workspace card's header
+or branch footer to select all threads in that card and open their bulk actions menu. This replaces
+any previous selection. Moving a thread to another workspace regroups it automatically. Turning grouping off restores separate cards and your saved order.
+This preference stays on the current device.
+
+Hover a workspace card's header to snooze or settle every thread in that card. These controls
+also work in Postponed. Hover a thread's row to act on that thread alone.
+
 ## Settle finished work
 
 Choose **Settle thread** from its menu to move finished work out of the active list

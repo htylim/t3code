@@ -360,6 +360,7 @@ export const ClientSettingsSchema = Schema.Struct({
   environmentIdentificationMode: EnvironmentIdentificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE)),
   ),
+  forkGroupSidebarWorkspaces: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   forkUseH3Wordmark: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   glassOpacity: GlassOpacity.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_GLASS_OPACITY)),
@@ -1547,6 +1548,7 @@ export const ClientSettingsPatch = Schema.Struct({
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
   diffLayout: Schema.optionalKey(DiffLayout),
   environmentIdentificationMode: Schema.optionalKey(EnvironmentIdentificationMode),
+  forkGroupSidebarWorkspaces: Schema.optionalKey(Schema.Boolean),
   forkUseH3Wordmark: Schema.optionalKey(Schema.Boolean),
   glassOpacity: Schema.optionalKey(GlassOpacity),
   onboardingCompletedAt: Schema.optionalKey(Schema.NullOr(Schema.String)),

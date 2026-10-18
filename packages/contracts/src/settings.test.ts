@@ -1220,3 +1220,22 @@ describe("server model preferences", () => {
     });
   });
 });
+
+describe("ClientSettings fork workspace grouping", () => {
+  it("enables grouping for older saved preferences", () => {
+    expect(decodeClientSettings({}).forkGroupSidebarWorkspaces).toBe(true);
+  });
+
+  it.each([true, false])("preserves the grouping preference %s", (forkGroupSidebarWorkspaces) => {
+    expect(decodeClientSettings({ forkGroupSidebarWorkspaces }).forkGroupSidebarWorkspaces).toBe(
+      forkGroupSidebarWorkspaces,
+    );
+    expect(decodeClientSettingsPatch({ forkGroupSidebarWorkspaces })).toEqual({
+      forkGroupSidebarWorkspaces,
+    });
+  });
+
+  it("rejects invalid grouping preferences", () => {
+    expect(() => decodeClientSettingsPatch({ forkGroupSidebarWorkspaces: "enabled" })).toThrow();
+  });
+});

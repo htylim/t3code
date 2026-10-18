@@ -45,7 +45,7 @@ const ITEMS: ReadonlyArray<SettingsSearchItem> = [
 ];
 
 describe("searchSettings", () => {
-  it("finds the device-local wordmark toggle only in fork builds", () => {
+  it("finds fork controls only when Fork settings are available", () => {
     const availability = {
       hasCloudPublicConfig: false,
       hasEnvironment: false,
@@ -55,11 +55,20 @@ describe("searchSettings", () => {
       isWslSettingsRowVisible: false,
       hasThreadAutoSettlement: false,
     };
-    const forkItems = filterAvailableSettingsSearchItems({ ...availability, isForkBuild: true });
+    const forkItems = filterAvailableSettingsSearchItems({
+      ...availability,
+      hasForkSettings: true,
+    });
     expect(searchSettings("H3", forkItems)[0]?.to).toBe("/settings/fork");
     expect(searchSettings("T3 branding", forkItems)[0]?.id).toBe("fork-wordmark");
+    expect(searchSettings("Group threads by workspace", forkItems)[0]?.id).toBe(
+      "fork-group-sidebar-workspaces",
+    );
     expect(getSettingsSearchTargetScope("fork-wordmark")?.scope).toBeNull();
     expect(searchSettings("H3", filterAvailableSettingsSearchItems(availability))).toEqual([]);
+    expect(
+      filterAvailableSettingsSearchItems(availability).some((setting) => setting.forkOnly),
+    ).toBe(false);
   });
 
   it.each(["OTel", "OTLP", "telemetry export", "Grafana"])(

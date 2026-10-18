@@ -62,7 +62,7 @@ export interface SettingsSearchItem {
 }
 
 export interface SettingsSearchAvailability {
-  readonly isForkBuild?: boolean;
+  readonly hasForkSettings?: boolean;
   readonly localEnvironmentDisabled?: boolean;
   readonly hasCloudPublicConfig: boolean;
   readonly hasEnvironment: boolean;
@@ -253,6 +253,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/appearance",
     searchTerms: ["dev nightly artwork pill label hide none"],
     targetId: "appearance-interface",
+  },
+  {
+    id: "fork-group-sidebar-workspaces",
+    title: "Group threads by workspace",
+    to: "/settings/fork",
+    searchTerms: ["sidebar project worktree shared card grouping working postponed snoozed"],
+    forkOnly: true,
   },
   {
     id: "fork-wordmark",
@@ -1117,7 +1124,7 @@ export function filterAvailableSettingsSearchItems(
   const items: ReadonlyArray<SettingsSearchItem> = SETTINGS_SEARCH_ITEMS;
   return items.filter(
     (item) =>
-      (!item.forkOnly || availability.isForkBuild === true) &&
+      (!item.forkOnly || availability.hasForkSettings === true) &&
       (!item.cloudOnly || availability.hasCloudPublicConfig) &&
       (!item.environmentOnly || availability.hasEnvironment) &&
       (!item.providerSettingsOnly || availability.hasProviderSettingsEnvironment) &&

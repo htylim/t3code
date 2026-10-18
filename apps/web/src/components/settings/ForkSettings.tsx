@@ -1,6 +1,6 @@
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 
-import { APP_STAGE_LABEL } from "../../branding";
+import { FORK_SETTINGS_AVAILABLE } from "./forkSettingsAvailability";
 import { useClientSettings, persistClientSettingsPatch } from "../../hooks/useSettings";
 import { Switch } from "../ui/switch";
 import { searchableSetting } from "./settingsSearch";
@@ -11,14 +11,44 @@ import {
   SettingsSection,
 } from "./settingsLayout";
 
-/** Edit this device's fork branding without changing the desktop app's identity. */
+/** Edit the fork preferences saved on this device. */
 export function ForkSettings() {
+  const forkGroupSidebarWorkspaces = useClientSettings(
+    (settings) => settings.forkGroupSidebarWorkspaces,
+  );
   const forkUseH3Wordmark = useClientSettings((settings) => settings.forkUseH3Wordmark);
 
-  if (APP_STAGE_LABEL !== "Fork") return null;
+  if (!FORK_SETTINGS_AVAILABLE) return null;
 
   return (
     <SettingsPageContainer>
+      <SettingsSection id="fork-sidebar" title="Sidebar">
+        <SettingsRow
+          {...searchableSetting("fork-group-sidebar-workspaces")}
+          description="Combine threads in the same project and workspace into one card in the current sidebar. Applies within each section except Settled. Saved on this device."
+          resetAction={
+            forkGroupSidebarWorkspaces !== DEFAULT_CLIENT_SETTINGS.forkGroupSidebarWorkspaces ? (
+              <SettingResetButton
+                label="workspace grouping"
+                onClick={() =>
+                  persistClientSettingsPatch({
+                    forkGroupSidebarWorkspaces: DEFAULT_CLIENT_SETTINGS.forkGroupSidebarWorkspaces,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              aria-label="Group threads by workspace"
+              checked={forkGroupSidebarWorkspaces}
+              onCheckedChange={(checked) =>
+                persistClientSettingsPatch({ forkGroupSidebarWorkspaces: checked })
+              }
+            />
+          }
+        />
+      </SettingsSection>
       <SettingsSection id="fork-branding" title="Branding">
         <SettingsRow
           {...searchableSetting("fork-wordmark")}
