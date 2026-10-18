@@ -24,7 +24,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { APP_STAGE_LABEL } from "../../branding";
+import { FORK_SETTINGS_AVAILABLE } from "./forkSettingsAvailability";
 
 import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
@@ -117,7 +117,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const navItems = SETTINGS_NAV_ITEMS.filter(
     (item) =>
       (item.to !== "/settings/projects" || isSettingsOverviewVisible(scopeSearch)) &&
-      (item.to !== "/settings/fork" || APP_STAGE_LABEL === "Fork"),
+      (item.to !== "/settings/fork" || FORK_SETTINGS_AVAILABLE),
   );
   const { isMobile, setOpenMobile, open, setOpen } = useSidebar();
   const searchInputRef = useRef<HTMLInputElement>(null);

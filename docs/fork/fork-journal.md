@@ -21,6 +21,51 @@
   Ordinary New Local still selected project defaults. No installed desktop app or provider
   turn was used; the live database was only read to seed the isolated stopped-thread snapshot.
 
+## 2026-10-17 - Shared sidebar cards by workspace
+
+- Upstream baseline: `da7c4f234db3`.
+- The current web and desktop sidebar groups threads with the same environment, physical
+  project, and workspace inside each section except Settled. Singletons retain their existing
+  layout. Workspace changes regroup threads automatically. A shared card has one project and
+  workspace header, one branch footer, and individual rows with their own metadata and actions.
+  Hover replaces a grouped row's metadata with its actions. Selection keeps the existing gestures.
+  Right-clicking a workspace card's shared header or footer replaces the selection with that
+  card's current threads and opens the existing bulk actions menu. Other cards and sections
+  remain outside the selection; a thread row retains its normal context menu.
+  Header hover reveals Snooze and Settle controls for every thread in the card, including
+  Postponed cards. Grouped rows retain the same Settle label as individual cards. Header actions
+  reuse bulk snooze and settle handling for navigation, Undo, and failures.
+  Grouping mode adds four pixels between cards to distinguish cards of different heights while
+  keeping each card's thread rows joined. Workspace cards and individual cards have no border.
+- Settings > Fork > Group threads by workspace controls the behavior and defaults on. The
+  preference stays on the device. Turning it off restores separate cards and the saved order.
+  Fork settings, navigation, and search are also available in development builds so the
+  controls can be tested before packaging. Mobile and the legacy sidebar keep their layouts.
+- Grouping is a client presentation change. A small sidebar helper owns workspace identity and
+  ordering. Threads remain direct list children with the existing handlers for selection, drag,
+  file drops, rename, and actions. No thread, workspace, or server state is merged.
+- Verification: 424 focused grouping, sidebar, settings, and contracts tests passed. Targeted
+  lint, web/mobile/desktop/contracts typechecks, and the production web build passed. The
+  authorized browser pass used an isolated copy of stopped-thread data. Verified workspace
+  split/rejoin, toggle persistence across reload, hover metadata replacement, range selection
+  across single cards and grouped rows, draft styling and discard, drag reorder, pin/unpin,
+  postpone/un-postpone, snooze/wake, and unchanged Settled rows. Working used restored
+  browser-only status fixtures with one and two threads, without starting agents. Light and
+  dark layouts had no horizontal overflow at the sidebar's minimum width. The real Fork
+  settings, navigation, and settings search passed in the ordinary development app, including
+  toggling workspace grouping both ways. Focused settings tests, lint, and the web typecheck
+  also passed after making these controls available in development.
+  Screenshots and a short drag recording were retained outside the repository. No product
+  defect was found in these flows. Native desktop and mobile UI were not exercised. The
+  isolated dev instance remains available for inspection. The card context menu addition
+  passed 48 focused membership, selection, and postponed tests, targeted lint, and the web
+  typecheck. The browser pass verified header/footer bulk menus, replacement of an outside
+  selection, and unchanged individual thread menus without running bulk actions. Header hover
+  actions passed 197 focused tests, targeted lint, and the web typecheck. Browser checks on three
+  disposable fixture threads verified group Snooze and Settle in Active and Postponed, visible
+  row Settle labels, and an untouched thread in another workspace. Live data and installed builds
+  were not changed.
+
 ## 2026-10-17 - Named worktree directories and local colors
 
 - Upstream baseline: `da7c4f234db3`, merged from fork `9a1a98c554` after initial implementation.
