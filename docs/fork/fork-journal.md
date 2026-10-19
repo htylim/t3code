@@ -1,5 +1,39 @@
 # Fork journal
 
+## 2026-10-19 - Integrate the reviewed upstream batch
+
+- Upstream baseline: `325a7e2ae4bf504cdaeb7b842e88b47f60b4bf59`, 503 upstream commits
+  after the previous baseline `da7c4f234db3`. Integration uses the reviewed snapshot on
+  `integration/upstream-2026-10-19`. Later upstream commits are outside this batch.
+- Keep the fork workspace picker as its own UI component. It uses upstream Git commands,
+  permissions, and thread metadata updates. Adopt upstream's quiet thread subscriptions and
+  workspace shortcut hint. Keep named directories, colors, rename and reuse controls, and
+  editing an existing thread's workspace. There is no second picker or new preference.
+- Keep grouped workspace cards and Postponed. Combine their row actions with upstream's
+  metadata grid, parent highlighting, shared timer subscriptions, pin placement, and drag fixes.
+  Keep Continue Workspace, project switching, custom shortcuts, and percent references while
+  adopting upstream's command-palette navigation and state changes.
+- Keep side chats, transient cleanup, owner context, and selected-text draft actions. Integrate
+  upstream's timeline structure, selection visibility fixes, panel behavior, and reduced-motion
+  navigation. Preserve upstream's closed-panel dismissal metadata across reloads while excluding
+  transient chats from persisted panel preferences.
+- Combine upstream's conditional table expansion control with the fork's fit-width wrapped
+  tables. Keep per-account Cost and Tokens exclusions alongside upstream's Limits deduplication.
+  Keep server-side Stop target resolution beyond loaded history and late Codex terminal handles
+  alongside upstream's running-state and delegated-follow-up fixes.
+- Keep fork branding, hover sidebar, visualization-marker handling, and packaging identity.
+  Apply upstream's explicit null publishing configuration as well as the fork update-feed guard.
+  Upstream migrations 63 and 64 arrive unchanged. No fork migration or startup repair was added.
+- Verification: Focused server, provider, persistence, web logic, contracts, packaging, and
+  Chromium tests passed. Scoped server, web, desktop, mobile, contracts, and client-runtime
+  typechecks, targeted lint and React Compiler checks, and web and server production builds
+  passed. The isolated Browser-panel pass covered picker reuse, named worktree creation with
+  color, existing-thread workspace moves, Continue Workspace with unsent drafts, grouping
+  preference changes, Postponed and its reverse action, side-chat rendering and closure, and
+  selected text opening an unsent new-thread draft. No provider turn was sent. The isolated
+  database applied upstream migrations 63 and 64 and passed integrity and foreign-key checks.
+  Native Electron and mobile clients and remote connection modes were not exercised.
+
 ## 2026-10-19 - Reserve database migrations exclusively for upstream
 
 - Upstream baseline: `da7c4f234db3`; reviewed upstream through `325a7e2ae4`.

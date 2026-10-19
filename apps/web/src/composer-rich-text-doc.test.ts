@@ -1,10 +1,10 @@
-import { getSchemaByResolvedExtensions, Node, resolveExtensions } from "@tiptap/core";
+import { Editor, getSchemaByResolvedExtensions, Node, resolveExtensions } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { TaskList } from "@tiptap/extension-task-list";
 import { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { splitBlockKeepMarks } from "@tiptap/pm/commands";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, onTestFinished } from "vite-plus/test";
 
 import { collapseExpandedComposerCursor, pastedPathQueryLength } from "./composer-logic";
 
@@ -472,11 +472,72 @@ describe("composer rich text document model", () => {
     "> **bold** and @README.md inside",
     "> - looks like a list but stays quote text",
     "> > nested stays literal inside the quote",
-    "before\n> quoted\nafter",
+    "before\n> quoted",
     "> quote\n\n> another",
     "- item\n> quote after list",
+    "> quoted\n\ncomment",
+    "> line one\n> line two\n\ncomment",
   ])("round-trips the quote %s through a real ProseMirror document", (value) => {
     expect(roundTrip(value).value).toBe(value);
+  });
+
+  describe("a paragraph after a quote", () => {
+    const paragraph = (text?: string) => ({
+      type: "paragraph",
+      ...(text ? { content: [{ type: "text", text }] } : {}),
+    });
+    const quote = (...lines: string[]) => ({
+      type: "blockquote",
+      attrs: { prefix: "> " },
+      content: lines.map((line) => paragraph(line)),
+    });
+    const serialize = (...content: object[]) => {
+      const doc = ProseMirrorNode.fromJSON(schema, { type: "doc", content });
+      doc.check();
+      return { doc, map: serializeEditorDoc(doc) };
+    };
+
+    it("is written after a blank line, or Markdown folds it into the quote", () => {
+      expect(serialize(quote("quoted"), paragraph("Comment to it")).map.value).toBe(
+        "> quoted\n\nComment to it",
+      );
+      expect(serialize(quote("a", "b"), paragraph("comment")).map.value).toBe(
+        "> a\n> b\n\ncomment",
+      );
+    });
+
+    it("does not double up on the empty line the user left themselves", () => {
+      expect(serialize(quote("quoted"), paragraph(), paragraph("Comment to it")).map.value).toBe(
+        "> quoted\n\nComment to it",
+      );
+    });
+
+    it("settles on the blank line when a draft glued it to the quote", () => {
+      const settled = "before\n> quoted\n\nafter";
+      expect(roundTrip("before\n> quoted\nafter").value).toBe(settled);
+      expect(roundTrip(settled).value).toBe(settled);
+    });
+
+    it.each(["# Heading", "- item", "3. item", "---", "```\ncode\n```"])(
+      "leaves %s on the next line, since it opens its own block",
+      (next) => {
+        const value = `> quoted\n${next}`;
+        expect(roundTrip(value).value).toBe(value);
+      },
+    );
+
+    it("keeps every offset mapped through the blank line", () => {
+      const { doc, map } = serialize(quote("quoted"), paragraph("Comment"));
+      for (let flat = 0; flat <= map.docLength; flat += 1) {
+        expect(collapsedToFlat(map, flatToCollapsed(map, flat))).toBe(flat);
+      }
+      // The caret on the end of the quote stays on it, and the blank line is
+      // not a place to type: it clamps to the start of the comment.
+      expect(flatToCollapsed(map, "quoted".length)).toBe("> quoted".length);
+      expect(collapsedToFlat(map, "> quoted\n".length)).toBe("quoted".length + 1);
+      expect(flatToCollapsed(map, "quoted".length + 1)).toBe("> quoted\n\n".length);
+      expect(flatToPm(map, "quoted".length + 1)).toBe(doc.child(0).nodeSize + 1);
+    });
   });
 
   it.each([
@@ -1093,5 +1154,124 @@ describe("caret stops at styled edges", () => {
     expect(stepCaretAcrossStyledEdge(stateAt("**bold** tail", 3), -1)).toBeNull();
     expect(stepCaretAcrossStyledEdge(stateAt("plain text", 1), -1)).toBeNull();
     expect(caretTakesMarksBefore(stateAt("plain text", 1))).toBe(false);
+  });
+});
+
+describe("inline code entry", () => {
+  function editorFor(block = "paragraph", mark?: string) {
+    const editor = new Editor({
+      element: null,
+      extensions: [
+        StarterKit.configure({ code: false, codeBlock: false, trailingNode: false }),
+        ComposerCodeExtension,
+        ComposerCodeBlockExtension,
+        stubAtom("composer-mention", { path: { default: "" }, source: { default: "" } }),
+      ],
+      content: { type: "doc", content: [{ type: block }] },
+    });
+    // Unmounted editors need the same plugins that Tiptap installs on mount.
+    editor.view.updateState(editor.state.reconfigure({ plugins: editor.extensionManager.plugins }));
+    if (mark) editor.commands.setMark(mark);
+    onTestFinished(() => editor.destroy());
+    return editor;
+  }
+
+  function type(editor: Editor, text: string) {
+    for (const ch of text) {
+      const { from, to } = editor.state.selection;
+      const insert = () => editor.state.tr.insertText(ch, from, to);
+      const handled = editor.state.plugins.some((plugin) =>
+        plugin.props.handleTextInput?.call(plugin, editor.view, from, to, ch, insert),
+      );
+      if (!handled) editor.view.dispatch(insert());
+    }
+  }
+
+  it.each(["", "prefix ", "@README.md"])(
+    "formats a filled pair after %j, leaves following text plain, and keeps the normal input rule",
+    (prefix) => {
+      const editor = editorFor();
+      if (prefix === "@README.md") {
+        editor.commands.insertContent({
+          type: "composer-mention",
+          attrs: { path: "README.md", source: prefix },
+        });
+      } else {
+        type(editor, prefix);
+      }
+      const offset = editor.state.selection.from - 1;
+      type(editor, "``");
+      editor.commands.setTextSelection(offset + 2);
+      type(editor, "hello world");
+      expect(serializeEditorDoc(editor.state.doc).value).toBe(`${prefix}\`hello world\``);
+      expect(editor.state.doc.firstChild?.lastChild?.marks).toEqual([]);
+
+      editor.commands.setTextSelection(offset + 14);
+      expect(editor.state.doc.textContent).toBe(
+        `${prefix === "@README.md" ? "" : prefix}hello world`,
+      );
+      expect(serializeEditorDoc(editor.state.doc).value).toBe(`${prefix}\`hello world\``);
+      type(editor, " next `typed`");
+      expect(serializeEditorDoc(editor.state.doc).value).toBe(
+        `${prefix}\`hello world\` next \`typed\``,
+      );
+      const formatted = editor.state.doc.toJSON();
+      let undos = 0;
+      while (editor.commands.undo()) undos += 1;
+      expect(undos).toBeGreaterThan(0);
+      expect(serializeEditorDoc(editor.state.doc).value).toBe("");
+      for (let i = 0; i < undos; i += 1) expect(editor.commands.redo()).toBe(true);
+      expect(editor.state.doc.toJSON()).toEqual(formatted);
+    },
+  );
+
+  it("keeps composition edits literal until the caret leaves the typed pair", () => {
+    const editor = editorFor();
+    type(editor, "``");
+    editor.commands.setTextSelection(2);
+    editor.view.dispatch(editor.state.tr.insertText("世").setMeta("composition", 1));
+    editor.view.dispatch(editor.state.tr.insertText("世界", 2, 3).setMeta("composition", 1));
+    expect(editor.state.doc.textContent).toBe("`世界`");
+    expect(editor.state.doc.firstChild?.firstChild?.marks).toEqual([]);
+    editor.commands.setTextSelection(5);
+    expect(editor.state.doc.textContent).toBe("世界");
+    expect(serializeEditorDoc(editor.state.doc).value).toBe("`世界`");
+  });
+
+  it.each(["paste", "setContent"])("keeps a %s pair literal after moving through it", (source) => {
+    const editor = editorFor();
+    const literal = "`literal`";
+    if (source === "paste") {
+      editor.view.dispatch(editor.state.tr.insertText(literal).setMeta("uiEvent", "paste"));
+    } else {
+      type(editor, "``");
+      editor.commands.setContent({
+        type: "doc",
+        content: [{ type: "paragraph", content: [{ type: "text", text: literal }] }],
+      });
+    }
+    const before = editor.state.doc.toJSON();
+    editor.commands.setTextSelection(2);
+    editor.commands.setTextSelection(literal.length + 1);
+    expect(editor.state.doc.toJSON()).toEqual(before);
+  });
+
+  it.each([
+    { name: "doubled delimiters", delimiters: "````", caret: 3 },
+    { name: "doubled closing delimiters", delimiters: "```", caret: 2 },
+    { name: "bold text", delimiters: "``", caret: 2, mark: "bold" },
+    { name: "existing inline code", delimiters: "``", caret: 2, mark: "code" },
+    { name: "a code block", delimiters: "``", caret: 2, block: "codeBlock" },
+  ])("leaves $name unchanged on caret movement", ({ delimiters, caret, mark, block }) => {
+    const editor = editorFor(block, mark);
+    type(editor, delimiters);
+    editor.commands.setTextSelection(caret);
+    type(editor, "literal");
+    const before = editor.state.doc.toJSON();
+    // Visit both the gap between closing ticks and the end of the pair.
+    editor.commands.setTextSelection(caret + "literal".length + 1);
+    expect(editor.state.doc.toJSON()).toEqual(before);
+    editor.commands.setTextSelection(editor.state.doc.content.size - 1);
+    expect(editor.state.doc.toJSON()).toEqual(before);
   });
 });

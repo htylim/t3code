@@ -1,88 +1,129 @@
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
-import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { expect, it, vi } from "vite-plus/test";
+import { act, type ComponentProps } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { page, userEvent } from "vite-plus/test/browser";
+
+import "~/index.css";
 
 const state = vi.hoisted(() => ({
   worktreePath: "/tmp/worktree" as string | null,
-  showContextMenu: vi.fn().mockResolvedValue("copy-path"),
-  writeTextToClipboard: vi.fn().mockResolvedValue(true),
+  showContextMenu: vi.fn(),
+  writeTextToClipboard: vi.fn(),
 }));
 
-vi.mock("../localApi", () => ({
-  readLocalApi: () => ({ contextMenu: { show: state.showContextMenu }, shell: {} }),
+vi.mock(import("../localApi"), async (original) => ({
+  ...(await original()),
+  readLocalApi: (() => ({ contextMenu: { show: state.showContextMenu }, shell: {} })) as never,
 }));
-vi.mock("../hooks/useCopyToClipboard", () => ({
+vi.mock(import("../hooks/useCopyToClipboard"), async (original) => ({
+  ...(await original()),
   writeTextToClipboard: state.writeTextToClipboard,
-  useCopyToClipboard: () => ({ copyToClipboard: state.writeTextToClipboard, isCopied: false }),
 }));
-vi.mock("./BranchToolbarBranchSelector", () => ({ BranchToolbarBranchSelector: () => null }));
-vi.mock("../state/entities", () => ({
-  useThreadShell: () => ({
+vi.mock(import("./BranchToolbarBranchSelector"), async (original) => ({
+  ...(await original()),
+  BranchToolbarBranchSelector: (() => null) as never,
+}));
+vi.mock(import("../state/entities"), async (original) => ({
+  ...(await original()),
+  useQuietThreadShell: (() => ({
     environmentId: "local",
     projectId: "project",
     worktreePath: state.worktreePath,
-  }),
-  useProject: () => ({ workspaceRoot: "/tmp/project" }),
+  })) as never,
+  useProject: (() => ({ workspaceRoot: "/tmp/project" })) as never,
   useThreadShellsForProjectRefs: () => [],
 }));
 
 import { BranchToolbar } from "./BranchToolbar";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
 
-it("keeps machine choices usable when the combined row's workspace is locked", async () => {
+let root: Root;
+let container: HTMLDivElement;
+
+beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const container = document.createElement("div");
+  state.worktreePath = "/tmp/worktree";
+  useNamedWorktreeStore.setState({ selections: {}, worktrees: {} });
+  state.showContextMenu.mockReset().mockResolvedValue("copy-path");
+  state.writeTextToClipboard.mockReset().mockResolvedValue(true);
+  container = document.createElement("div");
   document.body.append(container);
-  const root = createRoot(container);
+  root = createRoot(container);
+});
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  container.remove();
+  vi.unstubAllGlobals();
+});
+
+/** Mount the shared toolbar with only the context needed by each browser scenario. */
+function render(props: Partial<ComponentProps<typeof BranchToolbar>>) {
+  return act(async () =>
+    root.render(
+      <BranchToolbar
+        layout="panel"
+        panelSection="workspace"
+        environmentId={EnvironmentId.make("local")}
+        threadId={ThreadId.make("thread")}
+        showGitControls
+        envMode="local"
+        envLocked={false}
+        startFromOrigin={false}
+        onStartFromOriginChange={vi.fn()}
+        onEnvModeChange={vi.fn()}
+        {...props}
+      />,
+    ),
+  );
+}
+
+it("keeps machine choices usable when the combined row's workspace is locked", async () => {
   const onEnvironmentChange = vi.fn();
-  try {
-    await act(async () => {
-      root.render(
-        <BranchToolbar
-          layout="panel"
-          panelSection="workspace"
-          environmentId={EnvironmentId.make("local")}
-          threadId={ThreadId.make("thread")}
-          showGitControls
-          envMode="local"
-          envLocked={false}
-          startFromOrigin={false}
-          onStartFromOriginChange={vi.fn()}
-          onEnvModeChange={vi.fn()}
-          onEnvironmentChange={onEnvironmentChange}
-          availableEnvironments={["local", "remote"].map((id) => ({
-            environmentId: EnvironmentId.make(id),
-            projectId: ProjectId.make("project"),
-            label: id,
-            isPrimary: id === "local",
-            machine: "server",
-          }))}
-        />,
-      );
-    });
-    const trigger = container.querySelector("button")!;
-    expect(trigger.textContent).toBe("local");
-    expect(container.querySelectorAll("button")).toHaveLength(1);
-    await act(async () => {
-      trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, ctrlKey: true }));
-    });
-    expect(document.querySelector('[role="menu"]')).toBeNull();
-    await act(async () => trigger.click());
-    expect(document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')?.value).toBe(
-      "",
-    );
-    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
-    expect(
-      items.find((item) => item.textContent === "New worktree")?.getAttribute("aria-disabled"),
-    ).toBe("true");
-    await act(async () => items.find((item) => item.textContent === "remote")!.click());
-    expect(onEnvironmentChange).toHaveBeenCalledWith("remote");
-  } finally {
-    await act(async () => root.unmount());
-    container.remove();
-    vi.unstubAllGlobals();
-  }
+  await render({
+    onEnvironmentChange,
+    availableEnvironments: ["local", "remote"].map((id) => ({
+      environmentId: EnvironmentId.make(id),
+      projectId: ProjectId.make("project"),
+      label: id,
+      isPrimary: id === "local",
+      machine: "server",
+    })),
+  });
+  const trigger = container.querySelector("button")!;
+  expect(trigger.textContent).toBe("local");
+  expect(container.querySelectorAll("button")).toHaveLength(1);
+
+  // A ctrl-click is a macOS secondary click; it must not open the menu.
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, ctrlKey: true }));
+  });
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+
+  await userEvent.click(trigger);
+  const newWorktree = [...document.querySelectorAll('[role="menuitemradio"]')].find((option) =>
+    option.textContent?.startsWith("New worktree"),
+  );
+  expect(newWorktree?.getAttribute("aria-disabled")).toBe("true");
+  await userEvent.click(page.getByRole("menuitemradio", { name: "remote" }));
+  expect(onEnvironmentChange).toHaveBeenCalledWith("remote");
+});
+
+it("shows a started thread's primary machine as a static label in the composer", async () => {
+  await render({
+    layout: "composer",
+    showGitControls: false,
+    availableEnvironments: ["local", "remote"].map((id) => ({
+      environmentId: EnvironmentId.make(id),
+      projectId: ProjectId.make("project"),
+      label: id,
+      isPrimary: id === "local",
+      machine: "server",
+    })),
+  });
+  expect(container.textContent).toBe("local");
+  expect(container.querySelector("button")).toBeNull();
 });
 
 it.each([
@@ -92,46 +133,20 @@ it.each([
 ] as const)(
   "copies only an existing workspace path with mode %s and worktree %s",
   async (envMode, worktreePath, copiedPath) => {
-    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     state.worktreePath = worktreePath;
-    state.showContextMenu.mockClear();
-    state.writeTextToClipboard.mockClear();
-    const container = document.createElement("div");
-    document.body.append(container);
-    const root = createRoot(container);
-    try {
-      await act(async () => {
-        root.render(
-          <BranchToolbar
-            layout="panel"
-            panelSection="workspace"
-            environmentId={EnvironmentId.make("local")}
-            threadId={ThreadId.make("thread")}
-            showGitControls
-            envMode={envMode}
-            envLocked={false}
-            startFromOrigin={false}
-            onStartFromOriginChange={vi.fn()}
-            onEnvModeChange={vi.fn()}
-          />,
-        );
-      });
-      const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
-      await act(async () => {
-        container.querySelector('[aria-label="Run context"]')!.dispatchEvent(event);
-      });
-      expect(event.defaultPrevented).toBe(copiedPath !== null);
-      if (copiedPath === null) {
-        expect(state.showContextMenu).not.toHaveBeenCalled();
-        expect(state.writeTextToClipboard).not.toHaveBeenCalled();
-      } else {
-        expect(state.writeTextToClipboard).toHaveBeenCalledWith(copiedPath, "workspace path");
-      }
-    } finally {
-      await act(async () => root.unmount());
-      container.remove();
-      state.worktreePath = "/tmp/worktree";
-      vi.unstubAllGlobals();
+    await render({ envMode });
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    await act(async () => {
+      container.querySelector('[aria-label="Run context"]')!.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(copiedPath !== null);
+    if (copiedPath === null) {
+      expect(state.showContextMenu).not.toHaveBeenCalled();
+      expect(state.writeTextToClipboard).not.toHaveBeenCalled();
+    } else {
+      await vi.waitFor(() =>
+        expect(state.writeTextToClipboard).toHaveBeenCalledWith(copiedPath, "workspace path"),
+      );
     }
   },
 );
@@ -145,7 +160,6 @@ it.each([
 ] as const)(
   "shows only a named worktree below the branch for %s with saved color %s, named %s, Git controls %s",
   async (worktreePath, savedColor, expectedName, showGitControls) => {
-    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     state.worktreePath = worktreePath;
     const projectRef = {
       environmentId: EnvironmentId.make("local"),
@@ -158,43 +172,17 @@ it.each([
           ? { [namedWorktreeKey(projectRef, worktreePath)]: { color: savedColor } }
           : {},
     });
-    const container = document.createElement("div");
-    document.body.append(container);
-    const root = createRoot(container);
-    try {
-      await act(async () => {
-        root.render(
-          <BranchToolbar
-            layout="panel"
-            panelSection="branch"
-            environmentId={projectRef.environmentId}
-            threadId={ThreadId.make("thread")}
-            showGitControls={showGitControls}
-            envMode="worktree"
-            envLocked
-            startFromOrigin={false}
-            onStartFromOriginChange={vi.fn()}
-            onEnvModeChange={vi.fn()}
-          />,
-        );
-      });
-      const worktreeLabel = container.querySelector('[aria-label="Named worktree"]');
-      if (expectedName) {
-        expect(worktreeLabel?.textContent).toBe(expectedName);
-        const worktreePill = worktreeLabel?.querySelector<HTMLElement>('[data-slot="soft-pill"]');
-        expect(worktreePill?.textContent).toBe(expectedName);
-        expect(worktreePill?.style.backgroundColor).toContain(
-          savedColor ? "20, 184, 166" : "139, 92, 246",
-        );
-      } else {
-        expect(worktreeLabel).toBeNull();
-      }
-    } finally {
-      await act(async () => root.unmount());
-      container.remove();
-      state.worktreePath = "/tmp/worktree";
-      useNamedWorktreeStore.setState({ selections: {}, worktrees: {} });
-      vi.unstubAllGlobals();
+    await render({ panelSection: "branch", showGitControls, envMode: "worktree", envLocked: true });
+    const worktreeLabel = container.querySelector('[aria-label="Named worktree"]');
+    if (expectedName) {
+      expect(worktreeLabel?.textContent).toBe(expectedName);
+      const worktreePill = worktreeLabel?.querySelector<HTMLElement>('[data-slot="soft-pill"]');
+      expect(worktreePill?.textContent).toBe(expectedName);
+      expect(worktreePill?.style.backgroundColor).toContain(
+        savedColor ? "20, 184, 166" : "139, 92, 246",
+      );
+    } else {
+      expect(worktreeLabel).toBeNull();
     }
   },
 );

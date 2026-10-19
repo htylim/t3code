@@ -8,7 +8,7 @@ import { create } from "zustand";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
 import { useNamedWorktreeStore, type NamedWorktreeSelection } from "../namedWorktreeStore";
-import { readThreadShell, useProject, useThreadShell } from "../state/entities";
+import { readThreadShell, useProject, useQuietThreadShell } from "../state/entities";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
 import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -73,7 +73,7 @@ export function ThreadWorkspaceMenu({
   draftId,
   ...menuProps
 }: ThreadWorkspaceMenuProps) {
-  const thread = useThreadShell(threadRef);
+  const thread = useQuietThreadShell(threadRef);
   const draft = useComposerDraftStore((state) =>
     draftId ? state.getDraftSession(draftId) : state.getDraftThreadByRef(threadRef),
   );
@@ -147,21 +147,21 @@ export function ThreadWorkspaceMenu({
     pendingRef.current = true;
     setPending(true);
     setError(null);
+    let changed = false;
     try {
       await change();
-      return true;
+      changed = true;
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : String(cause);
       setError(detail);
-      return false;
-    } finally {
-      pendingRef.current = false;
-      setPending(false);
     }
+    pendingRef.current = false;
+    setPending(false);
+    return changed;
   }
 
   /** Adopt the branch actually checked out at the destination, including detached HEAD. */
-  async function useWorktree(seed: PreviousWorktreeSeed): Promise<boolean> {
+  async function selectWorktree(seed: PreviousWorktreeSeed): Promise<boolean> {
     return changeWorkspace(async () => {
       const status = await refreshStatus({
         environmentId: threadRef.environmentId,
@@ -236,9 +236,9 @@ export function ThreadWorkspaceMenu({
       requireWorktreeName
       interactionMode="standalone"
       selectionHint={hint}
-      onEnvModeChange={() => useWorktree({ worktreePath: project.workspaceRoot, branch: null })}
+      onEnvModeChange={() => selectWorktree({ worktreePath: project.workspaceRoot, branch: null })}
       onNewWorktreeSelect={createAndUseWorktree}
-      onUseWorktree={useWorktree}
+      onUseWorktree={selectWorktree}
     />
   );
 }

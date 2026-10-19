@@ -1,5 +1,11 @@
 import { joinBackward, joinTextblockBackward, joinTextblockForward } from "@tiptap/pm/commands";
-import { Fragment, Mark, type Node as ProseMirrorNode, type ResolvedPos } from "@tiptap/pm/model";
+import {
+  Fragment,
+  Mark,
+  type MarkType,
+  type Node as ProseMirrorNode,
+  type ResolvedPos,
+} from "@tiptap/pm/model";
 import { Code } from "@tiptap/extension-code";
 import { Blockquote } from "@tiptap/extension-blockquote";
 import { CodeBlock } from "@tiptap/extension-code-block";
@@ -12,6 +18,7 @@ import { TaskList } from "@tiptap/extension-task-list";
 import {
   type EditorState,
   Plugin,
+  PluginKey,
   Selection,
   TextSelection,
   type Transaction,
@@ -40,6 +47,71 @@ const TIPTAP_TO_MARK: Record<string, RichTextMark> = {
   code: "code",
 };
 
+type CodePair = { from: number; to: number };
+
+const codePairKey = new PluginKey<CodePair[]>("typedBacktickPairs");
+
+// Input rules only see text before the caret, so filling an already typed
+// pair needs a separate exit handler. Only typed pairs opt into that handler.
+function codePairCaretPlugin(type: MarkType) {
+  return new Plugin<CodePair[]>({
+    key: codePairKey,
+    state: {
+      init: () => [],
+      apply(tr, pairs) {
+        const mapped = pairs.flatMap((pair) => {
+          const from = tr.mapping.mapResult(pair.from, 1);
+          const to = tr.mapping.mapResult(pair.to, -1);
+          return from.deleted || to.deleted ? [] : [{ from: from.pos, to: to.pos }];
+        });
+        const typed = tr.getMeta(codePairKey) as CodePair | undefined;
+        return typed ? [...mapped, typed] : mapped;
+      },
+    },
+    props: {
+      handleTextInput(view, from, to, text, insert) {
+        if (view.composing || from !== to || text !== "`") return false;
+        const $from = view.state.doc.resolve(from);
+        if (
+          !$from.parent.isTextblock ||
+          $from.parent.type.spec.code ||
+          !/(^|[^`])`$/.test($from.nodeBefore?.text ?? "")
+        ) {
+          return false;
+        }
+        view.dispatch(insert().setMeta(codePairKey, { from: from - 1, to: from + 1 }));
+        return true;
+      },
+    },
+    appendTransaction(transactions, oldState, state) {
+      if (!state.selection.empty || oldState.selection.from === state.selection.from) return null;
+      if (transactions.some((tr) => tr.docChanged)) return null;
+      const pair = codePairKey.getState(state)?.find(({ to }) => to === state.selection.from);
+      if (!pair) return null;
+      const $start = state.doc.resolve(pair.from);
+      const $end = state.selection.$from;
+      if (!$start.sameParent($end) || $start.parent.type.spec.code) return null;
+      if (
+        $start.nodeBefore?.text?.endsWith("`") ||
+        $end.nodeAfter?.text?.startsWith("`") ||
+        !/^`[^`]+`$/.test(state.doc.textBetween(pair.from, pair.to))
+      ) {
+        return null;
+      }
+      let plain = true;
+      state.doc.nodesBetween(pair.from, pair.to, (node) => {
+        if (node.isInline && (!node.isText || node.marks.length > 0)) plain = false;
+      });
+      if (!plain) return null;
+      const tr = state.tr.delete(pair.to - 1, pair.to).delete(pair.from, pair.from + 1);
+      tr.addMark(pair.from, pair.to - 2, type.create());
+      tr.setSelection(TextSelection.create(tr.doc, pair.to - 2));
+      tr.removeStoredMark(type);
+      return tr;
+    },
+  });
+}
+
 /**
  * Tiptap's code mark excludes every other mark, which rejects the `bold+code`
  * spans markdown like `**\`x\`**` parses into and drops the whole insert.
@@ -49,6 +121,9 @@ export const ComposerCodeExtension = Code.extend({
   // ArrowRight leaves code through the caret stops at styled edges, so the
   // stock exit (inserting a space at the end of a line) is not needed.
   exitable: false,
+  addProseMirrorPlugins() {
+    return [...(this.parent?.() ?? []), codePairCaretPlugin(this.type)];
+  },
 });
 
 /**
@@ -741,6 +816,39 @@ function pushBreakRun(acc: RichAccumulator, position?: number): void {
   acc.md += 1;
 }
 
+/**
+ * A paragraph on the line right after a quote reads as part of it in Markdown
+ * (a lazy continuation), so the draft writes a blank line between them. An empty
+ * paragraph is that blank line already.
+ */
+function needsBlankLineAfterQuote(previous: ProseMirrorNode, block: ProseMirrorNode): boolean {
+  return (
+    previous.type.name === "blockquote" && block.type.name === "paragraph" && block.content.size > 0
+  );
+}
+
+/**
+ * That blank line, as a run that owns no document characters, like a marker:
+ * offsets inside it clamp to the start of the paragraph.
+ */
+function pushBlankLineRun(acc: RichAccumulator, pmPos: number): void {
+  acc.runs.push({
+    kind: "prefix",
+    flatStart: acc.flat,
+    docLen: 0,
+    collapsedLen: 1,
+    mdLen: 1,
+    openLen: 0,
+    closeLen: 0,
+    pmPos,
+    mdStart: acc.md,
+    collapsedStart: acc.collapsed,
+  });
+  acc.value += "\n";
+  acc.collapsed += 1;
+  acc.md += 1;
+}
+
 function appendInlineRuns(
   container: ProseMirrorNode,
   contentStart: number,
@@ -1197,6 +1305,9 @@ export function serializeEditorDoc(doc: ProseMirrorNode): RichDocMap {
   let pmBlockStart = 0;
   blocks.forEach((block, blockIndex) => {
     if (blockIndex > 0 && !isTrailingLineAfterRule(doc, blockIndex)) pushBreakRun(acc);
+    if (blockIndex > 0 && needsBlankLineAfterQuote(blocks[blockIndex - 1]!, block)) {
+      pushBlankLineRun(acc, pmBlockStart + 1);
+    }
     if (LIST_NODE_NAMES.has(block.type.name)) {
       walkList(block, pmBlockStart, acc);
     } else if (block.type.name === "codeBlock") {

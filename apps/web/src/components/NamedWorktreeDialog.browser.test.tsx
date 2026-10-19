@@ -27,7 +27,7 @@ vi.mock("../state/entities", () => ({
     state.live.map((source) => ({
       source: { ...source, lineage: { relationshipToParent: null } },
     })),
-  useThreadShell: () => ({
+  useQuietThreadShell: () => ({
     ...state.live[0],
     environmentId: "remote",
     projectId: "project",
@@ -55,6 +55,10 @@ vi.mock("../lib/archivedThreadsState", () => ({
   refreshArchivedThreadsForEnvironment: state.refresh,
 }));
 vi.mock("../state/filesystem", () => ({ filesystemEnvironment: { browse: () => null } }));
+vi.mock("../state/server", async () => {
+  const { Atom } = await import("effect/reactivity");
+  return { primaryServerKeybindingsAtom: Atom.make([]) };
+});
 vi.mock("../state/query", () => ({
   useEnvironmentQuery: () => ({
     data: { entries: state.entries.map((fullPath) => ({ fullPath })) },
@@ -74,7 +78,10 @@ vi.mock("../state/vcs", async () => {
     },
   };
 });
-vi.mock("../state/session", () => ({ useEnvironmentScope: () => state.allowed }));
+vi.mock("../state/session", () => ({
+  useEnvironmentScope: () => state.allowed,
+  readEnvironmentScope: () => state.allowed,
+}));
 vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => state.rename }));
 vi.mock("../state/use-orchestration-command", () => ({
   useOrchestrationCommand: () => state.update,

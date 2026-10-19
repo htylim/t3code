@@ -93,6 +93,10 @@ function getTimestampFormatter(
   return formatter;
 }
 
+export function resolveHour12(timestampFormat: TimestampFormat): boolean {
+  return getTimestampFormatter(timestampFormat, false).resolvedOptions().hour12 ?? false;
+}
+
 export function parseTimestampDate(isoDate: string): Date | null {
   const date = new Date(isoDate);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -235,7 +239,9 @@ export function msUntilRelativeTimeChange(
   const elapsedMs = Math.max(0, nowMs - date.getTime());
   const unitMs = relativeTimeUnitMs(elapsedMs);
   const nextChangeMs = date.getTime() + (Math.floor(elapsedMs / unitMs) + 1) * unitMs;
-  return nextChangeMs - nowMs;
+  // setTimeout fires at once past 2^31-1 ms, which would loop on a far-future
+  // timestamp. Waking early is harmless: the caller re-reads and re-schedules.
+  return Math.min(nextChangeMs - nowMs, DAY_MS);
 }
 
 export function formatRelativeElapsed(elapsedMs: number): RelativeTimeParts {

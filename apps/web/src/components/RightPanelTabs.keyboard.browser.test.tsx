@@ -146,6 +146,28 @@ describe("right panel new-tab shortcut", () => {
     },
   );
 
+  it("opens Files while a closed popup remains mounted", async () => {
+    await renderPanel();
+    const popup = document.createElement("div");
+    popup.dataset.slot = "menu-popup";
+    popup.dataset.closed = "";
+    container.append(popup);
+
+    expect((await press("f")).defaultPrevented).toBe(true);
+    expect(addFiles).toHaveBeenCalledOnce();
+  });
+
+  it("opens the add-surface menu while a closed popup remains mounted", async () => {
+    await renderPanel();
+    const popup = document.createElement("div");
+    popup.dataset.slot = "menu-popup";
+    popup.dataset.closed = "";
+    container.append(popup);
+
+    expect((await press("t", { metaKey: true })).defaultPrevented).toBe(true);
+    expect(document.querySelector('[role="menu"]:not([data-closed])')).not.toBeNull();
+  });
+
   it("leaves the shortcut alone while the mounted panel is closed", async () => {
     await renderPanel({ open: false });
     expect((await press("t", { metaKey: true })).defaultPrevented).toBe(false);
@@ -191,9 +213,13 @@ describe("right panel new-tab shortcut", () => {
     expect(document.querySelector('[role="menu"]')).not.toBeNull();
     await press("Escape");
     expect(document.querySelector('[role="menu"]:not([data-closed])')).toBeNull();
-    expect(document.activeElement).toBe(
-      container.querySelector('[aria-label="Add panel surface"]'),
-    );
+    // The menu hands focus back to its trigger once its close finishes, a few frames later.
+    // Timers are fake here, so advance them instead of polling in real time.
+    const trigger = container.querySelector('[aria-label="Add panel surface"]');
+    for (let frame = 0; frame < 10 && document.activeElement !== trigger; frame++) {
+      await act(() => vi.advanceTimersToNextFrame());
+    }
+    expect(document.activeElement).toBe(trigger);
     input.remove();
   });
 
@@ -203,8 +229,14 @@ describe("right panel new-tab shortcut", () => {
     const dialog = document.createElement("div");
     dialog.dataset.slot = "dialog-popup";
     container.append(dialog);
-    expect((await press("t", { metaKey: true })).defaultPrevented).toBe(false);
-    expect(document.querySelector('[role="menu"]')).toBeNull();
+    for (const state of ["data-open", "data-ending-style"]) {
+      dialog.setAttribute(state, "");
+      expect((await press("f")).defaultPrevented, state).toBe(false);
+      expect(addFiles, state).not.toHaveBeenCalled();
+      expect((await press("t", { metaKey: true })).defaultPrevented, state).toBe(false);
+      expect(document.querySelector('[role="menu"]'), state).toBeNull();
+      dialog.removeAttribute(state);
+    }
   });
 
   it("supports arrow keys with an existing tab in sheet mode and clears the menu on close", async () => {

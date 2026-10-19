@@ -52,6 +52,7 @@ import {
   type DefaultBranchConfirmableAction,
   requiresDefaultBranchConfirmation,
   resolveDefaultBranchActionDialogCopy,
+  resolveFeatureBranchUnavailableReason,
   resolveGitActionProgressPresentation,
   resolveGitActionResultToastTiming,
   resolveLiveThreadBranchUpdate,
@@ -97,7 +98,7 @@ import {
   useVcsInitAction,
   useVcsPullAction,
 } from "~/lib/sourceControlActions";
-import { useThreadProjection, useThreadShell } from "~/state/entities";
+import { useThreadProjection, useQuietThreadShell } from "~/state/entities";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
 import { useEnvironmentQuery } from "~/state/query";
 import { serverEnvironment } from "~/state/server";
@@ -982,7 +983,7 @@ export default function GitActionsControl({
     serverConfig?.availableEditors ?? [],
   );
   const threadToastData = activeThreadRef ? { threadRef: activeThreadRef } : undefined;
-  const activeServerThreadShell = useThreadShell(activeThreadRef);
+  const activeServerThreadShell = useQuietThreadShell(activeThreadRef);
   const openPrLink = useOpenPrLink(activeThreadRef ?? undefined);
   const activeDraftThread = useComposerDraftStore((store) =>
     draftId
@@ -1090,6 +1091,9 @@ export default function GitActionsControl({
   const changesTotals = gitStatusForActions?.branchChanges ?? gitStatusForActions?.workingTree;
 
   const allFiles = gitStatusForActions?.workingTree.files ?? [];
+  // Changed-file paths are repository-relative, so they must resolve against
+  // the worktree root from the same status snapshot, not the project cwd.
+  const workingTreeRoot = gitStatusForActions?.workingTree.rootPath ?? null;
   const selectedFiles = allFiles.filter((f) => !excludedFiles.has(f.path));
   const allSelected = excludedFiles.size === 0;
   const noneSelected = selectedFiles.length === 0;
@@ -1155,6 +1159,15 @@ export default function GitActionsControl({
         terminology: changeRequestTerminology,
       })
     : null;
+  // Follows the live status so the button tracks the tree while the dialog is open. Until the
+  // status loads, keep the option enabled: the server stays the authority and rejects a stale
+  // request with its own error.
+  const featureBranchUnavailableReason = pendingDefaultBranchAction
+    ? resolveFeatureBranchUnavailableReason({
+        branchName: pendingDefaultBranchAction.branchName,
+        hasWorkingTreeChanges: gitStatus?.hasWorkingTreeChanges ?? true,
+      })
+    : null;
 
   useEffect(() => {
     if (gitCwd === null) {
@@ -1189,8 +1202,8 @@ export default function GitActionsControl({
     };
   }, [activeEnvironmentId, gitCwd, refreshVcsStatus]);
 
-  // React 19.2 leaves useEffectEvent stale inside the memoized details panel.
-  // Bind each render's actions to its checkout and thread, including retained toast actions.
+  // Not an effect event: retained toast actions must stay bound to the checkout and
+  // thread of the render that created them, not follow later selections.
   async function runGitActionWithToast({
     action,
     commitMessage,
@@ -1488,7 +1501,7 @@ export default function GitActionsControl({
   };
 
   const openChangedFileInEditor = (filePath: string) => {
-    if (!gitCwd) {
+    if (workingTreeRoot === null) {
       toastManager.add({
         type: "error",
         title: "Editor opening is unavailable.",
@@ -1496,7 +1509,7 @@ export default function GitActionsControl({
       });
       return;
     }
-    const target = resolvePathLinkTarget(filePath, gitCwd);
+    const target = resolvePathLinkTarget(filePath, workingTreeRoot);
     void (async () => {
       const result = await openInPreferredEditor(target);
       if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
@@ -1843,8 +1856,10 @@ export default function GitActionsControl({
           <FileDiffIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} aria-hidden />
           <span className={cn("flex-1 text-left", THREAD_DETAILS_PANEL_LABEL_CLASS)}>Changes</span>
           <span className="flex items-center gap-1 font-mono text-2xs tabular-nums">
-            <span className="text-success">+{formatDiffCount(changesTotals?.insertions ?? 0)}</span>
-            <span className="text-destructive">
+            <span className="text-diff-addition">
+              +{formatDiffCount(changesTotals?.insertions ?? 0)}
+            </span>
+            <span className="text-diff-deletion">
               -{formatDiffCount(changesTotals?.deletions ?? 0)}
             </span>
           </span>
@@ -1942,7 +1957,7 @@ export default function GitActionsControl({
                                 <button
                                   type="button"
                                   className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
-                                  disabled={!canOperateThread}
+                                  disabled={!canOperateThread || workingTreeRoot === null}
                                   aria-label={`Open ${file.path} in editor`}
                                   onClick={() => openChangedFileInEditor(file.path)}
                                 >
@@ -2049,6 +2064,9 @@ export default function GitActionsControl({
               {pendingDefaultBranchActionCopy?.title ?? "Run action on default branch?"}
             </DialogTitle>
             <DialogDescription>{pendingDefaultBranchActionCopy?.description}</DialogDescription>
+            {featureBranchUnavailableReason && (
+              <p className="text-xs text-muted-foreground">{featureBranchUnavailableReason}</p>
+            )}
           </DialogHeader>
           <DialogFooter variant="bare" className="sm:flex-wrap sm:items-center">
             <Button
@@ -2072,7 +2090,7 @@ export default function GitActionsControl({
               className="w-full max-w-full sm:w-auto"
               size="sm-multiline"
               onClick={checkoutFeatureBranchAndContinuePendingAction}
-              disabled={!canChangeThreadBranch}
+              disabled={!canChangeThreadBranch || featureBranchUnavailableReason !== null}
             >
               Check out feature branch & continue
             </Button>

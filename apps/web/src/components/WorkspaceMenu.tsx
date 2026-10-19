@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import { GitCommandError } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import type {
@@ -28,7 +29,9 @@ import { requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { useArchivedThreadSnapshots } from "../lib/archivedThreadsState";
 import { readLocalApi } from "../localApi";
+import { shortcutLabelForCommand } from "../keybindings";
 import { useThreadShellsForProjectRefs } from "../state/entities";
+import { primaryServerKeybindingsAtom } from "../state/server";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
 import { vcsEnvironment } from "../state/vcs";
@@ -95,6 +98,10 @@ export interface WorkspaceMenuProps {
 /** Share the Workspace picker across composer controls and existing-thread entry points. */
 export function WorkspaceMenu(props: WorkspaceMenuProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
+  const shortcutLabel = shortcutLabelForCommand(
+    useAtomValue(primaryServerKeybindingsAtom),
+    "composer.workspace",
+  );
   const standalone = props.interactionMode === "standalone";
   const [internalOpen, setInternalOpen] = useState(false);
   const open = props.open ?? internalOpen;
@@ -104,6 +111,14 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
     initialFocusPending.current = nextOpen;
     setInternalOpen(nextOpen);
     props.onOpenChange?.(nextOpen);
+  }
+  let workspaceLabel = resolveCurrentWorkspaceLabel(props.activeWorktreePath);
+  if (props.forceNewWorktree) {
+    workspaceLabel = "New worktree";
+  } else if (props.envLocked) {
+    workspaceLabel = resolveLockedWorkspaceLabel(props.activeWorktreePath, props.effectiveEnvMode);
+  } else if (props.effectiveEnvMode === "worktree" && !props.activeWorktreePath) {
+    workspaceLabel = "New worktree";
   }
   const triggerContent = props.trigger ?? (
     <>
@@ -119,13 +134,7 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
         className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
       >
         <span data-composer-label-motion className="block truncate">
-          {props.forceNewWorktree
-            ? "New worktree"
-            : props.envLocked
-              ? resolveLockedWorkspaceLabel(props.activeWorktreePath, props.effectiveEnvMode)
-              : props.effectiveEnvMode === "worktree" && !props.activeWorktreePath
-                ? "New worktree"
-                : resolveCurrentWorkspaceLabel(props.activeWorktreePath)}
+          {workspaceLabel}
         </span>
       </span>
     </>
@@ -158,37 +167,47 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
       }}
     >
       {!props.anchor ? (
-        <MenuTrigger
-          render={
-            props.displayMode === "panel" ? (
-              <ThreadDetailsControl part="select" />
-            ) : (
-              <ComposerControl size="xs" />
-            )
-          }
-          aria-label={
-            props.ariaLabel ?? (props.displayMode === "panel" ? "Run context" : "Workspace")
-          }
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-          onDoubleClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-          onContextMenu={props.onContextMenu}
-          onMouseDownCapture={(event) => {
-            if (props.displayMode === "panel" && event.ctrlKey && event.button === 0) {
-              event.preventDefault();
-              event.stopPropagation();
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <MenuTrigger
+                render={
+                  props.displayMode === "panel" ? (
+                    <ThreadDetailsControl part="select" />
+                  ) : (
+                    <ComposerControl size="xs" />
+                  )
+                }
+                aria-label={
+                  props.ariaLabel ?? (props.displayMode === "panel" ? "Run context" : "Workspace")
+                }
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+                onContextMenu={props.onContextMenu}
+                onMouseDownCapture={(event) => {
+                  if (props.displayMode === "panel" && event.ctrlKey && event.button === 0) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }
+                }}
+                data-composer-shortcut="composer.workspace"
+                className={props.displayMode === "panel" ? undefined : "min-w-0 shrink"}
+                data-composer-context-control
+              >
+                {triggerContent}
+                {props.displayMode !== "panel" ? (
+                  <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
+                ) : null}
+              </MenuTrigger>
             }
-          }}
-          data-composer-shortcut="composer.workspace"
-          className={props.displayMode === "panel" ? undefined : "min-w-0 shrink"}
-          data-composer-context-control
-        >
-          {triggerContent}
-          {props.displayMode !== "panel" ? (
-            <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
-          ) : null}
-        </MenuTrigger>
+          />
+          <TooltipPopup side="top">
+            {workspaceLabel}
+            {shortcutLabel ? ` · ${shortcutLabel}` : null}
+          </TooltipPopup>
+        </Tooltip>
       ) : null}
       <MenuPopup
         align="start"
