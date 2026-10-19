@@ -57,6 +57,86 @@ vp run dev
 Keep each change small enough to review and merge on its own. Follow the upstream architecture and
 coding rules unless this directory documents an intentional fork-specific exception.
 
+## Database compatibility
+
+**NEVER introduce a fork-owned database migration.** Keeping this fork mergeable with upstream is
+more important than using the app's migration runner for a convenient cleanup. Upstream owns the
+entire migration sequence and the schema of its database. This rule applies to data-only changes
+as well as tables, columns, and indexes. A migration that only deletes obsolete rows still claims
+a migration number and changes database history.
+
+Do not add a downstream entry to `apps/server/src/persistence/Migrations.ts`, change an upstream
+migration's name or behavior, or replace an upstream migration with fork code. Do not reserve a
+high number, use a negative number or a timestamp, rename an entry to make it look upstream, or
+disable compatibility checks. Those approaches do not create an independent migration sequence.
+The runner skips IDs through the highest recorded ID, so a fork entry can prevent later upstream
+work from running. Renumbering a file also does not repair databases that already recorded it.
+
+New upstream migrations must arrive unchanged when upstream is merged. Do not resolve a collision
+by taking our version, dropping upstream's version, or marking upstream's work as completed without
+executing it. Fork-only migrations make otherwise routine upstream merges depend on repairing every
+affected database. They are a design error in this fork, not an acceptable integration cost.
+
+### Store fork metadata separately
+
+Keep fork-only metadata in fork-owned files or a separate store outside upstream's schema and
+migration history. Existing JSON sidecars and device-local preferences are examples. Do not add
+tables or columns to the upstream database for a downstream feature. If a feature requires an
+upstream schema change, redesign its storage or get that change accepted upstream first.
+
+Keeping feature values outside SQLite does not by itself keep a feature independent of SQLite.
+Check whether it also persists jobs, event payloads, or other records in existing upstream tables.
+Removing the feature must leave those records readable by the remaining code. If obsolete records
+need cleanup, perform that cleanup separately. Never add a migration to retire a fork feature.
+
+### Execute data repairs separately
+
+Use an explicitly invoked maintenance command or a one-time operator script for a necessary data
+repair. Do not hide it in startup, the migration loader, or an automatic compatibility workaround.
+The repair must name the target database, explain the exact records it changes, and require explicit
+authorization before writing live state. A development server must never use the live database.
+
+Before a live repair, test it on a disposable copy and create a consistent SQLite backup. Do not
+copy only the main file while a writer has uncheckpointed WAL data. Check the expected history and
+affected rows inside the same transaction as the write. Use narrow predicates, verify the number
+of affected rows, and roll back on an unexpected state. Make a repeat invocation harmless or fail
+without changes. Verify the result and keep the backup until the repaired app has been checked.
+
+Stop the owning app when a repair changes schema or data that running services cache. A narrowly
+scoped migration-history correction can use a short SQLite write transaction without stopping
+agents, provided it does not change application data and the history is rechecked under the lock.
+Do not stop the T3 server hosting the current session without arranging how work will continue.
+
+### Why fork migration 63 was removed
+
+The retired tag feature stored tag values in `fork/thread-tags.json`, but its inheritance tasks
+lived in the existing `orchestration_v2_effect_outbox` table. Removing tags introduced
+`63_RemoveThreadTagEffects` to delete tasks whose type was `thread-tag.inherit`. It added no tables
+or columns, but it still recorded migration 63 as `RemoveThreadTagEffects`.
+
+Upstream then assigned 63 to `DropUnusedV1Projections`. The different recorded name makes the
+startup compatibility check fail. Without that check, the migration runner would skip upstream's
+cleanup. This collision was caused by putting fork maintenance in upstream's migration sequence.
+
+The correction removes our migration source and registration. For a database whose latest entry
+is exactly `63 / RemoveThreadTagEffects`, first verify that no obsolete tag tasks remain. A
+separate, authorized repair can then delete only this registration:
+
+```sql
+DELETE FROM effect_sql_migrations
+WHERE migration_id = 63 AND name = 'RemoveThreadTagEffects';
+```
+
+This statement is not a general migration rollback. Do not run it if later migrations exist, if
+63 has a different name, or without verifying the original cleanup completed. Removing the history
+row does not restore deleted tasks, and it must not pretend upstream's migration already ran.
+After repair, the history ends at 62 and upstream's real migration 63 remains free to execute.
+
+An older installed Fork build still contains the removed registration and will recreate it on
+startup. Use a build containing this correction for subsequent launches. Do not silently modify
+the installed app as part of a source change. Independently review and repair any other affected
+database; never recursively rewrite every database found on the machine.
+
 ## Develop and verify
 
 The repository requires Node 24 and Vite+ (`vp`):

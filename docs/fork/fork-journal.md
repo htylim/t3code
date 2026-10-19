@@ -1,5 +1,27 @@
 # Fork journal
 
+## 2026-10-19 - Reserve database migrations exclusively for upstream
+
+- Upstream baseline: `da7c4f234db3`; reviewed upstream through `325a7e2ae4`.
+- Change: Remove the fork-owned `63_RemoveThreadTagEffects` migration and its registration.
+  Tag-task cleanup and correction of an already recorded fork entry are separate maintenance,
+  never app-startup migrations. Fork guidance prohibits downstream schema changes and migrations,
+  including data-only cleanup, reserved numbers, and changes to upstream migration identities.
+- Reason: Upstream assigned 63 to `DropUnusedV1Projections`. Our data-only migration claimed the
+  same ID and made the migration history incompatible. Keeping upstream merges routine requires
+  leaving upstream's entire migration sequence alone.
+- Scope: Migration registration, obsolete migration files, and fork operating instructions.
+  Existing tag sidecar files remain untouched. An older installed build must be replaced before
+  its next launch or it can register the removed fork migration again.
+- Verification: All eight focused migration tests, targeted lint, formatting, and diff checks
+  passed. The separate repair passed on a consistent snapshot of the real database, including
+  repeat execution and rejection of unexpected history, later migrations, remaining tag tasks,
+  and trigger side effects. Upstream's actual migration 63 SQL then ran successfully on the
+  repaired snapshot, which passed SQLite's integrity check. The authorized live repair created
+  a persistent SQLite backup and removed exactly one matching history row in a transaction.
+  Live history now ends at 62, with no obsolete tag tasks. No schema or application data changed;
+  the running app and agents were not stopped. The installed binary was not rebuilt or replaced.
+
 ## 2026-10-17 - Continue the current workspace in a new local chat
 
 - Upstream baseline: `da7c4f234db3`.
@@ -256,17 +278,18 @@ upstream.
   server storage, and inheritance across web, desktop, and mobile. Named-worktree labels keep
   the generic soft-pill components and palette without depending on tag code.
 - Reason: Named worktrees identify the working directory and replace the separate thread label.
-- Scope: Existing tag sidecar files remain untouched. Migration 63 removes obsolete inheritance
-  effects, including completed records, so old outbox payloads do not require a tag decoder.
-  Thread messages, worktree metadata, and unrelated queued provider effects remain unchanged.
+- Scope: Existing tag sidecar files remain untouched. Obsolete inheritance effects need a separate
+  one-time cleanup so old outbox payloads do not require a tag decoder. The original fork migration
+  63 was removed on October 19 because its ID collided with upstream. Thread messages, worktree
+  metadata, and unrelated queued provider effects remain unchanged.
 - Verification: All six changed packages passed scoped typechecks. Focused suites passed
   397 unit/server tests and 26 Chromium tests. Chromium tests ran against an identical temporary
   web-source copy because Vitest's browser mocks fail under the checkout's spaced path.
   Targeted lint passed with existing warnings. The isolated Browser panel verified both context
   menus, the worktree dialog and palette, and absence of tag commands from the command palette.
 - Upstream conflict map: Preserve the removed tag entry points when merging. The palette now
-  lives in `softPillColors.ts`. Reconcile migration 63 with any new upstream migration before
-  upgrading a database written by this build.
+  lives in `softPillColors.ts`. Databases that recorded `63 / RemoveThreadTagEffects` need the
+  separately executed history correction in the fork guidelines before upstream's 63 can run.
 
 ## 2026-10-10 - Integrate upstream through October 10
 
