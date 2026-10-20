@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { withPostponedThreadMenu } from "./Sidebar.postponed";
 import {
+  planSidebarThreadDrop,
   resolveSidebarDropTarget,
   resolveSidebarThreadSection,
   type SidebarListItem,
@@ -100,4 +101,33 @@ describe("Postponed sidebar behavior", () => {
       resolveSidebarDropTarget(sidebar, "active", "sidebar-marker-postponed-header"),
     ).toBeNull();
   });
+
+  it.each(["pinned", "active", "settled"] as const)(
+    "keeps a postponed thread parked when its reference drag ends in %s",
+    (targetSection) => {
+      const sidebar: SidebarListItem[] = [
+        { kind: "marker", marker: "pinned-header" },
+        { kind: "thread", key: "pinned", section: "pinned" },
+        { kind: "marker", marker: "pinned-divider" },
+        { kind: "thread", key: "active", section: "active" },
+        { kind: "marker", marker: "postponed-header" },
+        { kind: "thread", key: "postponed", section: "postponed" },
+        { kind: "marker", marker: "settled-header" },
+        { kind: "thread", key: "settled", section: "settled" },
+      ];
+      const target = resolveSidebarDropTarget(sidebar, "postponed", targetSection);
+      expect(target?.section).toBe(targetSection);
+      expect(
+        planSidebarThreadDrop({
+          activeKey: "postponed",
+          activeSection: "postponed",
+          target: target!,
+          pinnedOrder: ["pinned"],
+          pinnedKeysById: new Map([["pinned", "m"]]),
+          activeOrder: ["active"],
+          activeKeysById: new Map([["active", "m"]]),
+        }),
+      ).toEqual({ kind: "none" });
+    },
+  );
 });

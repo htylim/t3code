@@ -91,6 +91,8 @@
   Header hover reveals Snooze and Settle controls for every thread in the card, including
   Postponed cards. Grouped rows retain the same Settle label as individual cards. Header actions
   reuse bulk snooze and settle handling for navigation, Undo, and failures.
+  Postponed workspace headers also show Un-postpone at the right edge, using the individual
+  thread action for each current card member so underlying snooze or settlement clears first.
   Grouping mode adds four pixels between cards to distinguish cards of different heights while
   keeping each card's thread rows joined. Workspace cards and individual cards have no border.
 - Settings > Fork > Group threads by workspace controls the behavior and defaults on. The
@@ -121,6 +123,11 @@
   disposable fixture threads verified group Snooze and Settle in Active and Postponed, visible
   row Settle labels, and an untouched thread in another workspace. Live data and installed builds
   were not changed.
+  The header Un-postpone addition passed 23 focused grouping, postponed-menu, and restoration
+  tests, targeted lint, and the web typecheck. An isolated Browser-panel pass verified the
+  rightmost hover icon, restoration of all three epic-12 threads, an unrelated thread staying
+  postponed, unchanged chat navigation, and persistence after reload. The narrow sidebar had
+  no horizontal overflow. No provider turn was sent.
 
 ## 2026-10-17 - Named worktree directories and local colors
 
@@ -509,6 +516,12 @@ Upstream's new panel-menu command remains configurable; the fork's side-chat sho
   Postponing active cards is available through their menus. Postponed cards retain Settle and Snooze
   actions and have a rightmost return-arrow action to un-postpone,
   using the same icon as Un-settle.
+  Postponed cards and grouped rows can be dragged into a composer to insert a thread-link chip.
+  These drags leave postponement intact and cannot move or reorder threads within the sidebar.
+  Verification passed 225 focused sidebar tests, targeted lint, and the web typecheck. An
+  isolated Browser-panel pass verified grouped and individual postponed sources, correct chip
+  links, unchanged active-thread dragging, and no sidebar move after a cancelled reference drop.
+  No provider turn was sent.
   Successful lifecycle actions clear postponement through the shared thread-action hook, including
   Cmd+W and header menus. Settle remains available after automatic server settlement, and Undo
   restores the original postponement snapshot after Settle, Snooze, or Unpin.

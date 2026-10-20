@@ -1715,6 +1715,7 @@ type SidebarThreadRowProps = {
   onWorkspaceCardContextMenu: SidebarThreadRowProps["onContextMenu"];
   onSettleWorkspaceCard: (threadRef: ScopedThreadRef) => void;
   onSnoozeWorkspaceCard: SidebarThreadRowProps["onSnooze"];
+  onUnpostponeWorkspaceCard: (threadRef: ScopedThreadRef) => void;
   onSettle: (threadRef: ScopedThreadRef) => void;
   onActionSweepStart: (
     threadRef: ScopedThreadRef,
@@ -2084,7 +2085,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const showWorkspaceSnooze =
     canOperateThread && props.snoozeSupported && props.workspaceCanSnooze === true;
   const showWorkspaceSettle = canOperateThread && props.settlementSupported;
-  const showWorkspaceActions = showWorkspaceSnooze || showWorkspaceSettle;
+  const showWorkspaceUnpostpone = props.isPostponed;
+  const showWorkspaceActions =
+    showWorkspaceSnooze || showWorkspaceSettle || showWorkspaceUnpostpone;
   if (workspaceSnoozeMenuOpenRaw && !showWorkspaceSnooze) setWorkspaceSnoozeMenuOpen(false);
   const workspaceSnoozeMenuOpen = workspaceSnoozeMenuOpenRaw && showWorkspaceSnooze;
   /** Apply a header preset to the card without activating its first thread. */
@@ -2096,6 +2099,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     event.preventDefault();
     event.stopPropagation();
     props.onSettleWorkspaceCard(threadRef);
+  };
+  /** Restore this card without activating its first thread or changing other selections. */
+  const handleWorkspaceUnpostponeClick = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    props.onUnpostponeWorkspaceCard(threadRef);
   };
   /** Header controls must not start dragging their containing thread row. */
   const handleWorkspaceActionPointerDown = (event: ReactPointerEvent) => {
@@ -2623,7 +2632,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           type="button"
                           aria-label="Settle workspace card"
                           onClick={handleWorkspaceSettleClick}
-                          className="-mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                          className={cn(
+                            "inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground",
+                            !showWorkspaceUnpostpone && "-mr-1",
+                          )}
                         />
                       }
                     >
@@ -2631,6 +2643,25 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       Settle
                     </TooltipTrigger>
                     <TooltipPopup>Settle all {props.workspaceThreadCount} threads</TooltipPopup>
+                  </Tooltip>
+                ) : null}
+                {showWorkspaceUnpostpone ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label="Un-postpone workspace card"
+                          onClick={handleWorkspaceUnpostponeClick}
+                          className="-mr-1 inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        />
+                      }
+                    >
+                      <Undo2Icon aria-hidden className="mb-px size-3.5" />
+                    </TooltipTrigger>
+                    <TooltipPopup side="top">
+                      Un-postpone all {props.workspaceThreadCount} threads
+                    </TooltipPopup>
                   </Tooltip>
                 ) : null}
               </span>
@@ -3841,8 +3872,11 @@ export default function Sidebar() {
     listMotionRef.current?.update(false);
   };
 
-  // Working rows can supply chat context, but never preview sidebar movement.
-  const isContextDrag = dragState?.contextDrag === true || dragState?.activeSection === "working";
+  // Working and Postponed rows can supply chat context, but never preview sidebar movement.
+  const isContextDrag =
+    dragState?.contextDrag === true ||
+    dragState?.activeSection === "working" ||
+    dragState?.activeSection === "postponed";
   const dragTargetSection = isContextDrag ? null : (dragState?.targetSection ?? null);
   const finishThreadDrag = (started: boolean) => {
     dragSensorRef.current = null;
@@ -4491,6 +4525,23 @@ export default function Sidebar() {
       void snoozeThreads(threads, preset);
     },
   );
+
+  /** Restore current postponed card members through the individual thread action. */
+  const handleWorkspaceCardUnpostpone = useStableCallback((threadRef: ScopedThreadRef) => {
+    const threadKeys = resolveWorkspaceCardThreadKeys(threadRef);
+    const postponedByThreadKey = usePostponedThreadStore.getState().byThreadKey;
+    const threads = threadKeys.flatMap((threadKey) => {
+      const thread = threadByKeyRef.current.get(threadKey);
+      return thread && postponedByThreadKey[threadKey] ? [thread] : [];
+    });
+    if (threads.length === 0 || !checkThreadOperations(threads)) return;
+    removeFromSelection(threads.map(threadShellKey));
+    void Promise.all(
+      threads.map((thread) =>
+        movePostponedToActive(scopeThreadRef(thread.environmentId, thread.id)),
+      ),
+    );
+  });
 
   const handleMultiSelectContextMenu = useStableCallback(
     async (position: { x: number; y: number }) => {
@@ -5532,7 +5583,6 @@ export default function Sidebar() {
                             contextDrag={isContextDrag}
                             sortableDisabled={
                               renamingThreadKey === threadKey ||
-                              section === "postponed" ||
                               !draggableThreadKeys.has(threadKey) ||
                               optimisticDrop !== null
                             }
@@ -5624,6 +5674,7 @@ export default function Sidebar() {
                             onWorkspaceCardContextMenu={handleWorkspaceCardContextMenu}
                             onSettleWorkspaceCard={handleWorkspaceCardSettle}
                             onSnoozeWorkspaceCard={handleWorkspaceCardSnooze}
+                            onUnpostponeWorkspaceCard={handleWorkspaceCardUnpostpone}
                             onSettle={attemptSettle}
                             onActionSweepStart={startActionSweep}
                             onUnsettle={attemptUnsettle}
