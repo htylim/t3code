@@ -84,11 +84,54 @@ describe("named worktree metadata", () => {
     expect(useNamedWorktreeStore.getState().worktrees).toEqual({});
   });
 
+  it("keeps a color-only choice through temporary provisioning and automatic naming", () => {
+    const store = useNamedWorktreeStore.getState();
+    const automaticSelection = { name: "", color: "#14b8a6" };
+    const temporaryPath = "/worktrees/t3-abcd1234";
+    const finalPath = "/worktrees/fix-sidebar-colors";
+    store.select(projectRef, threadId, automaticSelection);
+    store.record(projectRef, [{ id: threadId, worktreePath: null }]);
+    expect(useNamedWorktreeStore.getState().worktrees).toEqual({});
+    store.record(projectRef, [{ id: threadId, worktreePath: temporaryPath }]);
+    expect(
+      useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, temporaryPath)],
+    ).toEqual({ color: automaticSelection.color });
+    expect(
+      useNamedWorktreeStore.getState().selections[namedWorktreeKey(projectRef, threadId)],
+    ).toEqual(automaticSelection);
+    const storage = useNamedWorktreeStore.persist.getOptions().storage!;
+    const write = vi.spyOn(storage, "setItem");
+    try {
+      store.record(projectRef, [{ id: threadId, worktreePath: temporaryPath }]);
+      expect(write).not.toHaveBeenCalled();
+    } finally {
+      write.mockRestore();
+    }
+    store.record(projectRef, [{ id: threadId, worktreePath: finalPath }]);
+    expect(
+      useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, finalPath)],
+    ).toEqual({ color: automaticSelection.color });
+    expect(useNamedWorktreeStore.getState().selections).toEqual({});
+  });
+
+  it("does not apply a color-only choice after switching to an existing worktree", () => {
+    const store = useNamedWorktreeStore.getState();
+    const worktreePath = "/worktrees/existing";
+    store.setColor(projectRef, worktreePath, "#3b82f6");
+    store.select(projectRef, threadId, { name: "", color: "#14b8a6" });
+    store.select(projectRef, threadId, null);
+    store.record(projectRef, [{ id: threadId, worktreePath }]);
+    expect(
+      useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, worktreePath)],
+    ).toEqual({ color: "#3b82f6" });
+  });
+
   it("rehydrates pending choices and completed metadata from local storage", async () => {
     const store = useNamedWorktreeStore.getState();
     store.select(projectRef, threadId, selection);
     store.record(projectRef, [{ id: threadId, worktreePath: "/worktrees/billing-fix" }]);
     store.select(projectRef, ThreadId.make("pending"), { name: "next", color: "#3b82f6" });
+    store.select(projectRef, ThreadId.make("automatic"), { name: "", color: "#14b8a6" });
     const storage = useNamedWorktreeStore.persist.getOptions().storage!;
     const persisted = await storage.getItem("t3code:fork:named-worktrees:v1");
     useNamedWorktreeStore.setState({ selections: {}, worktrees: {} });
@@ -99,6 +142,7 @@ describe("named worktree metadata", () => {
     ]);
     expect(Object.values(useNamedWorktreeStore.getState().selections)).toEqual([
       { name: "next", color: "#3b82f6" },
+      { name: "", color: "#14b8a6" },
     ]);
   });
 });

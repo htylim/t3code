@@ -15,16 +15,19 @@ to keep a large paste editable in the composer instead.
 ## Choose a workspace
 
 Choose **New worktree** to create a separate checkout when you send the first message. Leave its
-name empty for automatic naming, or enter a directory name and choose a color. The Git branch
-still gets its normal generated name. Named worktrees use the same automatic cleanup rules.
+name empty for automatic naming, or enter a directory name. You can choose a color either way.
+The Git branch still gets its normal generated name. Named worktrees use the same automatic cleanup rules.
+Editing the name or opening the color picker selects New worktree. Your choice stays selected when
+you close the picker.
 
 The Workspace picker lists named worktrees by directory and branch, with busy or dirty status.
 Colors are saved in this browser or desktop profile and do not sync between devices.
 Use a row's menu to rename an available worktree, copy its path, or remove it while keeping the branch.
 The composer picker locks once the thread has messages or an active session, or a saved thread has
-an assigned worktree. To change an existing idle thread's checkout, click its worktree pill or use
-**Edit workspace** in the thread menu. Confirm the move to an existing checkout or a new named
-worktree. Files and uncommitted changes remain in the original checkout.
+an assigned worktree. To change an existing idle thread's checkout, right-click its worktree pill
+and choose **Change worktree**, or use **Edit workspace** in the thread menu. In the dialog, choose
+an existing checkout or a new named worktree, then confirm with **Change worktree**.
+Files and uncommitted changes remain in the original checkout.
 
 ## Formatting
 

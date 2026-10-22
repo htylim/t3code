@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { resolveWorktreeDisplay } from "./worktreeDisplay";
 
-const defaultColor = "#d3d3d3";
+const defaultColor = "#808080";
 
 describe("worktree display", () => {
   it("excludes the local checkout and a worktree that has not been provisioned", () => {

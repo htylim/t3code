@@ -11,7 +11,6 @@ import type {
 import * as Cause from "effect/Cause";
 import { ChevronDownIcon, FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
 import {
-  useEffect,
   useRef,
   useState,
   type ComponentProps,
@@ -21,17 +20,15 @@ import {
 import { requestConfirmDialog } from "../confirmDialog";
 import {
   namedWorktreeKey,
-  isNamedWorktree,
   useNamedWorktreeStore,
   type NamedWorktreeSelection,
 } from "../namedWorktreeStore";
+import { useWorkspaceChoices } from "../hooks/useWorkspaceChoices";
 import { NewWorktreeRow } from "./NewWorktreeRow";
 import { requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
-import { useArchivedThreadSnapshots } from "../lib/archivedThreadsState";
 import { readLocalApi } from "../localApi";
 import { shortcutLabelForCommand } from "../keybindings";
-import { useThreadShellsForProjectRefs } from "../state/entities";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -39,7 +36,6 @@ import { vcsEnvironment } from "../state/vcs";
 import {
   resolveCurrentWorkspaceLabel,
   resolveLockedWorkspaceLabel,
-  resolveWorktreeRows,
   resolveWorktreeStatusWord,
   resolveWorktreeUnpushedWarning,
   type EnvMode,
@@ -79,6 +75,7 @@ export interface WorkspaceMenuProps {
   namedWorktreeSelection?: NamedWorktreeSelection | null;
   activeWorktreeColor?: string | null;
   onNewWorktreeSelect: (selection: NamedWorktreeSelection | null) => void | Promise<boolean>;
+  onNewWorktreeSelectionChange?: (selection: NamedWorktreeSelection | null) => void;
   onUseWorktree: (seed: PreviousWorktreeSeed) => void | Promise<boolean>;
   trigger?: ReactNode;
   open?: boolean;
@@ -241,51 +238,7 @@ function WorkspaceMenuContents(
     close: () => void;
   },
 ) {
-  const refsQuery = useEnvironmentQuery(
-    vcsEnvironment.listRefs({
-      environmentId: props.environmentId,
-      input: { cwd: props.projectCwd, worktreesOnly: true },
-    }),
-  );
-  const refs = refsQuery.data?.refs ?? [];
-  const projectRefs = [props.projectRef];
-  const liveThreads = useThreadShellsForProjectRefs(projectRefs);
-  const archived = useArchivedThreadSnapshots([props.environmentId]);
-  const threads = (() => {
-    const byId = new Map<string, OrchestrationV2ThreadShell>();
-    for (const snapshot of archived.snapshots) {
-      for (const thread of snapshot.snapshot.threads) {
-        if (thread.projectId === props.projectRef.projectId) byId.set(thread.id, thread);
-      }
-    }
-    for (const thread of liveThreads) byId.set(thread.id, thread.source);
-    return [...byId.values()];
-  })();
-  const namedWorktrees = useNamedWorktreeStore((state) => state.worktrees);
-  useEffect(() => {
-    useNamedWorktreeStore.getState().record(props.projectRef, threads);
-  }, [props.projectRef, threads]);
-  const rows = resolveWorktreeRows({
-    refs,
-    threads: threads.map((thread) => ({
-      worktreePath: thread.worktreePath,
-      archivedAt: thread.archivedAt === null ? null : "archived",
-      settledOverride: thread.settledOverride,
-      relationshipToParent: thread.lineage.relationshipToParent,
-      status: thread.status,
-    })),
-    activeProjectCwd: props.projectCwd,
-    activeWorktreePath: props.activeWorktreePath,
-    activeBranch: props.activeBranch,
-  }).filter(
-    (row) =>
-      row.worktreePath === props.activeWorktreePath ||
-      isNamedWorktree(
-        row.worktreePath,
-        namedWorktrees[namedWorktreeKey(props.projectRef, row.worktreePath)]?.color,
-      ),
-  );
-  const localRef = refs.find((ref) => ref.worktreePath === props.projectCwd);
+  const { refsQuery, archived, threads, rows, localRef } = useWorkspaceChoices(props);
   return (
     <>
       {props.environmentItems}
@@ -328,6 +281,9 @@ function WorkspaceMenuContents(
             selection={props.namedWorktreeSelection ?? null}
             disabled={props.envLocked || props.canCreateWorktree === false}
             nameRequired={props.requireWorktreeName ?? false}
+            {...(props.onNewWorktreeSelectionChange
+              ? { onSelectionChange: props.onNewWorktreeSelectionChange }
+              : {})}
             onSelect={async (selection) => {
               const accepted = await props.onNewWorktreeSelect(selection);
               if (accepted !== false) props.close();

@@ -6,7 +6,7 @@ import { AsyncResult } from "effect/reactivity";
 import * as Cause from "effect/Cause";
 
 const state = vi.hoisted(() => ({
-  picker: null as WorkspaceMenuProps | null,
+  picker: null as WorkspaceChangeDialogProps | null,
   thread: {
     environmentId: "remote",
     id: "thread",
@@ -19,12 +19,10 @@ const state = vi.hoisted(() => ({
   },
   canOperate: true,
   threadAvailable: true,
-  confirm: vi.fn(),
   create: vi.fn(),
   refresh: vi.fn(),
   update: vi.fn(),
 }));
-vi.mock("../confirmDialog", () => ({ requestConfirmDialog: state.confirm }));
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => true }));
 vi.mock("../state/entities", () => ({
   useQuietThreadShell: () => state.thread,
@@ -36,6 +34,7 @@ vi.mock("../state/session", () => ({
   readEnvironmentScope: () => state.canOperate,
 }));
 vi.mock("../composerDraftStore", () => ({
+  DraftId: { make: (draftId: string) => draftId },
   useComposerDraftStore: (select: (store: { getDraftThreadByRef: () => null }) => unknown) =>
     select({ getDraftThreadByRef: () => null }),
 }));
@@ -52,9 +51,9 @@ vi.mock("../state/use-orchestration-command", () => ({
   useOrchestrationCommand: () => state.update,
 }));
 vi.mock("../state/threads", () => ({ threadEnvironment: { updateMetadata: {} } }));
-vi.mock("./WorkspaceMenu", () => ({
+vi.mock("./WorkspaceChangeDialog", () => ({
   /** Expose committed controller state while the real picker has its own browser tests. */
-  WorkspaceMenu: function WorkspaceMenuFixture(props: WorkspaceMenuProps) {
+  WorkspaceChangeDialog: function WorkspaceChangeDialogFixture(props: WorkspaceChangeDialogProps) {
     useLayoutEffect(() => {
       state.picker = props;
     });
@@ -63,7 +62,7 @@ vi.mock("./WorkspaceMenu", () => ({
 }));
 
 import { ThreadWorkspaceMenu } from "./ThreadWorkspaceMenu";
-import type { WorkspaceMenuProps } from "./WorkspaceMenu";
+import type { WorkspaceChangeDialogProps } from "./WorkspaceChangeDialog";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
 
 const threadRef = {
@@ -75,15 +74,15 @@ let root: Root;
 let container: HTMLDivElement;
 
 /** Render the controller while leaving presentation to the existing picker component. */
-async function openPicker(): Promise<WorkspaceMenuProps> {
+async function openPicker(): Promise<WorkspaceChangeDialogProps> {
   await act(async () => {
-    root.render(createElement(ThreadWorkspaceMenu, { threadRef }));
+    root.render(createElement(ThreadWorkspaceMenu, { threadRef, open: true }));
   });
   return pickerProps();
 }
 
 /** Read the latest error and availability after an asynchronous workspace operation. */
-function pickerProps(): WorkspaceMenuProps {
+function pickerProps(): WorkspaceChangeDialogProps {
   return state.picker!;
 }
 
@@ -100,7 +99,6 @@ beforeEach(() => {
   state.thread.hasPendingUserInput = false;
   state.canOperate = true;
   state.threadAvailable = true;
-  state.confirm.mockReset().mockResolvedValue(true);
   state.refresh
     .mockReset()
     .mockResolvedValue(AsyncResult.success({ isRepo: true, refName: "actual-target" }));
@@ -265,96 +263,20 @@ it("keeps a newly created checkout available for retry if the thread changes bef
   expect(state.create).toHaveBeenCalledTimes(1);
 });
 
-it.each(["local", "existing", "new"])(
-  "cancelling %s leaves the thread and filesystem unchanged",
-  async (destination) => {
-    state.confirm.mockResolvedValue(false);
-    const picker = await openPicker();
-    await act(async () => {
-      let accepted;
-      if (destination === "new") {
-        accepted = await picker.onNewWorktreeSelect({ name: "billing-fix", color: "#14b8a6" });
-      } else {
-        accepted = await picker.onUseWorktree({
-          branch: "main",
-          worktreePath: destination === "local" ? "/repo" : "/trees/target",
-        });
-      }
-      expect(accepted).toBe(false);
-    });
-    expect(state.confirm).toHaveBeenCalledWith(
-      expect.stringContaining("Files and uncommitted changes will stay in the current checkout"),
-      { confirmLabel: "Proceed" },
-    );
-    expect(state.create).not.toHaveBeenCalled();
-    expect(state.update).not.toHaveBeenCalled();
-    expect(useNamedWorktreeStore.getState().worktrees).toEqual({});
-  },
-);
-
-it("does not prompt when reselecting the current checkout", async () => {
-  const picker = await openPicker();
-  await act(async () => {
-    expect(
-      await picker.onUseWorktree({ branch: "feature/source", worktreePath: "/trees/current" }),
-    ).toBe(true);
-  });
-  expect(state.confirm).not.toHaveBeenCalled();
-  expect(state.create).not.toHaveBeenCalled();
-});
-
-it.each(["existing", "new"])(
-  "waits for approval before changing to a %s worktree",
-  async (destination) => {
-    let respond!: (confirmed: boolean) => void;
-    state.confirm.mockReturnValue(
-      new Promise<boolean>((resolve) => {
-        respond = resolve;
-      }),
-    );
-    const picker = await openPicker();
-    let change!: void | Promise<boolean>;
-    await act(async () => {
-      if (destination === "new") {
-        change = picker.onNewWorktreeSelect({
-          name: "billing-fix",
-          color: "#14b8a6",
-        });
-      } else {
-        change = picker.onUseWorktree({
-          branch: "main",
-          worktreePath: "/trees/target",
-        });
-      }
-    });
-    expect(state.confirm).toHaveBeenCalledTimes(1);
-    expect(state.create).not.toHaveBeenCalled();
-    expect(state.update).not.toHaveBeenCalled();
-    await act(async () => {
-      respond(true);
-      expect(await change).toBe(true);
-    });
-    expect(state.update).toHaveBeenCalledTimes(1);
-    expect(state.create).toHaveBeenCalledTimes(destination === "new" ? 1 : 0);
-  },
-);
-
 it.each(["busy", "permission", "workspace", "branch", "deleted"])(
-  "rechecks %s after confirmation before creating a worktree",
+  "rechecks %s after validating the destination before moving the thread",
   async (changedState) => {
-    let respond!: (confirmed: boolean) => void;
-    state.confirm.mockReturnValue(
-      new Promise<boolean>((resolve) => {
-        respond = resolve;
+    const ready = AsyncResult.success({ isRepo: true, refName: "actual-target" });
+    let finishValidation!: (status: typeof ready) => void;
+    state.refresh.mockReturnValue(
+      new Promise<typeof ready>((resolve) => {
+        finishValidation = resolve;
       }),
     );
     const picker = await openPicker();
     let change!: void | Promise<boolean>;
     await act(async () => {
-      change = picker.onNewWorktreeSelect({
-        name: "billing-fix",
-        color: "#14b8a6",
-      });
+      change = picker.onUseWorktree({ branch: "main", worktreePath: "/trees/target" });
     });
     if (changedState === "deleted") state.threadAvailable = false;
     if (changedState === "busy") state.thread.runtime = { status: "running" };
@@ -362,7 +284,7 @@ it.each(["busy", "permission", "workspace", "branch", "deleted"])(
     if (changedState === "workspace") state.thread.worktreePath = "/trees/elsewhere";
     if (changedState === "branch") state.thread.branch = "changed-branch";
     await act(async () => {
-      respond(true);
+      finishValidation(ready);
       expect(await change).toBe(false);
     });
     expect(state.create).not.toHaveBeenCalled();

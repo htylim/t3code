@@ -44,6 +44,8 @@ interface WorktreeEditRequest {
   readonly projectRef: ScopedProjectRef;
   readonly projectCwd: string;
   readonly worktreePath: string;
+  /** Return keyboard users to their trigger without refocusing pointer-opened pills. */
+  readonly returnFocus?: HTMLElement | false;
 }
 const useWorktreeEditRequest = create<{ request: WorktreeEditRequest | null }>(() => ({
   request: null,
@@ -216,7 +218,7 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
         if (!open && !saving && worktreePath === request.worktreePath) closeWorktreeEditor(request);
       }}
     >
-      <DialogPopup>
+      <DialogPopup finalFocus={() => request.returnFocus ?? true}>
         <DialogHeader>
           <DialogTitle>Rename worktree</DialogTitle>
           <DialogDescription>

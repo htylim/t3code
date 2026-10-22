@@ -144,8 +144,10 @@
 
 - Upstream baseline: `da7c4f234db3`, merged from fork `9a1a98c554` after initial implementation.
 - Change: The web and desktop Workspace picker accepts an optional directory name and color
-  on the existing New worktree row. An empty name preserves automatic creation and disables
-  color selection. Editing keeps the picker open; selecting the row commits the choice.
+  on the existing New worktree row. Color selection works with an empty name and follows
+  automatic directory naming. In a new-thread draft, focusing the name or opening the color picker
+  selects New worktree. Valid edits save without closing the picker and remain after dismissal.
+  Existing-thread workspace edits still require explicit selection before creating a checkout.
   Opening focuses the selected workspace row, or the name editor when named creation is active.
   Existing worktrees stay in directory order when selected. The New worktree selection
   covers its full row while name and color editing keep the menu open.
@@ -156,13 +158,18 @@
   Sidebar card and search-result tooltips show the worktree pill on its own row below the branch.
   Pills always show the current directory name. First-prompt naming moves automatic directories
   before setup or agent work starts and updates thread paths. Explicit directory names stay put.
-  Unsaved colors default to light gray, which is also available in both color pickers.
+  Unsaved colors default to gray, which is also available in both color pickers.
   Static worktree branch naming defaults to an empty prefix across clients. Explicitly
   saved prefixes remain unchanged; resetting the prefix selects no prefix.
   Main checkouts and drafts awaiting a worktree have no pill in these locations.
-  Clicking a pill opens the existing Workspace picker with the current checkout selected
-  and focused. Breadcrumb and sidebar context menus offer Edit workspace below Rename thread
-  for both local and worktree threads. The details-panel worktree row includes a dropdown arrow.
+  Clicking a pill opens Rename worktree. Every pill has Rename worktree and Change worktree in its
+  own context menu; Change worktree opens a centered dialog with the current checkout selected.
+  Closing either pill dialog after pointer activation does not refocus its pill or reopen the
+  sidebar tooltip.
+  Keyboard-opened editors return focus to their triggering pill.
+  The details panel uses the same interactive pill as the sidebar and
+  breadcrumb. Thread context menus retain Edit workspace below Rename thread for both local and
+  worktree threads.
   Threads in the project's root checkout show Local checkout in that same row, with the existing
   folder icon and access to workspace editing. Drafts awaiting a new worktree do not show that label.
   Existing-thread selection adopts the destination checkout's actual branch; named creation
@@ -170,13 +177,13 @@
   an explicit name for new worktrees, while draft creation keeps the automatic-name option.
   The creation row retains its normal appearance when the name is empty; clicks and Enter
   cannot create a worktree until a required name is supplied.
-  Existing-thread pickers ignore hover and focus-loss dismissal, and omit composer floating-layer
-  behavior. Escape and outside clicks discard unsubmitted name and color edits, and selection
-  closes the picker. Composer pickers retain their original dismissal behavior.
+  Existing-thread changes use the same modal presentation as Rename worktree. Choosing a
+  destination only updates the dialog's selection. Cancel, Escape, and outside clicks discard
+  unsubmitted changes. The composer keeps its anchored picker and existing dismissal behavior.
   Only the selected thread moves, through the normal metadata update and provider-session detach.
-  Selecting a different checkout or creating a worktree from this picker requires confirmation
-  that files and uncommitted changes stay in the original checkout. Reselecting the current
-  checkout skips confirmation. Cancelling preserves an entered new-worktree name and color.
+  Selecting a different checkout or creating a worktree shows its destination and explains that
+  files and uncommitted changes stay in the original checkout. The footer's Change worktree button
+  applies the move without opening a second confirmation. The current checkout cannot be submitted.
   Manual moves require an idle thread and compare its original branch and path on the server.
   The picker's Rename action retains the shared color and directory editor for every thread
   using that checkout.
@@ -197,12 +204,36 @@
   Existing directories appear with the default color on clients without saved metadata.
   Reuse-list eligibility remains separate from pill visibility. Automatic directories stay out
   of the reuse list unless selected or carrying a saved color, preserving the existing policy.
-  `ThreadWorkspaceMenu.tsx` owns existing-thread picker requests and selection. It composes
+  `ThreadWorkspaceMenu.tsx` owns existing-thread dialog requests and selection. It composes
   the existing Git creation, status, and metadata commands without adding a separate workspace API.
+  The composer and dialog share workspace queries and reuse-list rules through `useWorkspaceChoices`.
   Manual directory renames preserve local colors, and manual removal forgets them.
   Generic color presets and soft-pill components belong to worktree labels. The former tag
   feature is retired across clients and server code.
-- Verification: The all-worktree pill and automatic-directory naming follow-up passed 186 focused
+- Verification: The optional-name color fix passed 17 unit tests, 35 Chromium tests, the web
+  typecheck, and targeted lint. It covers color selection without a name, clearing an entered name,
+  gray defaults, persistence, and preserving color through automatic directory naming.
+  An isolated Browser-panel test with Personal GPT-6-Luna at low effort verified the gray default,
+  selected teal without a name, and created a real worktree in a disposable repository. All three
+  worktree labels retained teal after automatic directory naming and a page reload.
+  Draft editing also selects New worktree on name focus or color-picker opening, saves valid edits
+  without closing the menu, and preserves input focus. Browser tests cover dismissal and reopening;
+  an isolated client pass verified name editing and a color-only choice after clicking away.
+  Pill clicks open Rename worktree, and their context menu opens the change dialog through Change
+  worktree. Focused browser tests cover both actions without activating the parent thread;
+  an isolated client pass verified sidebar, breadcrumb, and details-panel pills.
+  Rename-dialog focus behavior passed 16 focused Chromium tests, the web typecheck, and targeted
+  lint. The running isolated client verified pointer dismissal in the sidebar and breadcrumb,
+  plus keyboard focus restoration after Escape.
+  Change worktree now receives the same trigger-specific focus setting. The combined dialog
+  regression pass covered 38 Chromium tests, web typecheck, and targeted lint. The running client
+  verified Escape dismissal from sidebar and breadcrumb context menus and keyboard focus return.
+  Before fork integration, all 76 focused worktree browser tests and 105 color, display, packaging,
+  and desktop identity tests passed, along with the web typecheck and targeted lint.
+  The centered change dialog passed 72 focused Chromium tests, the web typecheck, and targeted
+  lint. The already-running isolated server verified the matching blurred backdrop, cancellation,
+  a move to the local checkout and back, and the composer's anchored picker without a backdrop.
+  The all-worktree pill and automatic-directory naming follow-up passed 186 focused
   web unit tests, 89 launch-service tests, 54 Chromium tests, nine React Compiler checks, and web
   and server typechecks. Real Git fixtures cover directory moves, occupied destinations, and
   live and archived thread references. Additional cases cover shared active runs, cancellation,

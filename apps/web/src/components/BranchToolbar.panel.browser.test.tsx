@@ -183,7 +183,7 @@ it.each([
       const worktreePill = worktreeLabel?.querySelector<HTMLElement>('[data-slot="soft-pill"]');
       expect(worktreePill?.textContent).toBe(expectedName);
       expect(worktreePill?.style.backgroundColor).toContain(
-        savedColor ? "20, 184, 166" : "211, 211, 211",
+        savedColor ? "20, 184, 166" : "128, 128, 128",
       );
     } else {
       expect(worktreeLabel).toBeNull();
@@ -204,5 +204,45 @@ it("updates an automatic pill when first-prompt naming moves its directory", asy
     container
       .querySelector('[aria-label="Worktree"] [data-slot="soft-pill"]')
       ?.getAttribute("style"),
-  ).toContain("211, 211, 211");
+  ).toContain("128, 128, 128");
+});
+
+it("keeps the New worktree label for a color-only selection", async () => {
+  state.worktreePath = null;
+  const projectRef = {
+    environmentId: EnvironmentId.make("local"),
+    projectId: ProjectId.make("project"),
+  };
+  useNamedWorktreeStore.getState().select(projectRef, ThreadId.make("thread"), {
+    name: "",
+    color: "#14b8a6",
+  });
+  await render({ envMode: "worktree" });
+  expect(container.querySelector('[aria-label="Run context"]')?.textContent).toBe("New worktree");
+});
+
+it("preserves the selected color when automatic naming moves the temporary worktree", async () => {
+  const projectRef = {
+    environmentId: EnvironmentId.make("local"),
+    projectId: ProjectId.make("project"),
+  };
+  useNamedWorktreeStore.getState().select(projectRef, ThreadId.make("thread"), {
+    name: "",
+    color: "#14b8a6",
+  });
+  state.worktreePath = "/tmp/t3-1234abcd";
+  const props = { panelSection: "branch", envMode: "worktree", envLocked: true } as const;
+  await render(props);
+  expect(
+    container.querySelector<HTMLElement>('[aria-label="Worktree"] [data-slot="soft-pill"]')?.style
+      .backgroundColor,
+  ).toContain("20, 184, 166");
+  state.worktreePath = "/tmp/fix-sidebar-colors";
+  state.branch = "fix/sidebar-colors";
+  await render(props);
+  const worktreeLabel = container.querySelector('[aria-label="Worktree"]');
+  expect(worktreeLabel?.textContent).toBe("fix-sidebar-colors");
+  expect(
+    worktreeLabel?.querySelector<HTMLElement>('[data-slot="soft-pill"]')?.style.backgroundColor,
+  ).toContain("20, 184, 166");
 });

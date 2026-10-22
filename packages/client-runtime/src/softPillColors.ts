@@ -1,9 +1,9 @@
 /** Default color for worktree labels without a saved custom color. */
-export const DEFAULT_SOFT_PILL_COLOR = "#d3d3d3";
+export const DEFAULT_SOFT_PILL_COLOR = "#808080";
 
 /** Preset swatches for colored soft-pill labels. */
 export const SOFT_PILL_COLOR_PRESETS = [
-  { label: "Light gray", color: DEFAULT_SOFT_PILL_COLOR },
+  { label: "Gray", color: DEFAULT_SOFT_PILL_COLOR },
   { label: "Violet", color: "#8b5cf6" },
   { label: "Blue", color: "#3b82f6" },
   { label: "Cyan", color: "#06b6d4" },

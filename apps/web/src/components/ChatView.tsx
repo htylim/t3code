@@ -7182,7 +7182,7 @@ export default function ChatView(props: ChatViewProps) {
                     prepareWorktree: {
                       projectCwd: activeProject.workspaceRoot,
                       baseBranch: baseBranchForWorktree,
-                      ...(namedWorktreeSelection
+                      ...(namedWorktreeSelection?.name
                         ? { directoryName: namedWorktreeSelection.name }
                         : {}),
                       ...(startFromOrigin ? { startFromOrigin: true } : {}),
@@ -7777,11 +7777,11 @@ export default function ChatView(props: ChatViewProps) {
     if (options?.focusComposer !== false) scheduleComposerFocus();
   };
   const onProviderModelSelectStable = useStableCallback(onProviderModelSelect);
-  const onEnvModeChange = (mode: DraftThreadEnvMode) => {
+  const onEnvModeChange = (mode: DraftThreadEnvMode, options?: { focusComposer?: boolean }) => {
     if (multipleModelSelections !== null) return;
     if (canOverrideServerThreadEnvMode) {
       if (activeThread) setPendingServerThreadEnvModeEntry({ threadId: activeThread.id, mode });
-      scheduleComposerFocus();
+      if (options?.focusComposer !== false) scheduleComposerFocus();
       return;
     }
     if (isLocalDraftThread) {
@@ -7794,7 +7794,7 @@ export default function ChatView(props: ChatViewProps) {
         ...(mode === "worktree" && draftThread?.worktreePath ? { worktreePath: null } : {}),
       });
     }
-    scheduleComposerFocus();
+    if (options?.focusComposer !== false) scheduleComposerFocus();
   };
   const onEnvModeChangeStable = useStableCallback(onEnvModeChange);
 

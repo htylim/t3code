@@ -1,5 +1,5 @@
 import { ThreadWorkspaceMenu } from "./ThreadWorkspaceMenu";
-import { SoftPill } from "./ui/soft-pill";
+import { WorktreePill } from "./WorktreePill";
 import { useWorktreeDisplay } from "../hooks/useWorktreeDisplay";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
@@ -21,7 +21,11 @@ import {
 } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
-import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
+import {
+  namedWorktreeKey,
+  useNamedWorktreeStore,
+  type NamedWorktreeSelection,
+} from "../namedWorktreeStore";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useQuietThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
 import {
@@ -42,7 +46,10 @@ import {
 import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
 import { WorkspaceMenu, type WorkspaceMenuProps } from "./WorkspaceMenu";
 import { MenuGroup, MenuGroupLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator } from "./ui/menu";
-import { THREAD_DETAILS_PANEL_ICON_CLASS } from "./chat/threadDetailsPanelStyles";
+import {
+  THREAD_DETAILS_PANEL_ICON_CLASS,
+  THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
+} from "./chat/threadDetailsPanelStyles";
 import { Separator } from "./ui/separator";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ComposerSurface } from "./chat/ComposerSurface";
@@ -65,7 +72,7 @@ interface BranchToolbarProps {
   threadId: ThreadId;
   showGitControls: boolean;
   draftId?: DraftId;
-  onEnvModeChange: (mode: EnvMode) => void;
+  onEnvModeChange: (mode: EnvMode, options?: { focusComposer?: boolean }) => void;
   envMode: EnvMode;
   activeThreadBranchOverride?: string | null;
   onActiveThreadBranchOverrideChange?: (branch: string | null) => void;
@@ -161,7 +168,7 @@ const RunContextSelector = memo(function RunContextSelector({
     : envModeLocked
       ? resolveLockedWorkspaceLabel(activeWorktreePath, effectiveEnvMode)
       : effectiveEnvMode === "worktree" && !activeWorktreePath
-        ? (workspaceProps.namedWorktreeSelection?.name ?? resolveEnvModeLabel("worktree"))
+        ? workspaceProps.namedWorktreeSelection?.name || resolveEnvModeLabel("worktree")
         : resolveCurrentWorkspaceLabel(activeWorktreePath);
   const isPanel = displayMode === "panel";
   const workspacePath =
@@ -589,6 +596,14 @@ export const BranchToolbar = memo(function BranchToolbar({
   const labelsOverflow = useLabelsOverflow(stripElement);
   if (!hasActiveThread || !activeProject || !activeProjectRef) return null;
   const activeWorktreeColor = worktreeDisplay?.color ?? null;
+  /** Keep the draft's workspace and pending name or color in sync while editing. */
+  function selectNewWorktree(selection: NamedWorktreeSelection | null, focusComposer = true) {
+    if (!activeProjectRef) return;
+    useNamedWorktreeStore.getState().select(activeProjectRef, threadId, selection);
+    if (focusComposer || effectiveEnvMode !== "worktree" || activeWorktreePath) {
+      onEnvModeChange("worktree", { focusComposer });
+    }
+  }
   const workspaceProps: WorkspaceMenuProps = {
     environmentId,
     projectRef: activeProjectRef,
@@ -602,10 +617,8 @@ export const BranchToolbar = memo(function BranchToolbar({
     onEnvModeChange,
     namedWorktreeSelection,
     activeWorktreeColor,
-    onNewWorktreeSelect: (selection) => {
-      useNamedWorktreeStore.getState().select(activeProjectRef, threadId, selection);
-      onEnvModeChange("worktree");
-    },
+    onNewWorktreeSelect: selectNewWorktree,
+    onNewWorktreeSelectionChange: (selection) => selectNewWorktree(selection, false),
     onUseWorktree,
   };
   if (layout === "panel") {
@@ -664,30 +677,36 @@ export const BranchToolbar = memo(function BranchToolbar({
                     />
                   }
                 >
-                  <ThreadWorkspaceMenu
-                    threadRef={threadRef}
-                    {...(draftId ? { draftId } : {})}
-                    displayMode="panel"
-                    ariaLabel="Edit workspace"
-                    trigger={
-                      <>
-                        {isLocalCheckout ? (
+                  {worktreeDisplay ? (
+                    <div
+                      className={cn(
+                        "flex h-8 min-w-0 items-center",
+                        THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
+                      )}
+                    >
+                      <FolderGitIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+                      <WorktreePill
+                        threadRef={threadRef}
+                        projectRef={activeProjectRef}
+                        projectCwd={activeProject.workspaceRoot}
+                        worktreePath={activeWorktreePath}
+                        worktree={worktreeDisplay}
+                      />
+                    </div>
+                  ) : (
+                    <ThreadWorkspaceMenu
+                      threadRef={threadRef}
+                      {...(draftId ? { draftId } : {})}
+                      displayMode="panel"
+                      ariaLabel="Edit workspace"
+                      trigger={
+                        <>
                           <FolderIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
-                        ) : (
-                          <FolderGitIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
-                        )}
-                        <span className="min-w-0 flex-1 text-left">
-                          {worktreeDisplay ? (
-                            <SoftPill color={worktreeDisplay.color}>
-                              {worktreeDisplay.name}
-                            </SoftPill>
-                          ) : (
-                            "Local checkout"
-                          )}
-                        </span>
-                      </>
-                    }
-                  />
+                          <span className="min-w-0 flex-1 text-left">Local checkout</span>
+                        </>
+                      }
+                    />
+                  )}
                 </TooltipTrigger>
                 <TooltipPopup>{activeWorktreePath ?? activeProject.workspaceRoot}</TooltipPopup>
               </Tooltip>

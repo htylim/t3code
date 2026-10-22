@@ -18,24 +18,35 @@ export function NewWorktreeRow({
   disabled,
   nameRequired = false,
   onSelect,
+  onSelectionChange,
 }: {
   selection: NamedWorktreeSelection | null;
   active?: boolean;
   disabled: boolean;
   nameRequired?: boolean;
   onSelect: (selection: NamedWorktreeSelection | null) => void;
+  onSelectionChange?: (selection: NamedWorktreeSelection | null) => void;
 }) {
   const [name, setName] = useState(selection?.name ?? "");
   const [color, setColor] = useState(selection?.color ?? DEFAULT_SOFT_PILL_COLOR);
   const directoryName = name.trim();
   const invalid = directoryName.length > 0 && !isWorktreeDirectoryName(directoryName);
-  const missingRequiredName = nameRequired && !directoryName;
-  const selectionBlocked = disabled || invalid || missingRequiredName;
 
-  /** Commit the current values only when the row is selected. */
+  /** Save valid choices while letting the caller decide whether to close the menu. */
+  function saveSelection(nextName: string, nextColor: string, commit: typeof onSelectionChange) {
+    const nextDirectoryName = nextName.trim();
+    if (disabled || (nameRequired && !nextDirectoryName)) return;
+    if (nextDirectoryName && !isWorktreeDirectoryName(nextDirectoryName)) return;
+    commit?.(
+      nextDirectoryName || nextColor !== DEFAULT_SOFT_PILL_COLOR
+        ? { name: nextDirectoryName, color: nextColor }
+        : null,
+    );
+  }
+
+  /** Confirm creation when the row or Enter is pressed. */
   function select() {
-    if (selectionBlocked) return;
-    onSelect(directoryName ? { name: directoryName, color } : null);
+    saveSelection(name, color, onSelect);
   }
 
   return (
@@ -73,7 +84,12 @@ export function NewWorktreeRow({
               value={name}
               disabled={disabled}
               aria-invalid={invalid}
-              onChange={(event) => setName(event.target.value)}
+              onFocus={() => saveSelection(name, color, onSelectionChange)}
+              onChange={(event) => {
+                const nextName = event.target.value;
+                setName(nextName);
+                saveSelection(nextName, color, onSelectionChange);
+              }}
             />
           </span>
           <span
@@ -86,8 +102,12 @@ export function NewWorktreeRow({
           >
             <WorktreeColorPicker
               color={color}
-              disabled={disabled || !directoryName || invalid}
-              onChange={setColor}
+              disabled={disabled}
+              onOpen={() => saveSelection(name, color, onSelectionChange)}
+              onChange={(nextColor) => {
+                setColor(nextColor);
+                saveSelection(name, nextColor, onSelectionChange);
+              }}
             />
           </span>
         </span>

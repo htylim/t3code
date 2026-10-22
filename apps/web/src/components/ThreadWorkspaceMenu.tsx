@@ -7,7 +7,6 @@ import { useRef, useState } from "react";
 import { create } from "zustand";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
-import { requestConfirmDialog } from "../confirmDialog";
 import { useNamedWorktreeStore, type NamedWorktreeSelection } from "../namedWorktreeStore";
 import { readThreadShell, useProject, useQuietThreadShell } from "../state/entities";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
@@ -16,11 +15,15 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { vcsEnvironment } from "../state/vcs";
 import { isWorktreeThreadRunning, type PreviousWorktreeSeed } from "./BranchToolbar.logic";
-import { WorkspaceMenu, type WorkspaceMenuProps } from "./WorkspaceMenu";
+import type { WorkspaceMenuProps } from "./WorkspaceMenu";
+import { WorkspaceChangeDialog } from "./WorkspaceChangeDialog";
+import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 
 interface WorkspacePickerRequest {
   readonly threadRef: ScopedThreadRef;
   readonly position: { readonly x: number; readonly y: number };
+  /** Return keyboard users to their trigger without refocusing pointer-opened pills. */
+  readonly returnFocus?: HTMLElement | false | undefined;
 }
 
 const useWorkspacePickerRequest = create<{ request: WorkspacePickerRequest | null }>(() => ({
@@ -36,21 +39,21 @@ function isThreadWorkspaceBusy(thread: EnvironmentThreadShell): boolean {
   );
 }
 
-/** Open the existing picker for a context-menu target, without selecting another conversation. */
+/** Open workspace changes for a context-menu target without selecting another conversation. */
 export function requestThreadWorkspaceEdit(request: WorkspacePickerRequest): void {
   useWorkspacePickerRequest.setState({ request });
 }
 
-/** Anchor native context-menu requests to their original sidebar or breadcrumb click. */
+/** Open workspace changes in a modal regardless of the context-menu click position. */
 export function ThreadWorkspaceMenuHost() {
   const request = useWorkspacePickerRequest((state) => state.request);
   if (!request) return null;
   return (
     <ThreadWorkspaceMenu
-      key={JSON.stringify(request)}
+      key={JSON.stringify([request.threadRef, request.position])}
       threadRef={request.threadRef}
+      returnFocus={request.returnFocus}
       open
-      anchor={{ getBoundingClientRect: () => new DOMRect(request.position.x, request.position.y) }}
       onOpenChange={(open) => {
         if (!open && useWorkspacePickerRequest.getState().request === request) {
           useWorkspacePickerRequest.setState({ request: null });
@@ -62,10 +65,11 @@ export function ThreadWorkspaceMenuHost() {
 
 type ThreadWorkspaceMenuProps = Pick<
   WorkspaceMenuProps,
-  "trigger" | "displayMode" | "open" | "onOpenChange" | "anchor" | "ariaLabel"
+  "trigger" | "displayMode" | "open" | "onOpenChange" | "ariaLabel"
 > & {
   readonly threadRef: ScopedThreadRef;
   readonly draftId?: DraftId;
+  readonly returnFocus?: HTMLElement | false | undefined;
 };
 
 /** Reuse normal Git commands and thread metadata updates for an idle thread's checkout choice. */
@@ -94,10 +98,8 @@ export function ThreadWorkspaceMenu({
     reportFailure: false,
   });
   const [pending, setPending] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [newWorktreeSelection, setNewWorktreeSelection] = useState<NamedWorktreeSelection | null>(
-    null,
-  );
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = menuProps.open ?? internalOpen;
   const pendingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const workspaceContext = thread ?? draft;
@@ -151,17 +153,15 @@ export function ThreadWorkspaceMenu({
     useNamedWorktreeStore.getState().select(projectRef, threadRef.threadId, null);
   }
 
-  /** Hide the picker while confirming, then recheck the thread before any mutation. */
-  async function confirmWorkspaceMove(message: string): Promise<boolean> {
-    setConfirming(true);
-    const confirmed = await requestConfirmDialog(
-      `${message}\n\nFiles and uncommitted changes will stay in the current checkout. They will not be transferred.`,
-      { confirmLabel: "Proceed" },
-    );
-    return Boolean(confirmed) && canChangeWorkspace();
+  /** Keep modal dismissal from interrupting a workspace mutation. */
+  function setOpen(nextOpen: boolean) {
+    if (pendingRef.current) return;
+    setInternalOpen(nextOpen);
+    if (!nextOpen) setError(null);
+    menuProps.onOpenChange?.(nextOpen);
   }
 
-  /** Leave cancellations and failures in the picker and prevent duplicate operations. */
+  /** Keep failures in the dialog and prevent duplicate operations. */
   async function changeWorkspace(change: () => Promise<boolean>): Promise<boolean> {
     if (pendingRef.current || !canChangeWorkspace()) return false;
     pendingRef.current = true;
@@ -174,7 +174,6 @@ export function ThreadWorkspaceMenu({
       const detail = cause instanceof Error ? cause.message : String(cause);
       setError(detail);
     }
-    setConfirming(false);
     pendingRef.current = false;
     setPending(false);
     return changed;
@@ -190,14 +189,7 @@ export function ThreadWorkspaceMenu({
       if (status._tag === "Failure") throw squashAtomCommandFailure(status);
       if (!status.value.isRepo)
         throw new Error("This workspace is unavailable. Choose another checkout.");
-      const currentCheckoutPath = activeWorktreePath ?? project?.workspaceRoot;
-      if (
-        seed.worktreePath !== currentCheckoutPath &&
-        !(await confirmWorkspaceMove(
-          `Move this thread to the selected checkout?\n${seed.worktreePath}`,
-        ))
-      )
-        return false;
+      if (!canChangeWorkspace()) return false;
       await assignWorkspace({ worktreePath: seed.worktreePath, branch: status.value.refName });
       return true;
     });
@@ -212,14 +204,7 @@ export function ThreadWorkspaceMenu({
         throw new Error("Enter a worktree name before creating a workspace.");
       if (!activeBranch)
         throw new Error("The thread has no source branch. Choose an existing workspace.");
-      setNewWorktreeSelection(selection);
       const branch = selection.name.trim();
-      if (
-        !(await confirmWorkspaceMove(
-          `Create a worktree and move this thread?\nThis will create worktree "${branch}" from branch "${activeBranch}" and move this thread to it.`,
-        ))
-      )
-        return false;
       const created = await createWorktree({
         environmentId: threadRef.environmentId,
         input: {
@@ -258,31 +243,33 @@ export function ThreadWorkspaceMenu({
           ? "This connection cannot change the thread's workspace."
           : null);
   return (
-    <WorkspaceMenu
-      {...menuProps}
-      {...(confirming ? { open: false } : {})}
-      onOpenChange={(open) => {
-        if (confirming) return;
-        if (!open) setNewWorktreeSelection(null);
-        menuProps.onOpenChange?.(open);
-      }}
-      environmentId={threadRef.environmentId}
-      projectRef={projectRef}
-      projectCwd={project.workspaceRoot}
-      activeWorktreePath={activeWorktreePath}
-      activeBranch={activeBranch}
-      effectiveEnvMode={activeWorktreePath ? "worktree" : "local"}
-      envLocked={pending || running || !canOperate}
-      allowOpenWhenLocked
-      canUseWorktree={!pending && !running && canOperate}
-      canCreateWorktree={canCreate}
-      requireWorktreeName
-      namedWorktreeSelection={newWorktreeSelection}
-      interactionMode="standalone"
-      selectionHint={hint}
-      onEnvModeChange={() => selectWorktree({ worktreePath: project.workspaceRoot, branch: null })}
-      onNewWorktreeSelect={createAndUseWorktree}
-      onUseWorktree={selectWorktree}
-    />
+    <>
+      {menuProps.open === undefined ? (
+        <ThreadDetailsControl
+          panel={menuProps.displayMode === "panel"}
+          part="select"
+          aria-label={menuProps.ariaLabel ?? "Change worktree"}
+          onClick={() => setOpen(true)}
+        >
+          {menuProps.trigger ?? "Change worktree"}
+        </ThreadDetailsControl>
+      ) : null}
+      {open ? (
+        <WorkspaceChangeDialog
+          returnFocus={menuProps.returnFocus}
+          projectRef={projectRef}
+          projectCwd={project.workspaceRoot}
+          activeWorktreePath={activeWorktreePath}
+          activeBranch={activeBranch}
+          envLocked={pending || running || !canOperate}
+          canCreateWorktree={canCreate}
+          pending={pending}
+          selectionHint={hint}
+          onOpenChange={setOpen}
+          onNewWorktreeSelect={createAndUseWorktree}
+          onUseWorktree={selectWorktree}
+        />
+      ) : null}
+    </>
   );
 }

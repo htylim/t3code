@@ -7,20 +7,26 @@ import { ThemeColorPickerPanel } from "./settings/ThemeColorPicker";
 import { Button } from "./ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 
-/** Select a worktree color without selecting or closing the workspace row. */
+/** Choose a worktree color while keeping the workspace menu open. */
 export function WorktreeColorPicker({
   color,
   disabled,
   onChange,
+  onOpen,
 }: {
   color: string;
   disabled: boolean;
   onChange: (color: string) => void;
+  onOpen?: () => void;
 }) {
   const floatingLayerProps = useComposerMenuProps();
   const [custom, setCustom] = useState(false);
   return (
-    <Popover>
+    <Popover
+      onOpenChange={(open) => {
+        if (open) onOpen?.();
+      }}
+    >
       <PopoverTrigger
         render={<Button variant="ghost" size="compact" disabled={disabled} />}
         aria-label="Worktree color"

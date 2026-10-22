@@ -17,7 +17,7 @@ const decodePersistedNamedWorktrees = Schema.decodeUnknownSync(PersistedNamedWor
 interface NamedWorktreeState {
   selections: Record<string, NamedWorktreeSelection>;
   worktrees: Record<string, { color: string }>;
-  /** Save a draft choice, or clear it to restore automatic directory naming. */
+  /** Save a draft name and color. An empty name keeps automatic directory naming. */
   select: (
     projectRef: ScopedProjectRef,
     threadId: ThreadId,
@@ -74,11 +74,19 @@ export const useNamedWorktreeStore = create<NamedWorktreeState>()(
           const selectionKey = namedWorktreeKey(projectRef, thread.id);
           const selection = selections[selectionKey];
           if (!selection || !thread.worktreePath) continue;
-          // Failed launches and selecting an existing checkout must not claim its color.
-          if (thread.worktreePath.split(/[\\/]/).at(-1) !== selection.name) continue;
-          worktrees[namedWorktreeKey(projectRef, thread.worktreePath)] = { color: selection.color };
-          delete selections[selectionKey];
-          changed = true;
+          const directoryName = thread.worktreePath.split(/[\\/]/).at(-1) ?? thread.worktreePath;
+          // Explicit names must match before a pending choice can claim the directory's color.
+          if (selection.name && directoryName !== selection.name) continue;
+          const worktreeKey = namedWorktreeKey(projectRef, thread.worktreePath);
+          if (worktrees[worktreeKey]?.color !== selection.color) {
+            worktrees[worktreeKey] = { color: selection.color };
+            changed = true;
+          }
+          // Automatic naming moves the temporary directory after provisioning records it.
+          if (selection.name || !isTemporaryWorktreeBranch(directoryName)) {
+            delete selections[selectionKey];
+            changed = true;
+          }
         }
         if (changed) set({ selections, worktrees });
       },
