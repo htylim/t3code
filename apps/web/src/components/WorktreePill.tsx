@@ -30,9 +30,7 @@ export function WorktreePill({
     <SoftPill
       color={worktree.color}
       className={className}
-      render={
-        <button type="button" disabled={busy} aria-label={`Rename worktree ${worktree.name}`} />
-      }
+      render={<button type="button" aria-label={`Rename worktree ${worktree.name}`} />}
       onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
@@ -49,15 +47,14 @@ export function WorktreePill({
       onContextMenu={async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (busy) return;
         const api = readLocalApi();
         if (!api) return;
         const position = { x: event.clientX, y: event.clientY };
         const returnFocus = event.button === 0 && !event.ctrlKey ? event.currentTarget : false;
         const action = await api.contextMenu.show(
           [
-            { id: "rename-worktree", label: "Rename worktree", icon: "pencil" },
-            { id: "change-worktree", label: "Change worktree", icon: "folder" },
+            { id: "rename-worktree", label: "Rename worktree", icon: "pencil", disabled: busy },
+            { id: "change-worktree", label: "Change worktree", icon: "folder", disabled: busy },
           ],
           position,
         );

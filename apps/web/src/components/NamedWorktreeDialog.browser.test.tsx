@@ -470,14 +470,16 @@ it("locks the entire rename editor while an agent is running", async () => {
 });
 
 it.each(["preparing", "queued", "starting", "running", "waiting"] as const)(
-  "disables both pill actions while the thread is %s and restores them afterward",
+  "keeps the pill undimmed with disabled actions while the thread is %s and restores them afterward",
   async (status) => {
     state.live[0]!.status = status;
     await renderWorkspaceEditors();
     const pill = page.getByRole("button", { name: "Rename worktree alpha", exact: true });
-    expect((pill.element() as HTMLButtonElement).disabled).toBe(true);
+    expect((pill.element() as HTMLButtonElement).disabled).toBe(false);
+    expect(getComputedStyle(pill.element()).opacity).toBe("1");
+    await act(async () => userEvent.click(pill));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
     await act(async () => {
-      pill.element().dispatchEvent(new MouseEvent("click", { bubbles: true }));
       pill
         .element()
         .dispatchEvent(
@@ -485,8 +487,10 @@ it.each(["preparing", "queued", "starting", "running", "waiting"] as const)(
         );
     });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect(button("Change worktree")).toBeUndefined();
+    expect(button("Rename worktree").disabled).toBe(true);
+    expect(button("Change worktree").disabled).toBe(true);
     expect(state.parentContextMenu).not.toHaveBeenCalled();
+    await act(async () => userEvent.keyboard("{Escape}"));
     state.live[0]!.status = "completed";
     await renderWorkspaceEditors();
     await act(async () => userEvent.click(pill));
