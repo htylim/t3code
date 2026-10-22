@@ -18,14 +18,17 @@ const state = vi.hoisted(() => ({
     hasPendingUserInput: false,
   },
   canOperate: true,
+  threadAvailable: true,
+  confirm: vi.fn(),
   create: vi.fn(),
   refresh: vi.fn(),
   update: vi.fn(),
 }));
+vi.mock("../confirmDialog", () => ({ requestConfirmDialog: state.confirm }));
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => true }));
 vi.mock("../state/entities", () => ({
   useQuietThreadShell: () => state.thread,
-  readThreadShell: () => state.thread,
+  readThreadShell: () => (state.threadAvailable ? state.thread : null),
   useProject: () => ({ id: "project", workspaceRoot: "/repo" }),
 }));
 vi.mock("../state/session", () => ({
@@ -96,6 +99,8 @@ beforeEach(() => {
   state.thread.hasPendingApprovals = false;
   state.thread.hasPendingUserInput = false;
   state.canOperate = true;
+  state.threadAvailable = true;
+  state.confirm.mockReset().mockResolvedValue(true);
   state.refresh
     .mockReset()
     .mockResolvedValue(AsyncResult.success({ isRepo: true, refName: "actual-target" }));
@@ -259,3 +264,108 @@ it("keeps a newly created checkout available for retry if the thread changes bef
   expect(pickerProps().selectionHint).toContain("Select it from the worktree list to retry");
   expect(state.create).toHaveBeenCalledTimes(1);
 });
+
+it.each(["local", "existing", "new"])(
+  "cancelling %s leaves the thread and filesystem unchanged",
+  async (destination) => {
+    state.confirm.mockResolvedValue(false);
+    const picker = await openPicker();
+    await act(async () => {
+      let accepted;
+      if (destination === "new") {
+        accepted = await picker.onNewWorktreeSelect({ name: "billing-fix", color: "#14b8a6" });
+      } else {
+        accepted = await picker.onUseWorktree({
+          branch: "main",
+          worktreePath: destination === "local" ? "/repo" : "/trees/target",
+        });
+      }
+      expect(accepted).toBe(false);
+    });
+    expect(state.confirm).toHaveBeenCalledWith(
+      expect.stringContaining("Files and uncommitted changes will stay in the current checkout"),
+      { confirmLabel: "Proceed" },
+    );
+    expect(state.create).not.toHaveBeenCalled();
+    expect(state.update).not.toHaveBeenCalled();
+    expect(useNamedWorktreeStore.getState().worktrees).toEqual({});
+  },
+);
+
+it("does not prompt when reselecting the current checkout", async () => {
+  const picker = await openPicker();
+  await act(async () => {
+    expect(
+      await picker.onUseWorktree({ branch: "feature/source", worktreePath: "/trees/current" }),
+    ).toBe(true);
+  });
+  expect(state.confirm).not.toHaveBeenCalled();
+  expect(state.create).not.toHaveBeenCalled();
+});
+
+it.each(["existing", "new"])(
+  "waits for approval before changing to a %s worktree",
+  async (destination) => {
+    let respond!: (confirmed: boolean) => void;
+    state.confirm.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        respond = resolve;
+      }),
+    );
+    const picker = await openPicker();
+    let change!: void | Promise<boolean>;
+    await act(async () => {
+      if (destination === "new") {
+        change = picker.onNewWorktreeSelect({
+          name: "billing-fix",
+          color: "#14b8a6",
+        });
+      } else {
+        change = picker.onUseWorktree({
+          branch: "main",
+          worktreePath: "/trees/target",
+        });
+      }
+    });
+    expect(state.confirm).toHaveBeenCalledTimes(1);
+    expect(state.create).not.toHaveBeenCalled();
+    expect(state.update).not.toHaveBeenCalled();
+    await act(async () => {
+      respond(true);
+      expect(await change).toBe(true);
+    });
+    expect(state.update).toHaveBeenCalledTimes(1);
+    expect(state.create).toHaveBeenCalledTimes(destination === "new" ? 1 : 0);
+  },
+);
+
+it.each(["busy", "permission", "workspace", "branch", "deleted"])(
+  "rechecks %s after confirmation before creating a worktree",
+  async (changedState) => {
+    let respond!: (confirmed: boolean) => void;
+    state.confirm.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        respond = resolve;
+      }),
+    );
+    const picker = await openPicker();
+    let change!: void | Promise<boolean>;
+    await act(async () => {
+      change = picker.onNewWorktreeSelect({
+        name: "billing-fix",
+        color: "#14b8a6",
+      });
+    });
+    if (changedState === "deleted") state.threadAvailable = false;
+    if (changedState === "busy") state.thread.runtime = { status: "running" };
+    if (changedState === "permission") state.canOperate = false;
+    if (changedState === "workspace") state.thread.worktreePath = "/trees/elsewhere";
+    if (changedState === "branch") state.thread.branch = "changed-branch";
+    await act(async () => {
+      respond(true);
+      expect(await change).toBe(false);
+    });
+    expect(state.create).not.toHaveBeenCalled();
+    expect(state.update).not.toHaveBeenCalled();
+  },
+);

@@ -91,8 +91,15 @@
   Header hover reveals Snooze and Settle controls for every thread in the card, including
   Postponed cards. Grouped rows retain the same Settle label as individual cards. Header actions
   reuse bulk snooze and settle handling for navigation, Undo, and failures.
-  Postponed workspace headers also show Un-postpone at the right edge, using the individual
-  thread action for each current card member so underlying snooze or settlement clears first.
+  Postponed thread cards, grouped rows, and workspace headers show a leftmost up-arrow
+  Un-postpone action. Workspace headers use the individual thread action for each current
+  card member so underlying snooze or settlement clears first.
+  Active thread cards, grouped thread rows, and workspace headers show a leftmost down-arrow
+  Postpone hover action. Workspace headers postpone only their current active members.
+  These actions recheck section and permission, preserve unrelated selections, and reuse
+  existing postponement and forward navigation. Other sections do not show the new action.
+  Right-click menus use the same down and up arrows wherever Postpone and Un-postpone
+  already have icons. Bulk menus and native desktop menus retain their existing icon policy.
   Grouping mode adds four pixels between cards to distinguish cards of different heights while
   keeping each card's thread rows joined. Workspace cards and individual cards have no border.
 - Settings > Fork > Group threads by workspace controls the behavior and defaults on. The
@@ -125,11 +132,15 @@
   were not changed.
   The header Un-postpone addition passed 23 focused grouping, postponed-menu, and restoration
   tests, targeted lint, and the web typecheck. An isolated Browser-panel pass verified the
-  rightmost hover icon, restoration of all three epic-12 threads, an unrelated thread staying
+  Un-postpone hover icon, restoration of all three epic-12 threads, an unrelated thread staying
   postponed, unchanged chat navigation, and persistence after reload. The narrow sidebar had
   no horizontal overflow. No provider turn was sent.
+  The Postpone hover addition passed focused grouping and postponement tests, the Sidebar
+  React Compiler check, targeted lint, and the web typecheck. An isolated Browser-panel pass
+  verified individual cards, grouped rows, whole-card postponement, the Postpone tooltip,
+  restoration, forward navigation, and an untouched thread in another workspace.
 
-## 2026-10-17 - Named worktree directories and local colors
+## 2026-10-17 - Worktree labels, named directories, and local colors
 
 - Upstream baseline: `da7c4f234db3`, merged from fork `9a1a98c554` after initial implementation.
 - Change: The web and desktop Workspace picker accepts an optional directory name and color
@@ -138,12 +149,17 @@
   Opening focuses the selected workspace row, or the name editor when named creation is active.
   Existing worktrees stay in directory order when selected. The New worktree selection
   covers its full row while name and color editing keep the menu open.
-  The details panel shows the named directory as a colored soft pill below the branch,
+  The details panel shows every assigned worktree as a colored soft pill below the branch,
   with a worktree icon beside the pill and in the top workspace row. Web and desktop
   breadcrumbs show project / worktree pill / thread, and sidebar project labels use the
   same pill. Settled and compact rows prefix their thread title with the worktree pill.
-  Sidebar card and search-result tooltips show the named-worktree pill on its own row below the branch.
-  Main checkouts and automatic directories have no pill in these locations.
+  Sidebar card and search-result tooltips show the worktree pill on its own row below the branch.
+  Pills always show the current directory name. First-prompt naming moves automatic directories
+  before setup or agent work starts and updates thread paths. Explicit directory names stay put.
+  Unsaved colors default to light gray, which is also available in both color pickers.
+  Static worktree branch naming defaults to an empty prefix across clients. Explicitly
+  saved prefixes remain unchanged; resetting the prefix selects no prefix.
+  Main checkouts and drafts awaiting a worktree have no pill in these locations.
   Clicking a pill opens the existing Workspace picker with the current checkout selected
   and focused. Breadcrumb and sidebar context menus offer Edit workspace below Rename thread
   for both local and worktree threads. The details-panel worktree row includes a dropdown arrow.
@@ -158,6 +174,9 @@
   behavior. Escape and outside clicks discard unsubmitted name and color edits, and selection
   closes the picker. Composer pickers retain their original dismissal behavior.
   Only the selected thread moves, through the normal metadata update and provider-session detach.
+  Selecting a different checkout or creating a worktree from this picker requires confirmation
+  that files and uncommitted changes stay in the original checkout. Reselecting the current
+  checkout skips confirmation. Cancelling preserves an entered new-worktree name and color.
   Manual moves require an idle thread and compare its original branch and path on the server.
   The picker's Rename action retains the shared color and directory editor for every thread
   using that checkout.
@@ -170,17 +189,33 @@
   of Initialize Git. Their named-worktree pill stays visible independently of Git status.
 - Reason: A useful directory name must exist before checkout and setup scripts run. The launch
   passes an optional `directoryName` through the existing worktree creation service. Git branch
-  generation and renaming continue independently, and managed worktree cleanup is unchanged.
+  generation stays independent for explicit directory names. Automatic directories move only
+  before setup or provider work starts; cancellation cleanup follows the moved path.
 - Scope: `namedWorktreeStore.ts` owns fork-only localStorage choices and colors, scoped by
   environment, project, and actual path. Named-worktree metadata needs no database migration.
-  Existing named directories appear with a default color on clients without saved metadata;
-  automatic directory names use the existing temporary-name detector and stay out of the list.
+  Worktree labels derive from current thread metadata, independently of saved creation choices.
+  Existing directories appear with the default color on clients without saved metadata.
+  Reuse-list eligibility remains separate from pill visibility. Automatic directories stay out
+  of the reuse list unless selected or carrying a saved color, preserving the existing policy.
   `ThreadWorkspaceMenu.tsx` owns existing-thread picker requests and selection. It composes
   the existing Git creation, status, and metadata commands without adding a separate workspace API.
   Manual directory renames preserve local colors, and manual removal forgets them.
   Generic color presets and soft-pill components belong to worktree labels. The former tag
   feature is retired across clients and server code.
-- Verification: Scoped web, server, contracts, and client-runtime typechecks and targeted lint
+- Verification: The all-worktree pill and automatic-directory naming follow-up passed 186 focused
+  web unit tests, 89 launch-service tests, 54 Chromium tests, nine React Compiler checks, and web
+  and server typechecks. Real Git fixtures cover directory moves, occupied destinations, and
+  live and archived thread references. Additional cases cover shared active runs, cancellation,
+  retries, light gray selection, and rendered pill updates. Targeted lint passed with one existing
+  optional-chaining warning in the launch tests. The isolated Browser-panel pass used Personal
+  GPT-6-Luna at low effort. It verified a real automatic-directory move, all three pill locations,
+  explicit directory preservation, matching colors, reload persistence, both gray swatches, and
+  workspace-picker entry points. Git and the isolated database agreed on the new path, and the
+  temporary directory was gone. The confirmation follow-up passed 36 focused Chromium tests,
+  web typecheck, compiler coverage, and lint. Isolated client checks exercised Proceed and Cancel
+  for local, existing, and new checkout selections, creation only after approval, and an uncommitted
+  file remaining in its original checkout. No installed-client test ran.
+  Earlier scoped web, server, contracts, and client-runtime typechecks and targeted lint
   passed. Picker DOM tests, persistence tests, launch forwarding, real Git worktree creation,
   branch renaming, collisions, and automatic named-directory cleanup passed. The full touched
   server test files also reported two failures in unchanged tests, unusual diff paths and expired
@@ -238,7 +273,8 @@
   panel verified its folder icon, dropdown arrow, picker access, and selected local checkout;
   the named-worktree pill still renders on a worktree thread.
 - Upstream conflict map: Preserve the optional directory-name field in contracts, client launch
-  forwarding, and `ThreadLaunchService`; path validation and initial path choice stay in
+  forwarding, and `ThreadLaunchService`, including automatic-directory naming before setup;
+  path validation and initial path choice stay in
   `GitVcsDriverCore`. The picker row, palette, and metadata store are separate fork-owned modules.
   `BranchToolbar`, `WorkspaceMenu`, and the first-send bootstrap in `ChatView` are the web seams.
   Existing-thread editing adds only the optional idle guard to metadata updates in contracts,

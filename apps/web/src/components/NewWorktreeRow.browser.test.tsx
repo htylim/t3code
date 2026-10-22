@@ -1,3 +1,4 @@
+import "../index.css";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
@@ -110,7 +111,7 @@ it("requires a name during workspace editing while leaving the name input usable
   expect(onSelect).not.toHaveBeenCalled();
   await act(async () => userEvent.fill(page.getByLabelText("Worktree name"), "billing-fix"));
   await selectRow();
-  expect(onSelect).toHaveBeenCalledWith({ name: "billing-fix", color: "#8b5cf6" });
+  expect(onSelect).toHaveBeenCalledWith({ name: "billing-fix", color: "#d3d3d3" });
 });
 
 it("blocks creation again when a required name is cleared", async () => {
@@ -148,5 +149,20 @@ it("lets an invalid name be corrected before selecting the full creation row", a
   expect(row.contains(document.querySelector('[aria-label="Worktree name"]'))).toBe(true);
   expect(row.contains(document.querySelector('[aria-label="Worktree color"]'))).toBe(true);
   await selectRow();
-  expect(onSelect).toHaveBeenCalledWith({ name: "billing-fix", color: "#8b5cf6" });
+  expect(onSelect).toHaveBeenCalledWith({ name: "billing-fix", color: "#d3d3d3" });
+});
+
+it("offers light gray alongside existing colors", async () => {
+  await typeName("billing-fix");
+  await act(async () =>
+    userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true })),
+  );
+  const graySwatch = page.getByRole("button", { name: "Light gray worktree color", exact: true });
+  expect(graySwatch.element().getAttribute("aria-pressed")).toBe("true");
+  await act(async () =>
+    userEvent.click(page.getByRole("button", { name: "Violet worktree color" })),
+  );
+  await act(async () => userEvent.click(graySwatch));
+  await selectRow();
+  expect(onSelect).toHaveBeenCalledWith({ name: "billing-fix", color: "#d3d3d3" });
 });

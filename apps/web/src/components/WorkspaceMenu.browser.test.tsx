@@ -12,7 +12,7 @@ vi.mock("../lib/archivedThreadsState", () => ({
 vi.mock("../state/query", () => ({
   useEnvironmentQuery: () => ({
     data: {
-      refs: ["alpha", "billing-fix", "zeta"].map((name) => ({
+      refs: ["alpha", "billing-fix", "zeta", "t3-1234abcd", "t3code-1234abcd"].map((name) => ({
         name: `feature/${name}`,
         worktreePath: `/tmp/${name}`,
         isRemote: false,
@@ -99,6 +99,7 @@ it.each([
 
 it("allows keyboard navigation after focusing the current option", async () => {
   await openWorkspace({ namedWorktreeSelection: null });
+  await vi.waitFor(() => expect(document.activeElement?.getAttribute("aria-checked")).toBe("true"));
   await act(async () => userEvent.keyboard("{ArrowDown}"));
   await vi.waitFor(() => expect(document.activeElement?.textContent).toBe("New worktree"));
   await act(async () => userEvent.keyboard("{Escape}"));
@@ -192,4 +193,10 @@ it("keeps a selected existing worktree in its original list position", async () 
   expect(selectedRow.closest('[data-slot="menu-group"]')).toBe(
     document.querySelectorAll('[data-slot="menu-group"]')[1],
   );
+});
+
+it("keeps other automatic worktrees out of the reuse list while showing the current one", async () => {
+  await openWorkspace({ effectiveEnvMode: "worktree", activeWorktreePath: "/tmp/t3-1234abcd" });
+  expect(worktreeNames()).toEqual(["alpha", "billing-fix", "t3-1234abcd", "zeta"]);
+  expect(document.querySelector('[aria-current="true"]')?.textContent).toContain("t3-1234abcd");
 });

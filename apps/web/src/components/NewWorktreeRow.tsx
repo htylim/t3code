@@ -1,4 +1,4 @@
-import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
+import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 import { WorktreeDirectoryName } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { PlusIcon } from "lucide-react";
@@ -26,7 +26,7 @@ export function NewWorktreeRow({
   onSelect: (selection: NamedWorktreeSelection | null) => void;
 }) {
   const [name, setName] = useState(selection?.name ?? "");
-  const [color, setColor] = useState(selection?.color ?? SOFT_PILL_COLOR_PRESETS[0].color);
+  const [color, setColor] = useState(selection?.color ?? DEFAULT_SOFT_PILL_COLOR);
   const directoryName = name.trim();
   const invalid = directoryName.length > 0 && !isWorktreeDirectoryName(directoryName);
   const missingRequiredName = nameRequired && !directoryName;

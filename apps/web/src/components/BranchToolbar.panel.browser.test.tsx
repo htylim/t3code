@@ -8,6 +8,7 @@ import "~/index.css";
 
 const state = vi.hoisted(() => ({
   worktreePath: "/tmp/worktree" as string | null,
+  branch: "t3/1234abcd" as string | null,
   showContextMenu: vi.fn(),
   writeTextToClipboard: vi.fn(),
 }));
@@ -30,6 +31,7 @@ vi.mock(import("../state/entities"), async (original) => ({
     environmentId: "local",
     projectId: "project",
     worktreePath: state.worktreePath,
+    branch: state.branch,
   })) as never,
   useProject: (() => ({ workspaceRoot: "/tmp/project" })) as never,
   useThreadShellsForProjectRefs: () => [],
@@ -44,6 +46,7 @@ let container: HTMLDivElement;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   state.worktreePath = "/tmp/worktree";
+  state.branch = "t3/1234abcd";
   useNamedWorktreeStore.setState({ selections: {}, worktrees: {} });
   state.showContextMenu.mockReset().mockResolvedValue("copy-path");
   state.writeTextToClipboard.mockReset().mockResolvedValue(true);
@@ -155,10 +158,11 @@ it.each([
   ["/tmp/billing-fix", "#14b8a6", "billing-fix", true],
   ["/tmp/billing-fix", null, "billing-fix", true],
   ["/tmp/billing-fix", null, "billing-fix", false],
-  ["/tmp/t3-1234abcd", null, null, true],
+  ["/tmp/t3-1234abcd", null, "t3-1234abcd", true],
+  ["/tmp/t3code-1234abcd", null, "t3code-1234abcd", false],
   [null, null, null, true],
 ] as const)(
-  "shows only a named worktree below the branch for %s with saved color %s, named %s, Git controls %s",
+  "shows every assigned worktree below the branch for %s with saved color %s, label %s, Git controls %s",
   async (worktreePath, savedColor, expectedName, showGitControls) => {
     state.worktreePath = worktreePath;
     const projectRef = {
@@ -173,16 +177,32 @@ it.each([
           : {},
     });
     await render({ panelSection: "branch", showGitControls, envMode: "worktree", envLocked: true });
-    const worktreeLabel = container.querySelector('[aria-label="Named worktree"]');
+    const worktreeLabel = container.querySelector('[aria-label="Worktree"]');
     if (expectedName) {
       expect(worktreeLabel?.textContent).toBe(expectedName);
       const worktreePill = worktreeLabel?.querySelector<HTMLElement>('[data-slot="soft-pill"]');
       expect(worktreePill?.textContent).toBe(expectedName);
       expect(worktreePill?.style.backgroundColor).toContain(
-        savedColor ? "20, 184, 166" : "139, 92, 246",
+        savedColor ? "20, 184, 166" : "211, 211, 211",
       );
     } else {
       expect(worktreeLabel).toBeNull();
     }
   },
 );
+
+it("updates an automatic pill when first-prompt naming moves its directory", async () => {
+  state.worktreePath = "/tmp/t3-1234abcd";
+  const props = { panelSection: "branch", envMode: "worktree", envLocked: true } as const;
+  await render(props);
+  expect(container.querySelector('[aria-label="Worktree"]')?.textContent).toBe("t3-1234abcd");
+  state.worktreePath = "/tmp/fix-sidebar-pills";
+  state.branch = "fix/sidebar-pills";
+  await render(props);
+  expect(container.querySelector('[aria-label="Worktree"]')?.textContent).toBe("fix-sidebar-pills");
+  expect(
+    container
+      .querySelector('[aria-label="Worktree"] [data-slot="soft-pill"]')
+      ?.getAttribute("style"),
+  ).toContain("211, 211, 211");
+});

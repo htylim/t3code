@@ -1,5 +1,5 @@
-import { NamedWorktreePill } from "../NamedWorktreePill";
-import { useNamedWorktree } from "../../hooks/useNamedWorktree";
+import { WorktreePill } from "../WorktreePill";
+import { useWorktreeDisplay } from "../../hooks/useWorktreeDisplay";
 import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
@@ -100,7 +100,7 @@ export const ChatHeader = memo(function ChatHeader({
   const breadcrumbContainerRef = useRef<HTMLDivElement>(null);
   const [collapseParentTitle, setCollapseParentTitle] = useState(false);
   const activeThreadRef = scopeThreadRef(activeThreadEnvironmentId, activeThreadId);
-  const namedWorktree = useNamedWorktree(
+  const worktreeDisplay = useWorktreeDisplay(
     activeProject ? scopeProjectRef(activeThreadEnvironmentId, activeProject.id) : null,
     activeWorktreePath,
     activeProjectCwd,
@@ -167,7 +167,7 @@ export const ChatHeader = memo(function ChatHeader({
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Title, font and rename changes resize the breadcrumb text without resizing the list, so it re-measures.
     activeProjectName,
     activeThreadTitle,
-    namedWorktree?.name,
+    worktreeDisplay?.name,
     parentThreadLink,
     interfaceFont,
     isRenamingTitle,
@@ -327,13 +327,13 @@ export const ChatHeader = memo(function ChatHeader({
             </WorkspaceBreadcrumbSeparator>
           </>
         ) : null}
-        {namedWorktree ? (
+        {worktreeDisplay ? (
           <>
             <WorkspaceBreadcrumbItem className="shrink">
               <Tooltip>
                 <TooltipTrigger render={<span className="inline-flex min-w-0 items-center" />}>
                   <WorkspaceBreadcrumbText className="max-w-40">
-                    <NamedWorktreePill
+                    <WorktreePill
                       threadRef={activeThreadRef}
                       projectRef={
                         activeProject
@@ -342,7 +342,7 @@ export const ChatHeader = memo(function ChatHeader({
                       }
                       projectCwd={activeProjectCwd}
                       worktreePath={activeWorktreePath}
-                      worktree={namedWorktree}
+                      worktree={worktreeDisplay}
                     />
                   </WorkspaceBreadcrumbText>
                 </TooltipTrigger>

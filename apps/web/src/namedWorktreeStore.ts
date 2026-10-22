@@ -1,5 +1,4 @@
 import type { ScopedProjectRef, ThreadId } from "@t3tools/contracts";
-import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
 import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
 import * as Schema from "effect/Schema";
 import { create } from "zustand";
@@ -42,42 +41,11 @@ export function namedWorktreeKey(projectRef: ScopedProjectRef, threadIdOrPath: s
   return JSON.stringify([projectRef.environmentId, projectRef.projectId, threadIdOrPath]);
 }
 
-/** Recognize named folders across clients, using the default color until one is saved locally. */
-export function resolveNamedWorktreeColor(
-  worktreePath: string,
-  savedColor?: string,
-): string | null {
-  if (savedColor) return savedColor;
+/** Keep automatic folders out of the reuse list unless a custom color marks them as named. */
+export function isNamedWorktree(worktreePath: string, savedColor?: string): boolean {
+  if (savedColor) return true;
   const directoryName = worktreePath.split(/[\\/]/).at(-1) ?? worktreePath;
-  return isTemporaryWorktreeBranch(directoryName) ? null : SOFT_PILL_COLOR_PRESETS[0].color;
-}
-
-/** Describe an existing named worktree, excluding the main checkout and automatic folders. */
-export function resolveNamedWorktree({
-  worktreePath,
-  projectCwd,
-  savedColor,
-}: {
-  worktreePath: string | null;
-  projectCwd?: string | null | undefined;
-  savedColor?: string | undefined;
-}): NamedWorktreeSelection | null {
-  if (!worktreePath || worktreePath === projectCwd) return null;
-  const color = resolveNamedWorktreeColor(worktreePath, savedColor);
-  if (!color) return null;
-  return { name: worktreePath.split(/[\\/]/).at(-1) ?? worktreePath, color };
-}
-
-/** Read the same named-worktree identity as the pills when opening a context menu. */
-export function readNamedWorktree(
-  projectRef: ScopedProjectRef,
-  worktreePath: string | null,
-  projectCwd: string | null,
-): NamedWorktreeSelection | null {
-  if (!worktreePath || !projectCwd) return null;
-  const savedColor =
-    useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, worktreePath)]?.color;
-  return resolveNamedWorktree({ worktreePath, projectCwd, savedColor });
+  return !isTemporaryWorktreeBranch(directoryName);
 }
 
 /** Keep color outside server state while the ordinary launch owns Git and cleanup. */

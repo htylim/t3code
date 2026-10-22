@@ -1,3 +1,4 @@
+import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 import { useAtomValue } from "@effect/atom-react";
 import { GitCommandError } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -20,7 +21,7 @@ import {
 import { requestConfirmDialog } from "../confirmDialog";
 import {
   namedWorktreeKey,
-  resolveNamedWorktreeColor,
+  isNamedWorktree,
   useNamedWorktreeStore,
   type NamedWorktreeSelection,
 } from "../namedWorktreeStore";
@@ -279,7 +280,7 @@ function WorkspaceMenuContents(
   }).filter(
     (row) =>
       row.worktreePath === props.activeWorktreePath ||
-      resolveNamedWorktreeColor(
+      isNamedWorktree(
         row.worktreePath,
         namedWorktrees[namedWorktreeKey(props.projectRef, row.worktreePath)]?.color,
       ),
@@ -411,7 +412,7 @@ function WorkspaceRow(
   const metadata = useNamedWorktreeStore(
     (state) => state.worktrees[namedWorktreeKey(props.projectRef, row.worktreePath)],
   );
-  const color = resolveNamedWorktreeColor(row.worktreePath, metadata?.color);
+  const color = metadata?.color || DEFAULT_SOFT_PILL_COLOR;
   const composerFloatingLayerProps = useComposerMenuProps();
   const [actionsOpen, setActionsOpen] = useState(false);
   const statusQuery = useEnvironmentQuery(

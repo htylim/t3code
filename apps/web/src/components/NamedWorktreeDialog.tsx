@@ -1,5 +1,5 @@
 import { useEnvironmentScope } from "../state/session";
-import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
+import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 import { useAtomValue } from "@effect/atom-react";
 import type { OrchestrationV2ThreadShell, ScopedProjectRef } from "@t3tools/contracts";
 import { AuthOrchestrationOperateScope, GitCommandError } from "@t3tools/contracts";
@@ -9,7 +9,7 @@ import * as Schema from "effect/Schema";
 import { useEffect, useId, useState } from "react";
 import { create } from "zustand";
 
-import { useNamedWorktree } from "../hooks/useNamedWorktree";
+import { useWorktreeDisplay } from "../hooks/useWorktreeDisplay";
 import { DraftId, useComposerDraftStore } from "../composerDraftStore";
 import {
   useArchivedThreadSnapshots,
@@ -75,11 +75,11 @@ export function NamedWorktreeDialogHost() {
 /** Keep rejected edits open and retain the moved path if updating a thread needs a retry. */
 function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
   const { projectRef, projectCwd } = request;
-  const namedWorktree = useNamedWorktree(projectRef, request.worktreePath, projectCwd);
+  const worktreeDisplay = useWorktreeDisplay(projectRef, request.worktreePath, projectCwd);
   const [worktreePath, setWorktreePath] = useState(request.worktreePath);
   const initialName = request.worktreePath.split(/[\\/]/).at(-1) ?? request.worktreePath;
-  const initialColor = namedWorktree?.color ?? SOFT_PILL_COLOR_PRESETS[0].color;
-  const [name, setName] = useState(namedWorktree?.name ?? initialName);
+  const initialColor = worktreeDisplay?.color ?? DEFAULT_SOFT_PILL_COLOR;
+  const [name, setName] = useState(worktreeDisplay?.name ?? initialName);
   const [color, setColor] = useState(initialColor);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -256,7 +256,7 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
                 label="Worktree"
                 color={color}
                 disabled={saving}
-                onChange={(nextColor) => setColor(nextColor ?? SOFT_PILL_COLOR_PRESETS[0].color)}
+                onChange={(nextColor) => setColor(nextColor ?? DEFAULT_SOFT_PILL_COLOR)}
               />
               <div className="min-w-0">
                 <SoftPill color={color}>{directoryName || currentName}</SoftPill>

@@ -21,8 +21,10 @@ still gets its normal generated name. Named worktrees use the same automatic cle
 The Workspace picker lists named worktrees by directory and branch, with busy or dirty status.
 Colors are saved in this browser or desktop profile and do not sync between devices.
 Use a row's menu to rename an available worktree, copy its path, or remove it while keeping the branch.
-Choose the workspace before starting a thread. The picker locks once the thread has messages or an
-active session, or a saved thread has an assigned worktree.
+The composer picker locks once the thread has messages or an active session, or a saved thread has
+an assigned worktree. To change an existing idle thread's checkout, click its worktree pill or use
+**Edit workspace** in the thread menu. Confirm the move to an existing checkout or a new named
+worktree. Files and uncommitted changes remain in the original checkout.
 
 ## Formatting
 

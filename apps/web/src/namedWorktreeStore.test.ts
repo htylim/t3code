@@ -2,12 +2,7 @@ import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  namedWorktreeKey,
-  resolveNamedWorktreeColor,
-  resolveNamedWorktree,
-  useNamedWorktreeStore,
-} from "./namedWorktreeStore";
+import { namedWorktreeKey, isNamedWorktree, useNamedWorktreeStore } from "./namedWorktreeStore";
 
 const projectRef = scopeProjectRef(EnvironmentId.make("local"), ProjectId.make("project"));
 const threadId = ThreadId.make("draft");
@@ -33,27 +28,12 @@ describe("named worktree metadata", () => {
       write.mockRestore();
     }
   });
-  it("shows existing named folders across clients and hides automatic folder names", () => {
-    expect(resolveNamedWorktreeColor("/worktrees/billing-fix")).toBe("#8b5cf6");
-    expect(resolveNamedWorktreeColor("C:\\worktrees\\billing-fix", "#14b8a6")).toBe("#14b8a6");
-    expect(resolveNamedWorktreeColor("/worktrees/t3-abcd1234")).toBeNull();
-    expect(resolveNamedWorktreeColor("/worktrees/t3code-abcd1234")).toBeNull();
-    expect(resolveNamedWorktreeColor("/worktrees/t3-abcd1234", "#14b8a6")).toBe("#14b8a6");
-  });
-  it("shows pills only for named worktrees, using the directory and saved color", () => {
-    expect(resolveNamedWorktree({ worktreePath: null })).toBeNull();
-    expect(resolveNamedWorktree({ worktreePath: "/repo", projectCwd: "/repo" })).toBeNull();
-    expect(resolveNamedWorktree({ worktreePath: "/trees/t3-abcd1234" })).toBeNull();
-    expect(resolveNamedWorktree({ worktreePath: "/trees/billing-fix" })).toEqual({
-      name: "billing-fix",
-      color: "#8b5cf6",
-    });
-    expect(
-      resolveNamedWorktree({
-        worktreePath: "C:\\trees\\billing-fix",
-        savedColor: "#14b8a6",
-      }),
-    ).toEqual({ name: "billing-fix", color: "#14b8a6" });
+  it("keeps reuse eligibility independent of pill visibility", () => {
+    expect(isNamedWorktree("/worktrees/billing-fix")).toBe(true);
+    expect(isNamedWorktree("C:\\worktrees\\billing-fix", "#14b8a6")).toBe(true);
+    expect(isNamedWorktree("/worktrees/t3-abcd1234")).toBe(false);
+    expect(isNamedWorktree("/worktrees/t3code-abcd1234")).toBe(false);
+    expect(isNamedWorktree("/worktrees/t3-abcd1234", "#14b8a6")).toBe(true);
   });
 
   it("keeps independent choices for different projects and machines", () => {

@@ -1,13 +1,10 @@
 import type { ScopedProjectRef } from "@t3tools/contracts";
 
-import {
-  namedWorktreeKey,
-  resolveNamedWorktree,
-  useNamedWorktreeStore,
-} from "../namedWorktreeStore";
+import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
+import { resolveWorktreeDisplay } from "../worktreeDisplay";
 
-/** Subscribe only to this worktree's saved color when rendering its name. */
-export function useNamedWorktree(
+/** Recompute the label from current thread metadata and subscribe only to its saved color. */
+export function useWorktreeDisplay(
   projectRef: ScopedProjectRef | null,
   worktreePath: string | null,
   projectCwd?: string | null,
@@ -18,5 +15,5 @@ export function useNamedWorktree(
       : undefined,
   );
   if (!projectRef || !projectCwd) return null;
-  return resolveNamedWorktree({ worktreePath, projectCwd, savedColor });
+  return resolveWorktreeDisplay({ worktreePath, projectCwd, savedColor });
 }

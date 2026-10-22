@@ -24,7 +24,7 @@ export function withPostponedThreadMenu(
       label: selection.bulk
         ? `Postpone${labelSuffix} (${selection.activeCount})`
         : `Postpone${labelSuffix}`,
-      ...(selection.bulk ? {} : { icon: "pause" }),
+      ...(selection.bulk ? {} : { icon: "arrow-down" }),
     });
   }
   if (selection.postponedCount > 0) {
@@ -33,7 +33,7 @@ export function withPostponedThreadMenu(
       label: selection.bulk
         ? `${unpostponeVerb}${labelSuffix} (${selection.postponedCount})`
         : `${unpostponeVerb}${labelSuffix}`,
-      ...(selection.bulk ? {} : { icon: "play" }),
+      ...(selection.bulk ? {} : { icon: "arrow-up" }),
     });
   }
   const combinedMenu = [...menu];

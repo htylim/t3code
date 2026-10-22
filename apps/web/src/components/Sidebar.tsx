@@ -17,8 +17,8 @@ import {
 } from "./chat/threadContextDrag";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
 import { requestThreadWorkspaceEdit } from "./ThreadWorkspaceMenu";
-import { NamedWorktreePill } from "./NamedWorktreePill";
-import { useNamedWorktree } from "../hooks/useNamedWorktree";
+import { WorktreePill } from "./WorktreePill";
+import { useWorktreeDisplay } from "../hooks/useWorktreeDisplay";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
@@ -78,7 +78,9 @@ import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
   AlarmClockIcon,
   AlarmClockOffIcon,
+  ArrowDownIcon,
   ArrowRightLeftIcon,
+  ArrowUpIcon,
   CheckIcon,
   CircleAlertIcon,
   CircleCheckIcon,
@@ -1056,7 +1058,11 @@ function SidebarThreadTooltip({
   const projectRef = thread.projectId
     ? scopeProjectRef(thread.environmentId, thread.projectId)
     : null;
-  const namedWorktree = useNamedWorktree(projectRef, thread.worktreePath, project?.workspaceRoot);
+  const worktreeDisplay = useWorktreeDisplay(
+    projectRef,
+    thread.worktreePath,
+    project?.workspaceRoot,
+  );
   const driverKind = providerEntry?.driverKind ?? null;
   const previousProviderNames = thread.providerInstanceHistory
     .filter((instanceId) => instanceId !== modelInstanceId)
@@ -1095,16 +1101,16 @@ function SidebarThreadTooltip({
             <MiddleTruncate value={thread.branch} className="flex" />
           </div>
         ) : null}
-        {namedWorktree ? (
+        {worktreeDisplay ? (
           <div className="flex min-w-0 items-center gap-2">
             <FolderGitIcon className="size-3 shrink-0 stroke-muted-foreground" />
             <div className="pointer-events-auto min-w-0">
-              <NamedWorktreePill
+              <WorktreePill
                 threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
                 projectRef={projectRef}
                 projectCwd={project?.workspaceRoot}
                 worktreePath={thread.worktreePath}
-                worktree={namedWorktree}
+                worktree={worktreeDisplay}
               />
             </div>
           </div>
@@ -1672,6 +1678,7 @@ type SidebarThreadRowProps = {
   pinningSupported: boolean;
   isPinned: boolean;
   isPostponed: boolean;
+  isInActiveSection: boolean;
   hasSideChat: boolean;
   isSideChat: boolean;
   // Present on rows whose server supports every drop outcome: dnd-kit
@@ -1716,6 +1723,7 @@ type SidebarThreadRowProps = {
   onSettleWorkspaceCard: (threadRef: ScopedThreadRef) => void;
   onSnoozeWorkspaceCard: SidebarThreadRowProps["onSnooze"];
   onUnpostponeWorkspaceCard: (threadRef: ScopedThreadRef) => void;
+  onPostponeWorkspaceCard: (threadRef: ScopedThreadRef) => void;
   onSettle: (threadRef: ScopedThreadRef) => void;
   onActionSweepStart: (
     threadRef: ScopedThreadRef,
@@ -1724,6 +1732,7 @@ type SidebarThreadRowProps = {
   ) => void;
   onUnsettle: (threadRef: ScopedThreadRef) => void;
   onUnpostpone: (threadRef: ScopedThreadRef) => void;
+  onPostpone: (threadRef: ScopedThreadRef) => void;
   onSnooze: (threadRef: ScopedThreadRef, preset: Pick<SnoozePreset, "snoozedUntil">) => void;
   onUnsnooze: (threadRef: ScopedThreadRef) => void;
   onUnpin: (threadRef: ScopedThreadRef) => void;
@@ -1758,7 +1767,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   } = props;
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const threadKey = scopedThreadKey(threadRef);
-  const namedWorktree = useNamedWorktree(
+  const worktreeDisplay = useWorktreeDisplay(
     thread.projectId ? scopeProjectRef(thread.environmentId, thread.projectId) : null,
     thread.worktreePath,
     props.project?.workspaceRoot,
@@ -2033,9 +2042,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     event.stopPropagation();
     onUnpostpone(threadRef);
   };
-  /** Keep Un-postpone from starting a card drag or an action sweep. */
-  const handleUnpostponePointerDown = (event: ReactPointerEvent) => {
+  /** Keep buttons without a sweep action from starting a card drag or sweep. */
+  const handleNonSweepActionPointerDown = (event: ReactPointerEvent) => {
     event.stopPropagation();
+  };
+  /** Postpone this thread without activating its card or changing the bulk selection. */
+  const handlePostponeClick = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    props.onPostpone(threadRef);
   };
   // While the snooze popover is open the pointer leaves the row, which
   // would fade the hover actions out from under the open menu. Pin them and
@@ -2069,7 +2084,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   }, [snoozeGateExpiryMs, snoozeGateNow, thread]);
   const showSnoozeButton =
     canOperateThread && props.snoozeSupported && canSnooze(thread, { now: snoozeGateNow });
+  const showPostponeButton = canOperateThread && props.isInActiveSection;
   const showHoverActions =
+    showPostponeButton ||
     (canOperateThread && props.settlementSupported) ||
     showSnoozeButton ||
     hasUnsentDraft ||
@@ -2087,7 +2104,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const showWorkspaceSettle = canOperateThread && props.settlementSupported;
   const showWorkspaceUnpostpone = props.isPostponed;
   const showWorkspaceActions =
-    showWorkspaceSnooze || showWorkspaceSettle || showWorkspaceUnpostpone;
+    showPostponeButton || showWorkspaceSnooze || showWorkspaceSettle || showWorkspaceUnpostpone;
   if (workspaceSnoozeMenuOpenRaw && !showWorkspaceSnooze) setWorkspaceSnoozeMenuOpen(false);
   const workspaceSnoozeMenuOpen = workspaceSnoozeMenuOpenRaw && showWorkspaceSnooze;
   /** Apply a header preset to the card without activating its first thread. */
@@ -2106,9 +2123,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     event.stopPropagation();
     props.onUnpostponeWorkspaceCard(threadRef);
   };
-  /** Header controls must not start dragging their containing thread row. */
-  const handleWorkspaceActionPointerDown = (event: ReactPointerEvent) => {
+  /** Postpone only this workspace card, without activating its first thread. */
+  const handleWorkspacePostponeClick = (event: ReactMouseEvent) => {
+    event.preventDefault();
     event.stopPropagation();
+    props.onPostponeWorkspaceCard(threadRef);
   };
   const handlePrClick = (event: ReactMouseEvent<HTMLElement>, targetUrl?: string) => {
     const url = targetUrl ?? pr?.url ?? currentLinkedPr?.url;
@@ -2176,7 +2195,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     title: thread.title,
     statusLabel: topStatus?.label ?? null,
     projectDisplayName: props.projectDisplayName,
-    worktreeName: namedWorktree?.name ?? null,
+    worktreeName: worktreeDisplay?.name ?? null,
     isActive: props.isActive,
   });
 
@@ -2197,7 +2216,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     ) : (
       <span
         aria-hidden={
-          variant === "slim" && !props.workspaceRowPosition && namedWorktree ? undefined : true
+          variant === "slim" && !props.workspaceRowPosition && worktreeDisplay ? undefined : true
         }
         className={cn(
           "min-w-0 flex-1 text-sm transition-opacity motion-reduce:transition-none",
@@ -2226,16 +2245,16 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           isRegeneratingTitle && "opacity-55",
         )}
       >
-        {variant === "slim" && !props.workspaceRowPosition && namedWorktree ? (
+        {variant === "slim" && !props.workspaceRowPosition && worktreeDisplay ? (
           <>
-            <NamedWorktreePill
+            <WorktreePill
               threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
               projectRef={
                 thread.projectId ? scopeProjectRef(thread.environmentId, thread.projectId) : null
               }
               projectCwd={props.project?.workspaceRoot}
               worktreePath={thread.worktreePath}
-              worktree={namedWorktree}
+              worktree={worktreeDisplay}
               className="max-w-1/2"
             />
             {" / "}
@@ -2498,12 +2517,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             type="button"
             aria-label="Un-postpone thread"
             onClick={handleUnpostponeClick}
-            onPointerDown={handleUnpostponePointerDown}
-            className="-mr-1 inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
+            onPointerDown={handleNonSweepActionPointerDown}
+            className="inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
           />
         }
       >
-        <Undo2Icon aria-hidden className="mb-px size-3.5" />
+        <ArrowUpIcon aria-hidden className="size-3.5" />
       </TooltipTrigger>
       <TooltipPopup side="top">Un-postpone thread</TooltipPopup>
     </Tooltip>
@@ -2520,25 +2539,25 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         )}
       >
         {props.projectDisplayName ? (
-          <span className={cn("min-w-0 truncate", namedWorktree && "max-w-1/2")}>
+          <span className={cn("min-w-0 truncate", worktreeDisplay && "max-w-1/2")}>
             {props.projectDisplayName}
           </span>
         ) : null}
-        {namedWorktree ? (
+        {worktreeDisplay ? (
           <>
             {props.projectDisplayName ? (
               <span aria-hidden className="shrink-0 text-icon-muted">
                 /
               </span>
             ) : null}
-            <NamedWorktreePill
+            <WorktreePill
               threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
               projectRef={
                 thread.projectId ? scopeProjectRef(thread.environmentId, thread.projectId) : null
               }
               projectCwd={props.project?.workspaceRoot}
               worktreePath={thread.worktreePath}
-              worktree={namedWorktree}
+              worktree={worktreeDisplay}
               className="min-w-0 shrink"
             />
           </>
@@ -2609,12 +2628,48 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             </span>
             {showWorkspaceActions ? (
               <span
-                onPointerDown={handleWorkspaceActionPointerDown}
+                onPointerDown={handleNonSweepActionPointerDown}
                 className={cn(
                   "pointer-events-none absolute inset-y-0 right-0 flex items-stretch opacity-0 transition-opacity has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:static has-[:focus-visible]:opacity-100 group-any-hover/workspace-header:pointer-events-auto group-any-hover/workspace-header:static group-any-hover/workspace-header:opacity-100",
                   workspaceSnoozeMenuOpen && "pointer-events-auto static opacity-100",
                 )}
               >
+                {showWorkspaceUnpostpone ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label="Un-postpone workspace card"
+                          onClick={handleWorkspaceUnpostponeClick}
+                          className="inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        />
+                      }
+                    >
+                      <ArrowUpIcon aria-hidden className="size-3.5" />
+                    </TooltipTrigger>
+                    <TooltipPopup side="top">
+                      Un-postpone all {props.workspaceThreadCount} threads
+                    </TooltipPopup>
+                  </Tooltip>
+                ) : null}
+                {showPostponeButton ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label="Postpone workspace card"
+                          onClick={handleWorkspacePostponeClick}
+                          className="inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        />
+                      }
+                    >
+                      <ArrowDownIcon aria-hidden className="size-3.5" />
+                    </TooltipTrigger>
+                    <TooltipPopup side="top">Postpone</TooltipPopup>
+                  </Tooltip>
+                ) : null}
                 {showWorkspaceSnooze ? (
                   <SnoozeMenuButton
                     label="Snooze workspace card"
@@ -2632,10 +2687,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           type="button"
                           aria-label="Settle workspace card"
                           onClick={handleWorkspaceSettleClick}
-                          className={cn(
-                            "inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground",
-                            !showWorkspaceUnpostpone && "-mr-1",
-                          )}
+                          className="-mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
                         />
                       }
                     >
@@ -2643,25 +2695,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       Settle
                     </TooltipTrigger>
                     <TooltipPopup>Settle all {props.workspaceThreadCount} threads</TooltipPopup>
-                  </Tooltip>
-                ) : null}
-                {showWorkspaceUnpostpone ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          type="button"
-                          aria-label="Un-postpone workspace card"
-                          onClick={handleWorkspaceUnpostponeClick}
-                          className="-mr-1 inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        />
-                      }
-                    >
-                      <Undo2Icon aria-hidden className="mb-px size-3.5" />
-                    </TooltipTrigger>
-                    <TooltipPopup side="top">
-                      Un-postpone all {props.workspaceThreadCount} threads
-                    </TooltipPopup>
                   </Tooltip>
                 ) : null}
               </span>
@@ -2854,6 +2887,25 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         snoozeMenuOpen && "pointer-events-auto opacity-100",
                       )}
                     >
+                      {unpostponeButton}
+                      {showPostponeButton ? (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                aria-label="Postpone thread"
+                                onClick={handlePostponeClick}
+                                onPointerDown={handleNonSweepActionPointerDown}
+                                className="inline-flex cursor-pointer items-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                              />
+                            }
+                          >
+                            <ArrowDownIcon aria-hidden className="size-3.5" />
+                          </TooltipTrigger>
+                          <TooltipPopup side="top">Postpone</TooltipPopup>
+                        </Tooltip>
+                      ) : null}
                       {props.workspaceRowPosition &&
                       variantAction === "unsnooze" &&
                       props.snoozeSupported &&
@@ -2909,10 +2961,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                                 aria-label="Settle thread"
                                 onClick={handleSettleClick}
                                 onPointerDown={handleActionPointerDown}
-                                className={cn(
-                                  "inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground",
-                                  !props.isPostponed && "-mr-1",
-                                )}
+                                className="-mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
                               />
                             }
                           >
@@ -2922,7 +2971,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           <TooltipPopup>Settle thread</TooltipPopup>
                         </Tooltip>
                       ) : null}
-                      {unpostponeButton}
                     </span>
                   ) : null}
                 </span>
@@ -4483,6 +4531,30 @@ export default function Sidebar() {
     }),
   );
 
+  /** Recheck section and permission before parking threads from a hover action. */
+  const postponeActiveThreads = (threadKeys: readonly string[]) => {
+    const threads: EnvironmentThreadShell[] = [];
+    for (const threadKey of threadKeys) {
+      if (sectionByThreadKeyRef.current.get(threadKey) !== "active") continue;
+      const thread = threadByKeyRef.current.get(threadKey);
+      if (thread) threads.push(thread);
+    }
+    if (threads.length === 0 || !checkThreadOperations(threads)) return;
+    const activeThreadKeys = threads.map(threadShellKey);
+    postponeThreads(activeThreadKeys);
+    removeFromSelection(activeThreadKeys);
+  };
+
+  /** Park only the clicked thread, preserving unrelated selections. */
+  const handleThreadPostpone = useStableCallback((threadRef: ScopedThreadRef) => {
+    postponeActiveThreads([scopedThreadKey(threadRef)]);
+  });
+
+  /** Park this card's current active members through the existing batch navigation path. */
+  const handleWorkspaceCardPostpone = useStableCallback((threadRef: ScopedThreadRef) => {
+    postponeActiveThreads(resolveWorkspaceCardThreadKeys(threadRef));
+  });
+
   /** Settle this card through the same batch path as selection and action sweeps. */
   const handleWorkspaceCardSettle = useStableCallback((threadRef: ScopedThreadRef) => {
     const threadKeys = resolveWorkspaceCardThreadKeys(threadRef);
@@ -5613,6 +5685,7 @@ export default function Sidebar() {
                             }
                             isPinned={thread.pinnedAt != null}
                             isPostponed={section === "postponed"}
+                            isInActiveSection={section === "active"}
                             hasSideChat={sideChatThreadStates.get(threadKey)?.hasSideChat ?? false}
                             isSideChat={sideChatThreadStates.get(threadKey)?.isSideChat ?? false}
                             dropVerb={
@@ -5675,10 +5748,12 @@ export default function Sidebar() {
                             onSettleWorkspaceCard={handleWorkspaceCardSettle}
                             onSnoozeWorkspaceCard={handleWorkspaceCardSnooze}
                             onUnpostponeWorkspaceCard={handleWorkspaceCardUnpostpone}
+                            onPostponeWorkspaceCard={handleWorkspaceCardPostpone}
                             onSettle={attemptSettle}
                             onActionSweepStart={startActionSweep}
                             onUnsettle={attemptUnsettle}
                             onUnpostpone={movePostponedToActive}
+                            onPostpone={handleThreadPostpone}
                             onSnooze={attemptSnooze}
                             onUnsnooze={attemptUnsnooze}
                             onUnpin={attemptUnpin}

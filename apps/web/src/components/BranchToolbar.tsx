@@ -1,6 +1,6 @@
 import { ThreadWorkspaceMenu } from "./ThreadWorkspaceMenu";
 import { SoftPill } from "./ui/soft-pill";
-import { useNamedWorktree } from "../hooks/useNamedWorktree";
+import { useWorktreeDisplay } from "../hooks/useWorktreeDisplay";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { readLocalApi } from "../localApi";
@@ -505,7 +505,7 @@ export const BranchToolbar = memo(function BranchToolbar({
       ? (state.selections[namedWorktreeKey(activeProjectRef, threadId)] ?? null)
       : null,
   );
-  const namedWorktree = useNamedWorktree(
+  const worktreeDisplay = useWorktreeDisplay(
     activeProjectRef,
     activeWorktreePath,
     activeProject?.workspaceRoot,
@@ -588,7 +588,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
   if (!hasActiveThread || !activeProject || !activeProjectRef) return null;
-  const activeWorktreeColor = namedWorktree?.color ?? null;
+  const activeWorktreeColor = worktreeDisplay?.color ?? null;
   const workspaceProps: WorkspaceMenuProps = {
     environmentId,
     projectRef: activeProjectRef,
@@ -654,13 +654,13 @@ export const BranchToolbar = memo(function BranchToolbar({
                 {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
               />
             ) : null}
-            {namedWorktree || isLocalCheckout ? (
+            {worktreeDisplay || isLocalCheckout ? (
               <Tooltip>
                 <TooltipTrigger
                   render={
                     <div
                       className="w-full"
-                      aria-label={isLocalCheckout ? "Local checkout" : "Named worktree"}
+                      aria-label={isLocalCheckout ? "Local checkout" : "Worktree"}
                     />
                   }
                 >
@@ -677,8 +677,10 @@ export const BranchToolbar = memo(function BranchToolbar({
                           <FolderGitIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} />
                         )}
                         <span className="min-w-0 flex-1 text-left">
-                          {namedWorktree ? (
-                            <SoftPill color={namedWorktree.color}>{namedWorktree.name}</SoftPill>
+                          {worktreeDisplay ? (
+                            <SoftPill color={worktreeDisplay.color}>
+                              {worktreeDisplay.name}
+                            </SoftPill>
                           ) : (
                             "Local checkout"
                           )}

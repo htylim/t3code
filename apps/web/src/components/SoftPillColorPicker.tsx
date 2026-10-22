@@ -1,4 +1,7 @@
-import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
+import {
+  DEFAULT_SOFT_PILL_COLOR,
+  SOFT_PILL_COLOR_PRESETS,
+} from "@t3tools/client-runtime/soft-pill-colors";
 import { ThemeColorPickerPanel } from "./settings/ThemeColorPicker";
 import { Button } from "./ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
@@ -50,7 +53,7 @@ export function SoftPillColorPicker({
                 <span
                   aria-hidden
                   className="size-3.5 rounded-full border border-foreground/15"
-                  style={{ backgroundColor: color ?? SOFT_PILL_COLOR_PRESETS[0].color }}
+                  style={{ backgroundColor: color ?? DEFAULT_SOFT_PILL_COLOR }}
                 />
                 Custom color
               </Button>
@@ -59,7 +62,7 @@ export function SoftPillColorPicker({
           <PopoverPopup align="start" side="bottom" padding="none" sideOffset={8}>
             <ThemeColorPickerPanel
               label={label}
-              value={color ?? SOFT_PILL_COLOR_PRESETS[0].color}
+              value={color ?? DEFAULT_SOFT_PILL_COLOR}
               onChange={onChange}
             />
           </PopoverPopup>

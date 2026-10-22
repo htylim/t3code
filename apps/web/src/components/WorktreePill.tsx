@@ -1,10 +1,10 @@
 import type { ScopedProjectRef, ScopedThreadRef } from "@t3tools/contracts";
-import type { NamedWorktreeSelection } from "../namedWorktreeStore";
+import type { WorktreeDisplay } from "../worktreeDisplay";
 import { requestThreadWorkspaceEdit } from "./ThreadWorkspaceMenu";
 import { SoftPill } from "./ui/soft-pill";
 
 /** Open the Workspace picker without activating the pill's containing thread. */
-export function NamedWorktreePill({
+export function WorktreePill({
   projectRef,
   threadRef,
   projectCwd,
@@ -16,7 +16,7 @@ export function NamedWorktreePill({
   threadRef: ScopedThreadRef;
   projectCwd: string | null | undefined;
   worktreePath: string | null;
-  worktree: NamedWorktreeSelection;
+  worktree: WorktreeDisplay;
   className?: string;
 }) {
   if (!projectRef || !projectCwd || !worktreePath) return null;

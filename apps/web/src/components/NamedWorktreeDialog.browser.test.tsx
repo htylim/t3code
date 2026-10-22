@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
   rename: vi.fn(),
   update: vi.fn(),
   refresh: vi.fn(),
+  refreshStatus: vi.fn(),
   allowed: true,
   entries: ["/trees/alpha", "/trees/beta"],
   live: [] as TestThread[],
@@ -34,7 +35,7 @@ vi.mock("../state/entities", () => ({
     branch: "feature",
     runtime: null,
   }),
-  readThreadShell: () => ({ ...state.live[0], runtime: null }),
+  readThreadShell: () => ({ ...state.live[0], branch: "feature", runtime: null }),
   useProject: () => ({ workspaceRoot: "/repo" }),
 }));
 vi.mock("../lib/archivedThreadsState", () => ({
@@ -73,6 +74,8 @@ vi.mock("../state/vcs", async () => {
     vcsEnvironment: {
       renameWorktree: { permissionAtom: () => Atom.make(state.allowed) },
       createWorktree: { permissionAtom: () => Atom.make(state.allowed) },
+      refreshStatus: { kind: "refreshStatus" },
+      removeWorktree: {},
       listRefs: () => null,
       status: () => null,
     },
@@ -82,7 +85,10 @@ vi.mock("../state/session", () => ({
   useEnvironmentScope: () => state.allowed,
   readEnvironmentScope: () => state.allowed,
 }));
-vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => state.rename }));
+vi.mock("../state/use-atom-command", () => ({
+  useAtomCommand: (command: { kind?: string }) =>
+    command.kind === "refreshStatus" ? state.refreshStatus : state.rename,
+}));
 vi.mock("../state/use-orchestration-command", () => ({
   useOrchestrationCommand: () => state.update,
 }));
@@ -97,7 +103,8 @@ vi.mock("../composerDraftStore", () => ({
 }));
 
 import { NamedWorktreeDialogHost, requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
-import { NamedWorktreePill } from "./NamedWorktreePill";
+import { WorktreePill } from "./WorktreePill";
+import { ConfirmDialogHost } from "./ConfirmDialogHost";
 import { ThreadWorkspaceMenuHost } from "./ThreadWorkspaceMenu";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
 const projectRef = {
@@ -128,6 +135,28 @@ async function openEditor() {
   });
 }
 
+/** Open the real workspace picker with the application confirmation host mounted. */
+async function openWorkspacePicker() {
+  await act(async () =>
+    root.render(
+      <>
+        <WorktreePill
+          threadRef={{ environmentId: projectRef.environmentId, threadId: ThreadId.make("live") }}
+          projectRef={projectRef}
+          projectCwd="/repo"
+          worktreePath={worktreePath}
+          worktree={{ name: "alpha", color: "#d3d3d3" }}
+        />
+        <ThreadWorkspaceMenuHost />
+        <ConfirmDialogHost />
+      </>,
+    ),
+  );
+  await act(async () =>
+    userEvent.click(page.getByRole("button", { name: "Edit workspace alpha" })),
+  );
+}
+
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   state.rename.mockReset().mockResolvedValue({
@@ -136,6 +165,9 @@ beforeEach(() => {
   });
   state.update.mockReset().mockResolvedValue({ _tag: "Success", value: {} });
   state.refresh.mockReset();
+  state.refreshStatus
+    .mockReset()
+    .mockResolvedValue({ _tag: "Success", value: { isRepo: true, refName: "main" } });
   state.allowed = true;
   state.entries = ["/trees/alpha", "/trees/beta"];
   state.live = [{ id: "live", projectId: "project", worktreePath, status: "completed" }];
@@ -151,31 +183,38 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("opens from a pill without activating its containing sidebar row", async () => {
-  const activateThread = vi.fn();
-  await act(async () =>
-    root.render(
-      <div onClick={activateThread}>
-        <NamedWorktreePill
-          threadRef={{ environmentId: projectRef.environmentId, threadId: ThreadId.make("live") }}
-          projectRef={projectRef}
-          projectCwd="/repo"
-          worktreePath={worktreePath}
-          worktree={{ name: "alpha", color: "#8b5cf6" }}
-        />
-        <ThreadWorkspaceMenuHost />
-      </div>,
-    ),
-  );
-  await act(async () =>
-    userEvent.click(
-      document.querySelector<HTMLButtonElement>('[aria-label="Edit workspace alpha"]')!,
-    ),
-  );
-  expect(activateThread).not.toHaveBeenCalled();
-  expect(document.querySelector('[role="menu"]')?.textContent).toContain("Workspace");
-  expect(document.querySelector('[aria-current="true"]')?.textContent).toContain("alpha");
-});
+it.each([
+  ["/trees/alpha", "alpha", "alpha"],
+  ["/trees/t3-abcd1234", "t3-abcd1234", "t3-abcd1234"],
+])(
+  "opens the picker for %s without activating its containing sidebar row",
+  async (path, label, directoryName) => {
+    const activateThread = vi.fn();
+    state.live[0]!.worktreePath = path;
+    await act(async () =>
+      root.render(
+        <div onClick={activateThread}>
+          <WorktreePill
+            threadRef={{ environmentId: projectRef.environmentId, threadId: ThreadId.make("live") }}
+            projectRef={projectRef}
+            projectCwd="/repo"
+            worktreePath={path}
+            worktree={{ name: label, color: "#d3d3d3" }}
+          />
+          <ThreadWorkspaceMenuHost />
+        </div>,
+      ),
+    );
+    await act(async () =>
+      userEvent.click(page.getByRole("button", { name: `Edit workspace ${label}`, exact: true })),
+    );
+    expect(activateThread).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="menu"]')?.textContent).toContain("Workspace");
+    expect(document.querySelector('[aria-current="true"]')?.textContent).toContain(directoryName);
+    await act(async () => userEvent.keyboard("{Escape}"));
+    await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+);
 
 it("disables Save for a sibling collision and recovers when the name changes", async () => {
   await openEditor();
@@ -262,4 +301,63 @@ it("blocks renaming a running worktree but still allows color changes", async ()
     ),
   );
   expect(button("Save").disabled).toBe(false);
+});
+
+it.each(["Cancel", "Proceed"])(
+  "%s in the workspace confirmation controls whether the thread moves",
+  async (action) => {
+    await openWorkspacePicker();
+    await act(async () =>
+      userEvent.click(page.getByRole("menuitemradio", { name: /local checkout/ })),
+    );
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull());
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+      "Files and uncommitted changes will stay in the current checkout",
+    );
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(state.update).not.toHaveBeenCalled();
+    await act(async () => userEvent.click(page.getByRole("button", { name: action, exact: true })));
+    if (action === "Proceed") {
+      await vi.waitFor(() =>
+        expect(state.update).toHaveBeenCalledWith({
+          environmentId: "remote",
+          input: {
+            threadId: "live",
+            branch: "main",
+            worktreePath: null,
+            expectedBranch: "feature",
+            expectedWorktreePath: worktreePath,
+            expectedIdle: true,
+          },
+        }),
+      );
+      await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+    } else {
+      expect(state.update).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
+      await act(async () => userEvent.keyboard("{Escape}"));
+    }
+    expect(state.rename).not.toHaveBeenCalled();
+  },
+);
+
+it("keeps a new worktree name after cancelling its confirmation", async () => {
+  await openWorkspacePicker();
+  await act(async () => userEvent.fill(page.getByLabelText("Worktree name"), "billing-fix"));
+  await act(async () => userEvent.click(page.getByText("New worktree", { exact: true })));
+  await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull());
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+    'create worktree "billing-fix"',
+  );
+  expect(state.rename).not.toHaveBeenCalled();
+  expect(state.update).not.toHaveBeenCalled();
+  await act(async () => userEvent.click(page.getByRole("button", { name: "Cancel", exact: true })));
+  await vi.waitFor(() =>
+    expect(document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')?.value).toBe(
+      "billing-fix",
+    ),
+  );
+  expect(state.rename).not.toHaveBeenCalled();
+  expect(state.update).not.toHaveBeenCalled();
+  await act(async () => userEvent.keyboard("{Escape}"));
 });

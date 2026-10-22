@@ -50,13 +50,16 @@ and other phone-only settings ignore the filter.
 
 In **Settings → Source Control → Worktree branch naming**, choose a static prefix,
 a model-selected semantic prefix such as `feat/` or `fix/`, or custom instructions
-for the complete name. The static prefix defaults to `t3/`; a trailing slash is
-optional, and an empty prefix adds nothing. Invalid characters in a static prefix
-are replaced with hyphens. Custom instructions are appended to
-the naming prompt and can specify issue IDs, namespaces, and casing.
+for the complete name. The static prefix defaults to empty, so generated names have
+no prefix. If you set a prefix, a trailing slash is optional. Invalid characters in
+a static prefix are replaced with hyphens. Custom instructions are appended to the
+naming prompt and can specify issue IDs, namespaces, and casing.
 
 These settings apply to automatically named new worktree branches. Select a project
-to override its environment defaults. Worktree directories keep their original names.
+to override its environment defaults. On the first prompt, automatic worktree directories
+also take the generated name, with slashes replaced by hyphens, before setup scripts or
+the agent start. Explicit directory names stay unchanged. If another thread is using
+the worktree, or Git refuses the move, the directory keeps its original name.
 If generation fails, or a custom name is invalid or already taken, the temporary
 branch name remains.
 

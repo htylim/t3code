@@ -7,6 +7,7 @@ import { useRef, useState } from "react";
 import { create } from "zustand";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
+import { requestConfirmDialog } from "../confirmDialog";
 import { useNamedWorktreeStore, type NamedWorktreeSelection } from "../namedWorktreeStore";
 import { readThreadShell, useProject, useQuietThreadShell } from "../state/entities";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
@@ -93,6 +94,10 @@ export function ThreadWorkspaceMenu({
     reportFailure: false,
   });
   const [pending, setPending] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [newWorktreeSelection, setNewWorktreeSelection] = useState<NamedWorktreeSelection | null>(
+    null,
+  );
   const pendingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const workspaceContext = thread ?? draft;
@@ -103,10 +108,15 @@ export function ThreadWorkspaceMenu({
   /** Recheck the target thread at execution, not only when its popup was rendered. */
   function canChangeWorkspace(): boolean {
     const currentThread = readThreadShell(threadRef);
+    if (thread && !currentThread) return false;
     return (
-      !pendingRef.current &&
       readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope) &&
-      !(currentThread && isThreadWorkspaceBusy(currentThread))
+      !(
+        currentThread &&
+        (isThreadWorkspaceBusy(currentThread) ||
+          currentThread.worktreePath !== activeWorktreePath ||
+          currentThread.branch !== activeBranch)
+      )
     );
   }
 
@@ -141,20 +151,30 @@ export function ThreadWorkspaceMenu({
     useNamedWorktreeStore.getState().select(projectRef, threadRef.threadId, null);
   }
 
-  /** Leave failures in the picker and prevent a double click from creating two checkouts. */
-  async function changeWorkspace(change: () => Promise<void>): Promise<boolean> {
-    if (!canChangeWorkspace()) return false;
+  /** Hide the picker while confirming, then recheck the thread before any mutation. */
+  async function confirmWorkspaceMove(message: string): Promise<boolean> {
+    setConfirming(true);
+    const confirmed = await requestConfirmDialog(
+      `${message}\n\nFiles and uncommitted changes will stay in the current checkout. They will not be transferred.`,
+      { confirmLabel: "Proceed" },
+    );
+    return Boolean(confirmed) && canChangeWorkspace();
+  }
+
+  /** Leave cancellations and failures in the picker and prevent duplicate operations. */
+  async function changeWorkspace(change: () => Promise<boolean>): Promise<boolean> {
+    if (pendingRef.current || !canChangeWorkspace()) return false;
     pendingRef.current = true;
     setPending(true);
     setError(null);
     let changed = false;
     try {
-      await change();
-      changed = true;
+      changed = await change();
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : String(cause);
       setError(detail);
     }
+    setConfirming(false);
     pendingRef.current = false;
     setPending(false);
     return changed;
@@ -170,7 +190,16 @@ export function ThreadWorkspaceMenu({
       if (status._tag === "Failure") throw squashAtomCommandFailure(status);
       if (!status.value.isRepo)
         throw new Error("This workspace is unavailable. Choose another checkout.");
+      const currentCheckoutPath = activeWorktreePath ?? project?.workspaceRoot;
+      if (
+        seed.worktreePath !== currentCheckoutPath &&
+        !(await confirmWorkspaceMove(
+          `Move this thread to the selected checkout?\n${seed.worktreePath}`,
+        ))
+      )
+        return false;
       await assignWorkspace({ worktreePath: seed.worktreePath, branch: status.value.refName });
+      return true;
     });
   }
 
@@ -183,7 +212,14 @@ export function ThreadWorkspaceMenu({
         throw new Error("Enter a worktree name before creating a workspace.");
       if (!activeBranch)
         throw new Error("The thread has no source branch. Choose an existing workspace.");
+      setNewWorktreeSelection(selection);
       const branch = selection.name.trim();
+      if (
+        !(await confirmWorkspaceMove(
+          `Create a worktree and move this thread?\nThis will create worktree "${branch}" from branch "${activeBranch}" and move this thread to it.`,
+        ))
+      )
+        return false;
       const created = await createWorktree({
         environmentId: threadRef.environmentId,
         input: {
@@ -207,6 +243,7 @@ export function ThreadWorkspaceMenu({
           { cause },
         );
       }
+      return true;
     });
   }
 
@@ -223,6 +260,12 @@ export function ThreadWorkspaceMenu({
   return (
     <WorkspaceMenu
       {...menuProps}
+      {...(confirming ? { open: false } : {})}
+      onOpenChange={(open) => {
+        if (confirming) return;
+        if (!open) setNewWorktreeSelection(null);
+        menuProps.onOpenChange?.(open);
+      }}
       environmentId={threadRef.environmentId}
       projectRef={projectRef}
       projectCwd={project.workspaceRoot}
@@ -234,6 +277,7 @@ export function ThreadWorkspaceMenu({
       canUseWorktree={!pending && !running && canOperate}
       canCreateWorktree={canCreate}
       requireWorktreeName
+      namedWorktreeSelection={newWorktreeSelection}
       interactionMode="standalone"
       selectionHint={hint}
       onEnvModeChange={() => selectWorktree({ worktreePath: project.workspaceRoot, branch: null })}

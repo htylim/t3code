@@ -312,7 +312,7 @@ const make = Effect.gen(function* () {
     let runReleased = false;
     // The background branch rename records the worktree again when it lands,
     // so cleanup stops it before forgetting a removed worktree.
-    let branchRename: Fiber.Fiber<unknown> | null = null;
+    let branchRename: Fiber.Fiber<unknown, ThreadLaunchError> | null = null;
     if (input.workspaceStrategy.type === "worktree") {
       yield* setupTracker.begin({
         threadId,
@@ -496,7 +496,11 @@ const make = Effect.gen(function* () {
       ) {
         const oldBranch = branch;
         const worktreeCwd = worktreePath;
-        branchRename = yield* generateBranchNameFor(worktreeCwd, initialMessage).pipe(
+        const directoryName = worktreeCwd.split(/[\\/]/).at(-1) ?? worktreeCwd;
+        const renameDirectory =
+          isTemporaryWorktreeBranch(directoryName) &&
+          !(input.workspaceStrategy.type === "worktree" && input.workspaceStrategy.directoryName);
+        const renameWorkspace = generateBranchNameFor(worktreeCwd, initialMessage).pipe(
           Effect.flatMap(({ branch: newBranch, exactName }) =>
             git.renameBranch({
               cwd: worktreeCwd,
@@ -507,24 +511,65 @@ const make = Effect.gen(function* () {
           ),
           Effect.flatMap((renamed) =>
             Effect.gen(function* () {
+              let renamedWorktreePath = worktreeCwd;
+              if (renameDirectory) {
+                const snapshot = yield* threads.getShellSnapshot();
+                const sharedRunningThread = [...snapshot.threads, ...snapshot.archivedThreads].some(
+                  (thread) =>
+                    thread.id !== threadId &&
+                    thread.worktreePath === worktreeCwd &&
+                    thread.activeRunId !== null,
+                );
+                if (!sharedRunningThread) {
+                  const moved = yield* git
+                    .renameWorktree({
+                      cwd: project.workspaceRoot,
+                      path: worktreeCwd,
+                      newDirName: renamed.branch.replaceAll("/", "-"),
+                    })
+                    .pipe(
+                      Effect.catchCause((cause) =>
+                        Effect.logWarning("Automatic worktree directory rename failed", {
+                          threadId,
+                          cause,
+                        }).pipe(Effect.as(null)),
+                      ),
+                    );
+                  if (moved !== null) {
+                    renamedWorktreePath = moved.worktree.path;
+                    worktreePath = renamedWorktreePath;
+                    if (createdWorktreePath === worktreeCwd)
+                      createdWorktreePath = renamedWorktreePath;
+                  }
+                }
+              }
+              const directoryMoved = renamedWorktreePath !== worktreeCwd;
               yield* threads
                 .dispatch({
                   type: "thread.metadata.update",
                   commandId: CommandId.make(`${input.commandId}:branch-rename`),
                   threadId,
                   branch: renamed.branch,
-                  worktreePath: worktreeCwd,
+                  worktreePath: renamedWorktreePath,
                   expectedBranch: oldBranch,
                   expectedWorktreePath: worktreeCwd,
                 })
                 .pipe(
-                  Effect.catchCause((cause) =>
-                    Effect.logWarning("Parent thread worktree branch update failed", {
+                  Effect.catchCause((cause) => {
+                    if (directoryMoved) return Effect.failCause(cause);
+                    return Effect.logWarning("Parent thread worktree branch update failed", {
                       threadId,
                       cause,
-                    }),
-                  ),
+                    });
+                  }),
                 );
+              branch = renamed.branch;
+              if (renameDirectory)
+                yield* setupTracker.update(threadId, (snapshot) => ({
+                  ...snapshot,
+                  worktreePath: renamedWorktreePath,
+                  branch: renamed.branch,
+                }));
               // Updating the parent first makes later subagents inherit the new name.
               // Re-read after each pass for children of subagents updated in that pass.
               const visited = new Set([threadId]);
@@ -534,7 +579,7 @@ const make = Effect.gen(function* () {
                   (thread) =>
                     !visited.has(thread.id) &&
                     thread.worktreePath === worktreeCwd &&
-                    thread.branch === oldBranch,
+                    (directoryMoved || thread.branch === oldBranch),
                 );
                 if (sharing.length === 0) break;
                 for (const thread of sharing) {
@@ -544,32 +589,39 @@ const make = Effect.gen(function* () {
                       type: "thread.metadata.update",
                       commandId: CommandId.make(`${input.commandId}:branch-rename:${thread.id}`),
                       threadId: thread.id,
-                      branch: renamed.branch,
-                      expectedBranch: oldBranch,
+                      branch: thread.branch === oldBranch ? renamed.branch : thread.branch,
+                      ...(directoryMoved ? { worktreePath: renamedWorktreePath } : {}),
+                      expectedBranch: thread.branch,
                       expectedWorktreePath: worktreeCwd,
                     })
                     .pipe(
-                      Effect.catchCause((cause) =>
-                        Effect.logWarning("Shared thread worktree branch update failed", {
+                      Effect.catchCause((cause) => {
+                        if (directoryMoved) return Effect.failCause(cause);
+                        return Effect.logWarning("Shared thread worktree branch update failed", {
                           threadId: thread.id,
                           cause,
-                        }),
-                      ),
+                        });
+                      }),
                     );
                 }
               }
-            }),
+            }).pipe(Effect.uninterruptible),
           ),
-          Effect.catchCause((cause) =>
-            Effect.logWarning("Thread worktree branch rename failed", {
+          Effect.mapError(mapError(input, "update-thread", threadId)),
+          Effect.catchCause((cause) => {
+            if (Cause.hasInterruptsOnly(cause)) return Effect.failCause(cause);
+            if (worktreePath !== worktreeCwd) return Effect.failCause(cause);
+            return Effect.logWarning("Thread worktree branch rename failed", {
               commandId: input.commandId,
               threadId,
               oldBranch,
               cause,
-            }),
-          ),
-          Effect.forkIn(preparationScope),
+            });
+          }),
         );
+        // Setup scripts and providers must never start in a directory that will move.
+        if (renameDirectory) yield* renameWorkspace;
+        else branchRename = yield* renameWorkspace.pipe(Effect.forkIn(preparationScope));
       }
 
       if (runId !== null && worktreePath !== null) {
