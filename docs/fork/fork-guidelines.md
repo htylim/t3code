@@ -208,10 +208,8 @@ copying an ignored file into it. Direct source development remains opt-in; copy 
 
 Before the first install, back up `~/.t3/userdata` and fully quit every running T3 Code app. Open the
 DMG and drag `T3 Code (Fork)` into `/Applications`. Local builds have an ad-hoc bundle signature,
-but no Apple Developer ID or notarization. If macOS blocks an unverified developer, follow
-[Apple's per-app approval instructions](https://support.apple.com/en-us/102445) in System Settings
-under Privacy & Security. A damaged-app warning requires investigation and signature verification;
-do not treat it as proof that manual approval is all that is missing.
+but no Apple Developer ID or notarization. Follow the [Gatekeeper approval steps](#gatekeeper-approval-for-local-builds)
+if macOS blocks the app.
 
 T3 Code Nightly and T3 Code Fork can remain installed together. They cannot run together: both use
 the same production database, settings, logs, and Electron user-data lock. Quit one before starting
@@ -219,6 +217,28 @@ the other. Giving the apps separate bundle identifiers does not isolate their sh
 
 Run the smallest relevant tests, lint checks, and type checks for each change. Do not point a
 development server at `~/.t3/userdata`, and do not set `VITE_HTTP_URL` or `VITE_WS_URL`.
+
+### Gatekeeper approval for local builds
+
+Include these steps in every macOS fork release's installation notes while Developer ID signing
+and notarization remain unconfigured:
+
+1. Open the installed `T3 Code (Fork)` from Finder's Applications folder. If macOS says Apple
+   could not verify the app, click **Done**.
+2. Open **System Settings > Privacy & Security** and scroll down to **Security**.
+3. Click **Open Anyway** for `T3 Code (Fork)`. On versions showing **Open** first, click that,
+   then **Open Anyway**. Authenticate and confirm opening the app.
+4. If no approval button appears, try opening the installed app again, dismiss the warning,
+   and close and reopen Privacy & Security. Apple says the button is available for about an hour
+   after the attempted launch. If it is still missing, ask for the macOS version and a screenshot
+   of the Security section before suggesting another workaround.
+
+These are [Apple's per-app approval steps](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac).
+Do not disable Gatekeeper globally or automatically strip quarantine from the installed app.
+A damaged-app warning requires signature verification and investigation; do not treat it as an
+ordinary unverified-developer warning. Ad-hoc signing verifies bundle integrity but does not
+establish Apple trust. Removing the unverified-developer approval step requires Developer ID
+signing and notarization. Do not promise a warning-free installation with the current build mode.
 
 ## Release the Fork desktop app
 
@@ -247,9 +267,13 @@ git ls-remote --tags origin 'fork-v*'
 If the developer named a branch, confirm `release_source_branch` is that exact branch before doing
 anything else. Keep `fork_commit_before` and verify at the end that `fork` still points to it.
 
-The fork suffix is not stored or incremented by the project. Check the previous release and choose
-the next value manually, for example `0.0.31-fork.2` to `0.0.31-fork.3`. Capture the release commit
-before building so it can be compared with the commit embedded in the artifact.
+The fork suffix is not stored or incremented by the project. Check published releases and remote
+tags, then choose the next unused numeric suffix, for example `0.1.0-fork.22` to `0.1.0-fork.23`.
+Use `0.1.0-fork.N`, without feature names, unless the developer requests a different base version.
+App, server, client, tag, release title, artifact names, and checksum
+filename must agree. Capture the release commit before building so it can be compared with the
+commit embedded in the artifact. Rebuilds replacing a published defective artifact get a new
+version; retain the old tag and mark the old release as superseded with a link to the replacement.
 
 ### 2. Run the focused packaging checks
 
@@ -270,7 +294,7 @@ source branch. The detached worktree still embeds `release_commit`, while the te
 updates make the server, client, Electron metadata, and artifact names agree:
 
 ```bash
-fork_version=0.0.31-fork.3
+fork_version=0.1.0-fork.23
 release_root="$PWD"
 release_stage="$(mktemp -d "${TMPDIR%/}/t3code-fork-release.XXXXXX")"
 git worktree add --detach "$release_stage" "$release_commit"
@@ -278,7 +302,8 @@ git worktree add --detach "$release_stage" "$release_commit"
 cd "$release_stage"
 vp i --frozen-lockfile
 node scripts/update-release-package-versions.ts "$fork_version"
-APP_VERSION="$fork_version" vp run dist:desktop:dmg:arm64 --build-version "$fork_version"
+APP_VERSION="$fork_version" T3CODE_DESKTOP_SIGNED=false \
+  vp run dist:desktop:dmg:arm64 --build-version "$fork_version"
 
 test "$(node apps/server/dist/bin.mjs --version)" = "t3 v${fork_version}"
 rg --fixed-strings -l "$fork_version" apps/server/dist/client/assets
@@ -348,6 +373,25 @@ The packaging script also verifies the staged app before exporting artifacts. An
 checks bundle integrity, but does not provide Apple Developer ID trust or notarization. Do not
 claim a standard Gatekeeper-approved installation without configuring and testing both.
 
+Local macOS packaging must retain `identity: "-"`, `hardenedRuntime: false`, and `notarize: false`.
+Skipping bundle signing leaves Electron's original executable signature invalid after packaging.
+Do not bypass the packaging script's signature verification to produce an artifact.
+
+Inspect the executable and native resource monitor with `lipo -archs`; both must match the
+advertised architecture. An arm64 release targets Apple Silicon, not Intel Macs. Read the minimum
+macOS version from the built bundle rather than guessing compatibility. Confirm the app contains
+no upstream `app-update.yml` feed.
+
+Run the packaged server with fresh temporary state using `ELECTRON_RUN_AS_NODE=1`, the bundled
+`apps/server/dist/bin.mjs` entry, and `serve --base-dir <temporary-directory> --no-browser` on an
+available loopback port. Verify HTTP 200 for the bundled client and the JavaScript asset containing
+the exact release version. Track and stop only the process started for this check. Do not print
+pairing tokens or other credentials from its logs.
+
+Save SHA-256 checksums for the DMG and ZIP in `release/SHA256SUMS-${fork_version}.txt`, using bare
+artifact filenames so recipients can run `shasum -a 256 -c` from their download directory. Attach
+this file to the release alongside both artifacts.
+
 ### 5. Tag safely, then stop before publishing
 
 Create an annotated tag that starts with `fork-v`, not `v`. A `v*.*.*` tag triggers the upstream
@@ -366,17 +410,34 @@ DMG and ZIP. Push the selected source branch only when the developer explicitly 
 Do not push or update `fork` for a release sourced from another branch. Do not publish npm packages,
 deploy hosted channels, update `main`, or attach upstream auto-update metadata.
 
+Prepare release notes outside the worktree and set `release_notes_file` to their absolute path.
+Include the source commit, changes, architecture, minimum macOS version, manual-update behavior,
+shared-data backup and quit instructions, the [Gatekeeper approval steps](#gatekeeper-approval-for-local-builds),
+and the checks actually run. State that the app is ad-hoc signed and lacks Developer ID signing
+and notarization. Record any unverified native desktop installation or launch explicitly.
+
 ```bash
 git push origin "fork-v${fork_version}"
 gh release create "fork-v${fork_version}" "$dmg" "$zip" \
+  "release/SHA256SUMS-${fork_version}.txt" \
   --repo htylim/t3code \
+  --target "$release_source_branch" --verify-tag --latest \
   --title "T3 Code ${fork_version}" \
-  --notes "Ad-hoc signed Apple Silicon fork build, without Developer ID or notarization. Back up ~/.t3/userdata and quit other T3 Code apps before launching."
+  --notes-file "$release_notes_file"
 ```
 
-After downloading the published artifacts, repeat the checksum and complete bundle-signature
-checks. A bundled-server smoke test does not verify a quarantined desktop launch. Test the latter
-only with authorization and isolated application state. Before any installed-app launch, back up `~/.t3/userdata` and quit every other T3 Code desktop app before launching the fork.
+Download the published DMG, ZIP, and checksum file into a fresh temporary directory. Run
+`shasum -a 256 -c`, extract the downloaded ZIP, mount the downloaded DMG read-only, and repeat full
+bundle-signature verification on both contained apps. Confirm the release tag resolves to the
+recorded commit and the release is marked latest. Detach only test mounts created for this release,
+remove the disposable build worktree, and wait for all build, upload, verification, and cleanup
+processes to finish before reporting completion.
+
+A bundled-server smoke test does not verify a quarantined desktop launch. Test the latter only
+with authorization and isolated application state. `T3CODE_HOME` isolates server state but does
+not isolate the packaged Electron profile. Do not launch a test copy against the daily-use profile.
+Before any authorized installed-app launch, back up `~/.t3/userdata` and quit every other T3 Code
+desktop app.
 
 ## Record downstream drift
 
