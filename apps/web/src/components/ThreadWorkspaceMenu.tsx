@@ -1,7 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { AuthOrchestrationOperateScope, type ScopedThreadRef } from "@t3tools/contracts";
 import { useRef, useState } from "react";
 import { create } from "zustand";
@@ -14,7 +13,7 @@ import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { vcsEnvironment } from "../state/vcs";
-import { isWorktreeThreadRunning, type PreviousWorktreeSeed } from "./BranchToolbar.logic";
+import { isThreadWorkspaceBusy, type PreviousWorktreeSeed } from "./BranchToolbar.logic";
 import type { WorkspaceMenuProps } from "./WorkspaceMenu";
 import { WorkspaceChangeDialog } from "./WorkspaceChangeDialog";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
@@ -30,17 +29,10 @@ const useWorkspacePickerRequest = create<{ request: WorkspacePickerRequest | nul
   request: null,
 }));
 
-/** A queued turn or unanswered provider request still owns the thread's current checkout. */
-function isThreadWorkspaceBusy(thread: EnvironmentThreadShell): boolean {
-  return (
-    isWorktreeThreadRunning({ status: thread.runtime?.status ?? "idle" }) ||
-    thread.hasPendingApprovals ||
-    thread.hasPendingUserInput
-  );
-}
-
 /** Open workspace changes for a context-menu target without selecting another conversation. */
 export function requestThreadWorkspaceEdit(request: WorkspacePickerRequest): void {
+  const thread = readThreadShell(request.threadRef);
+  if (thread && isThreadWorkspaceBusy(thread)) return;
   useWorkspacePickerRequest.setState({ request });
 }
 
@@ -155,7 +147,7 @@ export function ThreadWorkspaceMenu({
 
   /** Keep modal dismissal from interrupting a workspace mutation. */
   function setOpen(nextOpen: boolean) {
-    if (pendingRef.current) return;
+    if (pendingRef.current || (nextOpen && running)) return;
     setInternalOpen(nextOpen);
     if (!nextOpen) setError(null);
     menuProps.onOpenChange?.(nextOpen);
@@ -249,6 +241,7 @@ export function ThreadWorkspaceMenu({
           panel={menuProps.displayMode === "panel"}
           part="select"
           aria-label={menuProps.ariaLabel ?? "Change worktree"}
+          disabled={running}
           onClick={() => setOpen(true)}
         >
           {menuProps.trigger ?? "Change worktree"}

@@ -10,7 +10,7 @@ type TestThread = {
   id: string;
   projectId: string;
   worktreePath: string;
-  status: "completed" | "running";
+  status: "completed" | "preparing" | "queued" | "starting" | "running" | "waiting";
 };
 const state = vi.hoisted(() => ({
   rename: vi.fn(),
@@ -21,24 +21,58 @@ const state = vi.hoisted(() => ({
   allowed: true,
   entries: ["/trees/alpha", "/trees/beta"],
   live: [] as TestThread[],
+  threadRevision: 0,
+  threadListeners: new Set<() => void>(),
   archived: [] as TestThread[],
   draftStore: { draftThreadsByThreadKey: {}, setDraftThreadContext: vi.fn() },
 }));
-vi.mock("../state/entities", () => ({
-  useThreadShellsForProjectRefs: () =>
-    state.live.map((source) => ({
-      source: { ...source, lineage: { relationshipToParent: null } },
-    })),
-  useQuietThreadShell: () => ({
-    ...state.live[0],
-    environmentId: "remote",
-    projectId: "project",
-    branch: "feature",
-    runtime: null,
-  }),
-  readThreadShell: () => ({ ...state.live[0], branch: "feature", runtime: null }),
-  useProject: () => ({ workspaceRoot: "/repo" }),
-}));
+vi.mock("../state/entities", async () => {
+  const { useSyncExternalStore } = await import("react");
+  /** Let fixtures publish thread updates through the same subscription contract as the app. */
+  function useThreadRevision() {
+    useSyncExternalStore(
+      (listener) => {
+        state.threadListeners.add(listener);
+        return () => {
+          state.threadListeners.delete(listener);
+        };
+      },
+      () => state.threadRevision,
+    );
+  }
+  return {
+    useThreadShellsForProjectRefs: () => {
+      useThreadRevision();
+      return state.live.map((source) => ({
+        ...source,
+        runtime: { status: source.status },
+        hasPendingApprovals: false,
+        hasPendingUserInput: false,
+        source: { ...source, lineage: { relationshipToParent: null } },
+      }));
+    },
+    useQuietThreadShell: () => {
+      useThreadRevision();
+      return {
+        ...state.live[0],
+        environmentId: "remote",
+        projectId: "project",
+        branch: "feature",
+        runtime: { status: state.live[0]?.status ?? "idle" },
+        hasPendingApprovals: false,
+        hasPendingUserInput: false,
+      };
+    },
+    readThreadShell: () => ({
+      ...state.live[0],
+      branch: "feature",
+      runtime: { status: state.live[0]?.status ?? "idle" },
+      hasPendingApprovals: false,
+      hasPendingUserInput: false,
+    }),
+    useProject: () => ({ workspaceRoot: "/repo" }),
+  };
+});
 vi.mock("../lib/archivedThreadsState", () => ({
   useArchivedThreadSnapshots: () => ({
     snapshots: [
@@ -129,6 +163,14 @@ async function renameTo(name: string) {
   await act(async () => userEvent.fill(page.getByLabelText("Worktree directory name"), name));
 }
 
+/** Publish fixture runtime changes to mounted pills and dialogs. */
+async function publishThreadUpdate() {
+  await act(async () => {
+    state.threadRevision += 1;
+    for (const listener of state.threadListeners) listener();
+  });
+}
+
 /** Open the application-owned editor with a real dialog and filesystem fixtures. */
 async function openEditor() {
   await act(async () => {
@@ -137,8 +179,8 @@ async function openEditor() {
   });
 }
 
-/** Open the real workspace picker with the application confirmation host mounted. */
-async function openWorkspacePicker() {
+/** Mount shared pill actions and their real dialog hosts. */
+async function renderWorkspaceEditors() {
   await act(async () =>
     root.render(
       <>
@@ -157,6 +199,11 @@ async function openWorkspacePicker() {
       </>,
     ),
   );
+}
+
+/** Open the real workspace picker with the application confirmation host mounted. */
+async function openWorkspacePicker() {
+  await renderWorkspaceEditors();
   await act(async () =>
     page
       .getByRole("button", { name: "Rename worktree alpha" })
@@ -409,19 +456,89 @@ it("retries thread updates without moving an already renamed directory twice", a
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
-it("blocks renaming a running worktree but still allows color changes", async () => {
+it("locks the entire rename editor while an agent is running", async () => {
   state.live[0]!.status = "running";
   await openEditor();
-  await renameTo("gamma");
+  expect(document.querySelector<HTMLInputElement>('[role="dialog"] input')!.disabled).toBe(true);
   expect(button("Save").disabled).toBe(true);
   expect(document.querySelector('[role="status"]')?.textContent).toContain("Stop running agents");
-  await renameTo("alpha");
-  await act(async () =>
-    userEvent.click(
-      document.querySelector<HTMLButtonElement>('[aria-label="Teal worktree color"]')!,
-    ),
-  );
+  expect(
+    document.querySelector<HTMLButtonElement>('[aria-label="Teal worktree color"]')!.disabled,
+  ).toBe(true);
+  expect(state.rename).not.toHaveBeenCalled();
+  expect(state.update).not.toHaveBeenCalled();
+});
+
+it.each(["preparing", "queued", "starting", "running", "waiting"] as const)(
+  "disables both pill actions while the thread is %s and restores them afterward",
+  async (status) => {
+    state.live[0]!.status = status;
+    await renderWorkspaceEditors();
+    const pill = page.getByRole("button", { name: "Rename worktree alpha", exact: true });
+    expect((pill.element() as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => {
+      pill.element().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      pill
+        .element()
+        .dispatchEvent(
+          new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }),
+        );
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(button("Change worktree")).toBeUndefined();
+    expect(state.parentContextMenu).not.toHaveBeenCalled();
+    state.live[0]!.status = "completed";
+    await renderWorkspaceEditors();
+    await act(async () => userEvent.click(pill));
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Rename worktree");
+  },
+);
+
+it.each(["Rename worktree", "Change worktree"])(
+  "rejects %s if a run starts while the pill context menu is open",
+  async (action) => {
+    await renderWorkspaceEditors();
+    await act(async () =>
+      userEvent.click(page.getByRole("button", { name: "Rename worktree alpha", exact: true }), {
+        button: "right",
+      }),
+    );
+    state.live[0]!.status = "running";
+    await act(async () => userEvent.click(page.getByText(action, { exact: true })));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(state.rename).not.toHaveBeenCalled();
+    expect(state.update).not.toHaveBeenCalled();
+  },
+);
+
+it("locks pending rename and color edits when a run starts, then unlocks after it stops", async () => {
+  await openEditor();
+  await renameTo("gamma");
+  await act(async () => userEvent.click(page.getByRole("button", { name: "Teal worktree color" })));
+  state.live[0]!.status = "running";
+  await publishThreadUpdate();
+  expect(button("Save").disabled).toBe(true);
+  expect(document.querySelector<HTMLInputElement>('[role="dialog"] input')!.disabled).toBe(true);
+  expect(state.rename).not.toHaveBeenCalled();
+  expect(state.update).not.toHaveBeenCalled();
+  state.live[0]!.status = "completed";
+  await publishThreadUpdate();
+  expect(document.querySelector<HTMLInputElement>('[role="dialog"] input')!.value).toBe("gamma");
   expect(button("Save").disabled).toBe(false);
+});
+
+it("locks a selected destination if the thread starts running before Change worktree is submitted", async () => {
+  await openWorkspacePicker();
+  await act(async () => userEvent.click(page.getByRole("radio", { name: /Local checkout/ })));
+  expect(button("Change worktree").disabled).toBe(false);
+  state.live[0]!.status = "running";
+  await publishThreadUpdate();
+  expect(button("Change worktree").disabled).toBe(true);
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Stop this thread");
+  expect(state.update).not.toHaveBeenCalled();
+  state.live[0]!.status = "completed";
+  await publishThreadUpdate();
+  expect(button("Change worktree").disabled).toBe(false);
 });
 
 it.each(["Cancel", "Change worktree"])(

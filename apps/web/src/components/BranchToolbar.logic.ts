@@ -1,4 +1,8 @@
 import { isThreadSettled } from "@t3tools/client-runtime/state/thread-sort";
+import {
+  threadRuntimeIsActive,
+  type EnvironmentThreadShell,
+} from "@t3tools/client-runtime/state/models";
 import type {
   EnvironmentId,
   EnvironmentMachineKind,
@@ -349,6 +353,17 @@ export function isWorktreeThreadRunning(thread: Pick<WorktreeThreadState, "statu
     thread.status === "starting" ||
     thread.status === "running" ||
     thread.status === "waiting"
+  );
+}
+
+/** Keep a thread's checkout fixed while a run or provider question still owns it. */
+export function isThreadWorkspaceBusy(
+  thread: Pick<EnvironmentThreadShell, "runtime" | "hasPendingApprovals" | "hasPendingUserInput">,
+): boolean {
+  return (
+    threadRuntimeIsActive(thread.runtime) ||
+    thread.hasPendingApprovals ||
+    thread.hasPendingUserInput
   );
 }
 

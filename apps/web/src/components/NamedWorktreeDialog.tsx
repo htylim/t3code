@@ -23,7 +23,7 @@ import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { vcsEnvironment } from "../state/vcs";
-import { isWorktreeThreadRunning } from "./BranchToolbar.logic";
+import { isThreadWorkspaceBusy, isWorktreeThreadRunning } from "./BranchToolbar.logic";
 import { resolveWorktreeRenameIssue } from "./NamedWorktreeDialog.logic";
 import { SoftPillColorPicker } from "./SoftPillColorPicker";
 import { Button } from "./ui/button";
@@ -125,11 +125,17 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
   const directoryName = name.trim();
   const currentName = worktreePath.split(/[\\/]/).at(-1) ?? worktreePath;
   const renaming = directoryName !== currentName;
-  const running = threads.some(
-    (thread) =>
-      (thread.worktreePath === worktreePath || thread.worktreePath === request.worktreePath) &&
-      isWorktreeThreadRunning(thread),
-  );
+  const running =
+    liveThreads.some(
+      (thread) =>
+        (thread.worktreePath === worktreePath || thread.worktreePath === request.worktreePath) &&
+        isThreadWorkspaceBusy(thread),
+    ) ||
+    threads.some(
+      (thread) =>
+        (thread.worktreePath === worktreePath || thread.worktreePath === request.worktreePath) &&
+        isWorktreeThreadRunning(thread),
+    );
   let validationMessage = resolveWorktreeRenameIssue({
     worktreePath,
     name,
@@ -140,13 +146,12 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
   if (renaming && !validationMessage) {
     if (!canRename || !canUpdateThreads)
       validationMessage = "This connection cannot rename worktrees.";
-    else if (running)
-      validationMessage = "Stop running agents in this worktree before renaming it.";
     else if (archived.error || siblings.error)
       validationMessage = "Unable to check the worktree. Reconnect and try again.";
     else if (archived.isLoading || siblings.isPending || !siblings.data)
       validationMessage = "Checking directory names and thread history...";
   }
+  if (running) validationMessage = "Stop running agents in this worktree before editing it.";
   const unchanged = !renaming && color === initialColor && worktreePath === request.worktreePath;
   const disabled = saving || !!validationMessage || unchanged;
 
@@ -240,7 +245,7 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
                   id={inputId}
                   autoFocus
                   value={name}
-                  disabled={saving || worktreePath !== request.worktreePath}
+                  disabled={saving || running || worktreePath !== request.worktreePath}
                   aria-invalid={!!validationMessage}
                   aria-describedby={validationMessage ? helpId : undefined}
                   onChange={(event) => {
@@ -257,7 +262,7 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
               <SoftPillColorPicker
                 label="Worktree"
                 color={color}
-                disabled={saving}
+                disabled={saving || running}
                 onChange={(nextColor) => setColor(nextColor ?? DEFAULT_SOFT_PILL_COLOR)}
               />
               <div className="min-w-0">

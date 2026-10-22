@@ -1,6 +1,8 @@
 import type { ScopedProjectRef, ScopedThreadRef } from "@t3tools/contracts";
 import { readLocalApi } from "../localApi";
+import { readThreadShell, useQuietThreadShell } from "../state/entities";
 import type { WorktreeDisplay } from "../worktreeDisplay";
+import { isThreadWorkspaceBusy } from "./BranchToolbar.logic";
 import { requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
 import { requestThreadWorkspaceEdit } from "./ThreadWorkspaceMenu";
 import { SoftPill } from "./ui/soft-pill";
@@ -21,18 +23,22 @@ export function WorktreePill({
   worktree: WorktreeDisplay;
   className?: string;
 }) {
+  const thread = useQuietThreadShell(threadRef);
+  const busy = thread !== null && isThreadWorkspaceBusy(thread);
   if (!projectRef || !projectCwd || !worktreePath) return null;
   return (
     <SoftPill
       color={worktree.color}
       className={className}
-      render={<button type="button" aria-label={`Rename worktree ${worktree.name}`} />}
+      render={
+        <button type="button" disabled={busy} aria-label={`Rename worktree ${worktree.name}`} />
+      }
       onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
-        if (event.ctrlKey) return;
+        if (event.ctrlKey || busy) return;
         requestNamedWorktreeEdit({
           projectRef,
           projectCwd,
@@ -43,6 +49,7 @@ export function WorktreePill({
       onContextMenu={async (event) => {
         event.preventDefault();
         event.stopPropagation();
+        if (busy) return;
         const api = readLocalApi();
         if (!api) return;
         const position = { x: event.clientX, y: event.clientY };
@@ -54,6 +61,8 @@ export function WorktreePill({
           ],
           position,
         );
+        const currentThread = readThreadShell(threadRef);
+        if (currentThread && isThreadWorkspaceBusy(currentThread)) return;
         if (action === "rename-worktree") {
           requestNamedWorktreeEdit({ projectRef, projectCwd, worktreePath, returnFocus });
         } else if (action === "change-worktree") {

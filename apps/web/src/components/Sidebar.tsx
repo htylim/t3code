@@ -257,7 +257,7 @@ import {
   type SidebarSection,
   resolveSidebarRowThreadId,
 } from "./Sidebar.logic";
-import { resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
+import { isThreadWorkspaceBusy, resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
 import {
   createSidebarCollisionDetection,
   createSidebarSortingStrategy,
@@ -5009,7 +5009,7 @@ export default function Sidebar() {
                   AuthOrchestrationOperateScope,
                 ),
                 branch: thread.branch ?? null,
-                canEditWorkspace: !!projectCwd,
+                canEditWorkspace: !!projectCwd && !isThreadWorkspaceBusy(thread),
                 canOpenInChatSurface:
                   rightPanelOwnerRef !== null && scopedThreadKey(rightPanelOwnerRef) !== threadKey,
                 projectFilter: threadProjectGroup

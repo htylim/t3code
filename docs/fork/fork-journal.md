@@ -189,7 +189,9 @@
   using that checkout.
   Sibling directory checks disable colliding names, and server rejections
   preserve the draft. Stopped worktrees can be renamed while active in the client; running
-  agents block a directory move while color editing remains available. Successful moves
+  agents disable pill actions and workspace editing. Editors already open lock their name, color,
+  and submit controls until the run stops. Context-menu requests recheck the thread after selection.
+  Successful moves
   update live, archived, and draft thread paths. Failed reference updates can be retried
   without moving the directory twice. Directory listings refresh on opening and after moves.
   Assigned worktrees that Git no longer recognizes show an unavailable-checkout error instead
@@ -230,6 +232,9 @@
   verified Escape dismissal from sidebar and breadcrumb context menus and keyboard focus return.
   Before fork integration, all 76 focused worktree browser tests and 105 color, display, packaging,
   and desktop identity tests passed, along with the web typecheck and targeted lint.
+  Busy-thread restrictions passed 85 focused browser tests and 158 toolbar, context-menu, color,
+  and display unit tests. Web typecheck and targeted lint passed. An isolated Personal GPT-6-Luna
+  run verified all three pills stay disabled during execution and unlock after completion.
   The centered change dialog passed 72 focused Chromium tests, the web typecheck, and targeted
   lint. The already-running isolated server verified the matching blurred backdrop, cancellation,
   a move to the local checkout and back, and the composer's anchored picker without a backdrop.

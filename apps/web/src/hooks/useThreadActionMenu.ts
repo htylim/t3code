@@ -16,6 +16,7 @@ import {
 import { useRouter } from "@tanstack/react-router";
 
 import { resolveSnoozePresets } from "../components/Sidebar.snooze";
+import { isThreadWorkspaceBusy } from "../components/BranchToolbar.logic";
 import {
   buildThreadActionMenuItems,
   threadActionRequiresOperate,
@@ -149,7 +150,7 @@ export function useThreadActionMenu(input: {
       const items = buildThreadActionMenuItems({
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
         branch: thread.branch ?? null,
-        canEditWorkspace: !!worktreeProjectCwd,
+        canEditWorkspace: !!worktreeProjectCwd && !isThreadWorkspaceBusy(thread),
         projectFilter: null,
         isPinned: thread.pinnedAt != null,
         isSettled:

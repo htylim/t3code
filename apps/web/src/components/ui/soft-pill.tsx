@@ -12,7 +12,7 @@ export function SoftPill({ color, className, render, ...props }: SoftPillProps) 
   const defaultProps = {
     "data-slot": "soft-pill",
     className: cn(
-      "inline-block max-w-full truncate rounded-full border border-foreground/10 bg-foreground/5 px-2 align-middle text-xs leading-4 [button&]:cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+      "inline-block max-w-full truncate rounded-full border border-foreground/10 bg-foreground/5 px-2 align-middle text-xs leading-4 [button&]:cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:opacity-50",
       className,
     ),
     style: color

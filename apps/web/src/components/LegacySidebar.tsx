@@ -1,4 +1,5 @@
 import { requestThreadWorkspaceEdit } from "./ThreadWorkspaceMenu";
+import { isThreadWorkspaceBusy } from "./BranchToolbar.logic";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
 import { Spinner } from "~/components/ui/spinner";
@@ -2213,7 +2214,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                   id: "edit-workspace",
                   label: "Edit workspace",
                   icon: "pencil",
-                  disabled: !canOperateThread,
+                  disabled: !canOperateThread || isThreadWorkspaceBusy(thread),
                 },
               ]
             : []),

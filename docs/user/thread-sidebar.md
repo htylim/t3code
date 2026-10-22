@@ -61,7 +61,8 @@ Choose a directory name and color in the Workspace picker when starting a new wo
 Click a worktree pill in the sidebar, breadcrumb, or details panel to edit its color or
 rename its directory. Right-click a pill and choose **Change worktree** to choose another checkout
 in a dialog and confirm the move. The Git branch keeps its name when renaming a worktree. Save stays disabled for invalid names
-or an existing sibling directory. Stop agents using the worktree before renaming it.
+or an existing sibling directory. Rename and Change worktree are unavailable while the thread is
+busy. Stop agents using the worktree before editing it.
 
 ## Pin and reorder threads
 
