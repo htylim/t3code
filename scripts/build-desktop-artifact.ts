@@ -2797,7 +2797,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           role: "Viewer",
         },
       ],
-      ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
+      // Skipping signing leaves Electron's executable signature invalid after
+      // packaging. Seal local bundles too, without requiring an Apple identity.
+      ...(signed
+        ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") }
+        : { identity: "-", hardenedRuntime: false, notarize: false }),
       ...(macPasskeySigning
         ? {
             entitlements: macPasskeySigning.entitlementsPath,
@@ -3221,6 +3225,24 @@ export const verifyWindowsPrimaryFffNativeLoad = Effect.fn(
     }),
   );
 });
+
+/** Reject macOS bundles with missing or invalid signatures before exporting artifacts. */
+export const validateMacPackagedPayload = Effect.fn("desktopArtifact.validateMacPackagedPayload")(
+  function* (input: {
+    readonly stageDistDir: string;
+    readonly appName: string;
+    readonly targetArch: typeof BuildArch.Type;
+    readonly verbose?: boolean;
+  }) {
+    const path = yield* Path.Path;
+    const unpackedDirectory = input.targetArch === "x64" ? "mac" : `mac-${input.targetArch}`;
+    const appPath = path.join(input.stageDistDir, unpackedDirectory, `${input.appName}.app`);
+    yield* runCommand(
+      ChildProcess.make("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath]),
+      { label: `Verify macOS bundle signature: ${appPath}`, verbose: input.verbose ?? false },
+    );
+  },
+);
 
 export const validateWindowsPackagedPayload = Effect.fn(
   "desktopArtifact.validateWindowsPackagedPayload",
@@ -3945,6 +3967,15 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       distPath: stageDistDir,
       platform: options.platform,
       arch: options.arch,
+    });
+  }
+
+  if (options.platform === "mac") {
+    yield* validateMacPackagedPayload({
+      stageDistDir,
+      appName: resolveDesktopProductName(appVersion),
+      targetArch: options.arch,
+      verbose: options.verbose,
     });
   }
 

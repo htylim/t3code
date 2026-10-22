@@ -76,6 +76,7 @@ import {
   copyDirectoryPreservingSymlinks,
   LinuxBrowserSecretHostError,
   stageBrowserSecret,
+  validateMacPackagedPayload,
   validateWindowsPackagedPayload,
   WindowsPrimaryNativeProbeError,
   WindowsDesktopBuildPrerequisitesMissingError,
@@ -769,6 +770,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual(win.files, DESKTOP_FILE_EXCLUSIONS);
       assert.deepStrictEqual(winWithoutWslRuntime.files, win.files);
       assert.notProperty(mac.mac as Record<string, unknown>, "sign");
+      assert.propertyVal(mac.mac, "identity", "-");
+      assert.propertyVal(mac.mac, "hardenedRuntime", false);
+      assert.propertyVal(mac.mac, "notarize", false);
       assert.propertyVal(
         (mac.mac as Record<string, unknown>).extendInfo as Record<string, unknown>,
         "NSLocalNetworkUsageDescription",
@@ -1267,6 +1271,50 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
         assert.instanceOf(error, WindowsDesktopBuildPrerequisitesMissingError);
         assert.deepStrictEqual(error.missing, ["python"]);
+      }),
+    ),
+  );
+
+  it.effect("accepts a sealed macOS bundle and rejects modified resources", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const hostPlatform = yield* HostProcess.Platform;
+        if (hostPlatform !== "darwin") return;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const stageDistDir = yield* fs.makeTempDirectoryScoped({
+          prefix: "t3-mac-signature-test-",
+        });
+        const appPath = path.join(stageDistDir, "mac-arm64", "Signature Test.app");
+        const contentsPath = path.join(appPath, "Contents");
+        yield* fs.makeDirectory(path.join(contentsPath, "MacOS"), { recursive: true });
+        yield* fs.makeDirectory(path.join(contentsPath, "Resources"));
+        yield* fs.copyFile("/usr/bin/true", path.join(contentsPath, "MacOS", "test"));
+        yield* fs.writeFileString(
+          path.join(contentsPath, "Info.plist"),
+          '<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>test</string><key>CFBundleIdentifier</key><string>test.t3.signature</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>',
+        );
+        const resourcePath = path.join(contentsPath, "Resources", "payload.txt");
+        yield* fs.writeFileString(resourcePath, "original");
+        const signer = yield* spawner.spawn(
+          ChildProcess.make("codesign", ["--force", "--sign", "-", appPath], {
+            stdout: "ignore",
+            stderr: "inherit",
+          }),
+        );
+        assert.equal(Number(yield* signer.exitCode), 0);
+
+        const validationInput = {
+          stageDistDir,
+          appName: "Signature Test",
+          targetArch: "arm64" as const,
+        };
+        yield* validateMacPackagedPayload(validationInput);
+        yield* fs.writeFileString(resourcePath, "modified");
+        const signatureError = yield* validateMacPackagedPayload(validationInput).pipe(Effect.flip);
+        assert.instanceOf(signatureError, BuildCommandFailedError);
+        assert.include(signatureError.stderrTail, "a sealed resource is missing or invalid");
       }),
     ),
   );
@@ -2185,6 +2233,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.match(String(mac.sign), /[\\/]scripts[\\/]sign-macos\.ts$/);
+      assert.notProperty(mac, "identity");
+      assert.notProperty(mac, "hardenedRuntime");
+      assert.notProperty(mac, "notarize");
       assert.deepStrictEqual(mac.protocols, [
         { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
         { name: "Web site URL", schemes: ["http", "https"], role: "Viewer" },

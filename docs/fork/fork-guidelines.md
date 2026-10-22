@@ -207,8 +207,11 @@ copying an ignored file into it. Direct source development remains opt-in; copy 
 `.env` when `vp run dev:desktop` should expose the cloud UI.
 
 Before the first install, back up `~/.t3/userdata` and fully quit every running T3 Code app. Open the
-DMG, drag `T3 Code (Fork)` into `/Applications`, then right-click the installed app and choose
-**Open** because local builds are unsigned.
+DMG and drag `T3 Code (Fork)` into `/Applications`. Local builds have an ad-hoc bundle signature,
+but no Apple Developer ID or notarization. If macOS blocks an unverified developer, follow
+[Apple's per-app approval instructions](https://support.apple.com/en-us/102445) in System Settings
+under Privacy & Security. A damaged-app warning requires investigation and signature verification;
+do not treat it as proof that manual approval is all that is missing.
 
 T3 Code Nightly and T3 Code Fork can remain installed together. They cannot run together: both use
 the same production database, settings, logs, and Electron user-data lock. Quit one before starting
@@ -219,7 +222,8 @@ development server at `~/.t3/userdata`, and do not set `VITE_HTTP_URL` or `VITE_
 
 ## Release the Fork desktop app
 
-Fork releases are manual, unsigned desktop builds. Do not use `.github/workflows/release.yml`: its
+Fork releases are manual desktop builds with ad-hoc macOS bundle signatures. They are not
+Developer ID signed or notarized. Do not use `.github/workflows/release.yml`: its
 stable path publishes the upstream `t3` npm package, deploys upstream hosted channels, and pushes a
 version commit to `main`.
 
@@ -337,8 +341,12 @@ unzip -Z1 "$zip" \
 The main `Info.plist` must report the exact fork version and bundle identifier
 `com.htylim.t3code.fork`. The embedded commit must equal the release commit captured before the
 build. Recheck `git rev-parse fork` against `fork_commit_before`; a release from another branch must
-not move `fork`. Local artifacts are unsigned; that is expected until fork signing is configured
-explicitly.
+not move `fork`. Verify the full bundle signature in both delivery formats before publishing:
+extract the ZIP into a disposable directory with `ditto -x -k`, mount the DMG read-only, and run
+`codesign --verify --deep --strict --verbose=2` on each contained `.app`. Both checks must succeed.
+The packaging script also verifies the staged app before exporting artifacts. An ad-hoc signature
+checks bundle integrity, but does not provide Apple Developer ID trust or notarization. Do not
+claim a standard Gatekeeper-approved installation without configuring and testing both.
 
 ### 5. Tag safely, then stop before publishing
 
@@ -363,11 +371,12 @@ git push origin "fork-v${fork_version}"
 gh release create "fork-v${fork_version}" "$dmg" "$zip" \
   --repo htylim/t3code \
   --title "T3 Code ${fork_version}" \
-  --notes "Unsigned Apple Silicon fork build. Back up ~/.t3/userdata and quit other T3 Code apps before launching."
+  --notes "Ad-hoc signed Apple Silicon fork build, without Developer ID or notarization. Back up ~/.t3/userdata and quit other T3 Code apps before launching."
 ```
 
-After downloading the published DMG, repeat the checksum check and smoke-test the installed app.
-Back up `~/.t3/userdata` and quit every other T3 Code desktop app before launching the fork.
+After downloading the published artifacts, repeat the checksum and complete bundle-signature
+checks. A bundled-server smoke test does not verify a quarantined desktop launch. Test the latter
+only with authorization and isolated application state. Before any installed-app launch, back up `~/.t3/userdata` and quit every other T3 Code desktop app before launching the fork.
 
 ## Record downstream drift
 

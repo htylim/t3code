@@ -1423,3 +1423,17 @@ The fork-specific implementation was removed.
   not exercised. Mobile appearance and desktop packaging behavior have automated coverage.
   The two unchanged upstream macOS symlink-watcher timeouts recorded above remain unresolved.
   No new product regression was found in the exercised fork behavior. Nothing was published.
+
+## 2026-10-22 - Seal local macOS release bundles
+
+- Upstream baseline: `da7c4f234db3`, integrated in `415aa0dfa4`.
+- Local macOS packaging now explicitly ad-hoc signs the complete bundle, disables hardened
+  runtime for that signing mode, and skips notarization. Developer ID builds retain their
+  existing signing hook and entitlements.
+- Electron-builder 26 skips signing when no identity is selected. The resulting fork artifact
+  retained an invalid executable signature and macOS reported it as damaged. Packaging now runs
+  strict, recursive bundle-signature verification before copying artifacts into the release
+  directory. The release runbook requires verification of both the ZIP and DMG app copies.
+- Verification: 88 focused packaging and desktop identity tests passed, including a real macOS
+  fixture that verifies a sealed app and rejects a modified resource. The scripts type check and
+  targeted lint passed. Ad-hoc signing does not provide Apple Developer ID trust or notarization.
