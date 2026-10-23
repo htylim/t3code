@@ -343,6 +343,41 @@ describe("HtmlRender", () => {
   );
 
   it.live(
+    "reports storage failures from the same sandbox used by published HTML",
+    (ctx) =>
+      Effect.gen(function* () {
+        const executable = (yield* HostProcess.Environment)[TEST_BROWSER_ENV];
+        if (!executable) return ctx.skip(`Set ${TEST_BROWSER_ENV} to run this test.`);
+        yield* Effect.gen(function* () {
+          const htmlRender = yield* HtmlRender.HtmlRender;
+          const preview = yield* htmlRender.preview({
+            html: [
+              "<!doctype html><body><script>",
+              'console.log("before storage");',
+              'localStorage.getItem("diffView");',
+              'console.log("after storage");',
+              "</script></body>",
+            ].join(""),
+          });
+
+          expect(preview.consoleMessages).toContainEqual({
+            level: "log",
+            text: "before storage",
+          });
+          expect(preview.consoleMessages).toContainEqual({
+            level: "error",
+            text: expect.stringMatching(/SecurityError:.*localStorage/),
+          });
+          expect(preview.consoleMessages).not.toContainEqual({
+            level: "log",
+            text: "after storage",
+          });
+        }).pipe(Effect.provide(layerHtmlRender(executable)));
+      }),
+    30_000,
+  );
+
+  it.live(
     "keeps every local file but the page itself out of the browser",
     (ctx) =>
       Effect.gen(function* () {

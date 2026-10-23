@@ -1,5 +1,22 @@
 # Fork journal
 
+## 2026-10-23 - Match HTML preview permissions to published pages
+
+- Upstream baseline: `325a7e2ae4`.
+- Change: Headless HTML preview and published HTML assets share the same document sandbox
+  policy. Tool instructions explain that cookies and browser storage are unavailable and state
+  the 512,000-character input limit.
+- Reason: A generated walkthrough passed preview but rendered blank inside its thread because
+  an unguarded `localStorage` read stopped its script. Preview now reports that same error.
+  Published-page permissions remain unchanged.
+- Verification: All 46 focused HTML rendering and HTTP tests passed with the real headless
+  browser, including a regression test for blocked storage access. Server typecheck, targeted
+  lint, formatting, and diff checks passed. An isolated copy of the thread reproduced the blank
+  page; guarding preference access repaired that copy. Browser checks covered inline and full
+  screen display, split diffs, theme switching, and section controls. The original HTML produced
+  storage errors in the updated preview; the repaired copy produced none. Live thread data and
+  attachments were not modified. Native clients and remote connection modes were not exercised.
+
 ## 2026-10-19 - Integrate the reviewed upstream batch
 
 - Upstream baseline: `325a7e2ae4bf504cdaeb7b842e88b47f60b4bf59`, 503 upstream commits

@@ -11,6 +11,11 @@ export const HTML_RENDER_MIN_HEIGHT = 80;
 export const HTML_RENDER_MAX_HEIGHT = 2000;
 export const HTML_RENDER_MAX_TITLE_LENGTH = 200;
 
+// Keep preview and published documents equally isolated from host cookies and storage.
+// Modal dialogs stay blocked because inline pages can open without user interaction.
+export const HTML_RENDER_CONTENT_SECURITY_POLICY =
+  "sandbox allow-scripts allow-forms allow-popups allow-downloads";
+
 export interface HtmlRenderReference {
   readonly attachmentId: string;
   readonly title: string;

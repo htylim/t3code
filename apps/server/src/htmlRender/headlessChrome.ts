@@ -1,3 +1,4 @@
+import { HTML_RENDER_CONTENT_SECURITY_POLICY } from "@t3tools/shared/htmlRender";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -265,7 +266,7 @@ const launchBrowser = Effect.fnUntraced(function* (input: {
   const fulfillPage = (sessionId: string, requestId: string, body: Uint8Array) =>
     Queue.offerAll(outgoing, [
       textEncoder.encode(
-        `{"id":${++nextId},"sessionId":${JSON.stringify(sessionId)},"method":"Fetch.fulfillRequest","params":{"requestId":${JSON.stringify(requestId)},"responseCode":200,"responseHeaders":[{"name":"Content-Type","value":"text/html; charset=utf-8"}],"body":"`,
+        `{"id":${++nextId},"sessionId":${JSON.stringify(sessionId)},"method":"Fetch.fulfillRequest","params":{"requestId":${JSON.stringify(requestId)},"responseCode":200,"responseHeaders":[{"name":"Content-Type","value":"text/html; charset=utf-8"},{"name":"Content-Security-Policy","value":${JSON.stringify(HTML_RENDER_CONTENT_SECURITY_POLICY)}}],"body":"`,
       ),
       body,
       textEncoder.encode('"}}\0'),
