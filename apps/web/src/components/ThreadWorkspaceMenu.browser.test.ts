@@ -1,6 +1,6 @@
-import { createElement, act, useLayoutEffect } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { act, render as renderScreen } from "../../test/render";
+import { createElement, useLayoutEffect } from "react";
+import { expect, it, vi } from "vite-plus/test";
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import * as Cause from "effect/Cause";
@@ -70,28 +70,18 @@ const threadRef = {
   threadId: ThreadId.make("thread"),
 };
 const projectRef = { environmentId: threadRef.environmentId, projectId: ProjectId.make("project") };
-let root: Root;
-let container: HTMLDivElement;
-
-/** Render the controller while leaving presentation to the existing picker component. */
-async function openPicker(): Promise<WorkspaceChangeDialogProps> {
-  await act(async () => {
-    root.render(createElement(ThreadWorkspaceMenu, { threadRef, open: true }));
-  });
-  return pickerProps();
-}
 
 /** Read the latest error and availability after an asynchronous workspace operation. */
 function pickerProps(): WorkspaceChangeDialogProps {
   return state.picker!;
 }
 
-beforeEach(() => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+/** Own the rendered tree and fixture cleanup for one test. */
+async function createTestSurface() {
   state.picker = null;
-  container = document.createElement("div");
+  const container = document.createElement("div");
   document.body.append(container);
-  root = createRoot(container);
+  const screen = await renderScreen(null, { container });
   state.thread.branch = "feature/source";
   state.thread.worktreePath = "/trees/current";
   state.thread.runtime = null;
@@ -109,14 +99,31 @@ beforeEach(() => {
     );
   state.update.mockReset().mockResolvedValue(AsyncResult.success(undefined));
   useNamedWorktreeStore.setState({ selections: {}, worktrees: {} });
-});
-afterEach(async () => {
-  await act(async () => root.unmount());
-  container.remove();
-  vi.unstubAllGlobals();
-});
+
+  async function openPicker(): Promise<WorkspaceChangeDialogProps> {
+    await act(async () => {
+      screen.rerender(createElement(ThreadWorkspaceMenu, { threadRef, open: true }));
+    });
+    return pickerProps();
+  }
+  return {
+    screen,
+    container,
+    openPicker,
+    async [Symbol.asyncDispose]() {
+      try {
+        vi.unstubAllGlobals();
+      } finally {
+        await screen[Symbol.asyncDispose]();
+      }
+    },
+  };
+}
 
 it("moves only the selected thread and adopts the destination's current branch", async () => {
+  await using surface = await createTestSurface();
+  const { openPicker } = surface;
+
   const picker = await openPicker();
   await act(async () => {
     expect(await picker.onUseWorktree({ branch: "stale-ref", worktreePath: "/trees/target" })).toBe(
@@ -142,6 +149,9 @@ it("moves only the selected thread and adopts the destination's current branch",
 });
 
 it("represents the project's local checkout with a null worktree path", async () => {
+  await using surface = await createTestSurface();
+  const { openPicker } = surface;
+
   const picker = await openPicker();
   await act(async () => {
     await picker.onUseWorktree({ branch: "main", worktreePath: "/repo" });
@@ -150,6 +160,9 @@ it("represents the project's local checkout with a null worktree path", async ()
 });
 
 it("creates the same-named branch from the original thread branch and saves its color", async () => {
+  await using surface = await createTestSurface();
+  const { openPicker } = surface;
+
   const picker = await openPicker();
   await act(async () => {
     expect(await picker.onNewWorktreeSelect({ name: "billing-fix", color: "#14b8a6" })).toBe(true);
@@ -178,6 +191,9 @@ it("creates the same-named branch from the original thread branch and saves its 
 it.each([null, { name: " ", color: "#14b8a6" }])(
   "rejects creation without an explicit worktree name: %j",
   async (selection) => {
+    await using surface = await createTestSurface();
+    const { openPicker } = surface;
+
     const picker = await openPicker();
     await act(async () => {
       expect(await picker.onNewWorktreeSelect(selection)).toBe(false);
@@ -189,6 +205,9 @@ it.each([null, { name: " ", color: "#14b8a6" }])(
 );
 
 it("adopts a detached destination without inventing a branch", async () => {
+  await using surface = await createTestSurface();
+  const { openPicker } = surface;
+
   state.refresh.mockResolvedValue(AsyncResult.success({ isRepo: true, refName: null }));
   const picker = await openPicker();
   await act(async () => {
@@ -198,6 +217,9 @@ it("adopts a detached destination without inventing a branch", async () => {
 });
 
 it("does not create two worktrees when the creation row is selected twice", async () => {
+  await using surface = await createTestSurface();
+  const { openPicker } = surface;
+
   const created = AsyncResult.success({
     worktree: { path: "/trees/billing-fix", refName: "billing-fix" },
   });
@@ -222,6 +244,9 @@ it("does not create two worktrees when the creation row is selected twice", asyn
 it.each(["queued", "preparing", "starting", "running", "waiting"])(
   "does not move a thread that becomes %s after opening",
   async (status) => {
+    await using surface = await createTestSurface();
+    const { openPicker } = surface;
+
     const picker = await openPicker();
     state.thread.runtime = { status };
     await act(async () => {
@@ -235,6 +260,9 @@ it.each(["queued", "preparing", "starting", "running", "waiting"])(
 );
 
 it("rechecks thread permission before creating a checkout", async () => {
+  await using surface = await createTestSurface();
+  const { openPicker } = surface;
+
   const picker = await openPicker();
   state.canOperate = false;
   await act(async () => {
@@ -244,6 +272,9 @@ it("rechecks thread permission before creating a checkout", async () => {
 });
 
 it("keeps an unavailable destination from changing the thread", async () => {
+  await using surface = await createTestSurface();
+  const { openPicker } = surface;
+
   state.refresh.mockResolvedValue(AsyncResult.success({ isRepo: false }));
   const picker = await openPicker();
   await act(async () => {
@@ -254,6 +285,9 @@ it("keeps an unavailable destination from changing the thread", async () => {
 });
 
 it("keeps a newly created checkout available for retry if the thread changes before assignment", async () => {
+  await using surface = await createTestSurface();
+  const { openPicker } = surface;
+
   state.update.mockResolvedValue(AsyncResult.failure(Cause.fail(new Error("Workspace changed"))));
   const picker = await openPicker();
   await act(async () => {
@@ -266,6 +300,9 @@ it("keeps a newly created checkout available for retry if the thread changes bef
 it.each(["busy", "permission", "workspace", "branch", "deleted"])(
   "rechecks %s after validating the destination before moving the thread",
   async (changedState) => {
+    await using surface = await createTestSurface();
+    const { openPicker } = surface;
+
     const ready = AsyncResult.success({ isRepo: true, refName: "actual-target" });
     let finishValidation!: (status: typeof ready) => void;
     state.refresh.mockReturnValue(

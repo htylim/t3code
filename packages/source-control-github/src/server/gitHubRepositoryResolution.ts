@@ -1,8 +1,7 @@
 import { normalizeGitRemoteUrl } from "@t3tools/shared/git";
-import {
-  detectSourceControlProviderFromRemoteUrl,
-  isSshRemoteUrl,
-} from "@t3tools/shared/sourceControl";
+import { isSshRemoteUrl } from "@t3tools/shared/sourceControl";
+import { parseGitRemoteHost } from "@t3tools/source-control-core/shared/definition";
+import { definition } from "../shared/definition.ts";
 
 export interface GitHubRepositoryLocator {
   readonly host: string;
@@ -13,9 +12,10 @@ export interface GitHubRepositoryLocator {
 export function parseFetchRemotes(
   remotes: string,
 ): ReadonlyArray<{ readonly name: string; readonly url: string }> {
+  // Partial clones append the promisor filter, e.g. `(fetch) [blob:none]`.
   return remotes
     .split("\n")
-    .map((line) => /^(\S+)\s+(\S+)\s+\(fetch\)$/u.exec(line.trim()))
+    .map((line) => /^(\S+)\s+(\S+)\s+\(fetch\)(?:\s+\[[^\]]+\])?$/u.exec(line.trim()))
     .filter((match): match is RegExpExecArray => match !== null)
     .map((match) => ({ name: match[1]!, url: match[2]! }));
 }
@@ -162,13 +162,13 @@ export function parsePullRequestReference(
  * #6198).
  */
 export function gitHubApiHostForRemote(remoteUrl: string): string | null {
-  const provider = detectSourceControlProviderFromRemoteUrl(remoteUrl);
-  if (provider === null) return null;
-  const host = new URL(provider.baseUrl).host.toLowerCase();
+  const remote = parseGitRemoteHost(remoteUrl);
+  if (remote === null) return null;
+  const host = new URL(`https://${remote.host}`).host.toLowerCase();
   if (isSshRemoteUrl(remoteUrl) && !host.includes(".")) {
     return host.includes("github") ? "github.com" : null;
   }
-  return provider.kind === "github" ? host : null;
+  return definition.recognizeRemote(remote) === null ? null : host;
 }
 
 function apiHostForHint(host: string): string {

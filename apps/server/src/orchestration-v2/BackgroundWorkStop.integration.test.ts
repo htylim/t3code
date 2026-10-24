@@ -49,12 +49,7 @@ const stopEarlierBackgroundWork = ({
   readonly stopWithQueue?: "thread.stop" | "run.interrupt";
   readonly olderStart?: boolean;
   readonly workflowMember?: boolean;
-  readonly stalledRun?:
-    | "missing-session"
-    | "missing-session-terminal"
-    | "returned-interrupt"
-    | "returned-interrupt-terminal"
-    | "superseded-attempt";
+  readonly stalledRun?: "missing-session-terminal" | "returned-interrupt" | "superseded-attempt";
 }) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -237,7 +232,7 @@ const stopEarlierBackgroundWork = ({
           const run = before.runs[0]!;
           const node = before.nodes.find((candidate) => candidate.id === run.rootNodeId)!;
           const attempt = before.attempts[0]!;
-          if (stalledRun === "missing-session" || stalledRun === "missing-session-terminal") {
+          if (stalledRun === "missing-session-terminal") {
             const sessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
             const failed = yield* watch(
               (event) => event.type === "run.updated" && event.payload.status === "failed",
@@ -935,7 +930,7 @@ const stopEarlierBackgroundWork = ({
         }
 
         yield* orchestrator.dispatch(
-          stopWithQueue === "thread.stop"
+          stopWithQueue === "thread.stop" || resolveRunOnServer
             ? {
                 type: "thread.stop",
                 commandId: CommandId.make("stop-background-work"),
@@ -945,15 +940,11 @@ const stopEarlierBackgroundWork = ({
                 type: "run.interrupt",
                 commandId: CommandId.make("stop-background-work"),
                 threadId,
-                ...(resolveRunOnServer
-                  ? {}
-                  : {
-                      runId: olderStart
-                        ? watcherRun.runId
-                        : failedStart
-                          ? failedRun.runId
-                          : latestRun.runId,
-                    }),
+                runId: olderStart
+                  ? watcherRun.runId
+                  : failedStart
+                    ? failedRun.runId
+                    : latestRun.runId,
                 ...(stopWithQueue === undefined ? {} : { holdQueue: true }),
               },
         );
@@ -1043,10 +1034,6 @@ it.effect(
   () => stopEarlierBackgroundWork({ failedStart: true }),
 );
 
-it.effect("Stop preserves the roster when background work survives the interrupt", () =>
-  stopEarlierBackgroundWork({ failedStart: true, backgroundWorkAfterStop: "running" }),
-);
-
 it.effect("Stop preserves the roster when the background work probe fails", () =>
   stopEarlierBackgroundWork({ failedStart: true, backgroundWorkAfterStop: "unknown" }),
 );
@@ -1061,14 +1048,9 @@ it.effect.each(["thread.stop", "run.interrupt"] as const)(
   (stopType) => stopEarlierBackgroundWork({ stopWithQueue: stopType, olderStart: true }),
 );
 
-it.effect.each([
-  "missing-session",
-  "missing-session-terminal",
-  "returned-interrupt",
-  "returned-interrupt-terminal",
-  "superseded-attempt",
-] as const)("Stop recovers a stalled run after %s without changing a newer attempt", (stalledRun) =>
-  stopEarlierBackgroundWork({ stalledRun }),
+it.effect.each(["missing-session-terminal", "returned-interrupt", "superseded-attempt"] as const)(
+  "Stop recovers a stalled run after %s without changing a newer attempt",
+  (stalledRun) => stopEarlierBackgroundWork({ stalledRun }),
 );
 
 it.effect.each([false, true])(

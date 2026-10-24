@@ -234,6 +234,27 @@ const refineRepositoryIdentity: NonNullable<
   };
 });
 
+// An SSH remote names an alias rather than the web server, so the login that serves it says which.
+const resolveRemoteWebHost: NonNullable<
+  SourceControlProvider.SourceControlProvider["Service"]["resolveRemoteWebHost"]
+> = Effect.fn("ForgejoSourceControlProvider.resolveRemoteWebHost")(function* ({
+  cwd,
+  context,
+  resolveContext,
+}) {
+  if (!ForgejoCli.parseForgejoRemote(context.remoteUrl)?.ssh) return null;
+  const resolved = yield* resolveContext({
+    cwd,
+    context: {
+      ...context,
+      provider: { kind: SourceControlProviderKind.make("unknown"), name: "Unknown", baseUrl: "" },
+    },
+  });
+  return resolved?.provider.kind === "forgejo"
+    ? new URL(resolved.provider.baseUrl).host.toLowerCase()
+    : null;
+});
+
 const RepositorySchema = Schema.Struct({
   full_name: Schema.String,
   clone_url: Schema.String,
@@ -306,8 +327,9 @@ export const make = Effect.gen(function* () {
     kind: SourceControlProviderKind.make("forgejo"),
     repositoryNameFromRemoteUrl,
     refineRepositoryIdentity,
-    listChangeRequests: (input) =>
-      Effect.gen(function* () {
+    resolveRemoteWebHost,
+    listChangeRequests: Effect.fn("ForgejoSourceControlProvider.listChangeRequests")(
+      function* (input) {
         const repo = yield* cli.resolveRepository(input);
         const source = SourceControlProvider.sourceControlRefFromInput(input);
         const branch = SourceControlProvider.sourceBranch(input);
@@ -334,14 +356,16 @@ export const make = Effect.gen(function* () {
           if (items.length === 0) break;
         }
         return results.slice(0, limit);
-      }).pipe(mapError("listChangeRequests", input.cwd)),
+      },
+      (effect, input) => effect.pipe(mapError("listChangeRequests", input.cwd)),
+    ),
     getChangeRequest: (input) =>
       getPull(input).pipe(
         Effect.map(toForgejoChangeRequest),
         mapError("getChangeRequest", input.cwd),
       ),
-    createChangeRequest: (input) =>
-      Effect.gen(function* () {
+    createChangeRequest: Effect.fn("ForgejoSourceControlProvider.createChangeRequest")(
+      function* (input) {
         const repo = yield* cli.resolveRepository(input);
         const source = SourceControlProvider.sourceControlRefFromInput(input);
         const owner = source?.owner ?? source?.repository?.split("/")[0];
@@ -357,16 +381,20 @@ export const make = Effect.gen(function* () {
             body: yield* fs.readFileString(input.bodyFile),
           },
         });
-      }).pipe(mapError("createChangeRequest", input.cwd)),
-    getRepositoryCloneUrls: (input) =>
-      Effect.gen(function* () {
+      },
+      (effect, input) => effect.pipe(mapError("createChangeRequest", input.cwd)),
+    ),
+    getRepositoryCloneUrls: Effect.fn("ForgejoSourceControlProvider.getRepositoryCloneUrls")(
+      function* (input) {
         const repo = yield* cli.resolveRepository(input);
         return cloneUrls(
           yield* request({ ...input, path: repositoryPath(repo.repository) }, RepositorySchema),
         );
-      }).pipe(mapError("getRepositoryCloneUrls", input.cwd)),
-    createRepository: (input) =>
-      Effect.gen(function* () {
+      },
+      (effect, input) => effect.pipe(mapError("getRepositoryCloneUrls", input.cwd)),
+    ),
+    createRepository: Effect.fn("ForgejoSourceControlProvider.createRepository")(
+      function* (input) {
         const repo = yield* cli.resolveRepository(input);
         const user = yield* request(
           { ...input, path: "user" },
@@ -387,17 +415,21 @@ export const make = Effect.gen(function* () {
             RepositorySchema,
           ),
         );
-      }).pipe(mapError("createRepository", input.cwd)),
-    getDefaultBranch: (input) =>
-      Effect.gen(function* () {
+      },
+      (effect, input) => effect.pipe(mapError("createRepository", input.cwd)),
+    ),
+    getDefaultBranch: Effect.fn("ForgejoSourceControlProvider.getDefaultBranch")(
+      function* (input) {
         const repo = yield* cli.resolveRepository(input);
         return (
           (yield* request({ ...input, path: repositoryPath(repo.repository) }, RepositorySchema))
             .default_branch ?? null
         );
-      }).pipe(mapError("getDefaultBranch", input.cwd)),
-    checkoutChangeRequest: (input) =>
-      Effect.gen(function* () {
+      },
+      (effect, input) => effect.pipe(mapError("getDefaultBranch", input.cwd)),
+    ),
+    checkoutChangeRequest: Effect.fn("ForgejoSourceControlProvider.checkoutChangeRequest")(
+      function* (input) {
         const repo = yield* cli.resolveRepository(input);
         const pull = yield* getPull(input);
         if (repo.command === "fj") {
@@ -468,6 +500,8 @@ export const make = Effect.gen(function* () {
             args: ["reset", "--keep", pull.head.sha],
           });
         }
-      }).pipe(mapError("checkoutChangeRequest", input.cwd)),
+      },
+      (effect, input) => effect.pipe(mapError("checkoutChangeRequest", input.cwd)),
+    ),
   });
 });

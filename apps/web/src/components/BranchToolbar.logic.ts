@@ -28,6 +28,10 @@ export interface EnvironmentOption {
   machine: EnvironmentMachineKind;
 }
 
+/** "Add to another machine" stays muted until hovered: easy to find, quieter than the machines. */
+export const ADD_TO_MACHINE_LABEL_CLASS =
+  "flex min-w-0 items-center gap-1.5 opacity-55 in-data-highlighted:opacity-100 in-data-popup-open:opacity-100";
+
 export const EnvMode = Schema.Literals(["local", "worktree"]);
 export type EnvMode = typeof EnvMode.Type;
 
@@ -106,7 +110,7 @@ export const WORKTREE_SUBMODULES_LABELS: Record<WorktreeSubmodules, string> = {
 };
 
 /** Returns the directory name shown for a worktree on either host platform. */
-export function resolveWorktreeDirectoryName(worktreePath: string): string {
+function resolveWorktreeDirectoryName(worktreePath: string): string {
   return (
     worktreePath
       .replace(/[\\/]+$/, "")
@@ -167,10 +171,6 @@ export function resolvePreviousWorktreeSeed(input: {
     }
   }
   return latest === null ? null : { branch: latest.branch, worktreePath: latest.worktreePath };
-}
-
-export function resolvePreviousWorktreeLabel(seed: PreviousWorktreeSeed): string {
-  return seed.branch ? `Previous worktree (${seed.branch})` : "Previous worktree";
 }
 
 export function resolveEffectiveEnvMode(input: {
@@ -235,11 +235,10 @@ export function resolveBranchTriggerLabel(input: {
     return "Select ref";
   }
   if (effectiveEnvMode === "worktree" && !activeWorktreePath) {
-    const baseRef =
-      startFromOrigin && resolvedActiveBranchIsRemote === false
-        ? `origin/${resolvedActiveBranch}`
-        : resolvedActiveBranch;
-    return `From ${baseRef}`;
+    // Only the server can determine a local branch's configured remote.
+    return startFromOrigin && resolvedActiveBranchIsRemote === false
+      ? `From ${resolvedActiveBranch} (remote)`
+      : `From ${resolvedActiveBranch}`;
   }
   return resolvedActiveBranch;
 }

@@ -1,6 +1,6 @@
-import { act, type ComponentProps } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { act, render as renderScreen, fakeTimers } from "../../test/render";
+import { type ComponentProps } from "react";
+import { describe, expect, it, vi } from "vite-plus/test";
 import {
   compileResolvedKeybindingsConfig,
   DEFAULT_RESOLVED_KEYBINDINGS,
@@ -10,15 +10,11 @@ import { RightPanelTabs } from "./RightPanelTabs";
 
 vi.mock("~/hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 vi.mock("~/browser/browserDefaults", () => ({ useBrowserDefaults: () => ({ profiles: [] }) }));
-
-let root: Root;
-let container: HTMLDivElement;
 const addFiles = vi.fn();
 const noop = () => undefined;
 
-beforeEach(() => {
-  vi.useFakeTimers();
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+/** Own the rendered tree and fixture cleanup for one test. */
+async function createTestSurface() {
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -33,73 +29,78 @@ beforeEach(() => {
   });
   vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
   addFiles.mockClear();
-  container = document.createElement("div");
+  const container = document.createElement("div");
   document.body.append(container);
-  root = createRoot(container);
-});
+  const screen = await renderScreen(null, { container });
 
-afterEach(async () => {
-  await act(() => root.unmount());
-  container.remove();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
-});
-
-async function renderPanel(overrides: Partial<ComponentProps<typeof RightPanelTabs>> = {}) {
-  await act(() =>
-    root.render(
-      <RightPanelTabs
-        mode="inline"
-        open
-        keybindings={compileResolvedKeybindingsConfig([
-          { key: "mod+t", command: "rightPanel.new", when: "rightPanelOpen && !terminalFocus" },
-        ])}
-        getShortcutContext={() => ({
-          rightPanelOpen: true,
-          terminalFocus: false,
-          terminalOpen: false,
-          previewFocus: false,
-          previewOpen: false,
-          isWeb: true,
-          isDesktop: false,
-        })}
-        surfaces={[]}
-        environmentId={null}
-        activeSurfaceId={null}
-        pendingSurfaceIds={new Set()}
-        previewSessions={{}}
-        desktopByTabId={{}}
-        terminalLabelsById={new Map()}
-        onActivate={noop}
-        onCloseSurface={noop}
-        onCloseOtherSurfaces={noop}
-        onCloseSurfacesToRight={noop}
-        onCloseAllSurfaces={noop}
-        onCopyFilePath={noop}
-        onAddBrowser={noop}
-        onAddBrowserInProfile={noop}
-        onAddTerminal={noop}
-        onAddDiff={noop}
-        onAddFiles={addFiles}
-        onAddPullRequest={noop}
-        onAddPullRequests={noop}
-        onAddDevice={noop}
-        browserAvailable={false}
-        terminalAvailable={false}
-        diffAvailable={false}
-        filesAvailable
-        pullRequestAvailable={false}
-        pullRequestsAvailable={false}
-        deviceAvailable={false}
-        {...overrides}
-      >
-        content
-      </RightPanelTabs>,
-    ),
-  );
-  await act(() => vi.advanceTimersByTimeAsync(0));
-  await act(() => vi.advanceTimersToNextFrame());
+  async function renderPanel(overrides: Partial<ComponentProps<typeof RightPanelTabs>> = {}) {
+    await act(() =>
+      screen.rerender(
+        <RightPanelTabs
+          mode="inline"
+          open
+          keybindings={compileResolvedKeybindingsConfig([
+            { key: "mod+t", command: "rightPanel.new", when: "rightPanelOpen && !terminalFocus" },
+          ])}
+          getShortcutContext={() => ({
+            rightPanelOpen: true,
+            terminalFocus: false,
+            terminalOpen: false,
+            previewFocus: false,
+            previewOpen: false,
+            isWeb: true,
+            isDesktop: false,
+          })}
+          surfaces={[]}
+          environmentId={null}
+          activeSurfaceId={null}
+          pendingSurfaceIds={new Set()}
+          previewSessions={{}}
+          desktopByTabId={{}}
+          terminalLabelsById={new Map()}
+          onActivate={noop}
+          onCloseSurface={noop}
+          onCloseOtherSurfaces={noop}
+          onCloseSurfacesToRight={noop}
+          onCloseAllSurfaces={noop}
+          onCopyFilePath={noop}
+          onAddBrowser={noop}
+          onAddBrowserInProfile={noop}
+          onAddTerminal={noop}
+          onAddDiff={noop}
+          onAddFiles={addFiles}
+          onAddPullRequest={noop}
+          onAddPullRequests={noop}
+          onAddDevice={noop}
+          browserAvailable={false}
+          terminalAvailable={false}
+          diffAvailable={false}
+          filesAvailable
+          pullRequestAvailable={false}
+          pullRequestsAvailable={false}
+          deviceAvailable={false}
+          {...overrides}
+        >
+          content
+        </RightPanelTabs>,
+      ),
+    );
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    await act(() => vi.advanceTimersToNextFrame());
+  }
+  return {
+    screen,
+    container,
+    renderPanel,
+    async [Symbol.asyncDispose]() {
+      try {
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+      } finally {
+        await screen[Symbol.asyncDispose]();
+      }
+    },
+  };
 }
 
 async function press(key: string, options: KeyboardEventInit = {}) {
@@ -112,6 +113,10 @@ async function press(key: string, options: KeyboardEventInit = {}) {
 
 describe("right panel new-tab shortcut", () => {
   it("leaves the fork's default side-chat shortcut to the chat view", async () => {
+    using _timers = fakeTimers();
+    await using surface = await createTestSurface();
+    const { renderPanel } = surface;
+
     await renderPanel({ keybindings: DEFAULT_RESOLVED_KEYBINDINGS });
     expect((await press("t", { metaKey: true })).defaultPrevented).toBe(false);
     expect(document.querySelector('[role="menu"]')).toBeNull();
@@ -120,6 +125,10 @@ describe("right panel new-tab shortcut", () => {
   it.each(["MacIntel", "Win32", "Linux x86_64"])(
     "opens the menu on %s and chooses a tab",
     async (platform) => {
+      using _timers = fakeTimers();
+      await using surface = await createTestSurface();
+      const { renderPanel } = surface;
+
       vi.spyOn(navigator, "platform", "get").mockReturnValue(platform);
       await renderPanel();
       const event = await press(
@@ -147,6 +156,10 @@ describe("right panel new-tab shortcut", () => {
   );
 
   it("opens Files while a closed popup remains mounted", async () => {
+    using _timers = fakeTimers();
+    await using surface = await createTestSurface();
+    const { container, renderPanel } = surface;
+
     await renderPanel();
     const popup = document.createElement("div");
     popup.dataset.slot = "menu-popup";
@@ -158,6 +171,10 @@ describe("right panel new-tab shortcut", () => {
   });
 
   it("opens the add-surface menu while a closed popup remains mounted", async () => {
+    using _timers = fakeTimers();
+    await using surface = await createTestSurface();
+    const { container, renderPanel } = surface;
+
     await renderPanel();
     const popup = document.createElement("div");
     popup.dataset.slot = "menu-popup";
@@ -169,6 +186,10 @@ describe("right panel new-tab shortcut", () => {
   });
 
   it("leaves the shortcut alone while the mounted panel is closed", async () => {
+    using _timers = fakeTimers();
+    await using surface = await createTestSurface();
+    const { renderPanel } = surface;
+
     await renderPanel({ open: false });
     expect((await press("t", { metaKey: true })).defaultPrevented).toBe(false);
     expect(document.querySelector('[role="menu"]:not([data-closed])')).toBeNull();
@@ -177,6 +198,10 @@ describe("right panel new-tab shortcut", () => {
   it.each(["Win32", "Linux x86_64"])(
     "leaves Ctrl+T for the focused terminal on %s",
     async (platform) => {
+      using _timers = fakeTimers();
+      await using surface = await createTestSurface();
+      const { container, renderPanel } = surface;
+
       vi.spyOn(navigator, "platform", "get").mockReturnValue(platform);
       await renderPanel({
         getShortcutContext: () => ({
@@ -202,6 +227,10 @@ describe("right panel new-tab shortcut", () => {
   );
 
   it("uses a custom binding from a text field and closes on Escape", async () => {
+    using _timers = fakeTimers();
+    await using surface = await createTestSurface();
+    const { container, renderPanel } = surface;
+
     const input = document.createElement("input");
     await renderPanel({
       keybindings: compileResolvedKeybindingsConfig([{ key: "mod+y", command: "rightPanel.new" }]),
@@ -224,6 +253,10 @@ describe("right panel new-tab shortcut", () => {
   });
 
   it("does not open over another popup or during text composition", async () => {
+    using _timers = fakeTimers();
+    await using surface = await createTestSurface();
+    const { container, renderPanel } = surface;
+
     await renderPanel();
     expect((await press("t", { metaKey: true, isComposing: true })).defaultPrevented).toBe(false);
     const dialog = document.createElement("div");
@@ -240,6 +273,10 @@ describe("right panel new-tab shortcut", () => {
   });
 
   it("supports arrow keys with an existing tab in sheet mode and clears the menu on close", async () => {
+    using _timers = fakeTimers();
+    await using surface = await createTestSurface();
+    const { renderPanel } = surface;
+
     const panel = {
       mode: "sheet" as const,
       surfaces: [{ id: "files" as const, kind: "files" as const }],

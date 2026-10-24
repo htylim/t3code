@@ -1,5 +1,33 @@
 # Fork journal
 
+## 2026-10-24 - Integrate upstream through d53873b6a4
+
+- Upstream baseline: `d53873b6a4799e87afd63c8d288ef0089f5a3748`, following
+  `325a7e2ae4bf504cdaeb7b842e88b47f60b4bf59`. Integrates 892 upstream commits on
+  `review-upstream-main-changes`, starting from fork commit `c2260cbd9ebc`.
+- Adopt upstream's public `thread.stop` command and capability. Remove the fork's optional-run
+  interrupt protocol. Preserve late Codex terminal handles and the regression that stops
+  background commands beyond the client's loaded history.
+- Keep narrow-lane table wrapping, scoped percent references, named and colored worktrees,
+  workspace editing and grouping, Postponed, side chats, owner context, transient native-history
+  cleanup, selected-text actions, usage exclusions, navigation shortcuts, and Fork identity.
+  Move their integration points into upstream's extracted sidebar, timeline, composer, and
+  lifecycle modules. Preserve upstream's quiet subscriptions, indexed search, and Undo plans.
+- Normal desktop artifact builds now use upstream's temporary version alignment and checkout
+  lock. Retain Fork Connect defaults, update-feed suppression, ad-hoc signing, and strict bundle
+  signature verification. Update the release procedure to rely on the builder's manifest restore.
+- Adopt upstream test pruning without restoring unrelated cases. Retained browser regressions
+  use disposable renders and direct browser input under the new test rules. Remove unused
+  test-only exports left by the pruning. Upstream migrations 65 through 69 arrive unchanged.
+- Verification: 2,488 focused tests and React Compiler cases passed, including 364 server
+  orchestration/worktree/cleanup cases, 173 provider/HTTP/usage cases, 586 web unit cases,
+  18 client-runtime cases, 148 shared/contracts/packaging cases, 9 desktop cases, and 1,190
+  compiler cases. Five opt-in native-provider cases skipped. Scoped server, web, mobile,
+  desktop, contracts, shared, client-runtime, and scripts typechecks passed. Targeted lint,
+  formatting, export checks, and web/server production builds passed.
+- Limits: Browser execution and an integrated client pass require explicit approval and were
+  not run. No live provider turns, live-data writes, native builds, installers, or publication.
+
 ## 2026-10-23 - Match HTML preview permissions to published pages
 
 - Upstream baseline: `325a7e2ae4`.
@@ -1075,7 +1103,7 @@ restored against upstream's context records, as documented above.
   tests, and user documentation. Mobile, providers, and server orchestration are unchanged.
 - Verification: Passed 94 focused contract, server-default, and web shortcut tests; affected
   contracts, shared, server, and web type checks; targeted lint and formatting; and `git diff
---check`. In an isolated web environment, pressed `Cmd+W` on an unsettled thread with both panels
+  --check`. In an isolated web environment, pressed `Cmd+W` on an unsettled thread with both panels
   closed, confirmed the source moved to the Settled shelf, and landed on a fresh same-project draft.
 
 ## 2026-08-28 - Merge upstream attachment, feedback, and packaging changes

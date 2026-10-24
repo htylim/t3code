@@ -16,6 +16,17 @@ interface WorkspaceNavigation {
   readonly getRootState?: () => NavigationState | undefined;
 }
 
+function androidWorkspaceBackReturnsToThread(state: NavigationState) {
+  const current = state.routes[state.index];
+  const params = current?.params as ReactNavigation.RootParamList["Thread"] | undefined;
+  return (
+    current?.name === "Thread" &&
+    state.routes[state.index - 1]?.name === "Thread" &&
+    params !== undefined &&
+    !parentThreadIsBelow(state, params)
+  );
+}
+
 export function androidWorkspaceNavigationState(
   state: NavigationState,
   destination?: AndroidWorkspaceDestination,
@@ -65,6 +76,51 @@ export function resetAndroidWorkspace(
     payload: androidWorkspaceNavigationState(state, destination, reviewers),
     target: state.key,
   });
+}
+
+export function parentThreadIsBelow(
+  state: NavigationState,
+  parent: ReactNavigation.RootParamList["Thread"],
+) {
+  if (!parent?.environmentId || !parent.threadId) return false;
+  const previous = state.routes[state.index - 1];
+  const params = previous?.params as ReactNavigation.RootParamList["Thread"] | undefined;
+  return (
+    previous?.name === "Thread" &&
+    params?.environmentId === parent.environmentId &&
+    params?.threadId === parent.threadId
+  );
+}
+
+/**
+ * How a thread link opened from inside a thread reaches its target. `navigate` would reuse the
+ * current Thread route, so Back would skip the thread the link was in and land on the list.
+ */
+export function linkedThreadStep(
+  state: NavigationState,
+  target: ReactNavigation.RootParamList["Thread"],
+): "stay" | "pop" | "push" {
+  const params = state.routes[state.index]?.params as
+    | ReactNavigation.RootParamList["Thread"]
+    | undefined;
+  if (
+    state.routes[state.index]?.name === "Thread" &&
+    params?.environmentId === target?.environmentId &&
+    params?.threadId === target?.threadId
+  ) {
+    return "stay";
+  }
+  return parentThreadIsBelow(state, target) ? "pop" : "push";
+}
+
+export function returnToAndroidWorkspaceList(
+  navigation: WorkspaceNavigation & { readonly goBack: () => void },
+  selectTab: () => void,
+) {
+  const state = navigation.getState();
+  if (state && androidWorkspaceBackReturnsToThread(state)) return navigation.goBack();
+  selectTab();
+  resetAndroidWorkspace(navigation);
 }
 
 // In the split view these destinations swap the detail pane beside the sidebar instead of

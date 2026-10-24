@@ -1,4 +1,4 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { resolvePullRequestAuthorFilter, SourceControlProviderKind } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
 import type { PullRequestCapabilities, PullRequestViewerPermissions } from "@t3tools/contracts";
@@ -33,7 +33,7 @@ import type {
   AzureDevOpsPullRequest,
   AzureDevOpsRepositoryLocation,
 } from "./azureDevOpsPullRequestJson.ts";
-import { definition } from "../client/definition.ts";
+import { definition } from "../shared/definition.ts";
 
 /**
  * Every file is two `az` invocations, each paying a Python interpreter's start-up, so reading them
@@ -70,6 +70,12 @@ const CAPABILITIES: PullRequestCapabilities = {
   viewedFiles: "environment",
 };
 
+const UNAVAILABLE_REQUIREMENT = {
+  missing:
+    "Azure CLI (`az`) with the Azure DevOps extension is required. Install `az`, then run `az extension add --name azure-devops`.",
+  unauthenticated: "Azure CLI is not signed in. Run `az login` and retry.",
+};
+
 /**
  * Azure DevOps states no permission anywhere `az repos pr show` or `az repos pr list` reach: the
  * answer lives in the security namespaces, behind identity descriptors and token paths that would
@@ -83,7 +89,7 @@ const AZURE_DEVOPS_VIEWER_PERMISSIONS: PullRequestViewerPermissions = {
   requestReviewers: CAPABILITIES.reviewers.request,
 };
 
-export function azureDevOpsProviderFailure(
+function azureDevOpsProviderFailure(
   error: AzureDevOpsPullRequestCli.AzureDevOpsPullRequestCliError,
 ): PullRequestProviderFailure {
   if (error._tag === "AzureDevOpsCliUnavailableError") return { reason: "missing-tool" };
@@ -176,17 +182,19 @@ export const make = Effect.gen(function* () {
     );
   };
 
-  const diffScope = (input: { readonly cwd: string; readonly number: number }) =>
-    Effect.gen(function* () {
-      const location = yield* locationOf(input);
-      if (location === null) return null;
-      const iterations = yield* cli.listIterations({
-        cwd: input.cwd,
-        location,
-        number: input.number,
-      });
-      return { location, iterations };
+  const diffScope = Effect.fn("AzureDevOpsPullRequestProvider.diffScope")(function* (input: {
+    readonly cwd: string;
+    readonly number: number;
+  }) {
+    const location = yield* locationOf(input);
+    if (location === null) return null;
+    const iterations = yield* cli.listIterations({
+      cwd: input.cwd,
+      location,
+      number: input.number,
     });
+    return { location, iterations };
+  });
 
   const EMPTY_ITEM: AzureDevOpsItemContent = { contents: "", isBinary: false };
 
@@ -257,6 +265,7 @@ export const make = Effect.gen(function* () {
   const provider: PullRequestProviderApi = {
     kind: SourceControlProviderKind.make("azure-devops"),
     capabilities: CAPABILITIES,
+    unavailableRequirement: UNAVAILABLE_REQUIREMENT,
     // The bare repository name repeats across an organization; the project path does not.
     repositoryKey: ({ canonicalKey }) => canonicalKey,
 
@@ -273,6 +282,10 @@ export const make = Effect.gen(function* () {
           viewer: input.viewer,
           limit: input.limit,
           cursor: input.cursor,
+          author:
+            input.filters?.author === undefined
+              ? undefined
+              : resolvePullRequestAuthorFilter(input.filters.author, input.viewer),
         })
         .pipe(
           Effect.mapError(fail("listChangeRequests")),
@@ -305,8 +318,8 @@ export const make = Effect.gen(function* () {
         })),
       ),
 
-    getChangeRequest: (input) =>
-      Effect.gen(function* () {
+    getChangeRequest: Effect.fn("AzureDevOpsPullRequestProvider.getChangeRequest")(
+      function* (input) {
         const pullRequest = yield* cli.getPullRequest({ cwd: input.cwd, number: input.number });
         const location = pullRequest.location;
         const iterations =
@@ -346,7 +359,9 @@ export const make = Effect.gen(function* () {
             : { autoMergeMethod: pullRequest.autoMergeMethod }),
         };
         return detail;
-      }).pipe(Effect.mapError(fail("getChangeRequest"))),
+      },
+      Effect.mapError(fail("getChangeRequest")),
+    ),
 
     getChangeRequestActivity: (input) =>
       cli.getPullRequest({ cwd: input.cwd, number: input.number }).pipe(
@@ -380,8 +395,8 @@ export const make = Effect.gen(function* () {
 
     // `input.commit` is deliberately dropped: Azure states no commit list on a pull request, so
     // the Code tab has nothing to scope itself to and always asks for the whole change.
-    getDiff: (input) =>
-      Effect.gen(function* () {
+    getDiff: Effect.fn("AzureDevOpsPullRequestProvider.getDiff")(
+      function* (input) {
         const scope = yield* diffScope(input);
         if (scope === null) return EMPTY_DIFF_SLICE;
         const cursor = parseAzureDevOpsDiffCursor(input.cursor);
@@ -479,10 +494,12 @@ export const make = Effect.gen(function* () {
               : formatAzureDevOpsDiffCursor({ iterationId: iteration.id, fileIndex: index }),
         };
         return slice;
-      }).pipe(Effect.mapError(fail("getDiff"))),
+      },
+      Effect.mapError(fail("getDiff")),
+    ),
 
-    getDiffFileContents: (input) =>
-      Effect.gen(function* () {
+    getDiffFileContents: Effect.fn("AzureDevOpsPullRequestProvider.getDiffFileContents")(
+      function* (input) {
         const scope = yield* diffScope(input);
         const iteration = scope?.iterations.at(-1);
         if (scope === null || iteration === undefined) return { oldContents: "", newContents: "" };
@@ -496,15 +513,17 @@ export const make = Effect.gen(function* () {
             oldPath: input.oldPath,
           },
         });
-      }).pipe(Effect.mapError(fail("getDiffFileContents"))),
+      },
+      Effect.mapError(fail("getDiffFileContents")),
+    ),
 
     /**
      * A path the change does not carry is at the empty revision, which is where a file the pull
      * request deletes sits. When the change was too long to follow to its end, those paths are left
      * out instead: reporting them as deleted would clear a file nobody has read.
      */
-    getFileRevisions: (input) =>
-      Effect.gen(function* () {
+    getFileRevisions: Effect.fn("AzureDevOpsPullRequestProvider.getFileRevisions")(
+      function* (input) {
         const revisions = new Map<string, string>();
         if (input.paths.length === 0) return { revisions };
         const scope = yield* diffScope(input);
@@ -525,7 +544,9 @@ export const make = Effect.gen(function* () {
           }
         }
         return { revisions };
-      }).pipe(Effect.mapError(fail("getFileRevisions"))),
+      },
+      Effect.mapError(fail("getFileRevisions")),
+    ),
 
     runAction: (input) =>
       cli

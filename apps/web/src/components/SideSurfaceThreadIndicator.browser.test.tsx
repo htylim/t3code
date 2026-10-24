@@ -1,9 +1,8 @@
+import { act, render as renderScreen } from "../../test/render";
 import { userEvent } from "vite-plus/test/browser";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { selectThreadRightPanelState, useRightPanelStore } from "../rightPanelStore";
 import { SideSurfaceThreadIndicators } from "./SideSurfaceThreadIndicator";
@@ -12,14 +11,11 @@ import { TooltipProvider } from "./ui/tooltip";
 const ownerThreadRef = scopeThreadRef(EnvironmentId.make("env-1"), ThreadId.make("owner"));
 const sideThreadRef = scopeThreadRef(EnvironmentId.make("env-1"), ThreadId.make("side"));
 const otherOwnerThreadRef = scopeThreadRef(EnvironmentId.make("env-2"), ThreadId.make("owner"));
-
-let root: Root;
-let container: HTMLDivElement;
 const navigateToThread = vi.fn();
 const activateRow = vi.fn();
 
-beforeEach(() => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+/** Own the rendered tree and fixture cleanup for one test. */
+async function createTestSurface() {
   useRightPanelStore.setState({
     byThreadKey: {},
     threadPanelVisibilityByThreadKey: {},
@@ -27,40 +23,47 @@ beforeEach(() => {
   });
   navigateToThread.mockReset();
   activateRow.mockReset();
-  container = document.createElement("div");
+  const container = document.createElement("div");
   document.body.append(container);
-  root = createRoot(container);
-});
+  const screen = await renderScreen(null, { container });
 
-afterEach(async () => {
-  await act(async () => root.unmount());
-  container.remove();
-  vi.unstubAllGlobals();
-});
+  async function renderIndicators(threadRef: ScopedThreadRef = sideThreadRef, hasSideChat = false) {
+    await act(async () => {
+      screen.rerender(
+        <TooltipProvider>
+          <div onClick={activateRow} onKeyDown={activateRow} onDoubleClick={activateRow}>
+            <SideSurfaceThreadIndicators
+              hasSideChat={hasSideChat}
+              isSideChat
+              threadRef={threadRef}
+              onNavigateToThread={navigateToThread}
+            />
+          </div>
+        </TooltipProvider>,
+      );
+    });
+  }
 
-/** Render inside a clickable row to exercise navigation and event propagation together. */
-async function renderIndicators(threadRef: ScopedThreadRef = sideThreadRef, hasSideChat = false) {
-  await act(async () => {
-    root.render(
-      <TooltipProvider>
-        <div onClick={activateRow} onKeyDown={activateRow} onDoubleClick={activateRow}>
-          <SideSurfaceThreadIndicators
-            hasSideChat={hasSideChat}
-            isSideChat
-            threadRef={threadRef}
-            onNavigateToThread={navigateToThread}
-          />
-        </div>
-      </TooltipProvider>,
+  function parentThreadButton() {
+    const button = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="In a side chat"]',
     );
-  });
-}
-
-/** Find the actual navigation button, failing if the indicator is no longer interactive. */
-function parentThreadButton() {
-  const button = container.querySelector<HTMLButtonElement>('button[aria-label="In a side chat"]');
-  if (!button) throw new Error("Parent-thread navigation button was not rendered");
-  return button;
+    if (!button) throw new Error("Parent-thread navigation button was not rendered");
+    return button;
+  }
+  return {
+    screen,
+    container,
+    renderIndicators,
+    parentThreadButton,
+    async [Symbol.asyncDispose]() {
+      try {
+        vi.unstubAllGlobals();
+      } finally {
+        await screen[Symbol.asyncDispose]();
+      }
+    },
+  };
 }
 
 /** Read the owner's saved panel after the indicator activates it. */
@@ -70,6 +73,9 @@ function ownerPanel(threadRef: ScopedThreadRef = ownerThreadRef) {
 
 describe("side-chat parent navigation", () => {
   it("opens the parent and reveals its saved chat when another tab was selected and hidden", async () => {
+    await using surface = await createTestSurface();
+    const { renderIndicators, parentThreadButton } = surface;
+
     const panelStore = useRightPanelStore.getState();
     panelStore.openChat(ownerThreadRef, sideThreadRef);
     const savedSurfaces = ownerPanel().surfaces;
@@ -93,6 +99,9 @@ describe("side-chat parent navigation", () => {
   });
 
   it("matches both environment and thread ids when finding a cross-environment parent", async () => {
+    await using surface = await createTestSurface();
+    const { renderIndicators, parentThreadButton } = surface;
+
     const panelStore = useRightPanelStore.getState();
     const otherSideThreadRef = scopeThreadRef(
       otherOwnerThreadRef.environmentId,
@@ -112,6 +121,9 @@ describe("side-chat parent navigation", () => {
   });
 
   it("keeps transient metadata and the thread's own side chat intact", async () => {
+    await using surface = await createTestSurface();
+    const { renderIndicators, parentThreadButton } = surface;
+
     const panelStore = useRightPanelStore.getState();
     panelStore.openChat(ownerThreadRef, sideThreadRef, { transient: true });
     panelStore.openChat(sideThreadRef, otherOwnerThreadRef);
@@ -128,6 +140,9 @@ describe("side-chat parent navigation", () => {
   });
 
   it("opens the first saved parent when more than one thread hosts the same side chat", async () => {
+    await using surface = await createTestSurface();
+    const { renderIndicators, parentThreadButton } = surface;
+
     const panelStore = useRightPanelStore.getState();
     panelStore.openChat(ownerThreadRef, sideThreadRef);
     panelStore.openChat(otherOwnerThreadRef, sideThreadRef);
@@ -139,6 +154,9 @@ describe("side-chat parent navigation", () => {
   });
 
   it("does nothing if the relationship was removed before clicking", async () => {
+    await using surface = await createTestSurface();
+    const { renderIndicators, parentThreadButton } = surface;
+
     const panelStore = useRightPanelStore.getState();
     panelStore.openChat(ownerThreadRef, sideThreadRef);
     await renderIndicators();
@@ -154,14 +172,17 @@ describe("side-chat parent navigation", () => {
   it.each(["Enter", " "])(
     "keeps %j activation on the icon from opening the row's thread",
     async (key) => {
+      await using surface = await createTestSurface();
+      const { renderIndicators, parentThreadButton } = surface;
+
       useRightPanelStore.getState().openChat(ownerThreadRef, sideThreadRef);
       await renderIndicators();
 
-      await act(async () => {
+      await (async () => {
         const button = parentThreadButton();
         button.focus();
         await userEvent.keyboard(key === "Enter" ? "{Enter}" : " ");
-      });
+      })();
 
       expect(navigateToThread).toHaveBeenCalledExactlyOnceWith(ownerThreadRef);
       expect(activateRow).not.toHaveBeenCalled();
@@ -169,6 +190,9 @@ describe("side-chat parent navigation", () => {
   );
 
   it("keeps double clicking the icon from starting the enclosing row's rename action", async () => {
+    await using surface = await createTestSurface();
+    const { renderIndicators, parentThreadButton } = surface;
+
     useRightPanelStore.getState().openChat(ownerThreadRef, sideThreadRef);
     await renderIndicators();
 

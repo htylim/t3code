@@ -805,6 +805,7 @@ export function CompactChatSurface({ owner, target, focusRequestId }: CompactCha
 
       <div className="relative min-h-0 flex-1">
         <MessagesTimeline
+          emptyPlaceholderInset={0}
           key={routeThreadKey}
           isWorking={isWorking}
           activeTurnInProgress={running}

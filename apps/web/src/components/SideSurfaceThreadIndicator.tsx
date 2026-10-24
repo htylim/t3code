@@ -28,7 +28,7 @@ function SideSurfaceThreadIndicator({
       <button
         type="button"
         aria-label={label}
-        className="-m-1 inline-flex shrink-0 cursor-pointer items-center rounded p-1 text-muted-foreground/65 outline-hidden hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+        className="-m-1 inline-flex shrink-0 cursor-pointer items-center rounded p-1 text-muted-foreground/65 outline-hidden hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={onOpenParent}
         onKeyDown={handleKeyDown}
         onPointerDown={(event) => event.stopPropagation()}

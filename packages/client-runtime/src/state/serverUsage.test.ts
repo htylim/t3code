@@ -32,7 +32,6 @@ import {
   type PreparedConnection,
   type SupervisorConnectionState,
 } from "../connection/model.ts";
-import type { EnvironmentPresentation } from "../connection/presentation.ts";
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import * as Persistence from "../platform/persistence.ts";
@@ -40,7 +39,6 @@ import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import { createServerEnvironmentAtoms } from "./server.ts";
 import { withForkUsageDashboardIncluded } from "@t3tools/shared/forkUsageDashboard";
-import { refreshUsage } from "./usage.ts";
 
 const TARGET = new PrimaryConnectionTarget({
   environmentId: EnvironmentId.make("usage-environment"),
@@ -257,49 +255,6 @@ function waitForCost<E>(
   );
 }
 
-it.effect("refreshes cached usage windows only when override prices change", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const harness = yield* makeHarness();
-      const current = harness.summary();
-      const previous = harness.summary({ ...INPUT, sinceDay: UsageDay.make("2026-08-01") });
-      const unmountCurrent = harness.registry.mount(current);
-      const unmountPrevious = harness.registry.mount(previous);
-      yield* waitForCost(harness.registry, current, 0);
-      yield* waitForCost(harness.registry, previous, 0);
-      unmountPrevious();
-      expect(harness.requests()).toBe(2);
-
-      const prices = {
-        "custom-model": { inputCostPerMillionTokens: 3, outputCostPerMillionTokens: 9 },
-        "other-model": { inputCostPerMillionTokens: 1, outputCostPerMillionTokens: 2 },
-      };
-      yield* harness.updateSettings({ ...DEFAULT_SERVER_SETTINGS, usagePriceOverrides: prices });
-      yield* waitForCost(harness.registry, current, 3);
-      yield* waitForCost(harness.registry, previous, 3);
-      expect(harness.requests()).toBe(4);
-
-      yield* harness.updateSettings({
-        ...DEFAULT_SERVER_SETTINGS,
-        usagePriceOverrides: {
-          "other-model": { outputCostPerMillionTokens: 2, inputCostPerMillionTokens: 1 },
-          "custom-model": { outputCostPerMillionTokens: 9, inputCostPerMillionTokens: 3 },
-        },
-      });
-      yield* harness.updateSettings({
-        ...DEFAULT_SERVER_SETTINGS,
-        usagePriceOverrides: prices,
-        defaultTheme: "custom-theme",
-      });
-      yield* harness.updateSettings(DEFAULT_SERVER_SETTINGS);
-      yield* waitForCost(harness.registry, current, 0);
-      yield* waitForCost(harness.registry, previous, 0);
-      expect(harness.requests()).toBe(6);
-      unmountCurrent();
-    }),
-  ),
-);
-
 it.effect(
   "refreshes usage after fork account exclusion changes without rescanning for label edits",
   () =>
@@ -375,45 +330,6 @@ it.effect("restarts a pending usage read after a price change", () =>
   ),
 );
 
-it.effect("settles after one usage read when no source is refreshing", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const harness = yield* makeHarness();
-      const summary = harness.summary();
-      const unmount = harness.registry.mount(summary);
-      yield* settledSummary(harness.registry, summary);
-      expect(harness.inputs()).toEqual([INPUT]);
-      unmount();
-    }),
-  ),
-);
-
-it.effect("shows the cached usage summary until one awaited refresh replaces it", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const refreshed = yield* Deferred.make<void>();
-      const harness = yield* makeRefreshingHarness(Deferred.await(refreshed));
-      const summary = harness.summary();
-      const unmount = harness.registry.mount(summary);
-      yield* Deferred.await(harness.followUpStarted);
-
-      const provisional = harness.registry.get(summary);
-      expect(AsyncResult.isSuccess(provisional) && provisional.waiting).toBe(true);
-      expect(Option.getOrNull(AsyncResult.value(provisional))?.sources).toEqual([
-        cursorSource(true),
-      ]);
-      expect(harness.inputs()).toEqual([INPUT, { ...INPUT, awaitRefresh: true }]);
-
-      yield* Deferred.succeed(refreshed, undefined);
-      expect((yield* settledSummary(harness.registry, summary)).sources).toEqual([
-        cursorSource(false),
-      ]);
-      expect(harness.requests()).toBe(2);
-      unmount();
-    }),
-  ),
-);
-
 it.effect("keeps the cached usage summary when the awaited refresh fails", () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -428,33 +344,6 @@ it.effect("keeps the cached usage summary when the awaited refresh fails", () =>
       expect(AsyncResult.isSuccess(harness.registry.get(summary))).toBe(true);
       expect(harness.requests()).toBe(2);
       unmount();
-    }),
-  ),
-);
-
-it.effect("finishes a manual usage refresh only after the awaited refresh", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const refreshed = yield* Deferred.make<void>();
-      const harness = yield* makeRefreshingHarness(Deferred.await(refreshed));
-      const presentation = Atom.make({
-        connection: { phase: "connected" },
-      } as EnvironmentPresentation | null);
-      let finished = false;
-      const refreshing = refreshUsage({
-        registry: harness.registry,
-        server: harness.atoms,
-        presentations: { presentationAtom: () => presentation },
-        environmentIds: [TARGET.environmentId],
-        input: INPUT,
-      }).then(() => {
-        finished = true;
-      });
-      yield* Deferred.await(harness.followUpStarted);
-      expect(finished).toBe(false);
-      yield* Deferred.succeed(refreshed, undefined);
-      yield* Effect.promise(() => refreshing);
-      expect(harness.requests()).toBe(2);
     }),
   ),
 );

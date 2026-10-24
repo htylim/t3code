@@ -177,20 +177,18 @@ cargo --version
 ```
 
 Use a SemVer prerelease ending in `-fork` or `-fork.<identifier>` to select the downstream desktop
-identity. Before compiling a release, set the releasable package manifests to that exact version in
-a disposable worktree as described below:
+identity. The artifact builder aligns the server, client, and Electron versions before compiling:
 
 ```bash
 fork_version=0.0.31-fork.1
-node scripts/update-release-package-versions.ts "$fork_version"
-APP_VERSION="$fork_version" vp run dist:desktop:dmg --build-version "$fork_version"
+vp run dist:desktop:dmg --build-version "$fork_version"
 ```
 
-All three version inputs are required. The package manifests are compiled into the server,
-`APP_VERSION` is compiled into the web client, and `--build-version` controls Electron and artifact
-metadata. Setting only the latter two produces an internally inconsistent app whose client reports
-the fork version while its server reports the base package version. Do not modify a source branch
-just to align these build inputs; use the disposable release worktree below.
+The builder temporarily updates the releasable package manifests and sets `APP_VERSION`, then
+restores the original manifests. A checkout lock prevents overlapping builds from racing these
+writes. Do not manually stamp source manifests for a normal artifact build. With `--skip-build`,
+the existing compiled server and client must already contain the exact artifact version.
+Use the disposable release worktree below so generated outputs stay separate from development.
 
 The artifact is written to `release/` and installs as `T3 Code (Fork)` with the bundle identifier
 `com.htylim.t3code.fork`. Fork builds deliberately keep using `~/.t3/userdata`, so they see the same
@@ -290,8 +288,8 @@ these with repo-wide checks unless specifically requested.
 ### 3. Build an explicit architecture and exact version
 
 Compile in a disposable detached worktree so release-only package versions never dirty or move the
-source branch. The detached worktree still embeds `release_commit`, while the temporary manifest
-updates make the server, client, Electron metadata, and artifact names agree:
+source branch. The detached worktree embeds `release_commit`. The builder aligns versions during
+compilation and restores the manifests afterward:
 
 ```bash
 fork_version=0.1.0-fork.23
@@ -301,8 +299,7 @@ git worktree add --detach "$release_stage" "$release_commit"
 
 cd "$release_stage"
 vp i --frozen-lockfile
-node scripts/update-release-package-versions.ts "$fork_version"
-APP_VERSION="$fork_version" T3CODE_DESKTOP_SIGNED=false \
+T3CODE_DESKTOP_SIGNED=false \
   vp run dist:desktop:dmg:arm64 --build-version "$fork_version"
 
 test "$(node apps/server/dist/bin.mjs --version)" = "t3 v${fork_version}"
@@ -313,19 +310,14 @@ cp "release/T3-Code-${fork_version}-arm64.dmg" "$release_root/release/"
 cp "release/T3-Code-${fork_version}-arm64.zip" "$release_root/release/"
 
 cd "$release_root"
-git -C "$release_stage" restore -- \
-  apps/server/package.json \
-  apps/desktop/package.json \
-  apps/web/package.json \
-  packages/contracts/package.json
 git worktree remove "$release_stage"
 ```
 
 Both version checks are mandatory. The first exercises the compiled server's actual `--version`
 output; the second confirms the built client contains the exact same version. A matching DMG name
 or `Info.plist` alone is not proof that the bundled server and client agree.
-`git status --short` in the release worktree must show only the four package manifests updated by
-`update-release-package-versions.ts`; the frozen install must not rewrite `pnpm-lock.yaml`.
+`git status --short` in the release worktree must be clean after the builder restores the package
+manifests. The frozen install must not rewrite `pnpm-lock.yaml`.
 
 Start without `--verbose`; its electron-builder output is large enough to hide the useful final
 error. Use it only when diagnosing a focused failure. The packaging stage installs locked

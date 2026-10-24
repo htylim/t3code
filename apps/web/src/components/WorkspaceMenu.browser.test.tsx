@@ -1,7 +1,7 @@
+import { act, render as renderScreen } from "../../test/render";
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
-import { act, useState } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { useState } from "react";
+import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 vi.mock("../state/entities", () => ({ useThreadShellsForProjectRefs: () => [] }));
@@ -28,47 +28,49 @@ vi.mock("../state/query", () => ({
 }));
 
 import { WorkspaceMenu, type WorkspaceMenuProps } from "./WorkspaceMenu";
-
-let root: Root;
-let container: HTMLDivElement;
 const environmentId = EnvironmentId.make("local");
 const projectRef = { environmentId, projectId: ProjectId.make("project") };
 
-beforeEach(() => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  container = document.createElement("div");
+/** Own the rendered tree and fixture cleanup for one test. */
+async function createTestSurface() {
+  const container = document.createElement("div");
   document.body.append(container);
-  root = createRoot(container);
-});
+  const screen = await renderScreen(null, { container });
 
-afterEach(async () => {
-  await act(async () => root.unmount());
-  container.remove();
-  vi.unstubAllGlobals();
-});
-
-/** Open the actual workspace picker with a saved name, even when another option is active. */
-async function openWorkspace(overrides: Partial<WorkspaceMenuProps> = {}) {
-  await act(async () => {
-    root.render(
-      <WorkspaceMenu
-        environmentId={environmentId}
-        projectRef={projectRef}
-        projectCwd="/tmp/project"
-        activeWorktreePath={null}
-        activeBranch="main"
-        envLocked={false}
-        canUseWorktree
-        effectiveEnvMode="local"
-        namedWorktreeSelection={{ name: "billing-fix", color: "#14b8a6" }}
-        onEnvModeChange={vi.fn()}
-        onUseWorktree={vi.fn()}
-        onNewWorktreeSelect={vi.fn()}
-        {...overrides}
-      />,
-    );
-  });
-  await act(async () => userEvent.click(container.querySelector<HTMLButtonElement>("button")!));
+  async function openWorkspace(overrides: Partial<WorkspaceMenuProps> = {}) {
+    await act(async () => {
+      screen.rerender(
+        <WorkspaceMenu
+          environmentId={environmentId}
+          projectRef={projectRef}
+          projectCwd="/tmp/project"
+          activeWorktreePath={null}
+          activeBranch="main"
+          envLocked={false}
+          canUseWorktree
+          effectiveEnvMode="local"
+          namedWorktreeSelection={{ name: "billing-fix", color: "#14b8a6" }}
+          onEnvModeChange={vi.fn()}
+          onUseWorktree={vi.fn()}
+          onNewWorktreeSelect={vi.fn()}
+          {...overrides}
+        />,
+      );
+    });
+    await userEvent.click(container.querySelector<HTMLButtonElement>("button")!);
+  }
+  return {
+    screen,
+    container,
+    openWorkspace,
+    async [Symbol.asyncDispose]() {
+      try {
+        vi.unstubAllGlobals();
+      } finally {
+        await screen[Symbol.asyncDispose]();
+      }
+    },
+  };
 }
 
 it.each([
@@ -87,6 +89,9 @@ it.each([
 ] satisfies [string, Partial<WorkspaceMenuProps>, string][])(
   "focuses the selected %s when opened",
   async (_label, overrides, selector) => {
+    await using surface = await createTestSurface();
+    const { openWorkspace } = surface;
+
     await openWorkspace(overrides);
     const selectedOption = document.querySelector<HTMLElement>(selector)!;
     expect(selectedOption).not.toBeNull();
@@ -98,12 +103,15 @@ it.each([
 );
 
 it("allows keyboard navigation after focusing the current option", async () => {
+  await using surface = await createTestSurface();
+  const { container, openWorkspace } = surface;
+
   await openWorkspace({ namedWorktreeSelection: null });
   await vi.waitFor(() => expect(document.activeElement?.getAttribute("aria-checked")).toBe("true"));
-  await act(async () => userEvent.keyboard("{ArrowDown}"));
+  await userEvent.keyboard("{ArrowDown}");
   await vi.waitFor(() => expect(document.activeElement?.textContent).toBe("New worktree"));
-  await act(async () => userEvent.keyboard("{Escape}"));
-  await act(async () => userEvent.click(container.querySelector<HTMLButtonElement>("button")!));
+  await userEvent.keyboard("{Escape}");
+  await userEvent.click(container.querySelector<HTMLButtonElement>("button")!);
   await vi.waitFor(() => expect(document.activeElement?.textContent).toContain("local checkout"));
 });
 
@@ -133,17 +141,20 @@ function StandaloneWorkspaceFixture({ onSelect }: { onSelect: () => void }) {
 }
 
 it("keeps a standalone picker open on pointer leave and discards edits on Escape", async () => {
+  await using surface = await createTestSurface();
+  const { screen } = surface;
+
   const onSelect = vi.fn();
-  await act(async () => root.render(<StandaloneWorkspaceFixture onSelect={onSelect} />));
+  await act(async () => screen.rerender(<StandaloneWorkspaceFixture onSelect={onSelect} />));
   const input = page.getByLabelText("Worktree name");
-  await act(async () => userEvent.fill(input, "uncommitted-workspace"));
-  await act(async () => userEvent.hover(input));
-  await act(async () => userEvent.hover(document.body));
+  await userEvent.fill(input, "uncommitted-workspace");
+  await userEvent.hover(input);
+  await userEvent.hover(document.body);
   expect(document.querySelector('[role="menu"]')).not.toBeNull();
   expect(document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')?.value).toBe(
     "uncommitted-workspace",
   );
-  await act(async () => userEvent.keyboard("{Escape}"));
+  await userEvent.keyboard("{Escape}");
   await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
   expect(onSelect).not.toHaveBeenCalled();
 });
@@ -151,13 +162,16 @@ it("keeps a standalone picker open on pointer leave and discards edits on Escape
 it.each(["Escape", "outside click", "selection"])(
   "dismisses a standalone picker through %s",
   async (action) => {
+    await using surface = await createTestSurface();
+    const { screen } = surface;
+
     const onSelect = vi.fn();
-    await act(async () => root.render(<StandaloneWorkspaceFixture onSelect={onSelect} />));
-    await act(async () => {
+    await act(async () => screen.rerender(<StandaloneWorkspaceFixture onSelect={onSelect} />));
+    await (async () => {
       if (action === "Escape") await userEvent.keyboard("{Escape}");
       else if (action === "outside click") await userEvent.click(document.body);
       else await userEvent.click(page.getByRole("menuitemradio").first());
-    });
+    })();
     await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
     expect(onSelect).toHaveBeenCalledTimes(action === "selection" ? 1 : 0);
   },
@@ -172,15 +186,16 @@ function worktreeNames() {
 }
 
 it("keeps a selected existing worktree in its original list position", async () => {
+  await using surface = await createTestSurface();
+  const { openWorkspace } = surface;
+
   const onUseWorktree = vi.fn();
   await openWorkspace({ onUseWorktree });
   expect(worktreeNames()).toEqual(["alpha", "billing-fix", "zeta"]);
-  await act(async () =>
-    userEvent.click(
-      document
-        .querySelectorAll('[data-slot="menu-group"]')[1]!
-        .querySelectorAll<HTMLElement>('[role="menuitemradio"]')[1]!,
-    ),
+  await userEvent.click(
+    document
+      .querySelectorAll('[data-slot="menu-group"]')[1]!
+      .querySelectorAll<HTMLElement>('[role="menuitemradio"]')[1]!,
   );
   expect(onUseWorktree).toHaveBeenCalledWith({
     branch: "feature/billing-fix",
@@ -196,6 +211,9 @@ it("keeps a selected existing worktree in its original list position", async () 
 });
 
 it("keeps other automatic worktrees out of the reuse list while showing the current one", async () => {
+  await using surface = await createTestSurface();
+  const { openWorkspace } = surface;
+
   await openWorkspace({ effectiveEnvMode: "worktree", activeWorktreePath: "/tmp/t3-1234abcd" });
   expect(worktreeNames()).toEqual(["alpha", "billing-fix", "t3-1234abcd", "zeta"]);
   expect(document.querySelector('[aria-current="true"]')?.textContent).toContain("t3-1234abcd");

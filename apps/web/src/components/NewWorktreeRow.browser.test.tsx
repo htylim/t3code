@@ -1,15 +1,12 @@
+import { act, render as renderScreen } from "../../test/render";
 import "../index.css";
-import { act, useState } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { useState } from "react";
+import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import type { NamedWorktreeSelection } from "../namedWorktreeStore";
 import { NewWorktreeRow } from "./NewWorktreeRow";
 import { Menu, MenuPopup, MenuRadioGroup, MenuTrigger } from "./ui/menu";
-
-let root: Root;
-let container: HTMLDivElement;
 const onSelect = vi.fn();
 const onSelectionChange = vi.fn();
 
@@ -47,22 +44,28 @@ function Picker({ nameRequired = false }: { nameRequired?: boolean }) {
   );
 }
 
-beforeEach(async () => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+/** Own the rendered tree and fixture cleanup for one test. */
+async function createTestSurface() {
   onSelect.mockReset();
   onSelectionChange.mockReset();
-  container = document.createElement("div");
+  const container = document.createElement("div");
   document.body.append(container);
-  root = createRoot(container);
-  await act(async () => root.render(<Picker />));
+  const screen = await renderScreen(null, { container });
+  await act(async () => screen.rerender(<Picker />));
   await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
-});
 
-afterEach(async () => {
-  await act(async () => root.unmount());
-  container.remove();
-  vi.unstubAllGlobals();
-});
+  return {
+    screen,
+    container,
+    async [Symbol.asyncDispose]() {
+      try {
+        vi.unstubAllGlobals();
+      } finally {
+        await screen[Symbol.asyncDispose]();
+      }
+    },
+  };
+}
 
 /** Change the native input so React and Base UI both process the edit. */
 async function typeName(name: string) {
@@ -80,6 +83,8 @@ async function selectRow() {
 }
 
 it("starts empty with color enabled and selects ordinary creation", async () => {
+  await using _surface = await createTestSurface();
+
   expect(document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')!.value).toBe("");
   expect(document.querySelector<HTMLButtonElement>('[aria-label="Worktree color"]')!.disabled).toBe(
     false,
@@ -89,6 +94,8 @@ it("starts empty with color enabled and selects ordinary creation", async () => 
 });
 
 it("keeps editing and color selection open until the creation row is selected", async () => {
+  await using _surface = await createTestSurface();
+
   await typeName("  billing-fix  ");
   expect(onSelect).not.toHaveBeenCalled();
   expect(onSelectionChange).toHaveBeenLastCalledWith({ name: "billing-fix", color: "#808080" });
@@ -105,11 +112,11 @@ it("keeps editing and color selection open until the creation row is selected", 
 });
 
 it("keeps the selected color for automatic creation after clearing the name", async () => {
+  await using _surface = await createTestSurface();
+
   await typeName("billing-fix");
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true })),
-  );
-  await act(async () => userEvent.click(page.getByRole("button", { name: "Teal worktree color" })));
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
+  await userEvent.click(page.getByRole("button", { name: "Teal worktree color" }));
   await typeName(" ");
   expect(document.querySelector<HTMLButtonElement>('[aria-label="Worktree color"]')!.disabled).toBe(
     false,
@@ -119,10 +126,10 @@ it("keeps the selected color for automatic creation after clearing the name", as
 });
 
 it("selects a color without entering a name and keeps automatic naming", async () => {
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true })),
-  );
-  await act(async () => userEvent.click(page.getByRole("button", { name: "Teal worktree color" })));
+  await using _surface = await createTestSurface();
+
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
+  await userEvent.click(page.getByRole("button", { name: "Teal worktree color" }));
   expect(onSelect).not.toHaveBeenCalled();
   expect(onSelectionChange).toHaveBeenLastCalledWith({ name: "", color: "#14b8a6" });
   await selectRow();
@@ -130,31 +137,39 @@ it("selects a color without entering a name and keeps automatic naming", async (
 });
 
 it("requires a name during workspace editing while leaving the name input usable", async () => {
-  await act(async () => root.render(<Picker nameRequired />));
+  await using surface = await createTestSurface();
+  const { screen } = surface;
+
+  await act(async () => screen.rerender(<Picker nameRequired />));
   const row = document.querySelector<HTMLElement>('[role="menuitemradio"]')!;
   const input = document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')!;
   expect(input.disabled).toBe(false);
   expect(input.placeholder).toBe("Name (required)");
-  await act(async () => userEvent.click(row));
+  await userEvent.click(row);
   await act(async () =>
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
   );
   expect(onSelect).not.toHaveBeenCalled();
-  await act(async () => userEvent.fill(page.getByLabelText("Worktree name"), "billing-fix"));
+  await userEvent.fill(page.getByLabelText("Worktree name"), "billing-fix");
   await selectRow();
   expect(onSelect).toHaveBeenCalledWith({ name: "billing-fix", color: "#808080" });
 });
 
 it("blocks creation again when a required name is cleared", async () => {
-  await act(async () => root.render(<Picker nameRequired />));
+  await using surface = await createTestSurface();
+  const { screen } = surface;
+
+  await act(async () => screen.rerender(<Picker nameRequired />));
   await typeName("billing-fix");
   await typeName(" ");
-  await act(async () => userEvent.click(page.getByRole("menuitemradio")));
+  await userEvent.click(page.getByRole("menuitemradio"));
   expect(onSelect).not.toHaveBeenCalled();
   expect(document.querySelector('[aria-label="Worktree name"]')).not.toBeNull();
 });
 
 it("rejects traversal without closing or selecting the row", async () => {
+  await using _surface = await createTestSurface();
+
   await typeName("../outside");
   await selectRow();
   expect(onSelect).not.toHaveBeenCalled();
@@ -162,6 +177,8 @@ it("rejects traversal without closing or selecting the row", async () => {
 });
 
 it("keeps the edited draft selection when Escape dismisses the picker", async () => {
+  await using _surface = await createTestSurface();
+
   await typeName("billing-fix");
   const input = document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')!;
   await act(async () =>
@@ -175,24 +192,24 @@ it("keeps the edited draft selection when Escape dismisses the picker", async ()
 });
 
 it("selects New worktree when the name input is focused and keeps it after clicking away", async () => {
-  await act(async () => userEvent.click(page.getByLabelText("Worktree name")));
+  await using _surface = await createTestSurface();
+
+  await userEvent.click(page.getByLabelText("Worktree name"));
   expect(page.getByRole("menuitemradio").element().getAttribute("aria-checked")).toBe("true");
   expect(onSelectionChange).toHaveBeenLastCalledWith(null);
-  await act(async () => userEvent.click(document.body));
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Workspace", exact: true })),
-  );
+  await userEvent.click(document.body);
+  await userEvent.click(page.getByRole("button", { name: "Workspace", exact: true }));
   expect(page.getByRole("menuitemradio").element().getAttribute("aria-checked")).toBe("true");
   expect(document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')!.value).toBe("");
   expect(onSelect).not.toHaveBeenCalled();
 });
 
 it("saves an edited name when clicking away without selecting the row", async () => {
+  await using _surface = await createTestSurface();
+
   await typeName("billing-fix");
-  await act(async () => userEvent.click(document.body));
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Workspace", exact: true })),
-  );
+  await userEvent.click(document.body);
+  await userEvent.click(page.getByRole("button", { name: "Workspace", exact: true }));
   expect(page.getByRole("menuitemradio").element().getAttribute("aria-checked")).toBe("true");
   expect(document.querySelector<HTMLInputElement>('[aria-label="Worktree name"]')!.value).toBe(
     "billing-fix",
@@ -201,16 +218,14 @@ it("saves an edited name when clicking away without selecting the row", async ()
 });
 
 it("selects New worktree when opening its color picker and saves the color on outside click", async () => {
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true })),
-  );
+  await using _surface = await createTestSurface();
+
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
   expect(page.getByRole("menuitemradio").element().getAttribute("aria-checked")).toBe("true");
-  await act(async () => userEvent.click(page.getByRole("button", { name: "Teal worktree color" })));
-  await act(async () => userEvent.click(document.body));
-  await act(async () => userEvent.click(document.body));
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Workspace", exact: true })),
-  );
+  await userEvent.click(page.getByRole("button", { name: "Teal worktree color" }));
+  await userEvent.click(document.body);
+  await userEvent.click(document.body);
+  await userEvent.click(page.getByRole("button", { name: "Workspace", exact: true }));
   expect(page.getByRole("menuitemradio").element().getAttribute("aria-checked")).toBe("true");
   expect(onSelectionChange).toHaveBeenLastCalledWith({ name: "", color: "#14b8a6" });
   const swatch = document.querySelector<HTMLElement>('[aria-label="Worktree color"] span')!;
@@ -219,6 +234,8 @@ it("selects New worktree when opening its color picker and saves the color on ou
 });
 
 it("lets an invalid name be corrected before selecting the full creation row", async () => {
+  await using _surface = await createTestSurface();
+
   await typeName("../outside");
   await typeName("billing-fix");
   const row = document.querySelector<HTMLElement>('[role="menuitemradio"]')!;
@@ -229,16 +246,14 @@ it("lets an invalid name be corrected before selecting the full creation row", a
 });
 
 it("offers gray alongside existing colors", async () => {
+  await using _surface = await createTestSurface();
+
   await typeName("billing-fix");
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true })),
-  );
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
   const graySwatch = page.getByRole("button", { name: "Gray worktree color", exact: true });
   expect(graySwatch.element().getAttribute("aria-pressed")).toBe("true");
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Violet worktree color" })),
-  );
-  await act(async () => userEvent.click(graySwatch));
+  await userEvent.click(page.getByRole("button", { name: "Violet worktree color" }));
+  await userEvent.click(graySwatch);
   await selectRow();
   expect(onSelect).toHaveBeenCalledWith({ name: "billing-fix", color: "#808080" });
 });

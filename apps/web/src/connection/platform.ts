@@ -16,6 +16,7 @@ import {
   type PlatformConnectionRegistration,
   PrimaryConnectionRegistration,
   PrimaryConnectionTarget,
+  sshTargetKey,
   Wakeups,
 } from "@t3tools/client-runtime/connection";
 import { bootstrapRemoteBearerSession } from "@t3tools/client-runtime/authorization";
@@ -26,6 +27,7 @@ import {
   AuthStandardClientScopes,
   type DesktopBridge,
   type DesktopEnvironmentBootstrap,
+  type DesktopSshEnvironmentBootstrap,
   type DesktopSshEnvironmentTarget,
   type EnvironmentId,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
@@ -50,6 +52,7 @@ import {
 import { clearComposerDraftsEnvironment } from "../composerDraftStore";
 import { isHostedStaticApp } from "../hostedPairing";
 import { isLocalEnvironmentDisabled } from "../localEnvironment";
+import { randomUUID } from "../lib/utils";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { acknowledgeRpcRequest, trackRpcRequestSent } from "../rpc/requestLatencyState";
 import {
@@ -178,6 +181,36 @@ function sshPreparationError(cause: unknown) {
   });
 }
 
+// IPC keeps running after its waiter is interrupted. A retry can adopt only
+// that interrupted waiter's unfinished setup.
+const pendingSshSetups = new Map<
+  string,
+  { readonly promise: Promise<DesktopSshEnvironmentBootstrap>; signal: AbortSignal }
+>();
+
+const ensureDesktopSshEnvironment = (bridge: DesktopBridge, target: DesktopSshEnvironmentTarget) =>
+  Effect.tryPromise({
+    try: (signal) => {
+      const key = sshTargetKey(target);
+      const pending = pendingSshSetups.get(key);
+      if (pending?.signal.aborted) {
+        pending.signal = signal;
+        return pending.promise;
+      }
+      const setup = {
+        promise: bridge.ensureSshEnvironment(target, { issuePairingToken: true }),
+        signal,
+      };
+      pendingSshSetups.set(key, setup);
+      const forget = () => {
+        if (pendingSshSetups.get(key) === setup) pendingSshSetups.delete(key);
+      };
+      setup.promise.then(forget, forget);
+      return setup.promise;
+    },
+    catch: sshPreparationError,
+  });
+
 export const provisionDesktopSshEnvironment = Effect.fn(
   "web.connectionPlatform.ssh.provisionDesktop",
 )(function* (
@@ -185,13 +218,7 @@ export const provisionDesktopSshEnvironment = Effect.fn(
   target: DesktopSshEnvironmentTarget,
   expectedEnvironmentId?: EnvironmentId,
 ) {
-  const bootstrap = yield* Effect.tryPromise({
-    try: () =>
-      bridge.ensureSshEnvironment(target, {
-        issuePairingToken: true,
-      }),
-    catch: sshPreparationError,
-  });
+  const bootstrap = yield* ensureDesktopSshEnvironment(bridge, target);
   const pairingToken = bootstrap.pairingToken;
   if (pairingToken === null) {
     return yield* new ConnectionBlockedError({
@@ -211,7 +238,22 @@ export const provisionDesktopSshEnvironment = Effect.fn(
   }
   const access = yield* Effect.tryPromise({
     try: () => bridge.bootstrapSshBearerSession(bootstrap.httpBaseUrl, pairingToken),
-    catch: sshPreparationError,
+    catch: (cause) => {
+      const error = sshPreparationError(cause);
+      // A reused remote server on another build can fail to decode the grant
+      // the desktop's runner just minted, and answers 500 on every retry.
+      if (
+        error._tag === "ConnectionBlockedError" ||
+        descriptor.serverVersion === APP_VERSION ||
+        !error.detail.includes("[ssh_http:500]")
+      ) {
+        return error;
+      }
+      return new ConnectionBlockedError({
+        reason: "configuration",
+        detail: `${descriptor.label} runs T3 Code ${descriptor.serverVersion}, but this desktop is ${APP_VERSION}, and that server could not accept its pairing. Restart the T3 server on ${descriptor.label} so it runs ${APP_VERSION}, then retry.`,
+      });
+    },
   });
   return {
     environmentId: descriptor.environmentId,
@@ -275,6 +317,19 @@ export const prepareDesktopSshEnvironment = Effect.fn("web.connectionPlatform.ss
     return { bootstrap: provisioned.bootstrap, bearerToken: provisioned.bearerToken };
   },
 );
+
+const ANALYTICS_DEVICE_ID_KEY = "t3code:analytics-device-id";
+
+// Lives as long as this browser profile's site data. Storage can be blocked, which only drops the id.
+const analyticsDevice = {
+  id: Effect.try(() => {
+    const existing = window.localStorage.getItem(ANALYTICS_DEVICE_ID_KEY);
+    if (existing) return existing;
+    const created = randomUUID();
+    window.localStorage.setItem(ANALYTICS_DEVICE_ID_KEY, created);
+    return created;
+  }).pipe(Effect.option),
+};
 
 const layerCapabilities = Layer.effectContext(
   Effect.sync(() => {
@@ -352,6 +407,7 @@ const layerCapabilities = Layer.effectContext(
         if (bridge === undefined) {
           return;
         }
+        pendingSshSetups.delete(sshTargetKey(target));
         yield* Effect.tryPromise({
           try: () => bridge.disconnectSshEnvironment(target),
           catch: (cause) =>
@@ -364,6 +420,7 @@ const layerCapabilities = Layer.effectContext(
     });
 
     return Context.make(ClientCapabilities.CloudSession, cloudSession).pipe(
+      Context.add(ClientCapabilities.AnalyticsDevice, analyticsDevice),
       Context.add(ClientCapabilities.PrimaryEnvironmentAuth, primaryAuth),
       Context.add(ClientCapabilities.RelayDeviceIdentity, identity),
       Context.add(ClientCapabilities.ClientPresentation, presentation),
@@ -449,14 +506,14 @@ const loadSecondaryConnectionRegistration = Effect.fn(
 const PLATFORM_POLL_INTERVAL = "3 seconds";
 const SECONDARY_BEARER_REFRESH_SKEW_MS = 5_000;
 
-export function secondaryBearerExpiresAtEpochMs(
+function secondaryBearerExpiresAtEpochMs(
   issuedAtEpochMs: number,
   expiresInSeconds: number,
 ): number {
   return issuedAtEpochMs + Math.max(0, expiresInSeconds * 1_000);
 }
 
-export function secondaryBearerRefreshAtEpochMs(
+function secondaryBearerRefreshAtEpochMs(
   issuedAtEpochMs: number,
   expiresInSeconds: number,
 ): number {
@@ -485,7 +542,7 @@ export type PrimaryEnvironmentTargetRead =
       readonly cause: unknown;
     };
 
-export function readPrimaryEnvironmentTargetResult(
+function readPrimaryEnvironmentTargetResult(
   readTarget: () => PrimaryEnvironmentTarget | null = readPrimaryEnvironmentTarget,
 ): PrimaryEnvironmentTargetRead {
   try {
@@ -770,11 +827,11 @@ const layerEnvironmentOwnedDataCleanup = Layer.succeed(
 const layerRpcRequestObserver = Layer.succeed(
   EnvironmentRpcRequestObserver,
   EnvironmentRpcRequestObserver.of({
-    observe: ({ environmentId, method }) =>
+    observe: ({ environmentId, environmentLabel, method }) =>
       Effect.sync(() => {
         nextObservedRpcRequestId += 1;
         const requestId = `${environmentId}:${nextObservedRpcRequestId}`;
-        trackRpcRequestSent(requestId, method, `${method} · ${environmentId}`);
+        trackRpcRequestSent(requestId, method, `${method} · ${environmentLabel}`);
         return Effect.sync(() => {
           acknowledgeRpcRequest(requestId);
         });

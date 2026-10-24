@@ -1,4 +1,4 @@
-export function isSettingsPathname(pathname: string): boolean {
+function isSettingsPathname(pathname: string): boolean {
   return pathname === "/settings" || pathname.startsWith("/settings/");
 }
 

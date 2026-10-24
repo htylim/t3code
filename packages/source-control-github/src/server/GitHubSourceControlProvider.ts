@@ -26,6 +26,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import { decodeJsonResult } from "@t3tools/shared/schemaJson";
 import { isSshRemoteUrl } from "@t3tools/shared/sourceControl";
 
+import { GH_PROCESS_CONCURRENCY } from "./GitHubCredentials.ts";
 import * as GitHubRest from "./GitHubRest.ts";
 import * as GitHubRequestPolicy from "./GitHubRequestPolicy.ts";
 import * as GitHubChangeRequestTemplate from "./gitHubChangeRequestTemplate.ts";
@@ -60,9 +61,9 @@ import {
   type SourceControlManagedCliDiscoverySpec,
 } from "@t3tools/source-control-core/server/discovery";
 import * as SourceControlHost from "@t3tools/source-control-core/server/SourceControlHost";
-import { readSourceControlHostSettings } from "@t3tools/source-control-core/client/definition";
+import { readSourceControlHostSettings } from "@t3tools/source-control-core/shared/definition";
 
-import * as GitHubClient from "../client/definition.ts";
+import * as GitHubClient from "../shared/definition.ts";
 import {
   PullRequestByNumber,
   PullRequestNode,
@@ -235,7 +236,9 @@ export const makeDiscovery = Effect.gen(function* () {
       );
       const cli = yield* probeSourceControlProvider({
         cwd,
-        process,
+        process: {
+          run: (input) => process.run({ ...input, concurrency: GH_PROCESS_CONCURRENCY }),
+        },
         spec: { ...discovery, parseAuth: (input) => parseGitHubAuth(input, settings) },
       });
       const savedToken = (settings.tokens["github.com"] ?? "").trim() !== "";
@@ -893,6 +896,55 @@ export const make = Effect.gen(function* () {
     }),
     readChangeRequestTemplate: ({ cwd, treeish }) =>
       GitHubChangeRequestTemplate.detect(cwd, treeish, git.execute),
+    // `createChangeRequest` targets what `resolveRepository` picks: GH_REPO when it parses, else
+    // the remote `gh repo set-default` marked (`gh-resolved`). An HTTPS remote keeps a
+    // non-default port in the context's host, and the mark is then ignored.
+    createsChangeRequestsIn: Effect.fn("GitHubSourceControlProvider.createsChangeRequestsIn")(
+      function* ({ cwd, context, repository }) {
+        const host = URL.canParse(context.provider.baseUrl)
+          ? new URL(context.provider.baseUrl).host
+          : null;
+        const target = repository?.toLowerCase();
+        const fromEnvironment = parseGitHubRepositorySelector(
+          environment.GH_REPO ?? "",
+          host ?? "",
+        );
+        if (fromEnvironment !== null) {
+          const { host: targetHost, owner, name } = fromEnvironment;
+          return (
+            host !== null &&
+            URL.canParse(`https://${targetHost}`) &&
+            new URL(`https://${targetHost}`).host === host &&
+            `${owner}/${name}`.toLowerCase() === target
+          );
+        }
+        const mark = yield* git
+          .readConfigValue(cwd, `remote.${context.remoteName}.gh-resolved`)
+          .pipe(Effect.orElseSucceed(() => null));
+        const { locator } = resolveGitHubRepository({
+          remotes: `${context.remoteName}\t${context.remoteUrl} (fetch)`,
+          resolved: mark === null ? "" : `remote.${context.remoteName}.gh-resolved ${mark}`,
+          hostHint: host ?? undefined,
+          defaultHost: host ?? "github.com",
+        });
+        return locator === null || `${locator.owner}/${locator.name}`.toLowerCase() === target;
+      },
+    ),
+    // `gh pr create` run in the checkout, as an agent in a T3 worktree often does, takes its base
+    // from this key.
+    recordBranchBase: ({ cwd, branch, baseBranch }) =>
+      git
+        .execute({
+          operation: "GitHubSourceControlProvider.recordBranchBase",
+          cwd,
+          args: ["config", `branch.${branch}.gh-merge-base`, baseBranch],
+        })
+        .pipe(
+          Effect.asVoid,
+          Effect.catch((cause) =>
+            Effect.logWarning("Could not record the branch base for gh", { cause }),
+          ),
+        ),
     resolveLink: (input) => {
       // Automatic enrichment must not send ambient CLI credentials to a host from message text.
       if (input.url.host !== "github.com") return undefined;
@@ -927,8 +979,8 @@ export const make = Effect.gen(function* () {
           providerError("getChangeRequest", input.cwd, { reference: input.reference }),
         ),
       ),
-    createChangeRequest: (input) =>
-      Effect.gen(function* () {
+    createChangeRequest: Effect.fn("GitHubSourceControlProvider.createChangeRequest")(
+      function* (input) {
         const locator = yield* resolveRepository(input);
         const body = yield* fileSystem
           .readFileString(input.bodyFile)
@@ -953,13 +1005,16 @@ export const make = Effect.gen(function* () {
             maintainer_can_modify: true,
           },
         });
-      }).pipe(
-        Effect.mapError(
-          providerError("createChangeRequest", input.cwd, { reference: input.headSelector }),
+      },
+      (effect, input) =>
+        effect.pipe(
+          Effect.mapError(
+            providerError("createChangeRequest", input.cwd, { reference: input.headSelector }),
+          ),
         ),
-      ),
-    getRepositoryCloneUrls: (input) =>
-      Effect.gen(function* () {
+    ),
+    getRepositoryCloneUrls: Effect.fn("GitHubSourceControlProvider.getRepositoryCloneUrls")(
+      function* (input) {
         const fallbackHost = (yield* resolveRepository(input).pipe(
           Effect.map((locator) => locator.host),
           Effect.orElseSucceed(() => environment.GH_HOST ?? "github.com"),
@@ -972,13 +1027,16 @@ export const make = Effect.gen(function* () {
             : null);
         if (locator === null) return yield* failure("Repositories are named owner/name.");
         return repositoryCloneUrls(yield* readRepository(locator));
-      }).pipe(
-        Effect.mapError(
-          providerError("getRepositoryCloneUrls", input.cwd, { repository: input.repository }),
+      },
+      (effect, input) =>
+        effect.pipe(
+          Effect.mapError(
+            providerError("getRepositoryCloneUrls", input.cwd, { repository: input.repository }),
+          ),
         ),
-      ),
-    createRepository: (input) =>
-      Effect.gen(function* () {
+    ),
+    createRepository: Effect.fn("GitHubSourceControlProvider.createRepository")(
+      function* (input) {
         const locator = parseGitHubRepositorySelector(
           input.repository,
           (environment.GH_HOST ?? "github.com").toLowerCase(),
@@ -1006,13 +1064,16 @@ export const make = Effect.gen(function* () {
           return yield* failure("GitHub returned an invalid repository.", decoded.failure);
         }
         return repositoryCloneUrls(decoded.success);
-      }).pipe(
-        Effect.mapError(
-          providerError("createRepository", input.cwd, { repository: input.repository }),
+      },
+      (effect, input) =>
+        effect.pipe(
+          Effect.mapError(
+            providerError("createRepository", input.cwd, { repository: input.repository }),
+          ),
         ),
-      ),
-    getDefaultBranch: (input) =>
-      Effect.gen(function* () {
+    ),
+    getDefaultBranch: Effect.fn("GitHubSourceControlProvider.getDefaultBranch")(
+      function* (input) {
         const locator = yield* resolveRepository({
           cwd: input.cwd,
           host: contextHost(input.context),
@@ -1021,7 +1082,9 @@ export const make = Effect.gen(function* () {
         const repository = yield* readRepository(locator);
         const branch = repository.default_branch?.trim() ?? "";
         return branch.length > 0 ? branch : null;
-      }).pipe(Effect.mapError(providerError("getDefaultBranch", input.cwd))),
+      },
+      (effect, input) => effect.pipe(Effect.mapError(providerError("getDefaultBranch", input.cwd))),
+    ),
     checkoutChangeRequest: (input) =>
       checkoutPullRequest(input).pipe(
         Effect.mapError(

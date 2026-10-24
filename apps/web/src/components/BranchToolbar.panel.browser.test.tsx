@@ -1,7 +1,7 @@
+import { act, render as renderScreen } from "../../test/render";
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
-import { act, type ComponentProps } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { type ComponentProps } from "react";
+import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
@@ -40,49 +40,57 @@ vi.mock(import("../state/entities"), async (original) => ({
 import { BranchToolbar } from "./BranchToolbar";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
 
-let root: Root;
-let container: HTMLDivElement;
-
-beforeEach(() => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+/** Own the rendered tree and fixture cleanup for one test. */
+async function createTestSurface() {
   state.worktreePath = "/tmp/worktree";
   state.branch = "t3/1234abcd";
   useNamedWorktreeStore.setState({ selections: {}, worktrees: {} });
   state.showContextMenu.mockReset().mockResolvedValue("copy-path");
   state.writeTextToClipboard.mockReset().mockResolvedValue(true);
-  container = document.createElement("div");
+  const container = document.createElement("div");
   document.body.append(container);
-  root = createRoot(container);
-});
+  const screen = await renderScreen(null, { container });
 
-afterEach(async () => {
-  await act(async () => root.unmount());
-  container.remove();
-  vi.unstubAllGlobals();
-});
-
-/** Mount the shared toolbar with only the context needed by each browser scenario. */
-function render(props: Partial<ComponentProps<typeof BranchToolbar>>) {
-  return act(async () =>
-    root.render(
-      <BranchToolbar
-        layout="panel"
-        panelSection="workspace"
-        environmentId={EnvironmentId.make("local")}
-        threadId={ThreadId.make("thread")}
-        showGitControls
-        envMode="local"
-        envLocked={false}
-        startFromOrigin={false}
-        onStartFromOriginChange={vi.fn()}
-        onEnvModeChange={vi.fn()}
-        {...props}
-      />,
-    ),
-  );
+  function render(props: Partial<ComponentProps<typeof BranchToolbar>>) {
+    return act(async () =>
+      screen.rerender(
+        <BranchToolbar
+          layout="panel"
+          panelSection="workspace"
+          environmentId={EnvironmentId.make("local")}
+          threadId={ThreadId.make("thread")}
+          projectId={ProjectId.make("project")}
+          worktreePath={null}
+          isServerThread={false}
+          showGitControls
+          envMode="local"
+          envLocked={false}
+          startFromOrigin={false}
+          onStartFromOriginChange={vi.fn()}
+          onEnvModeChange={vi.fn()}
+          {...props}
+        />,
+      ),
+    );
+  }
+  return {
+    screen,
+    container,
+    render,
+    async [Symbol.asyncDispose]() {
+      try {
+        vi.unstubAllGlobals();
+      } finally {
+        await screen[Symbol.asyncDispose]();
+      }
+    },
+  };
 }
 
 it("keeps machine choices usable when the combined row's workspace is locked", async () => {
+  await using surface = await createTestSurface();
+  const { container, render } = surface;
+
   const onEnvironmentChange = vi.fn();
   await render({
     onEnvironmentChange,
@@ -114,6 +122,9 @@ it("keeps machine choices usable when the combined row's workspace is locked", a
 });
 
 it("shows a started thread's primary machine as a static label in the composer", async () => {
+  await using surface = await createTestSurface();
+  const { container, render } = surface;
+
   await render({
     layout: "composer",
     showGitControls: false,
@@ -136,6 +147,9 @@ it.each([
 ] as const)(
   "copies only an existing workspace path with mode %s and worktree %s",
   async (envMode, worktreePath, copiedPath) => {
+    await using surface = await createTestSurface();
+    const { container, render } = surface;
+
     state.worktreePath = worktreePath;
     await render({ envMode });
     const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
@@ -164,6 +178,9 @@ it.each([
 ] as const)(
   "shows every assigned worktree below the branch for %s with saved color %s, label %s, Git controls %s",
   async (worktreePath, savedColor, expectedName, showGitControls) => {
+    await using surface = await createTestSurface();
+    const { container, render } = surface;
+
     state.worktreePath = worktreePath;
     const projectRef = {
       environmentId: EnvironmentId.make("local"),
@@ -192,6 +209,9 @@ it.each([
 );
 
 it("updates an automatic pill when first-prompt naming moves its directory", async () => {
+  await using surface = await createTestSurface();
+  const { container, render } = surface;
+
   state.worktreePath = "/tmp/t3-1234abcd";
   const props = { panelSection: "branch", envMode: "worktree", envLocked: true } as const;
   await render(props);
@@ -208,6 +228,9 @@ it("updates an automatic pill when first-prompt naming moves its directory", asy
 });
 
 it("keeps the New worktree label for a color-only selection", async () => {
+  await using surface = await createTestSurface();
+  const { container, render } = surface;
+
   state.worktreePath = null;
   const projectRef = {
     environmentId: EnvironmentId.make("local"),
@@ -222,6 +245,9 @@ it("keeps the New worktree label for a color-only selection", async () => {
 });
 
 it("preserves the selected color when automatic naming moves the temporary worktree", async () => {
+  await using surface = await createTestSurface();
+  const { container, render } = surface;
+
   const projectRef = {
     environmentId: EnvironmentId.make("local"),
     projectId: ProjectId.make("project"),

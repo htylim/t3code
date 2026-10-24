@@ -1,15 +1,12 @@
-import { act, useLayoutEffect, type PointerEvent as ReactPointerEvent } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { act, render as renderScreen, fakeTimers } from "../../../test/render";
+import { useLayoutEffect, type PointerEvent as ReactPointerEvent } from "react";
 import { userEvent } from "vite-plus/test/browser";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { useSidebarPeek } from "./useSidebarPeek";
 
 const contextMenu = vi.hoisted(() => ({ open: false }));
 vi.mock("~/contextMenuFallback", () => ({ isContextMenuOpen: () => contextMenu.open }));
-
-let root: Root;
-let container: HTMLDivElement;
 let panel: HTMLDivElement;
 let peek: ReturnType<typeof useSidebarPeek>;
 let popupOpen = false;
@@ -57,30 +54,37 @@ async function reveal() {
   expect(peek.peekOpen).toBe(true);
 }
 
-beforeEach(async () => {
-  vi.useFakeTimers();
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+/** Own the rendered tree and fixture cleanup for one test. */
+async function createTestSurface() {
   popupOpen = false;
   contextMenu.open = false;
-  container = document.body.appendChild(document.createElement("div"));
-  root = createRoot(container);
-  await act(() => root.render(<SidebarFixture />));
+  const container = document.createElement("div");
+  const screen = await renderScreen(null, { container });
+  await act(() => screen.rerender(<SidebarFixture />));
   panel = container.querySelector<HTMLDivElement>("[data-sidebar-peek-fixture]")!;
   vi.spyOn(panel, "querySelector").mockImplementation(() =>
     popupOpen ? document.createElement("button") : null,
   );
-});
 
-afterEach(async () => {
-  await act(() => root.unmount());
-  container.remove();
-  vi.restoreAllMocks();
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-});
+  return {
+    screen,
+    container,
+    async [Symbol.asyncDispose]() {
+      try {
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+      } finally {
+        await screen[Symbol.asyncDispose]();
+      }
+    },
+  };
+}
 
 describe("collapsed sidebar hover preview", () => {
   it("requires deliberate edge hover and tolerates briefly leaving the panel", async () => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await movePointer(2);
     await advance(299);
     expect(peek.peekOpen).toBe(false);
@@ -100,12 +104,18 @@ describe("collapsed sidebar hover preview", () => {
   });
 
   it.each(["touch", "pen"])("does not reveal for %s input", async (pointerType) => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await movePointer(2, { pointerType });
     await advance(500);
     expect(peek.peekOpen).toBe(false);
   });
 
   it("does not open during a drag and keeps an existing preview until release", async () => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await movePointer(2, { buttons: 1 });
     await advance(500);
     expect(peek.peekOpen).toBe(false);
@@ -119,6 +129,9 @@ describe("collapsed sidebar hover preview", () => {
   });
 
   it("keeps keyboard focus and editing alive, then closes when focus leaves", async () => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await reveal();
     const editor = panel.appendChild(document.createElement("input"));
     editor.focus();
@@ -132,18 +145,24 @@ describe("collapsed sidebar hover preview", () => {
   });
 
   it("does not let pointer-focused links hold the preview open", async () => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await reveal();
     const link = panel.appendChild(document.createElement("a"));
     link.href = "#thread";
     link.textContent = "A thread";
     // Pointer focus does not activate :focus-visible on a link.
-    await act(() => userEvent.click(link));
+    await userEvent.click(link);
     await movePointer(400);
     await advance(200);
     expect(peek.peekOpen).toBe(false);
   });
 
   it("keeps popovers and fallback context menus usable outside the panel", async () => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await reveal();
     popupOpen = true;
     await movePointer(400);
@@ -161,6 +180,9 @@ describe("collapsed sidebar hover preview", () => {
   });
 
   it("counts pointer movement inside React portals as remaining in the sidebar", async () => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await reveal();
     const event = Object.assign(new Event("pointermove"), {
       pointerType: "mouse",
@@ -180,6 +202,9 @@ describe("collapsed sidebar hover preview", () => {
   });
 
   it("dismisses with Escape and requires leaving the edge before revealing again", async () => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await reveal();
     const escape = Object.assign(new Event("keydown", { cancelable: true }), { key: "Escape" });
     await act(() => documentEvents.dispatchEvent(escape));
@@ -193,6 +218,9 @@ describe("collapsed sidebar hover preview", () => {
   });
 
   it("leaves Escape to open menus", async () => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await reveal();
     popupOpen = true;
     const escape = Object.assign(new Event("keydown", { cancelable: true }), { key: "Escape" });
@@ -202,6 +230,9 @@ describe("collapsed sidebar hover preview", () => {
   });
 
   it("closes when the mouse leaves the window", async () => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await reveal();
     await act(() =>
       documentEvents.dispatchEvent(Object.assign(new Event("pointerout"), { relatedTarget: null })),
@@ -211,6 +242,9 @@ describe("collapsed sidebar hover preview", () => {
   });
 
   it("holds the sidebar through a native context menu and resumes dismissal afterward", async () => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await reveal();
     const row = panel.appendChild(document.createElement("div"));
     const contextEvent = new Event("contextmenu", { bubbles: true });
@@ -226,6 +260,9 @@ describe("collapsed sidebar hover preview", () => {
   });
 
   it("cancels a pending reveal when the window loses focus", async () => {
+    using _timers = fakeTimers();
+    await using _surface = await createTestSurface();
+
     await movePointer(2);
     await act(() => windowEvents.dispatchEvent(new Event("blur")));
     await advance(500);
@@ -233,21 +270,29 @@ describe("collapsed sidebar hover preview", () => {
   });
 
   it("cancels delayed reveals when pinned or switched to mobile", async () => {
+    using _timers = fakeTimers();
+    await using surface = await createTestSurface();
+    const { screen } = surface;
+
     await movePointer(2);
-    await act(() => root.render(<SidebarFixture enabled={false} />));
+    await act(() => screen.rerender(<SidebarFixture enabled={false} />));
     await advance(500);
     expect(peek.peekOpen).toBe(false);
-    await act(() => root.render(<SidebarFixture />));
+    await act(() => screen.rerender(<SidebarFixture />));
     await reveal();
-    await act(() => root.render(<SidebarFixture enabled={false} />));
+    await act(() => screen.rerender(<SidebarFixture enabled={false} />));
     expect(peek.peekOpen).toBe(false);
-    await act(() => root.render(<SidebarFixture />));
+    await act(() => screen.rerender(<SidebarFixture />));
     expect(peek.peekOpen).toBe(false);
   });
 
   it("clears timers when unmounted", async () => {
+    using _timers = fakeTimers();
+    await using surface = await createTestSurface();
+    const { screen } = surface;
+
     await movePointer(2);
-    await act(() => root.unmount());
+    await act(() => screen.unmount());
     expect(vi.getTimerCount()).toBe(0);
   });
 });

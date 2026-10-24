@@ -1,9 +1,8 @@
+import { act, render as renderScreen } from "../../test/render";
 import "../index.css";
 import { EnvironmentId, GitCommandError, ProjectId, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 type TestThread = {
@@ -148,8 +147,6 @@ const projectRef = {
   projectId: ProjectId.make("project"),
 };
 const worktreePath = "/trees/alpha";
-let root: Root;
-let container: HTMLDivElement;
 
 /** Locate one form action by its visible label. */
 function button(label: string): HTMLButtonElement {
@@ -160,7 +157,7 @@ function button(label: string): HTMLButtonElement {
 
 /** Edit through the native input so validation processes the browser's input events. */
 async function renameTo(name: string) {
-  await act(async () => userEvent.fill(page.getByLabelText("Worktree directory name"), name));
+  await userEvent.fill(page.getByLabelText("Worktree directory name"), name);
 }
 
 /** Publish fixture runtime changes to mounted pills and dialogs. */
@@ -171,57 +168,8 @@ async function publishThreadUpdate() {
   });
 }
 
-/** Open the application-owned editor with a real dialog and filesystem fixtures. */
-async function openEditor() {
-  await act(async () => {
-    requestNamedWorktreeEdit({ projectRef, projectCwd: "/repo", worktreePath });
-    root.render(<NamedWorktreeDialogHost />);
-  });
-}
-
-/** Mount shared pill actions and their real dialog hosts. */
-async function renderWorkspaceEditors() {
-  await act(async () =>
-    root.render(
-      <>
-        <div onContextMenu={state.parentContextMenu}>
-          <WorktreePill
-            threadRef={{ environmentId: projectRef.environmentId, threadId: ThreadId.make("live") }}
-            projectRef={projectRef}
-            projectCwd="/repo"
-            worktreePath={worktreePath}
-            worktree={{ name: "alpha", color: "#d3d3d3" }}
-          />
-        </div>
-        <NamedWorktreeDialogHost />
-        <ThreadWorkspaceMenuHost />
-        <ConfirmDialogHost />
-      </>,
-    ),
-  );
-}
-
-/** Open the real workspace picker with the application confirmation host mounted. */
-async function openWorkspacePicker() {
-  await renderWorkspaceEditors();
-  await act(async () =>
-    page
-      .getByRole("button", { name: "Rename worktree alpha" })
-      .element()
-      .dispatchEvent(
-        new MouseEvent("contextmenu", {
-          bubbles: true,
-          cancelable: true,
-          clientX: 20,
-          clientY: 20,
-        }),
-      ),
-  );
-  await act(async () => userEvent.click(page.getByText("Change worktree", { exact: true })));
-}
-
-beforeEach(() => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+/** Own the rendered tree and fixture cleanup for one test. */
+async function createTestSurface() {
   state.rename.mockReset().mockResolvedValue({
     _tag: "Success",
     value: { worktree: { path: "/trees/gamma", refName: "feature" } },
@@ -238,18 +186,76 @@ beforeEach(() => {
   state.archived = [{ id: "archived", projectId: "project", worktreePath, status: "completed" }];
   state.draftStore.setDraftThreadContext.mockClear();
   useNamedWorktreeStore.setState({ selections: {}, worktrees: {} });
-  container = document.body.appendChild(document.createElement("div"));
-  root = createRoot(container);
-});
-afterEach(async () => {
-  const cancelButton = document.querySelector('[role="dialog"]') ? button("Cancel") : null;
-  if (cancelButton && !cancelButton.disabled) {
-    await act(async () => userEvent.click(cancelButton));
+  const container = document.createElement("div");
+  const screen = await renderScreen(null, { container });
+
+  async function openEditor() {
+    await act(async () => {
+      requestNamedWorktreeEdit({ projectRef, projectCwd: "/repo", worktreePath });
+      screen.rerender(<NamedWorktreeDialogHost />);
+    });
   }
-  await act(async () => root.unmount());
-  container.remove();
-  vi.unstubAllGlobals();
-});
+
+  async function renderWorkspaceEditors() {
+    await act(async () =>
+      screen.rerender(
+        <>
+          <div onContextMenu={state.parentContextMenu}>
+            <WorktreePill
+              threadRef={{
+                environmentId: projectRef.environmentId,
+                threadId: ThreadId.make("live"),
+              }}
+              projectRef={projectRef}
+              projectCwd="/repo"
+              worktreePath={worktreePath}
+              worktree={{ name: "alpha", color: "#d3d3d3" }}
+            />
+          </div>
+          <NamedWorktreeDialogHost />
+          <ThreadWorkspaceMenuHost />
+          <ConfirmDialogHost />
+        </>,
+      ),
+    );
+  }
+
+  async function openWorkspacePicker() {
+    await renderWorkspaceEditors();
+    await act(async () =>
+      page
+        .getByRole("button", { name: "Rename worktree alpha" })
+        .element()
+        .dispatchEvent(
+          new MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+            clientX: 20,
+            clientY: 20,
+          }),
+        ),
+    );
+    await userEvent.click(page.getByText("Change worktree", { exact: true }));
+  }
+  return {
+    screen,
+    container,
+    openEditor,
+    renderWorkspaceEditors,
+    openWorkspacePicker,
+    async [Symbol.asyncDispose]() {
+      try {
+        const cancelButton = document.querySelector('[role="dialog"]') ? button("Cancel") : null;
+        if (cancelButton && !cancelButton.disabled) {
+          await userEvent.click(cancelButton);
+        }
+        vi.unstubAllGlobals();
+      } finally {
+        await screen[Symbol.asyncDispose]();
+      }
+    },
+  };
+}
 
 it.each([
   ["/trees/alpha", "alpha", "alpha"],
@@ -257,10 +263,13 @@ it.each([
 ])(
   "opens the rename dialog for %s without activating its containing sidebar row",
   async (path, label, directoryName) => {
+    await using surface = await createTestSurface();
+    const { screen } = surface;
+
     const activateThread = vi.fn();
     state.live[0]!.worktreePath = path;
     await act(async () =>
-      root.render(
+      screen.rerender(
         <div onClick={activateThread}>
           <WorktreePill
             threadRef={{ environmentId: projectRef.environmentId, threadId: ThreadId.make("live") }}
@@ -273,8 +282,8 @@ it.each([
         </div>,
       ),
     );
-    await act(async () =>
-      userEvent.click(page.getByRole("button", { name: `Rename worktree ${label}`, exact: true })),
+    await userEvent.click(
+      page.getByRole("button", { name: `Rename worktree ${label}`, exact: true }),
     );
     expect(activateThread).not.toHaveBeenCalled();
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Rename worktree");
@@ -282,7 +291,7 @@ it.each([
       directoryName,
     );
     expect(document.querySelector('[role="menu"]')).toBeNull();
-    await act(async () => userEvent.keyboard("{Escape}"));
+    await userEvent.keyboard("{Escape}");
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
   },
 );
@@ -295,8 +304,11 @@ it.each([
 ])(
   "restores pill focus only when %s was opened by keyboard: %s",
   async (dialogTitle, openingMethod) => {
+    await using surface = await createTestSurface();
+    const { screen } = surface;
+
     await act(async () =>
-      root.render(
+      screen.rerender(
         <>
           <Tooltip>
             <TooltipTrigger render={<div role="button" aria-label="Thread row" tabIndex={0} />}>
@@ -319,7 +331,7 @@ it.each([
       ),
     );
     const pill = page.getByRole("button", { name: "Rename worktree alpha", exact: true });
-    await act(async () => {
+    await (async () => {
       if (openingMethod === "keyboard") {
         await userEvent.tab();
         await userEvent.tab();
@@ -339,10 +351,10 @@ it.each([
         if (openingMethod === "mouse") await userEvent.click(pill);
         else await userEvent.keyboard("{Enter}");
       }
-    });
+    })();
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(dialogTitle);
-    await act(async () => userEvent.keyboard("{Escape}"));
+    await userEvent.keyboard("{Escape}");
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
     if (openingMethod === "keyboard") {
       await vi.waitFor(() => expect(document.activeElement).toBe(pill.element()));
@@ -355,6 +367,9 @@ it.each([
 );
 
 it("changes worktrees from the pill context menu without opening the parent thread menu", async () => {
+  await using surface = await createTestSurface();
+  const { openWorkspacePicker } = surface;
+
   await openWorkspacePicker();
   expect(state.parentContextMenu).not.toHaveBeenCalled();
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Change worktree");
@@ -364,7 +379,7 @@ it("changes worktrees from the pill context menu without opening the parent thre
   );
   expect(state.rename).not.toHaveBeenCalled();
   expect(state.update).not.toHaveBeenCalled();
-  await act(async () => userEvent.keyboard("{Escape}"));
+  await userEvent.keyboard("{Escape}");
   await act(async () =>
     page
       .getByRole("button", { name: "Rename worktree alpha" })
@@ -378,20 +393,23 @@ it("changes worktrees from the pill context menu without opening the parent thre
         }),
       ),
   );
-  await act(async () => userEvent.click(page.getByText("Rename worktree", { exact: true })));
+  await userEvent.click(page.getByText("Rename worktree", { exact: true }));
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Rename worktree");
   expect(state.parentContextMenu).not.toHaveBeenCalled();
-  await act(async () => userEvent.click(button("Cancel")));
+  await userEvent.click(button("Cancel"));
 });
 
 it("disables Save for a sibling collision and recovers when the name changes", async () => {
+  await using surface = await createTestSurface();
+  const { openEditor } = surface;
+
   await openEditor();
   await renameTo("beta");
   expect(button("Save").disabled).toBe(true);
   expect(document.querySelector('[role="status"]')?.textContent).toContain("already exists");
   await renameTo("gamma");
   expect(button("Save").disabled).toBe(false);
-  await act(async () => userEvent.click(button("Save")));
+  await userEvent.click(button("Save"));
   expect(state.rename).toHaveBeenCalledWith({
     environmentId: "remote",
     input: { cwd: "/repo", path: worktreePath, newDirName: "gamma" },
@@ -408,13 +426,14 @@ it("disables Save for a sibling collision and recovers when the name changes", a
 });
 
 it("saves color without calling Git or changing thread paths", async () => {
+  await using surface = await createTestSurface();
+  const { openEditor } = surface;
+
   await openEditor();
-  await act(async () =>
-    userEvent.click(
-      document.querySelector<HTMLButtonElement>('[aria-label="Teal worktree color"]')!,
-    ),
+  await userEvent.click(
+    document.querySelector<HTMLButtonElement>('[aria-label="Teal worktree color"]')!,
   );
-  await act(async () => userEvent.click(button("Save")));
+  await userEvent.click(button("Save"));
   expect(state.rename).not.toHaveBeenCalled();
   expect(state.update).not.toHaveBeenCalled();
   expect(
@@ -423,6 +442,9 @@ it("saves color without calling Git or changing thread paths", async () => {
 });
 
 it("keeps a race-time collision open and disables resubmission of that name", async () => {
+  await using surface = await createTestSurface();
+  const { openEditor } = surface;
+
   state.rename.mockResolvedValueOnce({
     _tag: "Failure",
     cause: Cause.fail(
@@ -436,7 +458,7 @@ it("keeps a race-time collision open and disables resubmission of that name", as
   });
   await openEditor();
   await renameTo("gamma");
-  await act(async () => userEvent.click(button("Save")));
+  await userEvent.click(button("Save"));
   expect(document.querySelector('[role="alert"]')?.textContent).toContain("already exists");
   expect(button("Save").disabled).toBe(true);
   expect(state.update).not.toHaveBeenCalled();
@@ -445,18 +467,24 @@ it("keeps a race-time collision open and disables resubmission of that name", as
 });
 
 it("retries thread updates without moving an already renamed directory twice", async () => {
+  await using surface = await createTestSurface();
+  const { openEditor } = surface;
+
   state.update.mockResolvedValueOnce({ _tag: "Failure", cause: Cause.fail(new Error("offline")) });
   await openEditor();
   await renameTo("gamma");
-  await act(async () => userEvent.click(button("Save")));
+  await userEvent.click(button("Save"));
   expect(document.querySelector('[role="alert"]')?.textContent).toContain("Save again to retry");
   expect(button("Cancel").disabled).toBe(true);
-  await act(async () => userEvent.click(button("Save")));
+  await userEvent.click(button("Save"));
   expect(state.rename).toHaveBeenCalledTimes(1);
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
 it("locks the entire rename editor while an agent is running", async () => {
+  await using surface = await createTestSurface();
+  const { openEditor } = surface;
+
   state.live[0]!.status = "running";
   await openEditor();
   expect(document.querySelector<HTMLInputElement>('[role="dialog"] input')!.disabled).toBe(true);
@@ -472,12 +500,15 @@ it("locks the entire rename editor while an agent is running", async () => {
 it.each(["preparing", "queued", "starting", "running", "waiting"] as const)(
   "keeps the pill undimmed with disabled actions while the thread is %s and restores them afterward",
   async (status) => {
+    await using surface = await createTestSurface();
+    const { renderWorkspaceEditors } = surface;
+
     state.live[0]!.status = status;
     await renderWorkspaceEditors();
     const pill = page.getByRole("button", { name: "Rename worktree alpha", exact: true });
     expect((pill.element() as HTMLButtonElement).disabled).toBe(false);
     expect(getComputedStyle(pill.element()).opacity).toBe("1");
-    await act(async () => userEvent.click(pill));
+    await userEvent.click(pill);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     await act(async () => {
       pill
@@ -490,10 +521,10 @@ it.each(["preparing", "queued", "starting", "running", "waiting"] as const)(
     expect(button("Rename worktree").disabled).toBe(true);
     expect(button("Change worktree").disabled).toBe(true);
     expect(state.parentContextMenu).not.toHaveBeenCalled();
-    await act(async () => userEvent.keyboard("{Escape}"));
+    await userEvent.keyboard("{Escape}");
     state.live[0]!.status = "completed";
     await renderWorkspaceEditors();
-    await act(async () => userEvent.click(pill));
+    await userEvent.click(pill);
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Rename worktree");
   },
 );
@@ -501,14 +532,18 @@ it.each(["preparing", "queued", "starting", "running", "waiting"] as const)(
 it.each(["Rename worktree", "Change worktree"])(
   "rejects %s if a run starts while the pill context menu is open",
   async (action) => {
+    await using surface = await createTestSurface();
+    const { renderWorkspaceEditors } = surface;
+
     await renderWorkspaceEditors();
-    await act(async () =>
-      userEvent.click(page.getByRole("button", { name: "Rename worktree alpha", exact: true }), {
+    await userEvent.click(
+      page.getByRole("button", { name: "Rename worktree alpha", exact: true }),
+      {
         button: "right",
-      }),
+      },
     );
     state.live[0]!.status = "running";
-    await act(async () => userEvent.click(page.getByText(action, { exact: true })));
+    await userEvent.click(page.getByText(action, { exact: true }));
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(state.rename).not.toHaveBeenCalled();
     expect(state.update).not.toHaveBeenCalled();
@@ -516,9 +551,12 @@ it.each(["Rename worktree", "Change worktree"])(
 );
 
 it("locks pending rename and color edits when a run starts, then unlocks after it stops", async () => {
+  await using surface = await createTestSurface();
+  const { openEditor } = surface;
+
   await openEditor();
   await renameTo("gamma");
-  await act(async () => userEvent.click(page.getByRole("button", { name: "Teal worktree color" })));
+  await userEvent.click(page.getByRole("button", { name: "Teal worktree color" }));
   state.live[0]!.status = "running";
   await publishThreadUpdate();
   expect(button("Save").disabled).toBe(true);
@@ -532,8 +570,11 @@ it("locks pending rename and color edits when a run starts, then unlocks after i
 });
 
 it("locks a selected destination if the thread starts running before Change worktree is submitted", async () => {
+  await using surface = await createTestSurface();
+  const { openWorkspacePicker } = surface;
+
   await openWorkspacePicker();
-  await act(async () => userEvent.click(page.getByRole("radio", { name: /Local checkout/ })));
+  await userEvent.click(page.getByRole("radio", { name: /Local checkout/ }));
   expect(button("Change worktree").disabled).toBe(false);
   state.live[0]!.status = "running";
   await publishThreadUpdate();
@@ -548,15 +589,18 @@ it("locks a selected destination if the thread starts running before Change work
 it.each(["Cancel", "Change worktree"])(
   "%s in the change dialog controls whether the thread moves",
   async (action) => {
+    await using surface = await createTestSurface();
+    const { openWorkspacePicker } = surface;
+
     await openWorkspacePicker();
     expect(button("Change worktree").disabled).toBe(true);
-    await act(async () => userEvent.click(page.getByRole("radio", { name: /Local checkout/ })));
+    await userEvent.click(page.getByRole("radio", { name: /Local checkout/ }));
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
       "Files and uncommitted changes will stay in the current checkout",
     );
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(state.update).not.toHaveBeenCalled();
-    await act(async () => userEvent.click(page.getByRole("button", { name: action, exact: true })));
+    await userEvent.click(page.getByRole("button", { name: action, exact: true }));
     if (action === "Change worktree") {
       await vi.waitFor(() =>
         expect(state.update).toHaveBeenCalledWith({
@@ -580,15 +624,14 @@ it.each(["Cancel", "Change worktree"])(
 );
 
 it("keeps new worktree edits while reviewing another destination and cancels without creating", async () => {
+  await using surface = await createTestSurface();
+  const { openWorkspacePicker } = surface;
+
   await openWorkspacePicker();
-  await act(async () =>
-    userEvent.click(page.getByRole("radio", { name: "New worktree", exact: true })),
-  );
-  await act(async () => userEvent.fill(page.getByLabelText("Worktree name"), "billing-fix"));
-  await act(async () => userEvent.click(page.getByRole("radio", { name: /Local checkout/ })));
-  await act(async () =>
-    userEvent.click(page.getByRole("radio", { name: "New worktree", exact: true })),
-  );
+  await userEvent.click(page.getByRole("radio", { name: "New worktree", exact: true }));
+  await userEvent.fill(page.getByLabelText("Worktree name"), "billing-fix");
+  await userEvent.click(page.getByRole("radio", { name: /Local checkout/ }));
+  await userEvent.click(page.getByRole("radio", { name: "New worktree", exact: true }));
   const worktreeNameInput = page.getByLabelText("Worktree name").element() as HTMLInputElement;
   expect(worktreeNameInput.value).toBe("billing-fix");
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
@@ -597,27 +640,24 @@ it("keeps new worktree edits while reviewing another destination and cancels wit
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   expect(state.rename).not.toHaveBeenCalled();
   expect(state.update).not.toHaveBeenCalled();
-  await act(async () => userEvent.click(page.getByRole("button", { name: "Cancel", exact: true })));
+  await userEvent.click(page.getByRole("button", { name: "Cancel", exact: true }));
   expect(state.rename).not.toHaveBeenCalled();
   expect(state.update).not.toHaveBeenCalled();
 });
 
 it("creates a named worktree only after the dialog's final confirmation", async () => {
+  await using surface = await createTestSurface();
+  const { openWorkspacePicker } = surface;
+
   await openWorkspacePicker();
-  await act(async () =>
-    userEvent.click(page.getByRole("radio", { name: "New worktree", exact: true })),
-  );
-  await act(async () => userEvent.fill(page.getByLabelText("Worktree name"), "billing-fix"));
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true })),
-  );
-  await act(async () => userEvent.click(page.getByRole("button", { name: "Teal worktree color" })));
-  await act(async () => userEvent.keyboard("{Escape}"));
+  await userEvent.click(page.getByRole("radio", { name: "New worktree", exact: true }));
+  await userEvent.fill(page.getByLabelText("Worktree name"), "billing-fix");
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
+  await userEvent.click(page.getByRole("button", { name: "Teal worktree color" }));
+  await userEvent.keyboard("{Escape}");
   expect(state.rename).not.toHaveBeenCalled();
   expect(state.update).not.toHaveBeenCalled();
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Change worktree", exact: true })),
-  );
+  await userEvent.click(page.getByRole("button", { name: "Change worktree", exact: true }));
   await vi.waitFor(() =>
     expect(state.rename).toHaveBeenCalledWith({
       environmentId: "remote",
@@ -640,32 +680,34 @@ it("creates a named worktree only after the dialog's final confirmation", async 
 });
 
 it("requires a valid directory name before confirming a new worktree", async () => {
+  await using surface = await createTestSurface();
+  const { openWorkspacePicker } = surface;
+
   await openWorkspacePicker();
-  await act(async () =>
-    userEvent.click(page.getByRole("radio", { name: "New worktree", exact: true })),
-  );
+  await userEvent.click(page.getByRole("radio", { name: "New worktree", exact: true }));
   expect(button("Change worktree").disabled).toBe(true);
-  await act(async () => userEvent.fill(page.getByLabelText("Worktree name"), "../outside"));
+  await userEvent.fill(page.getByLabelText("Worktree name"), "../outside");
   expect(button("Change worktree").disabled).toBe(true);
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
     "without path separators",
   );
-  await act(async () => userEvent.fill(page.getByLabelText("Worktree name"), "valid-name"));
+  await userEvent.fill(page.getByLabelText("Worktree name"), "valid-name");
   expect(button("Change worktree").disabled).toBe(false);
   expect(state.rename).not.toHaveBeenCalled();
   expect(state.update).not.toHaveBeenCalled();
 });
 
 it("keeps validation failures in the change dialog and retries the same destination", async () => {
+  await using surface = await createTestSurface();
+  const { openWorkspacePicker } = surface;
+
   state.refreshStatus.mockResolvedValueOnce({
     _tag: "Failure",
     cause: Cause.fail(new Error("Checkout unavailable")),
   });
   await openWorkspacePicker();
-  await act(async () => userEvent.click(page.getByRole("radio", { name: /Local checkout/ })));
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Change worktree", exact: true })),
-  );
+  await userEvent.click(page.getByRole("radio", { name: /Local checkout/ }));
+  await userEvent.click(page.getByRole("button", { name: "Change worktree", exact: true }));
   await vi.waitFor(() =>
     expect(document.querySelector('[role="status"]')?.textContent).toContain(
       "Checkout unavailable",
@@ -673,9 +715,7 @@ it("keeps validation failures in the change dialog and retries the same destinat
   );
   expect(state.update).not.toHaveBeenCalled();
   expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
-  await act(async () =>
-    userEvent.click(page.getByRole("button", { name: "Change worktree", exact: true })),
-  );
+  await userEvent.click(page.getByRole("button", { name: "Change worktree", exact: true }));
   await vi.waitFor(() => expect(state.update).toHaveBeenCalledTimes(1));
   await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
 });
