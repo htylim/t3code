@@ -16,6 +16,7 @@ import * as Path from "effect/Path";
 import * as NodeDgram from "node:dgram";
 import * as NodeHttp from "node:http";
 import * as NodeURL from "node:url";
+import * as NodeZlib from "node:zlib";
 
 import { resolveAttachmentPathById } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
@@ -316,7 +317,7 @@ describe("HtmlRender", () => {
     },
   );
 
-  it.live("reports storage failures from the same sandbox used by published HTML", (ctx) =>
+  it.live("supports page-local storage while keeping session storage blocked", (ctx) =>
     Effect.gen(function* () {
       const executable = (yield* HostProcess.Environment)[TEST_BROWSER_ENV];
       if (!executable) return ctx.skip(`Set ${TEST_BROWSER_ENV} to run this test.`);
@@ -325,27 +326,61 @@ describe("HtmlRender", () => {
         const preview = yield* htmlRender.preview({
           html: [
             "<!doctype html><body><script>",
-            'console.log("before storage");',
-            'localStorage.getItem("diffView");',
-            'console.log("after storage");',
+            'localStorage.setItem("diffView", "split");',
+            'console.log("diff view", localStorage.getItem("diffView"));',
+            'sessionStorage.getItem("diffView");',
+            'console.log("after session storage");',
             "</script></body>",
           ].join(""),
         });
 
         expect(preview.consoleMessages).toContainEqual({
           level: "log",
-          text: "before storage",
+          text: "diff view split",
         });
         expect(preview.consoleMessages).toContainEqual({
           level: "error",
-          text: expect.stringMatching(/SecurityError:.*localStorage/),
+          text: expect.stringMatching(/SecurityError:.*sessionStorage/),
         });
         expect(preview.consoleMessages).not.toContainEqual({
           level: "log",
-          text: "after storage",
+          text: "after session storage",
         });
       }).pipe(Effect.provide(layerHtmlRender(executable)));
     }),
+  );
+
+  it.live(
+    "keeps storage through compressed document replacement and resets it on a fresh load",
+    (ctx) =>
+      Effect.gen(function* () {
+        const executable = (yield* HostProcess.Environment)[TEST_BROWSER_ENV];
+        if (!executable) return ctx.skip(`Set ${TEST_BROWSER_ENV} to run this test.`);
+        yield* Effect.gen(function* () {
+          const htmlRender = yield* HtmlRender.HtmlRender;
+          const page = [
+            "<!doctype html><body><script>",
+            'localStorage.theme = "dark";',
+            'console.log("theme", localStorage.getItem("theme"));',
+            'console.log("loads", localStorage.getItem("loads"));',
+            'localStorage.setItem("loads", "1");',
+            "</script></body>",
+          ].join("");
+          const compressed = NodeZlib.gzipSync(page).toString("base64");
+          const html = `<!doctype html><script>(async function(){
+          const bytes = Uint8Array.from(atob(${JSON.stringify(compressed)}), c => c.charCodeAt(0));
+          const html = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+          document.open();document.write(html);document.close();
+        })().catch(console.error)</script>`;
+          for (let load = 0; load < 2; load++) {
+            const preview = yield* htmlRender.preview({ html });
+            expect(preview.consoleMessages).toEqual([
+              { level: "log", text: "theme dark" },
+              { level: "log", text: "loads null" },
+            ]);
+          }
+        }).pipe(Effect.provide(layerHtmlRender(executable)));
+      }),
   );
 
   it.live("keeps every local file but the page itself out of the browser", (ctx) =>

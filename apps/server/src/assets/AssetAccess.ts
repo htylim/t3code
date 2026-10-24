@@ -32,6 +32,7 @@ import {
   type ImageDimensions,
 } from "@t3tools/shared/imageDimensions";
 import { MCP_APP_MAX_HTML_BYTES } from "@t3tools/shared/mcpApp";
+import { HTML_RENDER_MAX_PAGE_BYTES } from "@t3tools/shared/htmlRender";
 import {
   isProjectFaviconPath,
   PROJECT_FAVICON_FALLBACK_MARKER,
@@ -66,7 +67,12 @@ import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as NativeAppIconResolver from "./NativeAppIconResolver.ts";
 import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 import { extractIcnsPng } from "./icns.ts";
-import { openMediaFile, readMediaFileHeader, type OpenMediaFile } from "./MediaFile.ts";
+import {
+  openMediaFile,
+  readMediaFileHeader,
+  streamMediaFile,
+  type OpenMediaFile,
+} from "./MediaFile.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 export const ASSET_ROUTE_PREFIX = "/api/assets";
@@ -223,14 +229,14 @@ const optionOnNotFound = <A, R>(
     }),
   );
 
-export const readMcpAppHtml = Effect.fn("AssetAccess.readMcpAppHtml")(function* (filePath: string) {
-  const fileSystem = yield* FileSystem.FileSystem;
-  // Stored snapshots also contain a bounded CSP meta tag (up to 32 domains
-  // per directive). Bound the read even if the attachment grows after minting.
-  const limit = MCP_APP_MAX_HTML_BYTES + 128 * 1024;
-  const chunks = yield* Stream.runCollect(fileSystem.stream(filePath, { bytesToRead: limit + 1 }));
+/** Collects a bounded HTML stream for bootstrap injection. */
+const readPreviewHtml = Effect.fn("AssetAccess.readPreviewHtml")(function* <E, R>(
+  htmlStream: Stream.Stream<Uint8Array, E, R>,
+  byteLimit: number,
+) {
+  const chunks = yield* Stream.runCollect(htmlStream);
   const size = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
-  if (size > limit) return null;
+  if (size > byteLimit) return null;
   const bytes = new Uint8Array(size);
   let position = 0;
   for (const chunk of chunks) {
@@ -238,6 +244,26 @@ export const readMcpAppHtml = Effect.fn("AssetAccess.readMcpAppHtml")(function* 
     position += chunk.byteLength;
   }
   return bytes;
+});
+
+/** Includes the capture's bounded CSP metadata while limiting reads of growing files. */
+export const readMcpAppHtml = Effect.fn("AssetAccess.readMcpAppHtml")(function* (filePath: string) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const limit = MCP_APP_MAX_HTML_BYTES + 128 * 1024;
+  return yield* readPreviewHtml(fileSystem.stream(filePath, { bytesToRead: limit + 1 }), limit);
+});
+
+/** Reads saved visualizations and HTML files for compatibility injection without rewriting them. */
+export const readHtmlRenderAsset = Effect.fn("AssetAccess.readHtmlRenderAsset")(function* (
+  filePath: string,
+  file?: OpenMediaFile,
+) {
+  const limit = HTML_RENDER_MAX_PAGE_BYTES;
+  if (file) {
+    return yield* readPreviewHtml(streamMediaFile(file, 0n, BigInt(limit + 1))!, limit);
+  }
+  const fileSystem = yield* FileSystem.FileSystem;
+  return yield* readPreviewHtml(fileSystem.stream(filePath, { bytesToRead: limit + 1 }), limit);
 });
 
 const readToolOutputImage = Effect.fn("AssetAccess.readToolOutputImage")(function* (input: {

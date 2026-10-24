@@ -23,6 +23,10 @@ import {
   MCP_APP_MAX_HTML_BYTES,
 } from "@t3tools/shared/mcpApp";
 import { ORCHESTRATION_PROTOCOL_HEADER } from "@t3tools/contracts";
+import {
+  HTML_RENDER_MAX_PAGE_BYTES,
+  injectHtmlRenderStorageBootstrap,
+} from "@t3tools/shared/htmlRender";
 
 import * as ServerConfig from "./config.ts";
 
@@ -75,7 +79,9 @@ describe("MCP app asset responses", () => {
               ...(download ? { renderIntent: "mcp-app" as const } : {}),
             }),
           );
-          expect(yield* Effect.promise(() => response.text())).toBe(html);
+          expect(yield* Effect.promise(() => response.text())).toBe(
+            download ? html : injectHtmlRenderStorageBootstrap(html),
+          );
         }
       }).pipe(Effect.provide(layerFileResponse)),
   );
@@ -140,6 +146,75 @@ describe("browser API CORS", () => {
 });
 
 const layerFileResponse = Layer.mergeAll(NodeHttpPlatform.layer, NodeServices.layer);
+
+describe("HTML asset storage compatibility", () => {
+  it.effect("bounds HTML transformation while allowing the original file to be downloaded", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-html-storage-limit-" });
+      const filePath = path.join(directory, "large.html");
+      yield* fs.writeFileString(filePath, "<!doctype html>");
+      yield* fs.truncate(filePath, HTML_RENDER_MAX_PAGE_BYTES + 1);
+      const preview = yield* assetFileResponse({ path: filePath });
+      expect(preview.status).toBe(413);
+      const download = yield* assetFileResponse(
+        { path: filePath, download: true },
+        undefined,
+        undefined,
+        "HEAD",
+      );
+      expect(download.status).toBe(200);
+      expect(download.headers["content-length"]).toBe(String(HTML_RENDER_MAX_PAGE_BYTES + 1));
+    }).pipe(Effect.provide(layerFileResponse)),
+  );
+
+  it.effect(
+    "adds storage to old attachments and opened workspace files without changing downloads",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-html-storage-" });
+        const filePath = path.join(directory, "saved.html");
+        const html = '<!doctype html><script>localStorage.setItem("theme", "☃")</script>';
+        yield* fs.writeFileString(filePath, html);
+        const canonicalPath = yield* fs.realPath(filePath);
+        for (const useDescriptor of [false, true]) {
+          for (const method of ["GET", "HEAD"] as const) {
+            const file = useDescriptor ? yield* openMediaFile(canonicalPath) : undefined;
+            if (useDescriptor) expect(file).not.toBeNull();
+            const response = HttpServerResponse.toWeb(
+              yield* assetFileResponse(
+                { path: canonicalPath, ...(file ? { file } : {}), mimeType: "text/html" },
+                "bytes=0-1",
+                undefined,
+                method,
+              ),
+            );
+            const expected = injectHtmlRenderStorageBootstrap(html);
+            expect(response.headers.get("content-length")).toBe(
+              String(new TextEncoder().encode(expected).byteLength),
+            );
+            expect(response.headers.get("cache-control")).toBe("private, no-store");
+            expect(response.headers.get("etag")).toBeNull();
+            expect(response.headers.get("last-modified")).toBeNull();
+            expect(response.headers.get("content-security-policy")).not.toContain(
+              "allow-same-origin",
+            );
+            expect(yield* Effect.promise(() => response.text())).toBe(
+              method === "HEAD" ? "" : expected,
+            );
+          }
+        }
+        const download = HttpServerResponse.toWeb(
+          yield* assetFileResponse({ path: canonicalPath, download: true }),
+        );
+        expect(yield* Effect.promise(() => download.text())).toBe(html);
+        expect(yield* fs.readFileString(canonicalPath)).toBe(html);
+      }).pipe(Effect.provide(layerFileResponse)),
+  );
+});
 
 const makeStaticRequest = Effect.fn("HttpTest.makeStaticRequest")(function* (staticDir: string) {
   const config = yield* ServerConfig.ServerConfig;

@@ -1,5 +1,23 @@
 # Fork journal
 
+## 2026-10-24 - Keep visualization storage in memory
+
+- Upstream baseline: `d53873b6a4`.
+- HTML previews and visual replies now provide page-local `localStorage`, including method
+  and property access. Each fresh page starts empty. Native cookies and session storage remain
+  blocked by the existing sandbox.
+- Inline HTML delivery adds the same shim to saved attachments and file previews without
+  rewriting their source files. Downloads preserve the original bytes. Transformation uses
+  the existing 25 MiB render limit and the validated file descriptor when available.
+- Reason: The visualize template reads storage during startup, which previously stopped its
+  rendering in an opaque-origin frame. The in-memory store also survives compressed pages
+  replacing their document with `document.write()`.
+- Verification: 75 focused shared, HTML-rendering, asset-access, and HTTP tests passed, including
+  real headless regressions that failed before the fix. Scoped server/shared typechecks, lint,
+  formatting, and diff checks passed. The exact previously blank attachment rendered at
+  3,614 pixels with no console errors after compatibility injection. Installed app bundles,
+  live attachments, and native clients were not changed.
+
 ## 2026-10-24 - Integrate upstream through d53873b6a4
 
 - Upstream baseline: `d53873b6a4799e87afd63c8d288ef0089f5a3748`, following

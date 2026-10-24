@@ -13,6 +13,7 @@ export const HTML_RENDER_MAX_HEIGHT = 2000;
 // page that grows with its frame, since vh units are rejected at publish.
 export const HTML_RENDER_MAX_FIT_HEIGHT = 20_000;
 export const HTML_RENDER_MAX_TITLE_LENGTH = 200;
+export const HTML_RENDER_MAX_PAGE_BYTES = 25 * 1024 * 1024;
 
 // Keep preview and published documents equally isolated from host cookies and storage.
 // Modal dialogs stay blocked because inline pages can open without user interaction.
@@ -385,6 +386,48 @@ const BASE_CSS =
   // An image outside a link or button opens in the app's viewer, as chat images do.
   ":where(img:not(a[href] img,button img)){cursor:zoom-in}";
 
+// Each document owns its store. Defining a data property never reads the native
+// getter, which throws for opaque origins. It also survives document.write().
+const STORAGE_BOOTSTRAP = `<script id="t3-storage">(function(){
+  const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+  if (descriptor && Object.hasOwn(descriptor, "value")) return;
+  const entries = new Map();
+  const storage = Object.create(null);
+  Object.defineProperties(storage, {
+    length: { configurable: true, get: function(){ return entries.size; } },
+    getItem: { configurable: true, value: function(key){ return entries.get(String(key)) ?? null; } },
+    setItem: { configurable: true, value: function(key, value){ entries.set(String(key), String(value)); } },
+    removeItem: { configurable: true, value: function(key){ entries.delete(String(key)); } },
+    clear: { configurable: true, value: function(){ entries.clear(); } },
+    key: { configurable: true, value: function(index){ return Array.from(entries.keys())[Number(index) >>> 0] ?? null; } }
+  });
+  const proxy = new Proxy(storage, {
+    get: function(target, key){
+      if (Reflect.has(target, key)) return Reflect.get(target, key);
+      return entries.get(key);
+    },
+    set: function(target, key, value){
+      if (typeof key !== "string") return Reflect.set(target, key, value);
+      entries.set(key, String(value));
+      return true;
+    },
+    deleteProperty: function(target, key){ entries.delete(key); return true; },
+    has: function(target, key){ return Reflect.has(target, key) || entries.has(key); },
+    ownKeys: function(){ return Array.from(entries.keys()); },
+    getOwnPropertyDescriptor: function(target, key){
+      if (entries.has(key)) return { configurable: true, enumerable: true, writable: true, value: entries.get(key) };
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    }
+  });
+  Object.defineProperty(window, "localStorage", { configurable: true, value: proxy });
+})();</script>`;
+
+/** Adds page-local storage before scripts without changing the document's doctype. */
+export function injectHtmlRenderStorageBootstrap(html: string): string {
+  const prefix = /^(?:\s|<!--[\s\S]*?(?:-->|$))*(?:<!doctype[^>]*>)?/i.exec(html)![0];
+  return `${prefix}${STORAGE_BOOTSTRAP}${html.slice(prefix.length)}`;
+}
+
 function rootRule(theme: HtmlRenderTheme): string {
   const declarations = Object.entries(theme.variables)
     .map(([name, value]) => `${name}:${value};`)
@@ -419,6 +462,7 @@ function bootstrapMarkup(markup: string): string {
       ? ""
       : '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<style id="t3-theme">${defaultCss}</style>`,
+    STORAGE_BOOTSTRAP,
     `<script>${BOOTSTRAP_SCRIPT}</script>`,
   ].join("");
 }

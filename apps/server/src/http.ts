@@ -5,7 +5,10 @@ import {
   EnvironmentHttpApi,
 } from "@t3tools/contracts";
 import { isDevProxiedPath } from "@t3tools/shared/devProxy";
-import { HTML_RENDER_CONTENT_SECURITY_POLICY } from "@t3tools/shared/htmlRender";
+import {
+  HTML_RENDER_CONTENT_SECURITY_POLICY,
+  injectHtmlRenderStorageBootstrap,
+} from "@t3tools/shared/htmlRender";
 import { injectMcpAppCookieBootstrap, injectMcpAppThemeBootstrap } from "@t3tools/shared/mcpApp";
 import { decodeOtlpTraceRecords } from "@t3tools/shared/observability";
 import * as ByteSize from "effect/ByteSize";
@@ -31,7 +34,12 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { OtlpTracer, OtlpSerialization } from "effect/observability";
 
 import * as ServerConfig from "./config.ts";
-import { ASSET_ROUTE_PREFIX, readMcpAppHtml, resolveAsset } from "./assets/AssetAccess.ts";
+import {
+  ASSET_ROUTE_PREFIX,
+  readHtmlRenderAsset,
+  readMcpAppHtml,
+  resolveAsset,
+} from "./assets/AssetAccess.ts";
 import { sourceControlMediaResponse } from "./assets/sourceControlMediaResponse.ts";
 import { statMediaFile, streamMediaFile, type OpenMediaFile } from "./assets/MediaFile.ts";
 import {
@@ -182,6 +190,21 @@ export const assetFileResponse = Effect.fn("assetFileResponse")(function* (
     const body = new TextEncoder().encode(
       injectMcpAppCookieBootstrap(injectMcpAppThemeBootstrap(new TextDecoder().decode(bytes))),
     );
+    headers["Content-Length"] = String(body.byteLength);
+    return method === "HEAD"
+      ? HttpServerResponse.empty({ status: 200, headers })
+      : HttpServerResponse.uint8Array(body, { headers });
+  }
+  if (!asset.download && headers["Content-Type"] === "text/html; charset=utf-8") {
+    const bytes = yield* readHtmlRenderAsset(asset.path, asset.file);
+    if (bytes === null) {
+      return HttpServerResponse.text("HTML file is too large to preview.", { status: 413 });
+    }
+    const body = new TextEncoder().encode(
+      injectHtmlRenderStorageBootstrap(new TextDecoder().decode(bytes)),
+    );
+    // Existing signed URLs must not keep serving a pre-shim document from cache.
+    headers["Cache-Control"] = "private, no-store";
     headers["Content-Length"] = String(body.byteLength);
     return method === "HEAD"
       ? HttpServerResponse.empty({ status: 200, headers })

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
+import * as NodeVM from "node:vm";
 
 import {
   injectHtmlRenderBootstrap,
+  injectHtmlRenderStorageBootstrap,
   readHtmlRenderImageRequest,
   readHtmlRenderLinkRequest,
 } from "./htmlRender.ts";
@@ -10,6 +12,58 @@ import { htmlRenderFromToolItem } from "./toolOutput.ts";
 const reference = { attachmentId: "thread-abc-123.html", title: "Chart", height: 420 };
 
 describe("injectHtmlRenderBootstrap", () => {
+  it("preserves a saved page's doctype behind leading comments", () => {
+    const prefix = "\uFEFF\n<!-- saved visualization -->\n<!doctype html>";
+    const html = `${prefix}<html><script>localStorage.theme = 'dark'</script></html>`;
+    expect(
+      injectHtmlRenderStorageBootstrap(html).startsWith(`${prefix}<script id="t3-storage">`),
+    ).toBe(true);
+  });
+
+  it("provides isolated string storage with method and property access", () => {
+    const injected = injectHtmlRenderBootstrap("<!doctype html><p>Storage</p>");
+    const scripts = [...injected.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)];
+    const bootstrap = scripts.map((script) => script[1]).join("\n");
+    const window = {};
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("Native storage must not be read");
+      },
+    });
+    const document = { getElementById: () => null };
+    const context = { window, document };
+    NodeVM.runInNewContext(bootstrap, context);
+    const storage = Reflect.get(window, "localStorage") as Storage;
+
+    expect(storage.getItem("missing")).toBeNull();
+    expect(storage.key(0)).toBeNull();
+    storage.setItem("theme", "dark");
+    storage.setItem("count", 2 as unknown as string);
+    storage.setItem("__proto__", "safe");
+    storage.diffView = "split";
+    expect(storage.length).toBe(4);
+    expect(storage.theme).toBe("dark");
+    expect(storage.getItem("count")).toBe("2");
+    expect(storage.getItem("diffView")).toBe("split");
+    expect(storage.getItem("__proto__")).toBe("safe");
+    expect(Object.keys(storage)).toEqual(["theme", "count", "__proto__", "diffView"]);
+    expect("theme" in storage).toBe(true);
+    storage.setItem("theme", "light");
+    expect(storage.key(0)).toBe("theme");
+    expect(storage.key(100)).toBeNull();
+    delete storage.diffView;
+    storage.removeItem("count");
+    storage.removeItem("missing");
+    expect(storage.length).toBe(2);
+    expect(storage.getItem("diffView")).toBeNull();
+    NodeVM.runInNewContext(bootstrap, context);
+    expect(storage.getItem("theme")).toBe("light");
+    storage.clear();
+    expect(storage.length).toBe(0);
+    expect(Object.keys(storage)).toEqual([]);
+  });
+
   it("puts the theme ahead of the page's own head content", () => {
     const html =
       "<!doctype html><html><head><style>:root{--background:red}</style></head><body>x</body></html>";
