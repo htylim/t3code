@@ -11,8 +11,6 @@ import { TooltipProvider } from "./ui/tooltip";
 const ownerThreadRef = scopeThreadRef(EnvironmentId.make("env-1"), ThreadId.make("owner"));
 const sideThreadRef = scopeThreadRef(EnvironmentId.make("env-1"), ThreadId.make("side"));
 const otherOwnerThreadRef = scopeThreadRef(EnvironmentId.make("env-2"), ThreadId.make("owner"));
-const navigateToThread = vi.fn();
-const activateRow = vi.fn();
 
 /** Own the rendered tree and fixture cleanup for one test. */
 async function createTestSurface() {
@@ -21,8 +19,8 @@ async function createTestSurface() {
     threadPanelVisibilityByThreadKey: {},
     userActionRevisionByThreadKey: {},
   });
-  navigateToThread.mockReset();
-  activateRow.mockReset();
+  const navigateToThread = vi.fn();
+  const activateRow = vi.fn();
   const container = document.createElement("div");
   document.body.append(container);
   const screen = await renderScreen(null, { container });
@@ -55,6 +53,8 @@ async function createTestSurface() {
     screen,
     container,
     renderIndicators,
+    navigateToThread,
+    activateRow,
     parentThreadButton,
     async [Symbol.asyncDispose]() {
       try {
@@ -85,8 +85,8 @@ describe("side-chat parent navigation", () => {
 
     await act(async () => parentThreadButton().click());
 
-    expect(navigateToThread).toHaveBeenCalledExactlyOnceWith(ownerThreadRef);
-    expect(activateRow).not.toHaveBeenCalled();
+    expect(surface.navigateToThread).toHaveBeenCalledExactlyOnceWith(ownerThreadRef);
+    expect(surface.activateRow).not.toHaveBeenCalled();
     expect(ownerPanel()).toMatchObject({
       isOpen: true,
       activeSurfaceId: savedSurfaces[0]?.id,
@@ -115,7 +115,7 @@ describe("side-chat parent navigation", () => {
 
     await act(async () => parentThreadButton().click());
 
-    expect(navigateToThread).toHaveBeenCalledExactlyOnceWith(otherOwnerThreadRef);
+    expect(surface.navigateToThread).toHaveBeenCalledExactlyOnceWith(otherOwnerThreadRef);
     expect(ownerPanel().isOpen).toBe(false);
     expect(ownerPanel(otherOwnerThreadRef).isOpen).toBe(true);
   });
@@ -133,7 +133,7 @@ describe("side-chat parent navigation", () => {
 
     await act(async () => parentThreadButton().click());
 
-    expect(navigateToThread).toHaveBeenCalledExactlyOnceWith(ownerThreadRef);
+    expect(surface.navigateToThread).toHaveBeenCalledExactlyOnceWith(ownerThreadRef);
     expect(ownerPanel().surfaces).toBe(originalOwnerSurfaces);
     expect(ownerPanel().surfaces[0]).toMatchObject({ transient: true });
     expect(ownerPanel(sideThreadRef)).toBe(originalSidePanel);
@@ -150,7 +150,7 @@ describe("side-chat parent navigation", () => {
 
     await act(async () => parentThreadButton().click());
 
-    expect(navigateToThread).toHaveBeenCalledExactlyOnceWith(ownerThreadRef);
+    expect(surface.navigateToThread).toHaveBeenCalledExactlyOnceWith(ownerThreadRef);
   });
 
   it("does nothing if the relationship was removed before clicking", async () => {
@@ -164,8 +164,8 @@ describe("side-chat parent navigation", () => {
 
     await act(async () => parentThreadButton().click());
 
-    expect(navigateToThread).not.toHaveBeenCalled();
-    expect(activateRow).not.toHaveBeenCalled();
+    expect(surface.navigateToThread).not.toHaveBeenCalled();
+    expect(surface.activateRow).not.toHaveBeenCalled();
     expect(ownerPanel().isOpen).toBe(false);
   });
 
@@ -184,8 +184,8 @@ describe("side-chat parent navigation", () => {
         await userEvent.keyboard(key === "Enter" ? "{Enter}" : " ");
       })();
 
-      expect(navigateToThread).toHaveBeenCalledExactlyOnceWith(ownerThreadRef);
-      expect(activateRow).not.toHaveBeenCalled();
+      expect(surface.navigateToThread).toHaveBeenCalledExactlyOnceWith(ownerThreadRef);
+      expect(surface.activateRow).not.toHaveBeenCalled();
     },
   );
 
@@ -200,6 +200,6 @@ describe("side-chat parent navigation", () => {
       parentThreadButton().dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     });
 
-    expect(activateRow).not.toHaveBeenCalled();
+    expect(surface.activateRow).not.toHaveBeenCalled();
   });
 });

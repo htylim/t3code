@@ -5,11 +5,10 @@ import { expect, it, vi } from "vite-plus/test";
 import "~/index.css";
 import { getClientSettings, __setClientSettingsForTests } from "../hooks/useSettings";
 import ChatMarkdown from "./ChatMarkdown";
-let originalSettings: ReturnType<typeof getClientSettings>;
 
 /** Own the rendered tree and fixture cleanup for one test. */
 async function createTestSurface() {
-  originalSettings = getClientSettings();
+  const originalSettings = getClientSettings();
   __setClientSettingsForTests({ ...originalSettings, wordWrap: true });
   const container = document.createElement("div");
   container.style.width = "160px";

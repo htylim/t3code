@@ -2,13 +2,12 @@ import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 
-import { buildComposerThreadPickerItems } from "./composerThreadPicker";
-import { detectComposerTrigger, replaceTextRange } from "./composer-logic";
 import {
-  buildMessageContext,
-  threadContextRecord,
-  threadContextReference,
-} from "./lib/composerContextRecords";
+  buildComposerThreadPickerItems,
+  resolveComposerThreadContext,
+} from "./composerThreadPicker";
+import { detectComposerTrigger, replaceTextRange } from "./composer-logic";
+import { buildMessageContext, threadContextReference } from "./lib/composerContextRecords";
 import { formatInlineContextReference } from "./lib/composerContextReferences";
 import { splitPromptIntoComposerSegments } from "./composer-editor-mentions";
 
@@ -175,41 +174,48 @@ describe("composer thread picker", () => {
     ).toEqual([]);
   });
 
-  it("replaces a multiword query with an upstream chip and passes the thread identity to the provider", () => {
-    const prompt = "Compare with %%login flow";
-    const trigger = detectComposerTrigger(prompt, prompt.length)!;
-    const [selected] = buildComposerThreadPickerItems({
-      ...pickerInput,
-      shells: [shell("other-project", { projectId: otherProjectId })],
-      scope: trigger.threadScope!,
-      query: trigger.query,
-    });
-    const record = threadContextRecord(selected!.thread, selected!.label);
-    const replacement = `${formatInlineContextReference(threadContextReference(record))} `;
-    const edited = replaceTextRange(prompt, trigger.rangeStart, trigger.rangeEnd, replacement);
-    expect(edited.text).toBe(
-      `Compare with [Fix login flow](t3-context://v1/thread/${record.contextId}) `,
-    );
-    expect(detectComposerTrigger(edited.text, edited.cursor)).toBeNull();
-    expect(splitPromptIntoComposerSegments(edited.text)).toContainEqual({
-      type: "context-reference",
-      kind: "thread",
-      contextId: record.contextId,
-      label: "Fix login flow",
-      source: replacement.trimEnd(),
-    });
-    const context = buildMessageContext({
-      terminalContexts: [],
-      reviewComments: [],
-      previewAnnotations: [],
-      threadContexts: [record],
-    });
-    const providerInput = projectComposerContextForProvider({
-      text: edited.text,
-      records: context!.records,
-    });
-    expect(providerInput).toContain("threadId: other-project");
-    expect(providerInput).toContain("environmentId: local");
-    expect(providerInput).toContain("t3_thread_read(threadId)");
-  });
+  it.each(["@login", "%login flow", "%%login flow"])(
+    "selects %s as a chip and passes its identity to the provider",
+    (query) => {
+      const prompt = `Compare with ${query}`;
+      const trigger = detectComposerTrigger(prompt, prompt.length)!;
+      const [selected] = buildComposerThreadPickerItems({
+        ...pickerInput,
+        shells: [shell("other-project")],
+        scope: trigger.threadScope ?? "project",
+        query: trigger.query,
+      });
+      const record = resolveComposerThreadContext(trigger, selected!.thread, {
+        title: selected!.label,
+      });
+      expect(record).not.toBeNull();
+      if (!record) throw new Error("Selecting a thread must retain its context record");
+      const replacement = `${formatInlineContextReference(threadContextReference(record))} `;
+      const edited = replaceTextRange(prompt, trigger.rangeStart, trigger.rangeEnd, replacement);
+      expect(edited.text).toBe(
+        `Compare with [Fix login flow](t3-context://v1/thread/${record.contextId}) `,
+      );
+      expect(detectComposerTrigger(edited.text, edited.cursor)).toBeNull();
+      expect(splitPromptIntoComposerSegments(edited.text)).toContainEqual({
+        type: "context-reference",
+        kind: "thread",
+        contextId: record.contextId,
+        label: "Fix login flow",
+        source: replacement.trimEnd(),
+      });
+      const context = buildMessageContext({
+        terminalContexts: [],
+        reviewComments: [],
+        previewAnnotations: [],
+        threadContexts: [record],
+      });
+      const providerInput = projectComposerContextForProvider({
+        text: edited.text,
+        records: context!.records,
+      });
+      expect(providerInput).toContain("threadId: other-project");
+      expect(providerInput).toContain("environmentId: local");
+      expect(providerInput).toContain("t3_thread_read(threadId)");
+    },
+  );
 });

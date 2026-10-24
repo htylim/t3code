@@ -138,6 +138,7 @@ vi.mock("../composerDraftStore", () => ({
 
 import { NamedWorktreeDialogHost, requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
 import { WorktreePill } from "./WorktreePill";
+import { dismissContextMenu } from "../contextMenuFallback";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import { ConfirmDialogHost } from "./ConfirmDialogHost";
 import { ThreadWorkspaceMenuHost } from "./ThreadWorkspaceMenu";
@@ -249,6 +250,7 @@ async function createTestSurface() {
         if (cancelButton && !cancelButton.disabled) {
           await userEvent.click(cancelButton);
         }
+        dismissContextMenu();
         vi.unstubAllGlobals();
       } finally {
         await screen[Symbol.asyncDispose]();

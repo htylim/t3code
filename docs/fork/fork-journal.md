@@ -25,8 +25,23 @@
   compiler cases. Five opt-in native-provider cases skipped. Scoped server, web, mobile,
   desktop, contracts, shared, client-runtime, and scripts typechecks passed. Targeted lint,
   formatting, export checks, and web/server production builds passed.
-- Limits: Browser execution and an integrated client pass require explicit approval and were
-  not run. No live provider turns, live-data writes, native builds, installers, or publication.
+- Browser verification after approval: all 150 retained browser cases across 13 fork-modified
+  test files passed. The 18 picker unit cases include failures reproduced before the fix for
+  selecting `%` and `%%` results. Both now use the same context-record path as upstream's `@`
+  results. Busy worktree pills let Escape dismiss their disabled-action context menu. The
+  existing browser case reproduced the swallowed Escape before the fix and passed afterward.
+- Keep test state local to disposable fixtures, mount the router before acquiring driven fake
+  timers, and use an observable focus assertion instead of frame polling. Register the
+  filename-launched transient deletion worker as a Knip entry and remove the unused upstream
+  Previous worktree rendering helper. Scoped checks passed format, lint, two package
+  typechecks, and 123 adjacent tests; both full Knip passes passed after the unused-file fixes.
+- The integrated Browser-panel pass used isolated worktree data copied read-only from stopped
+  threads. Verified project and environment percent references inserting thread chips, side-chat
+  creation and closure, Postpone and Un-postpone, and Settle and Un-settle. The dev copy applied
+  upstream migrations 65 through 69 and recovered with no active runs or pending effects.
+- Limits: No live provider turns, live-data writes, native builds, installers, or publication.
+  Native clients and remote connection modes were not exercised. Browser-panel screenshot
+  capture timed out; the integrated checks used rendered DOM and interaction state.
 
 ## 2026-10-23 - Match HTML preview permissions to published pages
 

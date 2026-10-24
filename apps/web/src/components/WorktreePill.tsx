@@ -33,7 +33,10 @@ export function WorktreePill({
       render={<button type="button" aria-label={`Rename worktree ${worktree.name}`} />}
       onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
-      onKeyDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        // Disabled context-menu actions leave focus on the pill, so Escape must reach the menu.
+        if (event.key !== "Escape") event.stopPropagation();
+      }}
       onClick={(event) => {
         event.stopPropagation();
         if (event.ctrlKey || busy) return;

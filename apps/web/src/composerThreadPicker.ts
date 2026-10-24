@@ -1,7 +1,19 @@
-import type { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import type { ComposerThreadItem } from "@t3tools/client-runtime/composerThreadItems";
 
 import type { Project, ThreadShell } from "./types";
+import type { ComposerTrigger } from "./composer-logic";
+import { threadContextRecord } from "./lib/composerContextRecords";
+
+/** Resolves a selected thread into the context record retained by the composer. */
+export function resolveComposerThreadContext(
+  trigger: ComposerTrigger,
+  threadRef: ScopedThreadRef,
+  shell: Pick<ThreadShell, "title"> | null,
+) {
+  if ((trigger.kind !== "path" && trigger.kind !== "thread") || !shell) return null;
+  return threadContextRecord(threadRef, shell.title);
+}
 
 const THREAD_PICKER_RESULT_LIMIT = 20;
 

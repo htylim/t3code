@@ -27,12 +27,15 @@ vi.mock(import("./BranchToolbarBranchSelector"), async (original) => ({
 }));
 vi.mock(import("../state/entities"), async (original) => ({
   ...(await original()),
-  useQuietThreadShell: (() => ({
-    environmentId: "local",
-    projectId: "project",
-    worktreePath: state.worktreePath,
-    branch: state.branch,
-  })) as never,
+  useQuietThreadShell: ((threadRef: unknown) => {
+    if (!threadRef) return null;
+    return {
+      environmentId: "local",
+      projectId: "project",
+      worktreePath: state.worktreePath,
+      branch: state.branch,
+    };
+  }) as never,
   useProject: (() => ({ workspaceRoot: "/tmp/project" })) as never,
   useThreadShellsForProjectRefs: () => [],
 }));
@@ -60,7 +63,7 @@ async function createTestSurface() {
           environmentId={EnvironmentId.make("local")}
           threadId={ThreadId.make("thread")}
           projectId={ProjectId.make("project")}
-          worktreePath={null}
+          worktreePath={state.worktreePath}
           isServerThread={false}
           showGitControls
           envMode="local"
@@ -94,6 +97,7 @@ it("keeps machine choices usable when the combined row's workspace is locked", a
   const onEnvironmentChange = vi.fn();
   await render({
     onEnvironmentChange,
+    isServerThread: true,
     availableEnvironments: ["local", "remote"].map((id) => ({
       environmentId: EnvironmentId.make(id),
       projectId: ProjectId.make("project"),
@@ -127,6 +131,7 @@ it("shows a started thread's primary machine as a static label in the composer",
 
   await render({
     layout: "composer",
+    isServerThread: true,
     showGitControls: false,
     availableEnvironments: ["local", "remote"].map((id) => ({
       environmentId: EnvironmentId.make(id),

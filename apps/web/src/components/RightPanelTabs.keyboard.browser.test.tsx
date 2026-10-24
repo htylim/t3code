@@ -1,4 +1,4 @@
-import { act, render as renderScreen, fakeTimers } from "../../test/render";
+import { act, render as renderScreen, stubGlobal } from "../../test/render";
 import { type ComponentProps } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import {
@@ -10,28 +10,27 @@ import { RightPanelTabs } from "./RightPanelTabs";
 
 vi.mock("~/hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 vi.mock("~/browser/browserDefaults", () => ({ useBrowserDefaults: () => ({ profiles: [] }) }));
-const addFiles = vi.fn();
 const noop = () => undefined;
 
 /** Own the rendered tree and fixture cleanup for one test. */
 async function createTestSurface() {
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      disconnect() {}
-      unobserve() {}
-    },
+  await using cleanup = new AsyncDisposableStack();
+  const addFiles = vi.fn();
+  cleanup.use(
+    stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+        unobserve() {}
+      },
+    ),
   );
-  Object.defineProperty(Element.prototype, "getAnimations", {
-    configurable: true,
-    value: () => [],
-  });
-  vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
-  addFiles.mockClear();
+  cleanup.use(vi.spyOn(Element.prototype, "getAnimations").mockReturnValue([]));
+  cleanup.use(vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel"));
   const container = document.createElement("div");
   document.body.append(container);
-  const screen = await renderScreen(null, { container });
+  const screen = cleanup.use(await renderScreen(null, { container }));
 
   async function renderPanel(overrides: Partial<ComponentProps<typeof RightPanelTabs>> = {}) {
     await act(() =>
@@ -85,20 +84,15 @@ async function createTestSurface() {
         </RightPanelTabs>,
       ),
     );
-    await act(() => vi.advanceTimersByTimeAsync(0));
-    await act(() => vi.advanceTimersToNextFrame());
   }
   return {
     screen,
     container,
     renderPanel,
+    addFiles,
+    cleanup: cleanup.move(),
     async [Symbol.asyncDispose]() {
-      try {
-        vi.restoreAllMocks();
-        vi.unstubAllGlobals();
-      } finally {
-        await screen[Symbol.asyncDispose]();
-      }
+      await this.cleanup.disposeAsync();
     },
   };
 }
@@ -106,14 +100,11 @@ async function createTestSurface() {
 async function press(key: string, options: KeyboardEventInit = {}) {
   const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...options });
   await act(() => (document.activeElement ?? document.body).dispatchEvent(event));
-  await act(() => vi.advanceTimersByTimeAsync(0));
-  await act(() => vi.advanceTimersToNextFrame());
   return event;
 }
 
 describe("right panel new-tab shortcut", () => {
   it("leaves the fork's default side-chat shortcut to the chat view", async () => {
-    using _timers = fakeTimers();
     await using surface = await createTestSurface();
     const { renderPanel } = surface;
 
@@ -125,7 +116,6 @@ describe("right panel new-tab shortcut", () => {
   it.each(["MacIntel", "Win32", "Linux x86_64"])(
     "opens the menu on %s and chooses a tab",
     async (platform) => {
-      using _timers = fakeTimers();
       await using surface = await createTestSurface();
       const { renderPanel } = surface;
 
@@ -150,13 +140,12 @@ describe("right panel new-tab shortcut", () => {
         ).defaultPrevented,
       ).toBe(true);
       await press("f");
-      expect(addFiles).toHaveBeenCalledOnce();
+      expect(surface.addFiles).toHaveBeenCalledOnce();
       expect(document.querySelector('[role="menu"]:not([data-closed])')).toBeNull();
     },
   );
 
   it("opens Files while a closed popup remains mounted", async () => {
-    using _timers = fakeTimers();
     await using surface = await createTestSurface();
     const { container, renderPanel } = surface;
 
@@ -167,11 +156,10 @@ describe("right panel new-tab shortcut", () => {
     container.append(popup);
 
     expect((await press("f")).defaultPrevented).toBe(true);
-    expect(addFiles).toHaveBeenCalledOnce();
+    expect(surface.addFiles).toHaveBeenCalledOnce();
   });
 
   it("opens the add-surface menu while a closed popup remains mounted", async () => {
-    using _timers = fakeTimers();
     await using surface = await createTestSurface();
     const { container, renderPanel } = surface;
 
@@ -186,7 +174,6 @@ describe("right panel new-tab shortcut", () => {
   });
 
   it("leaves the shortcut alone while the mounted panel is closed", async () => {
-    using _timers = fakeTimers();
     await using surface = await createTestSurface();
     const { renderPanel } = surface;
 
@@ -198,7 +185,6 @@ describe("right panel new-tab shortcut", () => {
   it.each(["Win32", "Linux x86_64"])(
     "leaves Ctrl+T for the focused terminal on %s",
     async (platform) => {
-      using _timers = fakeTimers();
       await using surface = await createTestSurface();
       const { container, renderPanel } = surface;
 
@@ -227,7 +213,6 @@ describe("right panel new-tab shortcut", () => {
   );
 
   it("uses a custom binding from a text field and closes on Escape", async () => {
-    using _timers = fakeTimers();
     await using surface = await createTestSurface();
     const { container, renderPanel } = surface;
 
@@ -242,18 +227,12 @@ describe("right panel new-tab shortcut", () => {
     expect(document.querySelector('[role="menu"]')).not.toBeNull();
     await press("Escape");
     expect(document.querySelector('[role="menu"]:not([data-closed])')).toBeNull();
-    // The menu hands focus back to its trigger once its close finishes, a few frames later.
-    // Timers are fake here, so advance them instead of polling in real time.
     const trigger = container.querySelector('[aria-label="Add panel surface"]');
-    for (let frame = 0; frame < 10 && document.activeElement !== trigger; frame++) {
-      await act(() => vi.advanceTimersToNextFrame());
-    }
-    expect(document.activeElement).toBe(trigger);
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
     input.remove();
   });
 
   it("does not open over another popup or during text composition", async () => {
-    using _timers = fakeTimers();
     await using surface = await createTestSurface();
     const { container, renderPanel } = surface;
 
@@ -265,7 +244,7 @@ describe("right panel new-tab shortcut", () => {
     for (const state of ["data-open", "data-ending-style"]) {
       dialog.setAttribute(state, "");
       expect((await press("f")).defaultPrevented, state).toBe(false);
-      expect(addFiles, state).not.toHaveBeenCalled();
+      expect(surface.addFiles, state).not.toHaveBeenCalled();
       expect((await press("t", { metaKey: true })).defaultPrevented, state).toBe(false);
       expect(document.querySelector('[role="menu"]'), state).toBeNull();
       dialog.removeAttribute(state);
@@ -273,7 +252,6 @@ describe("right panel new-tab shortcut", () => {
   });
 
   it("supports arrow keys with an existing tab in sheet mode and clears the menu on close", async () => {
-    using _timers = fakeTimers();
     await using surface = await createTestSurface();
     const { renderPanel } = surface;
 
@@ -288,7 +266,7 @@ describe("right panel new-tab shortcut", () => {
     await press("ArrowDown");
     expect(document.activeElement?.textContent).toContain("Files");
     await press("Enter");
-    expect(addFiles).toHaveBeenCalledOnce();
+    expect(surface.addFiles).toHaveBeenCalledOnce();
     await press("t", { metaKey: true });
     await renderPanel({ ...panel, open: false });
     expect(document.querySelector('[role="menu"]:not([data-closed])')).toBeNull();
