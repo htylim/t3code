@@ -1,5 +1,19 @@
 # Fork journal
 
+## 2026-10-25 - Keep hidden sidebar actions out of the row layout
+
+- Upstream baseline: `03d1a90915`.
+- Hidden row actions no longer reserve width beside timestamps and provider icons. Hover,
+  keyboard focus, and an open Snooze menu put the controls into the layout. Metadata leaves
+  the layout while the controls replace it; single-card Woke notifications remain available.
+  Remove the opacity crossfade so the two clusters do not overlap during the layout change.
+- Browser-panel checks covered grouped and individual cards with redesign off and on,
+  keyboard entry into hidden actions, hover exit, and an open Snooze menu. Idle metadata
+  reaches the same right edge instead of leaving 109 pixels for hidden controls. Screenshot
+  capture still timed out, so visual verification used rendered geometry and computed styles.
+  `check:changed HEAD` passed formatting, lint, both unused-code checks, and affected-package
+  typechecks. Diff checks passed. No UI test was added for this visual layout fix.
+
 ## 2026-10-25 - Integrate upstream through 03d1a90915
 
 - Upstream baseline: `03d1a909153d593805a80b4c691eda31ac3f3c46`, 131 commits after

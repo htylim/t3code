@@ -1643,7 +1643,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   {pinIndicator}
                 </>
               )}
-              {/* Reserve metadata and action widths so hover cannot shift the pin or Woke label. */}
               {sortable?.isDragging ? (
                 dragDestination
               ) : (
@@ -1662,9 +1661,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         : "pointer-events-none",
                       (!isWokeStatus || props.workspaceRowPosition) &&
                         showHoverActions &&
-                        "group-has-[:focus-visible]/sidebar-status-slot:opacity-0 group-has-[:focus-visible]/sidebar-status-slot:pointer-events-none group-any-hover/sidebar-row:opacity-0 group-any-hover/sidebar-row:pointer-events-none",
-                      "flex items-center self-center justify-self-end gap-1.5 tabular-nums text-secondary-label transition-opacity [grid-area:1/1]",
-                      snoozeMenuOpen && "pointer-events-none opacity-0",
+                        "group-has-[:focus-visible]/sidebar-status-slot:absolute group-has-[:focus-visible]/sidebar-status-slot:right-0 group-has-[:focus-visible]/sidebar-status-slot:opacity-0 group-has-[:focus-visible]/sidebar-status-slot:pointer-events-none group-any-hover/sidebar-row:absolute group-any-hover/sidebar-row:right-0 group-any-hover/sidebar-row:opacity-0 group-any-hover/sidebar-row:pointer-events-none",
+                      "flex items-center self-center gap-1.5 tabular-nums text-secondary-label",
+                      snoozeMenuOpen && "pointer-events-none absolute right-0 opacity-0",
                     )}
                   >
                     {props.workspaceRowPosition ? (
@@ -1771,11 +1770,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       className={cn(
                         // Mouse clicks leave Settle focused; only keyboard focus should keep
                         // the actions visible after the pointer leaves.
-                        "pointer-events-none flex items-stretch justify-self-end opacity-0 transition-opacity has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
-                        isWokeStatus && !props.workspaceRowPosition
-                          ? "[grid-area:1/2]"
-                          : "[grid-area:1/1]",
-                        snoozeMenuOpen && "pointer-events-auto opacity-100",
+                        "pointer-events-none absolute inset-y-0 right-0 flex items-stretch opacity-0 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:static has-[:focus-visible]:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:static group-any-hover/sidebar-row:opacity-100",
+                        snoozeMenuOpen && "pointer-events-auto static opacity-100",
                       )}
                     >
                       {unpostponeButton}
