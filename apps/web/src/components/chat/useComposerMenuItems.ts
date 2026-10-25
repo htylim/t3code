@@ -30,7 +30,7 @@ import {
   type EnvironmentQueryTarget,
 } from "~/state/pullRequests";
 import { useEnvironmentQuery } from "~/state/query";
-import { useComposerPathSearch, useDebouncedValue } from "~/state/queries";
+import { useComposerPathSearch, useDebouncedValue, useThreadSearch } from "~/state/queries";
 import {
   matchesPullRequestQuery,
   rankPullRequestMatches,
@@ -98,6 +98,12 @@ export function useComposerMenuItems({
     isPathTrigger || composerTriggerKind === "thread",
   );
   const environmentProjects = useProjects();
+  // Search also mounts older settled threads omitted from the initial shell.
+  useThreadSearch(
+    isPathTrigger || composerTriggerKind === "thread" ? [environmentId] : [],
+    composerTrigger?.query ?? "",
+    { titlesOnly: true },
+  );
   const workspaceEntries = useComposerPathSearch({
     environmentId,
     cwd: isPathTrigger ? gitCwd : null,

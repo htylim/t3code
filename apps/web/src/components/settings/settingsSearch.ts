@@ -30,6 +30,7 @@ export type SettingsPath =
   | "/settings/source-control"
   | "/settings/storage"
   | "/settings/connections"
+  | "/settings/beta"
   | "/settings/archived";
 
 export type SettingsSearchScope =
@@ -60,6 +61,7 @@ export interface SettingsSearchItem {
   readonly localEnvironmentOnly?: boolean;
   readonly wslAvailableOnly?: boolean;
   readonly managedTunnelOnly?: boolean;
+  readonly redesignOnly?: boolean;
   readonly secondary?: boolean;
   readonly requiresThreadAutoSettlement?: boolean;
 }
@@ -75,6 +77,7 @@ export interface SettingsSearchAvailability {
   readonly isWslSettingsRowVisible: boolean;
   readonly hasThreadAutoSettlement: boolean;
   readonly managedTunnelActive?: boolean;
+  readonly redesignEnabled?: boolean;
 }
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
@@ -91,6 +94,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/source-control": "Source Control",
   "/settings/storage": "Storage",
   "/settings/connections": "Connections",
+  "/settings/beta": "Beta",
   "/settings/archived": "Archive",
 };
 
@@ -266,6 +270,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["wide full width column layout messages composer monitor"],
   },
   {
+    id: "sidebar-project-icon-colors",
+    title: "Colored project icons",
+    to: "/settings/appearance",
+    searchTerms: ["sidebar favicon logo grayscale gray color"],
+    redesignOnly: true,
+  },
+  {
     id: "math-rendering",
     title: "Render math",
     to: "/settings/appearance",
@@ -353,21 +364,34 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "snooze-limited-threads",
-    title: "Snooze limited threads",
+    title: "Snooze until limits reset",
     to: "/settings/general",
     searchTerms: ["usage quota rate limit reset wake recover continue"],
   },
   {
     id: "auto-resume-limited-threads",
-    title: "Auto-resume limited threads",
+    title: "Resume after usage limits",
     to: "/settings/general",
     searchTerms: ["usage quota rate limit reset recover continue"],
   },
   {
+    id: "new-design",
+    title: "New design",
+    to: "/settings/beta",
+    searchTerms: ["beta redesign look style sidebar composer gray quieter classic"],
+  },
+  {
     id: "working-shelf",
-    title: "Working section (beta)",
-    to: "/settings/general",
-    searchTerms: ["hide fold running monitoring threads inbox sidebar shelf"],
+    title: "Working section",
+    to: "/settings/beta",
+    searchTerms: ["beta hide fold running monitoring threads inbox sidebar shelf"],
+  },
+  {
+    id: "guest-links",
+    title: "Guest links",
+    to: "/settings/beta",
+    scope: "environment",
+    searchTerms: ["beta share guest invite link teammate watch t3 connect tunnel"],
   },
   {
     id: "auto-settle-inactive-threads",
@@ -1064,6 +1088,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/storage": "project-defaults",
   "/settings/connections": "connections",
   "/settings/scheduled-tasks": null,
+  "/settings/beta": null,
   "/settings/archived": "project-defaults",
 };
 
@@ -1178,7 +1203,8 @@ export function filterAvailableSettingsSearchItems(
       (!item.localEnvironmentOnly || !availability.localEnvironmentDisabled) &&
       (!item.wslAvailableOnly || availability.isWslSettingsRowVisible) &&
       (!item.requiresThreadAutoSettlement || availability.hasThreadAutoSettlement) &&
-      (!item.managedTunnelOnly || availability.managedTunnelActive === true),
+      (!item.managedTunnelOnly || availability.managedTunnelActive === true) &&
+      (!item.redesignOnly || availability.redesignEnabled === true),
   );
 }
 

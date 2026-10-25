@@ -107,6 +107,7 @@
       // Fonts are configured as asset paths; Expo autolinks the native packages.
       "ignoreDependencies": [
         "@expo-google-fonts/dm-sans",
+        "@t3tools/mobile-highlights-native",
         "@t3tools/mobile-review-diff-native",
         "@t3tools/mobile-terminal-native",
       ],
@@ -114,6 +115,19 @@
     "apps/mobile/modules/t3-source-text": {
       // React Native codegen discovers component specifications by filename.
       "entry": ["src/*NativeComponent.ts!"],
+    },
+    "infra/task-cache": {
+      "ignore": ["vendor/**"],
+      // The bootstrap and Vite+ hook are loaded by shell/package configuration.
+      "entry": [
+        "alchemy.run.ts!",
+        "scripts/install.ts",
+        "scripts/install-ci.ts",
+        "src/runHook.ts",
+        "src/flush.ts",
+        "src/nativeRunHook.js",
+        "src/preload.mjs",
+      ],
     },
     "infra/relay": {
       "entry": ["alchemy.run.ts!", "src/persistence/schema.ts!"],

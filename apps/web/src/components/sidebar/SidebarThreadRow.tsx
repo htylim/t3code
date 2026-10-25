@@ -50,6 +50,7 @@ import {
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
+  UserRoundIcon,
   XIcon,
 } from "lucide-react";
 import {
@@ -116,6 +117,7 @@ import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } f
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { useThreadHasUnsentDraft } from "../../composerDraftStore";
+import { useClientSettings } from "../../hooks/useSettings";
 
 // The fields thread rows show. Provider status pushes refresh `checkedAt`,
 // status and auth on every provider; leaving those out keeps each
@@ -202,7 +204,7 @@ function SidebarProviderStack(props: {
       acpRegistryIconUrl={currentEntry.acpRegistryIconUrl}
       showBadge={showInstanceBadge}
       size="compact"
-      iconClassName="opacity-60"
+      iconClassName="opacity-60 redesign:opacity-50 redesign:grayscale"
     />
   );
   if (stack.length === 1) {
@@ -700,6 +702,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     wokeAtDate !== null &&
     (lastVisitedDate === null || lastVisitedDate < wokeAtDate) &&
     thread.settledOverride !== "settled";
+  const projectIconColors = useClientSettings((s) => s.sidebarProjectIconColors);
   const shouldRecede = shouldRecedeSidebarThread({
     status,
     isUnread,
@@ -712,7 +715,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       ? {
           label: thread.goal?.status === "active" ? "Goal" : "Working",
           icon: "working" as const,
-          className: "text-info",
+          className: "text-info-foreground",
         }
       : status === "waiting"
         ? {
@@ -732,31 +735,37 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 icon: "input" as const,
                 className: "text-indigo-600 dark:text-indigo-300",
               }
-            : status === "limited"
+            : status === "request"
               ? {
-                  label: "Limited",
-                  icon: "failed" as const,
-                  className: "text-warning",
+                  label: "Request",
+                  icon: "request" as const,
+                  className: "text-guest-foreground",
                 }
-              : status === "failed"
+              : status === "limited"
                 ? {
-                    label: "Failed",
+                    label: "Limited",
                     icon: "failed" as const,
-                    className: "text-error",
+                    className: "text-warning-foreground",
                   }
-                : isWoke
+                : status === "failed"
                   ? {
-                      label: "Woke",
-                      icon: "woke" as const,
-                      className: "text-warning",
+                      label: "Failed",
+                      icon: "failed" as const,
+                      className: "text-error-foreground",
                     }
-                  : isUnread
+                  : isWoke
                     ? {
-                        label: "Done",
-                        icon: "done" as const,
-                        className: "text-success",
+                        label: "Woke",
+                        icon: "woke" as const,
+                        className: "text-warning-foreground",
                       }
-                    : null;
+                    : isUnread
+                      ? {
+                          label: "Done",
+                          icon: "done" as const,
+                          className: "text-success-foreground",
+                        }
+                      : null;
   const isWokeStatus = topStatus?.icon === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
@@ -1012,11 +1021,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
 
   const rowSurfaceClassName = cn(
     "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-    variantAction === "unsettle" && "[&:not(:hover):not(:focus-within)_*]:text-secondary-label/70",
+    variantAction === "unsettle" &&
+      !props.isActive &&
+      "[&:not(:hover):not(:focus-within)_*]:text-secondary-label/70",
     props.isActive
-      ? "bg-sidebar-row-active text-sidebar-foreground"
+      ? "bg-sidebar-row-active text-sidebar-foreground light:shadow-xs light:ring-1 light:ring-inset light:ring-sidebar-border/70"
       : isSelected || props.sweepAction !== null
-        ? "bg-sidebar-row-selected text-sidebar-foreground"
+        ? "bg-sidebar-row-selected text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
         : hasUnsentDraft
           ? cn(draftSurfaceClassName, "text-sidebar-foreground")
           : shouldRecede
@@ -1097,18 +1108,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             ? cn(
                 "truncate",
                 shouldRecede
-                  ? "text-secondary-label"
-                  : isUnread || isWoke || status === "input"
+                  ? "text-secondary-label redesign:text-foreground/75 redesign:group-hover/sidebar-row:text-foreground redesign:group-focus-visible/sidebar-row:text-foreground"
+                  : isUnread || isWoke || status === "input" || status === "request"
                     ? "text-foreground"
                     : status === "failed"
                       ? "text-foreground/95"
-                      : "text-foreground/90",
+                      : "text-foreground/90 redesign:text-foreground",
               )
             : cn(
                 "truncate group-focus-within/sidebar-row:text-foreground group-hover/sidebar-row:text-foreground",
                 shouldRecede
                   ? "text-secondary-label/70"
-                  : props.isActive || isWoke || status === "input"
+                  : props.isActive || isWoke || status === "input" || status === "request"
                     ? "text-foreground"
                     : isUnread
                       ? "text-muted-foreground"
@@ -1403,12 +1414,20 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const workspaceHeader = (
     <>
       {props.project ? (
-        <ProjectFavicon project={props.project} className="size-4 shrink-0" />
+        <ProjectFavicon
+          project={props.project}
+          className={cn(
+            "size-4 shrink-0",
+            !props.isActive &&
+              !projectIconColors &&
+              "redesign:opacity-60 redesign:grayscale redesign:group-focus-visible/sidebar-row:opacity-100 redesign:group-focus-visible/sidebar-row:grayscale-0 redesign:group-any-hover/sidebar-row:opacity-100 redesign:group-any-hover/sidebar-row:grayscale-0 redesign:group-any-hover/workspace-header:opacity-100 redesign:group-any-hover/workspace-header:grayscale-0",
+          )}
+        />
       ) : null}
       <div
         className={cn(
           "flex min-w-0 flex-1 items-center gap-1.5 text-secondary-label text-xs",
-          shouldRecede ? "font-normal" : "font-medium",
+          shouldRecede ? "font-normal" : "font-medium redesign:font-normal",
         )}
       >
         {props.projectDisplayName ? (
@@ -1446,7 +1465,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       {workspaceBranch ? (
         <>
           <ThreadWorktreeIndicator thread={thread} />
-          <span className="flex min-w-0 flex-1 text-muted-foreground/40">
+          <span className="flex min-w-0 flex-1 text-muted-foreground/40 redesign:text-inherit">
             <MiddleTruncate value={workspaceBranch} showTitle={false} />
           </span>
         </>
@@ -1708,6 +1727,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                             <CircleDotDashedIcon aria-hidden className="size-4 shrink-0" />
                           ) : topStatus.icon === "input" ? (
                             <MessageCircleQuestionIcon aria-hidden className="size-4 shrink-0" />
+                          ) : topStatus.icon === "request" ? (
+                            <UserRoundIcon aria-hidden className="size-4 shrink-0" />
                           ) : topStatus.icon === "approval" ? (
                             <ShieldQuestionIcon aria-hidden className="size-4 shrink-0" />
                           ) : topStatus.icon === "failed" ? (
