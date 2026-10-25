@@ -1,5 +1,54 @@
 # Fork journal
 
+## 2026-10-25 - Integrate upstream through 03d1a90915
+
+- Upstream baseline: `03d1a909153d593805a80b4c691eda31ac3f3c46`, 131 commits after
+  `d53873b6a4799e87afd63c8d288ef0089f5a3748`. Merge on
+  `integration/upstream-2026-10-25` from fork commit `a61fc6f61c59`. Leave `fork` and
+  `main` unchanged. Upstream migrations arrive unchanged, with no fork migration.
+- Keep named and colored worktrees, workspace editing and grouping, Postponed, side chats,
+  transient history cleanup, scoped percent references, selected-text actions, HTML citations
+  and storage compatibility, navigation shortcuts, usage exclusions, narrow tables, and Fork
+  identity. Upstream main does not include its separate side-chats development branch.
+- Adapt the shared fork workspace header to the redesign's project-icon and text styling.
+  Worktree pills retain their chosen colors. Keep grouped card boundaries, section counts,
+  postponed markers, and hover actions alongside upstream's inbox returns and paged Settled
+  shelf. Percent pickers use upstream's thread search while retaining project/environment scope.
+- Move Fork settings into upstream's chat settings route layout. Keep guest sharing actions
+  alongside fork workspace and side-chat actions. Register retained fork effects in upstream's
+  new effect budget and shorten merge-sensitive comments without dropping their constraints.
+- Fix a browser-test state leak: workspace menu fixtures reset named-worktree choices before
+  mounting. The combined browser run reproduced a color assertion failure before this reset;
+  all retained browser files passed together afterward.
+- Automated verification: 743 web unit tests, 214 shared/contracts/client/packaging tests,
+  162 retained browser tests, four additional Undo/provider-settings browser tests, and 49
+  selected React Compiler cases passed. The real headless browser passed all 12 HTML-rendering
+  cases. Server suites passed 662 cases, with ten opt-in cases skipped and one failure below.
+- Scoped contracts, shared, client-runtime, server, web, desktop, and mobile typechecks passed.
+  Web and server production bundles passed, including the transient deletion worker. Targeted
+  formatting and lint passed with existing warnings. Scoped unused-file/dependency and export
+  checks passed. `check:changed` expanded the integration into all packages, so verification used
+  explicit affected-package checks instead of completing a repo-wide run.
+- Integrated Browser-panel verification used 172 copied stopped threads across five projects,
+  copied HTML attachments, and a disposable Git project. Checked redesign off and on, light
+  and dark appearance, workspace grouping and individual cards, create/reuse/rename/color,
+  all three pill locations, bulk Postpone/Un-postpone and Settle, button and keyboard Undo,
+  F2 rename, continue-workspace creation, selected-text side-chat reuse, citations/comments,
+  project/environment percent chips, Cmd+W panel closure, hover reveal/dismissal, and account
+  usage inclusion round trips. Fork branding fixtures verified H3/T3, both Forge images, and
+  persistence after reload. Inline HTML citation selection used a temporary sandbox driver.
+- Personal GPT-6-Luna with low reasoning completed short main and side-chat fixture turns.
+  Locally inspected owner metadata and confirmed transient thread deletion and an empty
+  client cleanup registry. An attempted provider read of the owning thread did not run:
+  automatic approval review rejected disclosure of a separate private conversation.
+- Limits: the unchanged cleanup case `compares the checked-out branch without a full status`
+  expects a corrupt Git file to report `kept`; this host reports `failed` with Git's invalid
+  repository diagnostic. The checkout remains untouched. Browser screenshots timed out and
+  requested viewport resizing did not change the measured page width. Narrow wrapping has
+  focused browser coverage, not a completed integrated narrow-viewport pass. Native Electron,
+  mobile runtime, remote/relay/tunnel, and installers were not exercised. No live-state writes,
+  installed-app changes, push, PR, or publication occurred.
+
 ## 2026-10-25 - Cite rendered HTML passages
 
 - Upstream baseline: `d53873b6a4`.
