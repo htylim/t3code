@@ -175,9 +175,17 @@ export function useQuietThreadShell(ref: ScopedThreadRef | null): EnvironmentThr
   );
 }
 
-/** Every thread shell, held through streaming ticks; see quietThreadShellAtom. */
+/** Visible thread shells, held through streaming ticks; see quietThreadShellAtom. */
 export function useQuietThreadShells(): ReadonlyArray<EnvironmentThreadShell> {
-  return useAtomValue(environmentThreadShells.quietThreadShellsAtom);
+  const threads = useAtomValue(environmentThreadShells.quietThreadShellsAtom);
+  const transientByThreadKey = useTransientSideChatStore((state) => state.byThreadKey);
+  return threads.filter(
+    (thread) =>
+      !isTransientSideChatIn(transientByThreadKey, {
+        environmentId: thread.environmentId,
+        threadId: thread.id,
+      }),
+  );
 }
 
 export function useChildThreadInputs(ref: ScopedThreadRef | null) {
