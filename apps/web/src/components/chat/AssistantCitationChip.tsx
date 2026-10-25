@@ -1,6 +1,7 @@
 import type { AssistantCitation } from "@t3tools/contracts";
 import {
   assistantCitationLabel,
+  assistantCitationSource,
   serializeAssistantCitation,
 } from "@t3tools/shared/assistantCitations";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -93,6 +94,7 @@ export function AssistantCitationChip({
     ? {
         contextElement: activeSourceAnchor.source,
         getBoundingClientRect: () => {
+          if (activeSourceAnchor.kind === "html") return activeSourceAnchor.getBoundingClientRect();
           const rects = activeSourceAnchor.range.getClientRects();
           const rect =
             rects.item(rects.length - 1) ?? activeSourceAnchor.range.getBoundingClientRect();
@@ -107,9 +109,10 @@ export function AssistantCitationChip({
       }
     : undefined;
   const label = assistantCitationLabel(citation);
+  const citationSource = assistantCitationSource(citation);
   const sourceLinkProps = {
     to: "/$environmentId/$threadId" as const,
-    params: { environmentId: citation.environmentId, threadId: citation.threadId },
+    params: { environmentId: citationSource.environmentId, threadId: citationSource.threadId },
     hash: assistantCitationHash(citation),
     "data-markdown-copy": serializeAssistantCitation(citation),
     resetScroll: false,
@@ -269,6 +272,9 @@ function AssistantCitationQuote({ citation }: { citation: AssistantCitation }) {
       <blockquote className="border-l-2 border-border pl-3 text-muted-foreground">
         {citation.text}
       </blockquote>
+      {citation.version === 2 && citation.source.kind === "html-attachment" ? (
+        <p className="text-xs text-muted-foreground">From HTML preview: {citation.source.title}</p>
+      ) : null}
       {citation.comment ? <p>{citation.comment}</p> : null}
     </div>
   );

@@ -498,6 +498,14 @@
     "./cloneUrl": {
       "types": "./src/cloneUrl.ts",
       "import": "./src/cloneUrl.ts"
+    },
+    "./assistantCitationText": {
+      "types": "./src/assistantCitationText.ts",
+      "import": "./src/assistantCitationText.ts"
+    },
+    "./htmlRenderCitation": {
+      "types": "./src/htmlRenderCitation.ts",
+      "import": "./src/htmlRenderCitation.ts"
     }
   },
   "scripts": {

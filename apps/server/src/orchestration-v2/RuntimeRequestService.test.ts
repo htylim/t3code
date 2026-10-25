@@ -1,6 +1,7 @@
 import { assert, it, vi } from "@effect/vitest";
 import {
   NodeId,
+  EnvironmentId,
   ProviderSessionId,
   RuntimeRequestId,
   ThreadId,
@@ -15,6 +16,74 @@ import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAda
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as RuntimeRequestService from "./RuntimeRequestService.ts";
+import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
+
+it.effect(
+  "delivers readable HTML quotes in question answers without changing saved answers",
+  () => {
+    const threadId = ThreadId.make("answer-thread");
+    const providerSessionId = ProviderSessionId.make("answer-session");
+    const requestId = RuntimeRequestId.make("answer-request");
+    const quote = serializeAssistantCitation({
+      version: 2,
+      source: {
+        kind: "html-attachment",
+        environmentId: EnvironmentId.make("source-environment"),
+        threadId,
+        itemId: "html-row",
+        attachmentId: "html-page",
+        title: "Chart choices",
+      },
+      text: "Use a native table.",
+      comment: "Explain this choice.",
+      start: 0,
+      end: 19,
+      prefix: "",
+      suffix: "",
+    });
+    const answers = Object.freeze({
+      question: quote,
+      options: ["Keep this option", quote],
+      structured: { selected: true },
+    });
+    const respondToRuntimeRequest = vi.fn(
+      (_input: ProviderAdapter.ProviderAdapterV2RuntimeRequestResponseInput) => Effect.void,
+    );
+    const layerTest = RuntimeRequestService.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.mock(ProjectionStore.ProjectionStoreV2)({
+            getRuntimeRequest: () =>
+              Effect.succeed({
+                status: "resolved",
+                responseCapability: { type: "live", providerSessionId },
+              } as never),
+          }),
+          Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({
+            get: () => Effect.succeed(Option.some({ respondToRuntimeRequest } as never)),
+          }),
+        ),
+      ),
+    );
+    return Effect.gen(function* () {
+      yield* (yield* RuntimeRequestService.RuntimeRequestServiceV2).respond({
+        threadId,
+        providerSessionId,
+        requestId,
+        answers,
+      });
+      const delivered = respondToRuntimeRequest.mock.calls[0]?.[0].answers;
+      assert.include(String(delivered?.question), '"text": "Use a native table."');
+      assert.include(String(delivered?.question), '"kind": "html-attachment"');
+      assert.notInclude(String(delivered?.question), "t3-citation://");
+      assert.equal((delivered?.options as string[])[0], "Keep this option");
+      assert.include((delivered?.options as string[])[1]!, '"comment": "Explain this choice."');
+      assert.deepEqual(delivered?.structured, { selected: true });
+      assert.equal(answers.question, quote);
+      assert.deepEqual(answers.options, ["Keep this option", quote]);
+    }).pipe(Effect.provide(layerTest));
+  },
+);
 
 it.effect.each(["expired", "resolved"] as const)(
   "responds only to resolved requests and preserves feedback (%s)",

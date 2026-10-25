@@ -10,6 +10,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import { expandAssistantCitationsForProvider } from "@t3tools/shared/assistantCitations";
 
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
@@ -47,6 +48,13 @@ export class RuntimeRequestResponseExecutionError extends Schema.TaggedError<Run
 }
 
 const isRuntimeRequestResponseExecutionError = Schema.is(RuntimeRequestResponseExecutionError);
+
+/** Expands textual answers and answer lists while preserving structured provider data. */
+function expandAnswerCitations(answer: unknown): unknown {
+  if (typeof answer === "string") return expandAssistantCitationsForProvider(answer);
+  if (Array.isArray(answer)) return answer.map(expandAnswerCitations);
+  return answer;
+}
 
 export interface RuntimeRequestServiceV2Shape {
   readonly respond: (input: {
@@ -116,11 +124,22 @@ export const layer: Layer.Layer<
               requestId: input.requestId,
             });
           }
+          let providerAnswers: ProviderUserInputAnswers | undefined;
+          if (input.answers !== undefined) {
+            providerAnswers = Object.fromEntries(
+              Object.entries(input.answers).map(([questionId, answer]) => [
+                questionId,
+                expandAnswerCitations(answer),
+              ]),
+            );
+          }
           yield* session.value.respondToRuntimeRequest({
             requestId: input.requestId,
             ...(input.decision === undefined ? {} : { decision: input.decision }),
-            ...(input.feedback === undefined ? {} : { feedback: input.feedback }),
-            ...(input.answers === undefined ? {} : { answers: input.answers }),
+            ...(input.feedback === undefined
+              ? {}
+              : { feedback: expandAssistantCitationsForProvider(input.feedback) }),
+            ...(providerAnswers === undefined ? {} : { answers: providerAnswers }),
           });
         },
         (effect, input) =>

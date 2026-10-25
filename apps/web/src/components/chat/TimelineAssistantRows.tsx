@@ -22,6 +22,9 @@ import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../times
 import { useV2ItemSupport } from "../../state/v2ItemSupport";
 import { TimelineRowCtx, TimelineRowActivityCtx, type TimelineRow } from "./timelineRowContext";
 import { MESSAGE_HEADING_LEVEL, MessageAuthorHeading } from "./TimelineRowParts";
+import { assistantCitationSource } from "@t3tools/shared/assistantCitations";
+import { toastManager } from "../ui/toast";
+import type { HtmlCitationContext } from "./HtmlCitationActions";
 
 export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
@@ -243,6 +246,66 @@ export function HtmlRenderTimelineRow({
   const ctx = use(TimelineRowCtx);
   const { onAppFullscreenChange } = ctx;
   const onFullscreenChange = (fullscreen: boolean) => onAppFullscreenChange(row.id, fullscreen);
+  const requestedSource =
+    ctx.citationRequest && assistantCitationSource(ctx.citationRequest.citation);
+  const isRequestedAttachment =
+    requestedSource?.kind === "html-attachment" &&
+    requestedSource.itemId === row.id &&
+    requestedSource.attachmentId === row.htmlRender.attachmentId;
+  const request = isRequestedAttachment ? ctx.citationRequest : null;
+  /** Scrolls the virtual timeline only after the frame has resolved its quote. */
+  const revealQuote = (rect: DOMRect, found: boolean) => {
+    const list = ctx.listRef.current;
+    const scrollNode = list?.getScrollableNode();
+    if (!request || !list || !(scrollNode instanceof HTMLElement)) return;
+    const activation = request.activationRef.current;
+    if (activation.scrolled || activation.dismissed) return;
+    const offset = Math.max(
+      0,
+      Math.min(
+        scrollNode.scrollHeight - scrollNode.clientHeight,
+        scrollNode.scrollTop +
+          rect.top -
+          scrollNode.getBoundingClientRect().top -
+          Math.min(120, scrollNode.clientHeight / 3),
+      ),
+    );
+    void list.scrollToOffset({ offset, animated: false }).then(
+      () => {
+        if (activation.dismissed) return;
+        activation.scrolled = true;
+        request.onComplete();
+        if (!found)
+          toastManager.add({
+            type: "warning",
+            title: "The quoted text has changed",
+            description: "Showing the source HTML preview. The saved quote is unchanged.",
+          });
+      },
+      () => {
+        activation.dismissed = true;
+        request.onComplete();
+        toastManager.add({ type: "warning", title: "Could not open the cited HTML preview" });
+      },
+    );
+  };
+
+  let citation: HtmlCitationContext | undefined;
+  if (ctx.threadRef && ctx.onCiteAssistantText) {
+    citation = {
+      source: {
+        kind: "html-attachment",
+        ...ctx.threadRef,
+        itemId: row.id,
+        attachmentId: row.htmlRender.attachmentId,
+        title: row.htmlRender.title,
+      },
+      onCite: ctx.onCiteAssistantText,
+      onAskAboutSelection: ctx.onAskAboutSelection,
+      request,
+      onReveal: revealQuote,
+    };
+  }
 
   return (
     <div className="min-w-0 px-1">
@@ -252,6 +315,7 @@ export function HtmlRenderTimelineRow({
         htmlRender={row.htmlRender}
         threadRef={ctx.threadRef ?? undefined}
         onFullscreenChange={onFullscreenChange}
+        citation={citation}
       />
     </div>
   );

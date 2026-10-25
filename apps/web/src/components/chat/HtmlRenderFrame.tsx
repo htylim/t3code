@@ -16,6 +16,7 @@ import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { HtmlRenderDialog } from "./HtmlRenderDialog";
 import { observeResize } from "~/lib/observeResize";
+import type { HtmlCitationContext } from "./HtmlCitationActions";
 
 const MIN_URL_LIFE_MS = 5 * 60_000;
 
@@ -24,6 +25,7 @@ export function HtmlRenderFrame(props: {
   readonly htmlRender: HtmlRenderReference;
   readonly threadRef: ScopedThreadRef | undefined;
   readonly onFullscreenChange?: (fullscreen: boolean) => void;
+  readonly citation?: HtmlCitationContext | undefined;
 }) {
   const { attachmentId, title } = props.htmlRender;
   const boxRef = useRef<HTMLDivElement>(null);
@@ -89,6 +91,26 @@ export function HtmlRenderFrame(props: {
     );
   }, [cacheFailed, cachedExpiresAt, cachedUrl, refresh, src]);
 
+  let expandedCitation: HtmlCitationContext | undefined;
+  const citationContext = props.citation;
+  if (citationContext) {
+    expandedCitation = {
+      ...citationContext,
+      request: null,
+      onCite: (citation) => {
+        setExpandedSrc(null);
+        return citationContext.onCite(citation);
+      },
+    };
+    const askAboutSelection = citationContext.onAskAboutSelection;
+    if (askAboutSelection) {
+      expandedCitation.onAskAboutSelection = async (...args) => {
+        setExpandedSrc(null);
+        await askAboutSelection(...args);
+      };
+    }
+  }
+
   return (
     <div ref={boxRef} className="group/html-render relative" style={{ height }}>
       {src !== null ? (
@@ -100,6 +122,7 @@ export function HtmlRenderFrame(props: {
             className="block size-full"
             onContentHeight={setContentHeight}
             onFullscreenChange={onFullscreenChange}
+            citation={props.citation}
           />
           <div className="absolute end-2 top-2 flex gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/html-render:opacity-100 pointer-coarse:opacity-100">
             <Tooltip>
@@ -135,6 +158,7 @@ export function HtmlRenderFrame(props: {
               src={expandedSrc}
               title={title}
               threadRef={props.threadRef}
+              citation={expandedCitation}
               onClose={() => setExpandedSrc(null)}
             />
           ) : null}

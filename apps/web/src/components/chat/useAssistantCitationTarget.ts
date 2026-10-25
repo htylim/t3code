@@ -5,6 +5,29 @@ import type { TimelineEntry } from "../../session-logic";
 import type { MessagesTimelineRow } from "./MessagesTimeline.logic";
 import type { AssistantCitationRequest, AssistantCitationTarget } from "./AssistantCitationSource";
 import { toastManager } from "../ui/toast";
+import { assistantCitationSource } from "@t3tools/shared/assistantCitations";
+import type { AssistantCitation } from "@t3tools/contracts";
+
+/** Matches the durable source, including attachment identity when a turn contains several previews. */
+function matchesCitationSource(
+  citation: AssistantCitation,
+  entry: {
+    kind: string;
+    id: string;
+    message?: { id: string };
+    htmlRender?: { attachmentId: string };
+  },
+) {
+  const source = assistantCitationSource(citation);
+  if (source.kind === "assistant-message") {
+    return entry.kind === "message" && entry.message?.id === source.messageId;
+  }
+  return (
+    entry.kind === "html-render" &&
+    entry.id === source.itemId &&
+    entry.htmlRender?.attachmentId === source.attachmentId
+  );
+}
 
 export interface CitationHistoryPage {
   readonly loading: boolean;
@@ -89,9 +112,8 @@ export function useAssistantCitationTarget({
       setFinishedKey(navigation.target.key);
       toastManager.add({ type: "warning", title, description });
     };
-    const source = entries.find(
-      (entry) =>
-        entry.kind === "message" && entry.message.id === navigation.target.citation.messageId,
+    const source = entries.find((entry) =>
+      matchesCitationSource(navigation.target.citation, entry),
     );
     if (!source) {
       if (loadEarlier) {
@@ -114,16 +136,14 @@ export function useAssistantCitationTarget({
       );
       return;
     }
-    if (source.kind !== "message" || source.message.role !== "assistant") {
+    if (source.kind === "message" && source.message.role !== "assistant") {
       fail(
         "The citation does not refer to an assistant response",
         "The selected text is still saved in your citation.",
       );
       return;
     }
-    const index = rows.findIndex(
-      (row) => row.kind === "message" && row.message.id === navigation.target.citation.messageId,
-    );
+    const index = rows.findIndex((row) => matchesCitationSource(navigation.target.citation, row));
     if (index < 0) {
       const foldRunId = getTurnFoldRunId(source.id);
       if (foldRunId) onExpandTurn(foldRunId);
@@ -188,7 +208,7 @@ export function useAssistantCitationTarget({
   const positioning = request !== null && finishedKey !== request.key;
   const sourceRow =
     target && positioning
-      ? rows.find((row) => row.kind === "message" && row.message.id === target.citation.messageId)
+      ? rows.find((row) => matchesCitationSource(target.citation, row))
       : undefined;
   return {
     target,

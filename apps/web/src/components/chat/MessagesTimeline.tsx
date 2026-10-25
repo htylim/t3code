@@ -183,7 +183,7 @@ interface MessagesTimelineProps {
   citationHistoryLoading?: boolean;
   onCiteAssistantText?: (
     citation: AssistantCitation,
-    sourceAnchor: AssistantCitationSourceAnchor,
+    sourceAnchor?: AssistantCitationSourceAnchor,
   ) => boolean;
   isWorking: boolean;
   runlessWorkActive?: boolean;
@@ -928,6 +928,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
   }, [timelineViewportElement, rows.length, reportContentOverflow, chatWidth]);
 
   const sharedState: TimelineRowSharedState = {
+    onCiteAssistantText,
+    onAskAboutSelection,
     citationRequest: readyCitationRequest,
     listRef,
     timestampFormat,

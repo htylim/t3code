@@ -1,5 +1,6 @@
 import type { AssistantCitation } from "@t3tools/contracts";
 import {
+  assistantCitationSource,
   formatAssistantCitationHref,
   parseAssistantCitationHref,
 } from "@t3tools/shared/assistantCitations";
@@ -37,9 +38,10 @@ export function assistantCitationFromLocation(href: string) {
 
 /** A fresh activation lets the same link reveal its source again after dismissal. */
 export function assistantCitationNavigation(citation: AssistantCitation) {
+  const source = assistantCitationSource(citation);
   return {
     to: "/$environmentId/$threadId" as const,
-    params: { environmentId: citation.environmentId, threadId: citation.threadId },
+    params: { environmentId: source.environmentId, threadId: source.threadId },
     hash: assistantCitationHash(citation),
     resetScroll: false,
     state: { assistantCitationActivation: randomUUID() },

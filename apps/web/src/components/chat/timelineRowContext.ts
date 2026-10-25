@@ -19,8 +19,11 @@ import { type AssistantCitationTarget } from "./AssistantCitationSource";
 import { type MessagesTimelineRow, type WorkGroupScrollAnchor } from "./MessagesTimeline.logic";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { type HandoffTimelineRun } from "./V2LifecycleRow";
+import type { HtmlCitationContext } from "./HtmlCitationActions";
 
 export interface TimelineRowSharedState {
+  onCiteAssistantText?: HtmlCitationContext["onCite"] | undefined;
+  onAskAboutSelection?: HtmlCitationContext["onAskAboutSelection"] | undefined;
   citationRequest: AssistantCitationTarget | null;
   listRef: React.RefObject<LegendListRef | null>;
   timestampFormat: TimestampFormat;

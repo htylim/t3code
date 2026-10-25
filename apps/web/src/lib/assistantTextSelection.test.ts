@@ -9,13 +9,13 @@ import {
   formatAssistantCitationHref,
   parseAssistantCitationHref,
 } from "@t3tools/shared/assistantCitations";
-
 import {
-  type AssistantTextSelector,
-  captureAssistantTextSelection,
   createAssistantTextSelector,
   findAssistantCitationText,
-} from "./assistantTextSelection";
+  type AssistantTextSelector,
+} from "@t3tools/shared/assistantCitationText";
+
+import { captureAssistantTextSelection } from "./assistantTextSelection";
 
 function selector(
   text: string,

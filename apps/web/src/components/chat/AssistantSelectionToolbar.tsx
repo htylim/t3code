@@ -24,23 +24,34 @@ import {
 } from "~/lib/selectionActions";
 import { Button } from "../ui/button";
 
+export type AssistantToolbarSelection = {
+  citation: AssistantCitation;
+  position: SelectionActionPoint;
+  sourceAnchor: AssistantCitationSourceAnchor;
+  selectedMarkdown: string;
+};
+
 export function AssistantSelectionToolbar({
   viewport,
   threadRef,
   onCite,
   onAskAboutSelection,
+  externalSelection,
+  onDismissExternal,
+  onClearExternal,
+  portalContainer,
 }: {
   viewport: HTMLElement | null;
   threadRef: ScopedThreadRef;
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
   onAskAboutSelection?: SelectedTextThreadActionHandler;
+  externalSelection?: AssistantToolbarSelection | null;
+  onDismissExternal?: () => void;
+  onClearExternal?: () => void;
+  portalContainer?: HTMLElement;
 }) {
-  const [selection, setSelection] = useState<{
-    citation: AssistantCitation;
-    position: SelectionActionPoint;
-    sourceAnchor: AssistantCitationSourceAnchor;
-    selectedMarkdown: string;
-  } | null>(null);
+  const [nativeSelection, setSelection] = useState<AssistantToolbarSelection | null>(null);
+  const selection = externalSelection === undefined ? nativeSelection : externalSelection;
   const toolbarRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<ReturnType<typeof observeSelectionActions> | null>(null);
 
@@ -53,7 +64,7 @@ export function AssistantSelectionToolbar({
   }, [selection]);
 
   useEffect(() => {
-    if (!viewport) return;
+    if (!viewport || externalSelection !== undefined) return;
     const clear = () => setSelection(null);
     const update = (pointer: SelectionActionPoint | null) => {
       const nativeSelection = window.getSelection();
@@ -132,9 +143,8 @@ export function AssistantSelectionToolbar({
             : captured.selector.text,
         sourceAnchor: { source: captured.source, range: captured.range, viewport },
         citation: {
-          version: 1,
-          ...threadRef,
-          messageId: MessageId.make(messageId),
+          version: 2,
+          source: { kind: "assistant-message", ...threadRef, messageId: MessageId.make(messageId) },
           ...captured.selector,
         },
         position: resolveSelectionActionPosition({
@@ -182,23 +192,26 @@ export function AssistantSelectionToolbar({
       actions.dispose();
       actionsRef.current = null;
     };
-  }, [threadRef, viewport]);
+  }, [externalSelection, threadRef, viewport]);
 
   if (!selection) return null;
   const tooLong = selection.citation.text.length > ASSISTANT_CITATION_MAX_TEXT_LENGTH;
   const dismiss = () => {
     actionsRef.current?.cancel();
+    onDismissExternal?.();
     setSelection(null);
   };
   const cite = () => {
     if (tooLong || !onCite(selection.citation, selection.sourceAnchor)) return false;
-    window.getSelection()?.removeAllRanges();
+    if (onClearExternal) onClearExternal();
+    else window.getSelection()?.removeAllRanges();
     dismiss();
     return true;
   };
   const ask = (action: SelectedTextThreadAction) => {
     if (tooLong || !onAskAboutSelection) return;
-    window.getSelection()?.removeAllRanges();
+    if (onClearExternal) onClearExternal();
+    else window.getSelection()?.removeAllRanges();
     dismiss();
     void onAskAboutSelection(action, selection.citation, selection.selectedMarkdown);
   };
@@ -254,6 +267,6 @@ export function AssistantSelectionToolbar({
         </>
       ) : null}
     </div>,
-    document.body,
+    portalContainer ?? document.body,
   );
 }

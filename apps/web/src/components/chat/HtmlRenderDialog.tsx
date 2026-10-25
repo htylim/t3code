@@ -5,12 +5,14 @@ import { useRef, useState } from "react";
 import { HtmlRenderDocument } from "../files/BrowserDocumentFrame";
 import { Button } from "../ui/button";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
+import type { HtmlCitationContext } from "./HtmlCitationActions";
 
 export function HtmlRenderDialog(props: {
   readonly src: string;
   readonly title: string;
   readonly threadRef?: ScopedThreadRef | undefined;
   readonly onClose: () => void;
+  readonly citation?: HtmlCitationContext | undefined;
 }) {
   const [zoom, setZoom] = useState(1);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -42,6 +44,7 @@ export function HtmlRenderDialog(props: {
                 title={props.title}
                 threadRef={props.threadRef}
                 className="block size-full"
+                citation={props.citation}
               />
             </div>
           </div>

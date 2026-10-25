@@ -32,6 +32,7 @@ import { shortcutConflictKey } from "~/keybindings";
 import { useOpenChangeRequestLink } from "~/lib/openPullRequestLink";
 import { readLocalApi } from "~/localApi";
 import { cn } from "~/lib/utils";
+import { HtmlCitationActions, type HtmlCitationContext } from "../chat/HtmlCitationActions";
 import { primaryServerKeybindingsAtom, serverEnvironment } from "~/state/server";
 
 /**
@@ -119,6 +120,7 @@ export function HtmlRenderDocument(props: {
   readonly className?: string;
   readonly threadRef?: ScopedThreadRef | undefined;
   readonly onContentHeight?: (height: number) => void;
+  readonly citation?: HtmlCitationContext | undefined;
   /** Reports the image viewer opening and closing, so a virtualized row can stay mounted. */
   readonly onFullscreenChange?: ((fullscreen: boolean) => void) | undefined;
 }) {
@@ -298,7 +300,7 @@ export function HtmlRenderDocument(props: {
         title={props.title}
         // Never allow-same-origin: the opaque origin keeps the page out of the app's session.
         sandbox="allow-scripts allow-forms"
-        loading="lazy"
+        loading={props.citation?.request ? "eager" : "lazy"}
         onLoad={() => {
           setLoaded(true);
           // Covers a theme change that landed while the page was loading.
@@ -311,6 +313,9 @@ export function HtmlRenderDocument(props: {
         className={cn("border-0 scheme-light", props.className)}
         style={loaded ? { colorScheme: theme.appearance } : undefined}
       />
+      {props.citation ? (
+        <HtmlCitationActions frameRef={frameRef} loaded={loaded} context={props.citation} />
+      ) : null}
       {expandedImage !== null ? (
         <ExpandedImageDialog preview={expandedImage} onClose={() => setExpandedImage(null)} />
       ) : null}

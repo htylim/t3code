@@ -8,6 +8,7 @@ import {
   type KnownComposerContextRecord,
   type ThreadContextRecord,
 } from "@t3tools/contracts";
+import { expandAssistantCitationsForProvider } from "./assistantCitations.ts";
 
 const CONTEXT_PROTOCOL = "t3-context:";
 const COMPOSER_CONTEXT_HREF_PREFIX = `${CONTEXT_PROTOCOL}//v1/`;
@@ -288,12 +289,13 @@ function formatEnvelopeEntry(
   return `${open}>\n${escapeComposerContextPayloadText(body)}\n</${CONTEXT_ENTRY_TAG}>`;
 }
 
+/** Expands context records and saved quotes only for provider input, leaving persisted text intact. */
 export function projectComposerContextForProvider(input: {
   text: string;
   records: ReadonlyArray<ComposerContextRecord>;
 }): string {
   const occurrences = collectComposerContextReferences(input.text);
-  if (occurrences.length === 0) return input.text;
+  if (occurrences.length === 0) return expandAssistantCitationsForProvider(input.text);
   const recordsById = new Map<ComposerContextId, ComposerContextRecord | undefined>();
   for (const record of input.records) {
     recordsById.set(record.contextId, recordsById.has(record.contextId) ? undefined : record);
@@ -318,8 +320,9 @@ export function projectComposerContextForProvider(input: {
     );
     entries.push(entry);
   }
-  if (entries.length === 0) return body;
-  return `${body}\n\n<${CONTEXT_ENVELOPE_TAG} version="1">\n${entries.join("\n")}\n</${CONTEXT_ENVELOPE_TAG}>`;
+  const expandedBody = expandAssistantCitationsForProvider(body);
+  if (entries.length === 0) return expandedBody;
+  return `${expandedBody}\n\n<${CONTEXT_ENVELOPE_TAG} version="1">\n${entries.join("\n")}\n</${CONTEXT_ENVELOPE_TAG}>`;
 }
 
 // Thread reads are environment-local even when a draft moves between machines.

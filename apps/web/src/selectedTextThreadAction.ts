@@ -1,6 +1,9 @@
 import type { AssistantCitation, ScopedThreadRef } from "@t3tools/contracts";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
+import {
+  assistantCitationSource,
+  serializeAssistantCitation,
+} from "@t3tools/shared/assistantCitations";
 
 import { useComposerDraftStore, type DraftId } from "./composerDraftStore";
 import { useRightPanelStore } from "./rightPanelStore";
@@ -27,10 +30,14 @@ export function buildAskInNewThreadPrompt(input: {
   readonly selectedMarkdown: string;
   readonly sourceThreadTitle: string;
   readonly sourceThreadRef: ScopedThreadRef;
+  readonly citation?: AssistantCitation;
 }): string {
   const source = formatInlineContextReference(
     threadContextReference(threadContextRecord(input.sourceThreadRef, input.sourceThreadTitle)),
   );
+  if (input.citation && assistantCitationSource(input.citation).kind === "html-attachment") {
+    return `Regarding this selection from ${source}:\n\n${serializeAssistantCitation(input.citation)}\n\n`;
+  }
   return `Regarding this selection from ${source}:\n\n${markdownBlockquote(input.selectedMarkdown)}\n\n`;
 }
 

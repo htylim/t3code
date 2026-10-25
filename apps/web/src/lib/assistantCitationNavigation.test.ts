@@ -34,6 +34,28 @@ function createCitationRouter(initialEntry = "/environment-one/thread-one") {
 }
 
 describe("assistant citation navigation", () => {
+  it("returns to an HTML attachment's source thread and preserves its exact document identity", async () => {
+    const htmlCitation: AssistantCitation = {
+      version: 2,
+      source: {
+        kind: "html-attachment",
+        environmentId: EnvironmentId.make("source-environment"),
+        threadId: ThreadId.make("source-thread"),
+        itemId: "preview-two",
+        attachmentId: "html-two",
+        title: "Second preview",
+      },
+      text: "A selected passage",
+      start: 0,
+      end: 18,
+      prefix: "",
+      suffix: "",
+    };
+    const router = createCitationRouter();
+    await router.navigate(assistantCitationNavigation(htmlCitation));
+    expect(router.state.location.pathname).toBe("/source-environment/source-thread");
+    expect(assistantCitationFromLocation(router.state.location.href)).toEqual(htmlCitation);
+  });
   it("preserves encoded quote whitespace through router navigation and reload", async () => {
     const router = createCitationRouter();
     await router.navigate(assistantCitationNavigation(citation));

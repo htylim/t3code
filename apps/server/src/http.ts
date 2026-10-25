@@ -5,6 +5,7 @@ import {
   EnvironmentHttpApi,
 } from "@t3tools/contracts";
 import { isDevProxiedPath } from "@t3tools/shared/devProxy";
+import { injectHtmlRenderCitationBridge } from "@t3tools/shared/htmlRenderCitation";
 import {
   HTML_RENDER_CONTENT_SECURITY_POLICY,
   injectHtmlRenderStorageBootstrap,
@@ -201,7 +202,9 @@ export const assetFileResponse = Effect.fn("assetFileResponse")(function* (
       return HttpServerResponse.text("HTML file is too large to preview.", { status: 413 });
     }
     const body = new TextEncoder().encode(
-      injectHtmlRenderStorageBootstrap(new TextDecoder().decode(bytes)),
+      injectHtmlRenderStorageBootstrap(
+        injectHtmlRenderCitationBridge(new TextDecoder().decode(bytes)),
+      ),
     );
     // Existing signed URLs must not keep serving a pre-shim document from cache.
     headers["Cache-Control"] = "private, no-store";

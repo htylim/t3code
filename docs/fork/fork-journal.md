@@ -1,5 +1,25 @@
 # Fork journal
 
+## 2026-10-25 - Cite rendered HTML passages
+
+- Upstream baseline: `d53873b6a4`.
+- Web and desktop HTML previews use the regular citation controls, comments, and source navigation.
+  New v2 citations identify either an assistant message or an HTML attachment. Saved v1 links
+  remain readable without rewriting conversations or adding a database migration.
+- Provider input expands citations into readable quotes, comments, and source metadata. Stored
+  messages keep their citation links. HTML citations include the attachment title and identity,
+  without sending the entire document. Mobile continues displaying quotes and comments.
+- Serve-time injection supports existing HTML previews and compressed pages that replace their
+  document. The iframe keeps its opaque origin. Fullscreen citations return to the composer.
+- Verification: Regression tests fail against the original codec and provider delivery path.
+  Focused tests cover sandbox selection, source identity, comments, reload, changed passages,
+  document replacement, legacy links, and unchanged download bytes. Changed-file checks cover
+  formatting, lint, unused exports and dependencies, affected typechecks, and adjacent tests.
+- Integrated Browser-panel verification used an isolated data copy and the original Epic 13
+  attachment. Inline and fullscreen Cite, comments, new-thread handoff, ordinary message Cite,
+  reload, and cross-thread source navigation passed. A Personal GPT-6-Luna turn returned the
+  exact quote, HTML attachment kind, title, ID, and saved comment. The live install was unchanged.
+
 ## 2026-10-24 - Keep visualization storage in memory
 
 - Upstream baseline: `d53873b6a4`.

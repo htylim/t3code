@@ -13,6 +13,33 @@ import {
 } from "./selectedTextThreadAction";
 
 describe("Ask in new thread prompt", () => {
+  it("keeps the exact HTML attachment and passage when moving a quote into a new thread", () => {
+    const source = {
+      kind: "html-attachment",
+      environmentId: EnvironmentId.make("source-environment"),
+      threadId: ThreadId.make("source-thread"),
+      itemId: "second-preview",
+      attachmentId: "second-html",
+      title: "Chart choices",
+    } as const;
+    const citation: AssistantCitation = {
+      version: 2,
+      source,
+      text: "Use a native table.",
+      start: 0,
+      end: 19,
+      prefix: "",
+      suffix: "",
+    };
+    const prompt = buildAskInNewThreadPrompt({
+      sourceThreadRef: source,
+      sourceThreadTitle: "Report",
+      selectedMarkdown: citation.text,
+      citation,
+    });
+    expect(collectAssistantCitations(prompt).map((match) => match.citation)).toEqual([citation]);
+    expect(prompt).toContain("t3-context://v1/thread/thread_source-thread");
+  });
   it("quotes selected Markdown and includes the canonical source thread reference", () => {
     expect(
       buildAskInNewThreadPrompt({

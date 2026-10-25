@@ -52,6 +52,37 @@ function readProviderContext(expanded: string): unknown {
 }
 
 describe("assistant citation references", () => {
+  it("round-trips v2 message and HTML sources and explains attachment provenance to the model", () => {
+    const { version: _version, environmentId, threadId, messageId, ...quote } = citation;
+    const sources = [
+      { kind: "assistant-message", environmentId, threadId, messageId },
+      {
+        kind: "html-attachment",
+        environmentId,
+        threadId,
+        itemId: "html-render:item",
+        attachmentId: "attachment-html",
+        title: "Table and chart libraries",
+      },
+    ] as const;
+    for (const source of sources) {
+      const quoted = { version: 2, source, ...quote, comment: "Why this choice?" } as const;
+      const href = formatAssistantCitationHref(quoted);
+      expect(href).toMatch(/^t3-citation:\/\/v2\//);
+      expect(parseAssistantCitationHref(href)).toEqual(quoted);
+      const expanded = expandAssistantCitationsForProvider(serializeAssistantCitation(quoted));
+      expect(readProviderContext(expanded)).toEqual([
+        { id: "assistant-quote-1", citation: quoted },
+      ]);
+      expect(expanded).toContain("citation.source");
+      if (source.kind === "html-attachment") {
+        expect(renderAssistantCitationsAsText(serializeAssistantCitation(quoted))).toContain(
+          "From HTML preview: Table and chart libraries",
+        );
+      }
+    }
+  });
+
   it("preserves legacy v1 link bytes without adding a comment", () => {
     expect(parseAssistantCitationHref(legacyHref)).toStrictEqual(legacyCitation);
     expect(formatAssistantCitationHref(legacyCitation)).toBe(legacyHref);
@@ -90,6 +121,9 @@ describe("assistant citation references", () => {
 
   it.each([
     "t3-citation://v2/a/b/c?text=quote&start=0&end=5&prefix=&suffix=",
+    "t3-citation://v2/a/b/c?text=quote&start=0&end=5&prefix=&suffix=&kind=html-attachment&title=Missing+ID",
+    "t3-citation://v2/a/b/c?text=quote&start=0&end=5&prefix=&suffix=&kind=assistant-message&attachmentId=wrong",
+    "t3-citation://v2/a/b/c?text=quote&start=0&end=5&prefix=&suffix=&kind=html-attachment&attachmentId=html&title=a&title=b",
     "t3-citation://v1/a/b/c?text=quote&start=5&end=0&prefix=&suffix=",
     "t3-citation://v1/a/b/c?text=quote&start=0&end=5&prefix=&suffix=&text=other",
     "t3-citation://v1/a/b/c?text=quote&start=0&end=5&prefix=&suffix=&unknown=value",

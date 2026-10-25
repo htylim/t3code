@@ -29,6 +29,7 @@ import {
 } from "@t3tools/shared/htmlRender";
 
 import * as ServerConfig from "./config.ts";
+import { injectHtmlRenderCitationBridge } from "@t3tools/shared/htmlRenderCitation";
 
 import { assetResponseHeaders, assetFileResponse, downloadContentDisposition } from "./http.ts";
 import * as ServerHttp from "./http.ts";
@@ -80,7 +81,9 @@ describe("MCP app asset responses", () => {
             }),
           );
           expect(yield* Effect.promise(() => response.text())).toBe(
-            download ? html : injectHtmlRenderStorageBootstrap(html),
+            download
+              ? html
+              : injectHtmlRenderStorageBootstrap(injectHtmlRenderCitationBridge(html)),
           );
         }
       }).pipe(Effect.provide(layerFileResponse)),
@@ -192,7 +195,7 @@ describe("HTML asset storage compatibility", () => {
                 method,
               ),
             );
-            const expected = injectHtmlRenderStorageBootstrap(html);
+            const expected = injectHtmlRenderStorageBootstrap(injectHtmlRenderCitationBridge(html));
             expect(response.headers.get("content-length")).toBe(
               String(new TextEncoder().encode(expected).byteLength),
             );

@@ -47,6 +47,8 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ProviderTurnStart from "./ProviderTurnStartService.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
+import { EnvironmentId } from "@t3tools/contracts";
 
 const isDomainEvent = Schema.is(OrchestrationV2DomainEvent);
 
@@ -792,6 +794,36 @@ function makeLocalCommandHarness(input: {
     }).pipe(Effect.provide(layer)),
   };
 }
+
+effectIt.effect(
+  "delivers readable citation text and comments without rewriting the saved message",
+  () =>
+    Effect.gen(function* () {
+      const quote = serializeAssistantCitation({
+        version: 1,
+        environmentId: EnvironmentId.make("source-environment"),
+        threadId: ThreadId.make("source-thread"),
+        messageId: MessageId.make("source-message"),
+        text: "Use a native table.",
+        comment: "Why?",
+        start: 0,
+        end: 19,
+        prefix: "",
+        suffix: "",
+      });
+      const harness = makeLocalCommandHarness({
+        text: `Explain ${quote}`,
+        previousTurn: { runStatus: "completed", turnStatus: "completed" },
+      });
+      yield* harness.start;
+      const delivered = harness.startRootRun.mock.calls[0]?.[0].message.text;
+      expect(delivered).toContain("<assistant_citations>");
+      expect(delivered).toContain('"text": "Use a native table."');
+      expect(delivered).toContain('"comment": "Why?"');
+      expect(delivered).not.toContain("t3-citation://");
+      expect(harness.projection().messages.at(-1)?.text).toBe(`Explain ${quote}`);
+    }),
+);
 
 effectIt.effect("recovers an abandoned failed turn before continuing its native conversation", () =>
   Effect.gen(function* () {

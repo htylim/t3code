@@ -114,6 +114,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { type SetStateAction, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { assistantCitationFromLocation } from "../lib/assistantCitationNavigation";
+import { assistantCitationSource } from "@t3tools/shared/assistantCitations";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -578,7 +579,8 @@ export default function ChatView(props: ChatViewProps) {
   const citationLocation = { href: citationHref, key: citationKey };
   const citationRequest = (() => {
     const citation = assistantCitationFromLocation(citationLocation.href);
-    return citation && citation.environmentId === environmentId && citation.threadId === threadId
+    const source = citation && assistantCitationSource(citation);
+    return citation && source?.environmentId === environmentId && source.threadId === threadId
       ? { citation, key: citationLocation.key ?? citationLocation.href }
       : null;
   })() as AssistantCitationRequest | null;
@@ -626,7 +628,7 @@ export default function ChatView(props: ChatViewProps) {
   const [restingComposerControlsVisible, setRestingComposerControlsVisible] = useState(false);
   const citeAssistantText = (
     citation: AssistantCitation,
-    sourceAnchor: AssistantCitationSourceAnchor,
+    sourceAnchor?: AssistantCitationSourceAnchor,
   ) => {
     const inserted = composerRef.current?.citeAssistantText(citation, sourceAnchor) ?? false;
     if (!inserted) {
@@ -2809,7 +2811,8 @@ export default function ChatView(props: ChatViewProps) {
         const prompt = buildAskInNewThreadPrompt({
           selectedMarkdown,
           sourceThreadTitle: activeThread.title,
-          sourceThreadRef: citation,
+          sourceThreadRef: assistantCitationSource(citation),
+          citation,
         });
         const store = useComposerDraftStore.getState();
         await createSelectedTextThreadDraft({
@@ -2817,9 +2820,13 @@ export default function ChatView(props: ChatViewProps) {
           createThread: () => handleNewThread(activeProjectRef),
           setPrompt: (draftId, prompt) => {
             store.setPrompt(draftId, prompt);
-            store.addThreadContexts(draftId, [threadContextRecord(citation, activeThread.title)], {
-              appendReference: false,
-            });
+            store.addThreadContexts(
+              draftId,
+              [threadContextRecord(assistantCitationSource(citation), activeThread.title)],
+              {
+                appendReference: false,
+              },
+            );
           },
         });
       } catch (cause) {

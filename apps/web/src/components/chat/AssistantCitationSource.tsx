@@ -1,5 +1,6 @@
 import type { LegendListRef } from "@legendapp/list/react";
 import type { AssistantCitation, MessageId, ScopedThreadRef } from "@t3tools/contracts";
+import { assistantCitationSource } from "@t3tools/shared/assistantCitations";
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import {
   resolveAssistantCitationRange,
@@ -26,6 +27,21 @@ export function observeAssistantCitationCommentSource({
   citation: AssistantCitation;
   onUnavailable: () => void;
 }): () => void {
+  if (anchor.kind === "html") {
+    const clearHighlight = anchor.highlight(citation);
+    const observer = new MutationObserver(() => {
+      if (!anchor.source.isConnected || !anchor.viewport.contains(anchor.source)) {
+        observer.disconnect();
+        clearHighlight();
+        onUnavailable();
+      }
+    });
+    observer.observe(anchor.viewport, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      clearHighlight();
+    };
+  }
   const { source, range, viewport } = anchor;
   const registry = typeof CSS !== "undefined" ? CSS.highlights : undefined;
   let highlight: Highlight | null = null;
@@ -351,7 +367,9 @@ export function AssistantCitationSource({
   useEffect(() => {
     const root = rootRef.current;
     const list = listRef.current;
-    if (!root || !list || !request || request.citation.messageId !== messageId) return;
+    if (!root || !list || !request) return;
+    const source = assistantCitationSource(request.citation);
+    if (source.kind !== "assistant-message" || source.messageId !== messageId) return;
     return observeAssistantCitationSource({ root, itemKey, request, list });
   }, [itemKey, listRef, messageId, request]);
 

@@ -322,7 +322,7 @@ export interface ChatComposerHandle {
   pasteTextAtEnd: (text: string, options?: { bypassAutoAttachment?: boolean }) => boolean;
   citeAssistantText: (
     citation: AssistantCitation,
-    sourceAnchor: AssistantCitationSourceAnchor,
+    sourceAnchor?: AssistantCitationSourceAnchor,
   ) => boolean;
   openModelPicker: () => void;
   stepReasoningEffort: (direction: 1 | -1) => void;
@@ -1818,7 +1818,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       focusEditorAfterReplace?: boolean;
       citationComment?: {
         start: number;
-        sourceAnchor: AssistantCitationSourceAnchor;
+        sourceAnchor: AssistantCitationSourceAnchor | undefined;
         insertedSpaces: ComposerCitationCommentRequest["insertedSpaces"];
       };
     },
@@ -2654,6 +2654,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     options?: {
       ensureLeadingBoundary?: boolean;
       citationCommentAnchor?: AssistantCitationSourceAnchor;
+      openCitationComment?: boolean;
       clipboardData?: DataTransfer;
     },
   ): boolean => {
@@ -2663,7 +2664,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       activePendingIsResponding ||
       (pendingUserInputs.length > 0 && !activePendingProgress?.activeQuestion) ||
       projectSelectionRequired ||
-      (options?.citationCommentAnchor && !composerEditorRef.current)
+      ((options?.openCitationComment || options?.citationCommentAnchor) &&
+        !composerEditorRef.current)
     ) {
       return false;
     }
@@ -2681,7 +2683,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       cursor,
       rangeEnd,
       needsLeadingSpace ? ` ${text}` : text,
-      options?.citationCommentAnchor
+      options?.openCitationComment || options?.citationCommentAnchor
         ? {
             citationComment: {
               start: cursor + (needsLeadingSpace ? 1 : 0),
@@ -3132,7 +3134,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         insertComposerTextStable(
           formatAssistantCitationForComposer(citation, citation.comment),
           "cursor",
-          { ensureLeadingBoundary: true, citationCommentAnchor: sourceAnchor },
+          {
+            ensureLeadingBoundary: true,
+            openCitationComment: true,
+            ...(sourceAnchor ? { citationCommentAnchor: sourceAnchor } : {}),
+          },
         ),
       openModelPicker: openModelPickerStable,
       stepReasoningEffort: (direction) => {
