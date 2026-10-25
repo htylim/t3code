@@ -48,7 +48,6 @@ import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useWorkspaceEnvironments } from "../../state/workspace";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
-import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { ThreadSearchMatchExcerpt } from "../threads/thread-search-match";
 import {
@@ -60,6 +59,9 @@ import {
 import { parseActiveThreadPath, type HardwareKeyboardCommand } from "./hardwareKeyboardCommands";
 import { threadJumpIndex } from "./threadKeyboardShortcuts";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
+import { openSettings } from "../settings/settings-navigation";
+import { useSelectWorkspaceTab } from "../workspace/useSelectWorkspaceTab";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
 const PALETTE_COMMANDS: ReadonlyArray<HardwareKeyboardCommand> = [
   "commandPalette",
@@ -208,8 +210,9 @@ export function CommandPalette(props: {
   readonly onCommand: (command: HardwareKeyboardCommand) => void;
 }) {
   const navigation = useNavigation();
+  const selectTab = useSelectWorkspaceTab();
   const { themeVariables } = useAppearancePreferences();
-  const { selectThread, selectThreadRoute } = useAdaptiveWorkspaceLayout();
+  const selectDetail = useSelectWorkspaceDetail();
   const runCommand = props.onCommand;
   const projects = useProjects();
   const threads = useThreadShells();
@@ -238,7 +241,21 @@ export function CommandPalette(props: {
         .map((environment) => environment.environmentId),
     [environments],
   );
-  const search = useThreadSearch(searchEnvironmentIds, query.startsWith(">") ? "" : query);
+  // The palette matches environment names when there are several; older rows must match the same.
+  const environmentLabels =
+    environments.length > 1
+      ? Object.fromEntries(
+          searchEnvironmentIds.flatMap((environmentId) => {
+            const label = savedConnectionsById[environmentId]?.environmentLabel;
+            return label === undefined ? [] : [[environmentId, label]];
+          }),
+        )
+      : undefined;
+  const search = useThreadSearch(
+    searchEnvironmentIds,
+    query.startsWith(">") ? "" : query,
+    environmentLabels === undefined ? {} : { environmentLabels },
+  );
   const contentMatchByKey = useMemo(
     () =>
       new Map(
@@ -269,66 +286,42 @@ export function CommandPalette(props: {
         kind: "action",
         title: "Open settings",
         searchTerms: ["preferences", "configuration"],
-        run: () =>
-          navigation.navigate("SettingsSheet", {
-            screen: "SettingsContent",
-            params: { screen: "Settings" },
-          }),
+        run: () => selectTab("settings"),
       },
       {
         key: "appearance",
         kind: "action",
         title: "Appearance",
         searchTerms: ["theme", "colors", "dark", "light"],
-        run: () =>
-          navigation.navigate("SettingsSheet", {
-            screen: "SettingsContent",
-            params: { screen: "SettingsAppearance" },
-          }),
+        run: () => openSettings(navigation, "SettingsAppearance"),
       },
       {
         key: "environments",
         kind: "action",
         title: "Manage environments",
         searchTerms: ["connections", "server", "remote"],
-        run: () =>
-          navigation.navigate("SettingsSheet", {
-            screen: "SettingsContent",
-            params: { screen: "SettingsEnvironments" },
-          }),
+        run: () => openSettings(navigation, "SettingsEnvironments"),
       },
       {
         key: "scheduledTasks",
         kind: "action",
         title: "Scheduled tasks",
         searchTerms: ["schedule", "automations", "recurring"],
-        run: () =>
-          navigation.navigate("SettingsSheet", {
-            screen: "SettingsContent",
-            params: { screen: "SettingsScheduledTasks" },
-          }),
+        run: () => openSettings(navigation, "SettingsScheduledTasks"),
       },
       {
         key: "usage",
         kind: "action",
         title: "Usage",
         searchTerms: ["limits", "accounts", "quota"],
-        run: () =>
-          navigation.navigate("SettingsSheet", {
-            screen: "SettingsContent",
-            params: { screen: "SettingsUsage" },
-          }),
+        run: () => openSettings(navigation, "SettingsUsage"),
       },
       {
         key: "archive",
         kind: "action",
         title: "Archived threads",
         searchTerms: ["restore", "history"],
-        run: () =>
-          navigation.navigate("SettingsSheet", {
-            screen: "SettingsContent",
-            params: { screen: "SettingsArchive" },
-          }),
+        run: () => openSettings(navigation, "SettingsArchive"),
       },
     ];
     const projectByKey = new Map(
@@ -344,12 +337,15 @@ export function CommandPalette(props: {
         title: `New thread in ${activeProject.title}`,
         searchTerms: ["new task", "chat", "create"],
         run: () =>
-          selectThreadRoute({
-            draft: {
-              requestId: uuidv4(),
-              environmentId: activeProject.environmentId,
-              projectId: activeProject.id,
-              title: activeProject.title,
+          selectDetail({
+            name: "Thread",
+            params: {
+              draft: {
+                requestId: uuidv4(),
+                environmentId: activeProject.environmentId,
+                projectId: activeProject.id,
+                title: activeProject.title,
+              },
             },
           }),
       });
@@ -379,12 +375,15 @@ export function CommandPalette(props: {
       detail: `New thread · ${savedConnectionsById[project.environmentId]?.environmentLabel ?? project.environmentId}`,
       searchTerms: [project.workspaceRoot, "new thread", "project"],
       run: () =>
-        selectThreadRoute({
-          draft: {
-            requestId: uuidv4(),
-            environmentId: project.environmentId,
-            projectId: project.id,
-            title: project.title,
+        selectDetail({
+          name: "Thread",
+          params: {
+            draft: {
+              requestId: uuidv4(),
+              environmentId: project.environmentId,
+              projectId: project.id,
+              title: project.title,
+            },
           },
         }),
     }));
@@ -412,7 +411,11 @@ export function CommandPalette(props: {
           ...(thread.environmentId === activeThread?.environmentId && thread.id === activeThread.id
             ? { secondary: true }
             : {}),
-          run: () => selectThread(thread),
+          run: () =>
+            selectDetail({
+              name: "Thread",
+              params: { environmentId: String(thread.environmentId), threadId: String(thread.id) },
+            }),
         };
       });
     // Recent means used recently: written in or opened, whichever is later.
@@ -423,6 +426,7 @@ export function CommandPalette(props: {
     );
     return [...actions, ...projectItems, ...threadItems];
   }, [
+    selectTab,
     activeThread,
     activeThreadRef,
     environments.length,
@@ -430,8 +434,7 @@ export function CommandPalette(props: {
     projects,
     runCommand,
     savedConnectionsById,
-    selectThread,
-    selectThreadRoute,
+    selectDetail,
     threads,
   ]);
   const rankedMessageKeys = useMemo(() => {
@@ -519,9 +522,7 @@ export function CommandPalette(props: {
     pendingAction.current?.();
   }, [props]);
 
-  // iOS drops Modal onDismiss when the VC is dismissed mid-presentation (e.g.
-  // ⌘K during the fade-in) or raced by another sheet — without a fallback the
-  // palette stays mounted-but-invisible and ⌘K dead-ends on a stale open state.
+  // iOS may drop onDismiss during presentation or competing sheets; a fallback clears stale palette state.
   useEffect(() => {
     if (visible) return;
     const fallback = setTimeout(handleDismissed, 400);

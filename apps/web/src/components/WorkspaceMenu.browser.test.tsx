@@ -28,11 +28,13 @@ vi.mock("../state/query", () => ({
 }));
 
 import { WorkspaceMenu, type WorkspaceMenuProps } from "./WorkspaceMenu";
+import { useNamedWorktreeStore } from "../namedWorktreeStore";
 const environmentId = EnvironmentId.make("local");
 const projectRef = { environmentId, projectId: ProjectId.make("project") };
 
 /** Own the rendered tree and fixture cleanup for one test. */
 async function createTestSurface() {
+  useNamedWorktreeStore.setState({ selections: {}, worktrees: {} });
   const container = document.createElement("div");
   document.body.append(container);
   const screen = await renderScreen(null, { container });

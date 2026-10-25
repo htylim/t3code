@@ -51,12 +51,9 @@ const isUuid = Schema.is(Schema.String.check(Schema.isUUID()));
 const isOpenCodeId = Schema.is(Schema.String.check(Schema.isPattern(/^ses_[a-zA-Z0-9]+$/)));
 
 /**
- * Deletes one native session for a transient side chat, without touching T3 state.
- * The caller must own the transient registration, stop its runtime, and prevent
- * resume/fork while this runs. Pass the original provider configuration and native
- * ID before removing T3's binding. Missing targets fail unless allowMissing is set.
- * Unsafe targets always fail; deletion never falls
- * back to archiving, cascading deletion, or deleting files by a guessed path.
+ * Deletes one native session after its owner stops the runtime and blocks resume/fork.
+ * Pass the original provider configuration and native ID before removing T3's binding.
+ * Missing targets require allowMissing; unsafe targets never cascade or use guessed paths.
  */
 export const deleteTransientChatProviderThread = Effect.fn("deleteTransientChatProviderThread")(
   function* (input: TransientChatProviderThreadDeleteInput) {
