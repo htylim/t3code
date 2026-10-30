@@ -3383,6 +3383,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             separateCards={groupWorkspaces}
                             workspaceRowPosition={workspaceRow?.position}
                             workspaceThreadCount={workspaceRow?.count}
+                            workspaceBranch={workspaceRow?.branch}
                             workspaceCanSnooze={workspaceCanSnooze}
                             variantAction={
                               section === "snoozed"

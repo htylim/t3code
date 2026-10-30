@@ -3,7 +3,7 @@ import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environ
 
 type WorkspaceThread = Pick<
   EnvironmentThreadShell,
-  "environmentId" | "projectId" | "worktreePath" | "id"
+  "environmentId" | "projectId" | "worktreePath" | "id" | "branch"
 >;
 
 /** Describe one thread's part of a shared workspace card. */
@@ -11,6 +11,7 @@ export interface SidebarWorkspaceRow {
   readonly position: "first" | "middle" | "last";
   readonly count: number;
   readonly threadKeys: readonly string[];
+  readonly branch: string | null;
 }
 
 /** Keep physical projects and environments separate, even when their labels match. */
@@ -69,6 +70,7 @@ export function sidebarWorkspaceRowPositions<Thread extends WorkspaceThread>(
       const threadKeys = members.map((thread) =>
         scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
       );
+      const branch = members.find((thread) => thread.branch !== null)?.branch ?? null;
       for (const [index, thread] of members.entries()) {
         let position: SidebarWorkspaceRow["position"] = "middle";
         if (index === 0) position = "first";
@@ -77,6 +79,7 @@ export function sidebarWorkspaceRowPositions<Thread extends WorkspaceThread>(
           position,
           count: members.length,
           threadKeys,
+          branch,
         });
       }
     }

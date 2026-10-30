@@ -13,6 +13,7 @@ function thread(id: string, worktreePath: string | null = "/work/feature") {
     environmentId: EnvironmentId.make("local"),
     projectId: ProjectId.make("project"),
     worktreePath,
+    branch: null as string | null,
   };
 }
 
@@ -165,5 +166,25 @@ describe("sidebar workspace cards", () => {
     const first = { ...thread("first"), branch: "stale", title: "One", tag: "review" };
     const second = { ...thread("second"), branch: "current", title: "Two", tag: "other" };
     expect(groupSidebarWorkspaceThreads([first, second], true)).toEqual([[first, second]]);
+  });
+
+  it("keeps a saved workspace branch when the last thread has no branch", () => {
+    const first = { ...thread("first", null), branch: "main" };
+    const last = thread("last", null);
+    const positions = sidebarWorkspaceRowPositions([[first, last]], true);
+    expect(positions.get("local:last")).toMatchObject({ position: "last", branch: "main" });
+    const reordered = sidebarWorkspaceRowPositions([[last, first]], true);
+    expect(reordered.get("local:first")).toMatchObject({ position: "last", branch: "main" });
+  });
+
+  it("does not borrow a branch from another workspace or section", () => {
+    const first = { ...thread("first"), branch: "feature" };
+    const localThreads = [thread("local-first", null), thread("local-last", null)];
+    const otherSection = { ...thread("other-section", null), branch: "main" };
+    const positions = sidebarWorkspaceRowPositions(
+      [[first, ...localThreads], [otherSection]],
+      true,
+    );
+    expect(positions.get("local:local-last")).toMatchObject({ branch: null });
   });
 });

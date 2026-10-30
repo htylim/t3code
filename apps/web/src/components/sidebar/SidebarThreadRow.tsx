@@ -544,6 +544,7 @@ type SidebarThreadRowProps = {
   workspaceRowPosition?: SidebarWorkspaceRow["position"] | undefined;
   separateCards?: boolean | undefined;
   workspaceThreadCount?: number | undefined;
+  workspaceBranch?: string | null | undefined;
   workspaceCanSnooze?: boolean | undefined;
   variantAction: SidebarSweepAction;
   settlementSupported: boolean;
@@ -677,7 +678,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     thread.branchPullRequest,
   );
   const gitStatus = useEnvironmentQuery(
-    leaseLiveStatus && (thread.branch != null || thread.worktreePath !== null) && gitCwd !== null
+    leaseLiveStatus &&
+      (props.workspaceRowPosition === "last" ||
+        thread.branch != null ||
+        thread.worktreePath !== null) &&
+      gitCwd !== null
       ? vcsEnvironment.status({
           environmentId: thread.environmentId,
           input: { cwd: gitCwd, includeRemote: false },
@@ -1458,7 +1463,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     </>
   );
   const workspaceBranch = props.workspaceRowPosition
-    ? (visibleGitStatus?.refName ?? thread.branch)
+    ? (visibleGitStatus?.refName ?? props.workspaceBranch ?? thread.branch)
     : thread.branch;
   const workspaceFooter = (
     <>
