@@ -328,7 +328,7 @@ export const ChatHeader = memo(function ChatHeader({
             </WorkspaceBreadcrumbSeparator>
           </>
         ) : null}
-        {worktreeDisplay ? (
+        {!activeProject?.isScratch && worktreeDisplay ? (
           <>
             <WorkspaceBreadcrumbItem className="shrink">
               <Tooltip>
