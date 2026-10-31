@@ -1187,12 +1187,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         )}
         dir={textDirection(thread.title)}
       >
-        {slimWorktreePill ? (
-          <>
-            {slimWorktreePill}
-            {" / "}
-          </>
-        ) : null}
+        {slimWorktreePill ? <>{slimWorktreePill} </> : null}
         {thread.title}
       </span>
     );
@@ -1564,30 +1559,23 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       {props.project ? (
         <ProjectFavicon project={props.project} className="size-4 shrink-0" />
       ) : null}
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 font-normal text-secondary-label text-xs">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5 font-normal text-secondary-label text-xs">
         {props.projectDisplayName ? (
           <span className={cn("min-w-0 truncate", worktreeDisplay && "max-w-1/2")}>
             {props.projectDisplayName}
           </span>
         ) : null}
         {worktreeDisplay ? (
-          <>
-            {props.projectDisplayName ? (
-              <span aria-hidden className="shrink-0 text-icon-muted">
-                /
-              </span>
-            ) : null}
-            <WorktreePill
-              threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
-              projectRef={
-                thread.projectId ? scopeProjectRef(thread.environmentId, thread.projectId) : null
-              }
-              projectCwd={props.project?.workspaceRoot}
-              worktreePath={thread.worktreePath}
-              worktree={worktreeDisplay}
-              className="min-w-0 shrink"
-            />
-          </>
+          <WorktreePill
+            threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
+            projectRef={
+              thread.projectId ? scopeProjectRef(thread.environmentId, thread.projectId) : null
+            }
+            projectCwd={props.project?.workspaceRoot}
+            worktreePath={thread.worktreePath}
+            worktree={worktreeDisplay}
+            className="min-w-0 shrink"
+          />
         ) : null}
       </div>
     </>
