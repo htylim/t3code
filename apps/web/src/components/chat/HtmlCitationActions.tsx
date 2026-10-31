@@ -55,6 +55,7 @@ export function HtmlCitationActions({
     requestedKey.current = request.key;
     command("reveal", request.citation, request.key);
   });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- sends the loaded HTML frame its pending citation reveal request
   useEffect(() => {
     if (loaded && requestKey) reveal();
   }, [loaded, requestKey]);
@@ -151,6 +152,7 @@ export function HtmlCitationActions({
       },
     });
   });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to HTML frame selection messages and document dismissal events
   useEffect(() => {
     window.addEventListener("message", receive);
     const dismiss = () => setCaptured(null);

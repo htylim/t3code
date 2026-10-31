@@ -124,10 +124,7 @@ export function ArchivedThreadsPanel() {
 
   const handleArchivedThreadContextMenu = async (
     threadRef: ScopedThreadRef,
-    position: {
-      x: number;
-      y: number;
-    },
+    position: { x: number; y: number },
   ) => {
     const api = readLocalApi();
     if (!api) return;

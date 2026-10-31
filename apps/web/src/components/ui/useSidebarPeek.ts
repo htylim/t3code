@@ -11,6 +11,7 @@ export function useSidebarPeek(enabled: boolean) {
   const panelRef = useRef<HTMLDivElement>(null);
   const portalPointerEvent = useRef<PointerEvent | null>(null);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers pointer tracking and releases hover timers for the collapsed sidebar
   useEffect(() => {
     if (!enabled) return;
 

@@ -26,19 +26,3 @@ export class ProviderCredentialError extends Schema.TaggedError<ProviderCredenti
     return `Could not ${this.operation} stored provider credentials.`;
   }
 }
-
-/** Native providers supported by transient history deletion. */
-export const TransientChatProvider = Schema.Literals(["codex", "claudeAgent", "opencode"]);
-export type TransientChatProvider = typeof TransientChatProvider.Type;
-
-/** Native history deletion failed or refused an unsafe target. */
-export class TransientChatProviderThreadDeleteError extends Schema.TaggedError<TransientChatProviderThreadDeleteError>()(
-  "TransientChatProviderThreadDeleteError",
-  {
-    provider: TransientChatProvider,
-    providerSessionId: Schema.String,
-    reason: Schema.Literals(["invalid-target", "unsafe-session", "provider-error"]),
-    message: Schema.String,
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {}

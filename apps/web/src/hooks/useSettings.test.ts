@@ -16,6 +16,7 @@ import {
   __setClientSettingsForTests,
   ensureClientSettingsHydrated,
   getClientSettings,
+  resolveEnvironmentIdentificationMode,
   mergeEnvironmentSettings,
   persistClientSettingsPatch,
   persistClientSettingsUpdate,
@@ -359,4 +360,34 @@ it("uses the environment's model preferences after migration, including empty li
   );
   expect(merged.favorites).toEqual([]);
   expect(merged.providerModelPreferences).toEqual({});
+});
+
+describe("Fork artwork choices", () => {
+  it("keeps neutral Fork artwork on custom themes while applying the upstream policy to channel art", () => {
+    const input = {
+      settingsHydrated: true,
+      paletteThemeActive: true,
+      paletteThemeAllowsArtwork: false,
+    };
+    expect(
+      resolveEnvironmentIdentificationMode({
+        ...input,
+        mode: "artwork",
+        artworkSupportsCustomThemes: true,
+      }),
+    ).toBe("artwork");
+    expect(resolveEnvironmentIdentificationMode({ ...input, mode: "fork-artwork" })).toBe(
+      "fork-artwork",
+    );
+    expect(resolveEnvironmentIdentificationMode({ ...input, mode: "nightly-artwork" })).toBe(
+      "pill",
+    );
+    expect(
+      resolveEnvironmentIdentificationMode({
+        ...input,
+        mode: "none",
+        artworkSupportsCustomThemes: true,
+      }),
+    ).toBe("none");
+  });
 });

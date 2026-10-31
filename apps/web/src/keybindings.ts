@@ -29,7 +29,7 @@ export interface ShortcutMatchContext {
   terminalOpen: boolean;
   previewFocus: boolean;
   previewOpen: boolean;
-  rightPanelOpen: boolean;
+  rightPanelOpen?: boolean;
   isWeb: boolean;
   isDesktop: boolean;
   editableFocus?: boolean;
@@ -464,10 +464,6 @@ export function terminalNavigationShortcutData(
       return moveLine;
     }
     return null;
-  }
-
-  if (event.ctrlKey && !event.metaKey && !event.altKey) {
-    return moveWord;
   }
 
   if (event.altKey && !event.metaKey && !event.ctrlKey) {

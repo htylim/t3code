@@ -215,7 +215,9 @@ describe("composer thread picker", () => {
       });
       expect(providerInput).toContain("threadId: other-project");
       expect(providerInput).toContain("environmentId: local");
-      expect(providerInput).toContain("t3_thread_read(threadId)");
+      expect(providerInput).toContain(
+        't3_thread_read({"threadId":"other-project","environmentId":"local"})',
+      );
     },
   );
 });

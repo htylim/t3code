@@ -251,7 +251,7 @@ it("keeps the saved quote when the attachment no longer contains that passage", 
 
 it("ignores selection messages that do not come from its own iframe", async () => {
   const onCite = vi.fn(() => true);
-  await using screen = await render(<Preview context={{ source, onCite }} onLoad={() => {}} />);
+  await using _screen = await render(<Preview context={{ source, onCite }} onLoad={() => {}} />);
   await act(async () =>
     window.dispatchEvent(
       new MessageEvent("message", {

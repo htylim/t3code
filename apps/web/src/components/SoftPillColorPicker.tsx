@@ -1,8 +1,9 @@
+import { useEffect, useState } from "react";
 import {
   DEFAULT_SOFT_PILL_COLOR,
   SOFT_PILL_COLOR_PRESETS,
 } from "@t3tools/client-runtime/soft-pill-colors";
-import { ThemeColorPickerPanel } from "./settings/ThemeColorPicker";
+import { createFrameCommitter, ThemeColorPickerPanel } from "./settings/ThemeColorPicker";
 import { Button } from "./ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 
@@ -18,6 +19,9 @@ export function SoftPillColorPicker({
   readonly disabled: boolean;
   readonly onChange: (color: string | null) => void;
 }) {
+  const [committer] = useState(createFrameCommitter);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- commits the last custom color when its picker unmounts
+  useEffect(() => committer.flush, [committer]);
   return (
     <fieldset disabled={disabled} className="grid gap-3">
       <legend className="mb-2 text-sm font-medium">{label} color</legend>
@@ -61,6 +65,7 @@ export function SoftPillColorPicker({
           />
           <PopoverPopup align="start" side="bottom" padding="none" sideOffset={8}>
             <ThemeColorPickerPanel
+              committer={committer}
               label={label}
               value={color ?? DEFAULT_SOFT_PILL_COLOR}
               onChange={onChange}

@@ -3,7 +3,7 @@ import type { ComposerThreadItem } from "@t3tools/client-runtime/composerThreadI
 
 import type { Project, ThreadShell } from "./types";
 import type { ComposerTrigger } from "./composer-logic";
-import { threadContextRecord } from "./lib/composerContextRecords";
+import { threadContextRecord } from "@t3tools/shared/composerContextReferences";
 
 /** Resolves a selected thread into the context record retained by the composer. */
 export function resolveComposerThreadContext(

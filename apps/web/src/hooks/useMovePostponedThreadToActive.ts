@@ -9,7 +9,7 @@ import { usePostponedThreadStore } from "../postponedThreadStore";
 import { readThreadShell } from "../state/entities";
 import { threadEnvironment } from "../state/threads";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
-import * as ThreadUndo from "./threadUndo";
+import * as ThreadUndo from "@t3tools/client-runtime/state/thread-undo";
 /** Clear underlying parking states before removing the local postponement preference. */
 export function useMovePostponedThreadToActive() {
   const unsettleThread = useOrchestrationCommand(threadEnvironment.unsettle, {

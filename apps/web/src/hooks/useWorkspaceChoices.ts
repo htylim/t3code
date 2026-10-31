@@ -36,6 +36,7 @@ export function useWorkspaceChoices(props: {
     return [...byId.values()];
   })();
   const namedWorktrees = useNamedWorktreeStore((state) => state.worktrees);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records discovered workspace assignments in the persistent named-worktree store
   useEffect(() => {
     useNamedWorktreeStore.getState().record(props.projectRef, threads);
   }, [props.projectRef, threads]);

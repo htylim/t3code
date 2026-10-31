@@ -5,7 +5,6 @@ import { buildThreadActionMenuItems, type ThreadActionMenuState } from "./thread
 const baseState: ThreadActionMenuState = {
   canOperate: true,
   branch: null,
-  canOpenInChatSurface: false,
   projectFilter: null,
   isPinned: false,
   isSettled: false,
@@ -90,21 +89,13 @@ describe("buildThreadActionMenuItems", () => {
     },
   );
 
-  it("includes the fork action without replacing upstream actions", () => {});
-
-  it("includes the compact Chat entry only for an eligible sidebar target", () => {
-    expect(ids(baseState)).not.toContain("open-in-chat-surface");
-    expect(
-      buildThreadActionMenuItems({ ...baseState, canOpenInChatSurface: true }).find(
-        (item) => item.id === "open-in-chat-surface",
-      ),
-    ).toMatchObject({ label: "Open in side surface", icon: "panel-right" });
-  });
-
-  it("disables archive while the thread is running", () => {
-    const archiveItem = buildThreadActionMenuItems({ ...baseState, isRunning: true }).find(
-      (item) => item.id === "archive",
-    );
-    expect(archiveItem?.disabled).toBe(true);
+  it("disables archive and turning into a project while the thread is running", () => {
+    const items = buildThreadActionMenuItems({
+      ...baseState,
+      isRunning: true,
+      canTurnIntoProject: true,
+    });
+    expect(items.find((item) => item.id === "archive")?.disabled).toBe(true);
+    expect(items.find((item) => item.id === "turn-into-project")?.disabled).toBe(true);
   });
 });

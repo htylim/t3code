@@ -154,7 +154,6 @@ export type VcsListRefsInput = typeof VcsListRefsInput.Type;
 
 /** A single folder name inside the configured managed worktree directory. */
 export const WorktreeDirectoryName = TrimmedNonEmptyStringSchema.check(
-  // eslint-disable-next-line no-control-regex -- Filesystem names must reject NUL and other control characters.
   Schema.isPattern(/^(?!\.{1,2}$)[^/\\\u0000-\u001f]+$/u),
 );
 
@@ -375,6 +374,7 @@ export const GitCommandFailureReason = Schema.Literals([
   "authentication_failed",
   "branch_already_exists",
   "branch_checked_out_in_worktree",
+  "config_locked",
   "host_key_unverified",
   "not_a_repository",
   "path_already_exists",

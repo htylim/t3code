@@ -1,4 +1,5 @@
-/** Keep bundler externals and staged runtime dependencies aligned. */
+/** Keep bundler externals and staged runtime dependency roots aligned. */
+// Filesystem-loaded externals need dependencies outside the bundle.
 const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   // Cursor ships computed Webpack imports and platform helper packages.
   "@cursor/sdk",

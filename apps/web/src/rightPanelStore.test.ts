@@ -1,16 +1,16 @@
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { type EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { useClosedViewStore } from "./closedViewStore";
 import { reopenClosedView } from "./reopenClosedView";
 import {
+  hostRightPanel,
   migratePersistedRightPanelState,
   pullRequestSurface,
   pullRequestSurfaceId,
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
-  selectSideChatThreadStates,
   selectThreadPanelVisibility,
   selectThreadRightPanelState,
   useRightPanelStore,
@@ -18,7 +18,6 @@ import {
 
 const refA = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-A"));
 const refB = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-B"));
-const refC = scopeThreadRef("env-2" as EnvironmentId, ThreadId.make("thread-C"));
 
 beforeEach(() => {
   useClosedViewStore.setState({ entries: [] });
@@ -41,11 +40,21 @@ async function reloadRightPanelStore() {
 }
 
 describe("rightPanelStore", () => {
-  it.each([false, true])("records only reusable closed side chats, transient=%s", (transient) => {
-    const panels = useRightPanelStore.getState();
-    panels.openChat(refA, refB, transient ? { transient: true } : undefined);
-    panels.closeSurface(refA, "chat:env-1:thread-B");
-    expect(useClosedViewStore.getState().entries).toHaveLength(transient ? 0 : 1);
+  it("opens a hosted side chat's panel actions in its parent's panel until unhosted", () => {
+    const store = useRightPanelStore.getState();
+    const unhost = hostRightPanel(refB, refA);
+    store.openFile(refB, "src/app.ts");
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)?.id).toBe(
+      "file:src/app.ts",
+    );
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB).surfaces,
+    ).toEqual([]);
+    unhost();
+    store.openFile(refB, "src/app.ts");
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refB)?.id).toBe(
+      "file:src/app.ts",
+    );
   });
 
   it("records single and bulk tab closes, newest first", () => {
@@ -1190,6 +1199,24 @@ describe("rightPanelStore", () => {
     });
   });
 
+  it("hides the panel when browser reconciliation removes its last session tab", () => {
+    const store = useRightPanelStore.getState();
+    store.openBrowser(refA, "tab-a");
+    store.reconcileBrowserSurfaces(refA, []);
+    expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+      isOpen: false,
+      activeSurfaceId: null,
+      surfaces: [],
+    });
+
+    store.openBrowser(refA, "tab-b");
+    store.open(refA, "diff");
+    store.reconcileBrowserSurfaces(refA, []);
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA),
+    ).toMatchObject({ isOpen: true, activeSurfaceId: "diff" });
+  });
+
   it("moves a surface to a new index and keeps it there through browser reconciliation", () => {
     const store = useRightPanelStore.getState();
     store.openTerminal(refA, "term-1");
@@ -1211,343 +1238,4 @@ describe("rightPanelStore", () => {
     expect(surfaceIds()).toEqual(["browser:tab-a", "terminal:term-1", "diff", "browser:tab-b"]);
     expect(store.getUserActionRevision(refA)).toBe(revision);
   });
-});
-
-it("drops persisted plan surfaces and does not reopen an empty panel", () => {
-  expect(
-    migratePersistedRightPanelState({
-      byThreadKey: {
-        "env-1:thread-A": {
-          isOpen: true,
-          activeSurfaceId: "plan",
-          surfaces: [{ id: "plan", kind: "plan" }],
-        },
-        "env-1:thread-B": {
-          isOpen: true,
-          activeSurfaceId: "plan",
-          surfaces: [
-            { id: "plan", kind: "plan" },
-            { id: "diff", kind: "diff" },
-          ],
-        },
-      },
-    }),
-  ).toEqual({
-    threadPanelVisibilityByThreadKey: {},
-    byThreadKey: {
-      "env-1:thread-A": {
-        isOpen: false,
-        activeSurfaceId: null,
-        surfaces: [],
-      },
-      "env-1:thread-B": {
-        isOpen: true,
-        activeSurfaceId: "diff",
-        surfaces: [{ id: "diff", kind: "diff" }],
-      },
-    },
-  });
-});
-
-it("keeps valid target-scoped chat surfaces and drops malformed ones during migration", () => {
-  expect(
-    migratePersistedRightPanelState({
-      byThreadKey: {
-        "env-1:thread-A": {
-          isOpen: true,
-          activeSurfaceId: "chat:env-2:thread-C",
-          surfaces: [
-            {
-              id: "chat:env-2:thread-C",
-              kind: "chat",
-              environmentId: "env-2",
-              threadId: "thread-C",
-            },
-            {
-              id: "chat:wrong",
-              kind: "chat",
-              environmentId: "env-1",
-              threadId: "thread-B",
-            },
-          ],
-        },
-      },
-    }),
-  ).toEqual({
-    threadPanelVisibilityByThreadKey: {},
-    byThreadKey: {
-      "env-1:thread-A": {
-        isOpen: true,
-        activeSurfaceId: "chat:env-2:thread-C",
-        surfaces: [
-          {
-            id: "chat:env-2:thread-C",
-            kind: "chat",
-            environmentId: "env-2",
-            threadId: "thread-C",
-          },
-        ],
-      },
-    },
-  });
-});
-
-it("drops persisted self-targeting and duplicate chat surfaces", () => {
-  expect(
-    migratePersistedRightPanelState({
-      byThreadKey: {
-        "env-1:thread-A": {
-          isOpen: true,
-          activeSurfaceId: "chat:env-1:thread-A",
-          surfaces: [
-            {
-              id: "chat:env-1:thread-A",
-              kind: "chat",
-              environmentId: "env-1",
-              threadId: "thread-A",
-            },
-            {
-              id: "chat:env-1:thread-B",
-              kind: "chat",
-              environmentId: "env-1",
-              threadId: "thread-B",
-            },
-            {
-              id: "chat:env-2:thread-C",
-              kind: "chat",
-              environmentId: "env-2",
-              threadId: "thread-C",
-            },
-          ],
-        },
-      },
-    }),
-  ).toEqual({
-    threadPanelVisibilityByThreadKey: {},
-    byThreadKey: {
-      "env-1:thread-A": {
-        isOpen: true,
-        activeSurfaceId: "chat:env-1:thread-B",
-        surfaces: [
-          {
-            id: "chat:env-1:thread-B",
-            kind: "chat",
-            environmentId: "env-1",
-            threadId: "thread-B",
-          },
-        ],
-      },
-    },
-  });
-});
-
-it("stores one target-scoped chat surface under its owning thread", () => {
-  useRightPanelStore.getState().openChat(refA, refB);
-
-  expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
-    isOpen: true,
-    activeSurfaceId: "chat:env-1:thread-B",
-    surfaces: [
-      {
-        id: "chat:env-1:thread-B",
-        kind: "chat",
-        environmentId: refB.environmentId,
-        threadId: refB.threadId,
-      },
-    ],
-  });
-  expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB)).toEqual({
-    isOpen: false,
-    activeSurfaceId: null,
-    surfaces: [],
-  });
-});
-
-/** Read sidebar roles from the current store after each user action. */
-function readSideChatThreadStates() {
-  return selectSideChatThreadStates(useRightPanelStore.getState().byThreadKey);
-}
-
-it("keeps all saved side-chat relationships marked regardless of the active owner", () => {
-  const store = useRightPanelStore.getState();
-  store.openChat(refA, refB);
-  expect(readSideChatThreadStates().get(scopedThreadKey(refA))).toEqual({
-    hasSideChat: true,
-    isSideChat: false,
-  });
-  expect(readSideChatThreadStates().get(scopedThreadKey(refB))).toEqual({
-    hasSideChat: false,
-    isSideChat: true,
-  });
-
-  store.openChat(refC, refA);
-  expect(readSideChatThreadStates().get(scopedThreadKey(refA))).toEqual({
-    hasSideChat: true,
-    isSideChat: true,
-  });
-  expect(readSideChatThreadStates().get(scopedThreadKey(refB))?.isSideChat).toBe(true);
-  expect(readSideChatThreadStates().get(scopedThreadKey(refC))?.hasSideChat).toBe(true);
-});
-
-it("keeps both indicators when the panel is hidden or another tab is selected", () => {
-  const store = useRightPanelStore.getState();
-  store.openChat(refA, refB);
-  const savedSideChatStates = readSideChatThreadStates();
-
-  store.close(refA);
-  expect(readSideChatThreadStates()).toEqual(savedSideChatStates);
-  store.show(refA);
-  expect(readSideChatThreadStates()).toEqual(savedSideChatStates);
-  store.open(refA, "files");
-  expect(readSideChatThreadStates()).toEqual(savedSideChatStates);
-  store.activateSurface(refA, "chat:env-1:thread-B");
-  expect(readSideChatThreadStates()).toEqual(savedSideChatStates);
-  store.closeSurface(refA, "chat:env-1:thread-B");
-  expect(readSideChatThreadStates().size).toBe(0);
-});
-
-it("moves the indicator to the replacement target and distinguishes environments", () => {
-  const store = useRightPanelStore.getState();
-  const sameIdOtherEnvironment = scopeThreadRef(refC.environmentId, refB.threadId);
-
-  store.openChat(refA, refB);
-  expect(readSideChatThreadStates().get(scopedThreadKey(refB))?.isSideChat).toBe(true);
-  store.openChat(refA, sameIdOtherEnvironment);
-  expect(readSideChatThreadStates().get(scopedThreadKey(sameIdOtherEnvironment))?.isSideChat).toBe(
-    true,
-  );
-  expect(readSideChatThreadStates().has(scopedThreadKey(refB))).toBe(false);
-  expect(readSideChatThreadStates().get(scopedThreadKey(refA))?.hasSideChat).toBe(true);
-  store.openChat(refA, refC);
-  expect(readSideChatThreadStates().get(scopedThreadKey(refC))?.isSideChat).toBe(true);
-  expect(readSideChatThreadStates().has(scopedThreadKey(sameIdOtherEnvironment))).toBe(false);
-});
-
-it("keeps a shared side-chat target marked until its last owner removes it", () => {
-  const store = useRightPanelStore.getState();
-  store.openChat(refA, refB);
-  store.openChat(refC, refB);
-
-  store.closeAllSurfaces(refA);
-  expect(readSideChatThreadStates().has(scopedThreadKey(refA))).toBe(false);
-  expect(readSideChatThreadStates().get(scopedThreadKey(refB))?.isSideChat).toBe(true);
-  expect(readSideChatThreadStates().get(scopedThreadKey(refC))?.hasSideChat).toBe(true);
-
-  store.closeAllSurfaces(refC);
-  expect(readSideChatThreadStates().size).toBe(0);
-});
-
-it("restores both indicators from persisted side-chat tabs even while hidden", () => {
-  const store = useRightPanelStore.getState();
-  store.openChat(refA, refB);
-  store.close(refA);
-  const savedSideChatStates = readSideChatThreadStates();
-  const persisted = JSON.parse(
-    JSON.stringify({ byThreadKey: useRightPanelStore.getState().byThreadKey }),
-  );
-
-  useRightPanelStore.setState({ byThreadKey: {} });
-  expect(readSideChatThreadStates().size).toBe(0);
-  useRightPanelStore.setState(migratePersistedRightPanelState(persisted));
-  expect(readSideChatThreadStates()).toEqual(savedSideChatStates);
-});
-
-it("marks owners of transient side chats without treating unrelated panels as chats", () => {
-  const store = useRightPanelStore.getState();
-  store.open(refC, "files");
-  expect(readSideChatThreadStates().size).toBe(0);
-
-  store.openChat(refA, refB, { transient: true });
-  expect(readSideChatThreadStates().get(scopedThreadKey(refA))?.hasSideChat).toBe(true);
-  expect(readSideChatThreadStates().get(scopedThreadKey(refB))?.isSideChat).toBe(true);
-  expect(readSideChatThreadStates().has(scopedThreadKey(refC))).toBe(false);
-});
-
-it("marks newly created side chats as transient", () => {
-  useRightPanelStore.getState().openChat(refA, refB, { transient: true });
-
-  expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
-    isOpen: true,
-    activeSurfaceId: "chat:env-1:thread-B",
-    surfaces: [
-      {
-        id: "chat:env-1:thread-B",
-        kind: "chat",
-        environmentId: refB.environmentId,
-        threadId: refB.threadId,
-        transient: true,
-      },
-    ],
-  });
-});
-
-it("omits transient Chat surfaces from persisted panel state", () => {
-  useRightPanelStore.getState().open(refA, "diff");
-  useRightPanelStore.getState().openChat(refA, refB, { transient: true });
-  useRightPanelStore.getState().openChat(refC, refB, { transient: true });
-
-  const partialize = useRightPanelStore.persist.getOptions().partialize;
-  expect(partialize?.(useRightPanelStore.getState())).toEqual({
-    threadPanelVisibilityByThreadKey: {},
-    byThreadKey: {
-      "env-1:thread-A": {
-        isOpen: true,
-        activeSurfaceId: "diff",
-        surfaces: [{ id: "diff", kind: "diff" }],
-      },
-    },
-  });
-});
-
-it("reopens the same chat surface without duplication and replaces a different target", () => {
-  useRightPanelStore.getState().open(refA, "diff");
-  useRightPanelStore.getState().openChat(refA, refB);
-  useRightPanelStore.getState().open(refA, "files");
-  useRightPanelStore.getState().openChat(refA, refB);
-
-  expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
-    isOpen: true,
-    activeSurfaceId: "chat:env-1:thread-B",
-    surfaces: [
-      { id: "diff", kind: "diff" },
-      { id: "files", kind: "files" },
-      {
-        id: "chat:env-1:thread-B",
-        kind: "chat",
-        environmentId: refB.environmentId,
-        threadId: refB.threadId,
-      },
-    ],
-  });
-
-  useRightPanelStore.getState().openChat(refA, refC);
-
-  expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
-    isOpen: true,
-    activeSurfaceId: "chat:env-2:thread-C",
-    surfaces: [
-      { id: "diff", kind: "diff" },
-      { id: "files", kind: "files" },
-      {
-        id: "chat:env-2:thread-C",
-        kind: "chat",
-        environmentId: refC.environmentId,
-        threadId: refC.threadId,
-      },
-    ],
-  });
-});
-
-it("does not open the owning thread as its own chat surface", () => {
-  useRightPanelStore.getState().openChat(refA, refA);
-  expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)).toBeNull();
-});
-
-it("closing a chat surface only removes the owner's view", () => {
-  useRightPanelStore.getState().openChat(refA, refB);
-  useRightPanelStore.getState().open(refB, "diff");
-  useRightPanelStore.getState().closeSurface(refA, "chat:env-1:thread-B");
-
-  expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)).toBeNull();
-  expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refB)).toBe("diff");
 });

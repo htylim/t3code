@@ -643,23 +643,6 @@ upstream.
   screenshots were blurred, and the panel disconnected before the settings interaction check.
   The installed app and live data were unchanged.
 
-## 2026-10-08 - Fit wrapped Markdown tables to the chat width
-
-- Upstream baseline: `5e2225671f`.
-- Change: Wrapped tables allow headers and cells to shrink to the available chat width.
-  Enabling wrapping no longer preserves the unwrapped column widths. The existing word-wrap
-  preference and per-table toggle still control wrapping, and unwrapped tables retain scrolling.
-- Reason: Ordinary two-column tables required horizontal scrolling even with wrapping enabled.
-- Scope: Shared web and desktop Markdown renderer and table CSS. Native mobile uses a separate
-  renderer. No provider, server, connection, or wire-contract changes.
-- Verification: All 74 focused Markdown tests, web typecheck, formatting, and diff checks passed.
-  Targeted lint passed with existing warnings in unrelated code. Browser verification against
-  isolated dev state passed for the reported table, long headers, identifiers, URLs, and the wrap
-  toggle. Wrapped two-column tables fit 728, 600, 320, and 160 pixel containers; twelve-column
-  tables retained scrolling when narrower than their minimum content width. The viewport resize
-  tool timed out, so narrow-width checks temporarily resized the Markdown container instead.
-  Recheck wrapping after upstream changes to the table CSS or toggle.
-
 ## 2026-10-08 - Integrate the October 8 nightly
 
 - Upstream baseline: `5e2225671f`, release `v0.0.46-nightly.20261008.2819`.
@@ -847,24 +830,6 @@ and guide were removed. Mermaid is no longer downstream drift.
   An isolated Browser panel pass checked both scopes, searches, and reference selection in existing
   and new-thread composers with copied subagent metadata and an ordinary fork fixture.
 
-## 2026-10-04 - Keep both side-chat roles visible in the sidebar
-
-- Upstream baseline: `8ed276c246`, with parent navigation added against `efecd3cf8b` on 2026-10-07.
-- Both web and desktop sidebar layouts mark threads that host a side chat and threads used as
-  side chats. The host uses the outline split-panel icon; the side-chat thread uses a filled right
-  pane. Indicators follow saved chat tabs across navigation, hidden panels, and tab switches.
-- Removing or replacing a chat tab updates the roles. Threads can have both roles, and a shared
-  target stays marked until its last owner removes it. State remains local to the client.
-- Clicking the filled indicator opens its parent thread and reveals the saved side chat, even
-  when the panel was hidden or another tab was selected. Keyboard activation does the same.
-  A target shared by several parents opens its first saved parent. Existing tabs and transient
-  chat metadata stay intact. Both sidebar layouts share this behavior; native mobile has no indicator.
-- Verification: All 96 focused panel-state and indicator interaction tests passed, along with the
-  web typecheck and targeted lint. Existing sidebar lint warnings remain. An isolated Browser panel
-  pass verified the current sidebar's row navigation, parent navigation from a hidden panel,
-  keyboard activation, and the "In a side chat" label. Native mobile and the legacy sidebar
-  were not tested in a running client.
-
 ## 2026-10-04 - Integrate upstream Orchestration V2
 
 - Upstream baseline: `8ed276c246`, following `de251fc297`. Integrates the reviewed 102 commits
@@ -958,35 +923,6 @@ restored against upstream's context records, as documented above.
   Escape dismissal, pinning, Settings, both sidebar layouts, and menus extending beyond the panel.
   The main view remained 1,536 pixels wide while the preview opened. Browser resizing timed out,
   so narrow-screen behavior and the native desktop shell were not visually verified.
-
-## 2026-09-21 - Focus side-chat drafts after selected-text actions
-
-- Upstream baseline: `7445aa733ada`.
-- Change: Each **Ask in side chat** action requests focus for its target composer after the
-  citation reaches the editor, with the caret after its trailing space. Existing drafts remain intact.
-- Reason: Reusing an open side chat appended the citation without rerunning its initial focus effect.
-- Scope: Web and desktop selection actions and the compact chat composer. Focus requests identify
-  the target environment and thread; provider adapters and native mobile are unchanged.
-- Verification: Reproduced focus remaining on the page body before the fix. An isolated browser
-  verified new, visible, and hidden side chats, repeated selections, preservation of existing drafts,
-  a single space after the citation, and typing into the side composer without clicking it.
-  Passed 29 focused tests and the web typecheck. Targeted lint retained only existing warnings.
-
-## 2026-09-13 — Reuse transient side chats for selected text
-
-- Upstream baseline: `b1e223e2b0`
-- Change: **Ask in side chat** appends the selected-text citation to an existing transient
-  side-chat draft and reveals that chat without replacement confirmation. Existing draft text
-  is preserved, and nothing is sent automatically.
-- Reason: Follow-up selections belong in the temporary conversation already open beside the thread.
-- Scope: Web and desktop selection actions, scoped by owning thread and environment. Regular side
-  chats and explicit new-side-chat actions retain their replacement behavior. Mobile has no matching
-  selection action; provider adapters, contracts, and connection handling are unchanged.
-- Verification: Focused selection and replacement tests, web typecheck, targeted lint and formatting,
-  and `git diff --check`. An isolated browser with a snapshot of real conversations verified initial
-  creation, repeated selections in the same unsent draft, preservation of typed text, reopening a
-  hidden chat, returning from Files, and cancellation of explicit new-chat replacement. SQLite
-  confirmed no extra threads or sent messages after reuse.
 
 ## 2026-09-12 - Consolidate selected-text actions in the citation toolbar
 
@@ -1137,22 +1073,6 @@ restored against upstream's context records, as documented above.
   frozen installation, targeted lint and formatting, and conflict-marker checks passed.
   Whitespace findings were limited to three payload lines in upstream's React Native patch.
 
-## 2026-09-04 - Keep side-chat composer styling aligned with upstream
-
-- Upstream baseline: `fff33f9e8519`
-- Change: The fork-owned side chat now wraps the shared `ChatComposer` with upstream's
-  `ComposerSurface.Shell` and `ComposerSurface.Host` components.
-- Reason: Upstream moved the composer backdrop, outline, radius, and shadow out of global
-  `.chat-composer-glass-*` classes and into `ComposerSurface`. The side-chat adapter kept the
-  removed class names, so its controls rendered without the composer container.
-- Scope: Web and desktop side chats and the focused presentation-parity test. Mobile and the
-  upstream main composer are unchanged.
-- Verification: Passed 11 focused side-chat tests, targeted formatting, targeted lint with no
-  errors, and `git diff --check` for the changed files. In an isolated browser with synthetic
-  threads, opened the target in the side surface and typed into its composer. The side composer
-  retained upstream's 1px outline, 22px corners, translucent backdrop, and light-mode shadow in
-  both light and dark appearances.
-
 ## 2026-09-03 - Merge upstream assistant citations, attachments, and desktop changes
 
 - Upstream baseline: `fff33f9e8`. Integrated 276 upstream commits.
@@ -1232,19 +1152,6 @@ restored against upstream's context records, as documented above.
   merge-focused desktop packaging tests. Scoped typechecks, web/server builds, frozen installation,
   targeted lint and formatting, and diff checks passed. Isolated browser checks covered main
   and side-chat attachments and side-chat composition.
-
-## 2026-08-17 — Focus side chats when opened
-
-- Upstream baseline: `a5e29edeec`
-- Change: Opening a side chat now moves keyboard focus from the main composer to the side-chat
-  composer after its target thread loads.
-- Reason: The side surface became visible while the main composer kept the caret, so typing still
-  went to the main chat.
-- Scope: The fork-owned side-chat adapter and its focused presentation test. Desktop inherits the
-  web behavior. Mobile and other right-panel surfaces are unchanged.
-- Verification: Passed 11 focused side-chat tests, the web type check, targeted lint and formatting,
-  and `git diff --check`. In the isolated dev app, opened Chat from the right-panel picker and
-  confirmed the side composer became `document.activeElement` while the main composer lost focus.
 
 ## 2026-08-17 — Enable T3 Connect in Fork desktop artifacts
 
@@ -1365,60 +1272,6 @@ restored against upstream's context records, as documented above.
 - Verification: Reviewed the documented version sources against the server, web, packaging, and
   upstream release scripts; checked the Markdown diff and command sequence explicitly.
 
-## 2026-08-11 — Add compact Chat right-panel surface
-
-- Upstream baseline: `2e381a50ad`
-- Change: Web and desktop thread context menus can open one different existing thread in the
-  owning thread's right panel. The fork-owned compact surface shows the target's live timeline,
-  persists a plain-text target-scoped draft, and supports direct send, interrupt, approvals, and
-  user-input responses without navigating the main chat.
-- Reason: Let users monitor and continue a second thread while keeping the primary thread in view,
-  without cloning or refactoring upstream's full Chat surface.
-- Scope: Fork-owned compact Chat UI and target-command builders; narrow right-panel descriptor,
-  tab, sidebar-menu, render, and global-shortcut seams; user documentation. Desktop inherits the
-  shared web behavior. Mobile, contracts, server orchestration, providers, related right-panel
-  surfaces, and global panel lifetime are unchanged.
-- Verification: Passed 45 focused right-panel, menu, target-isolation, availability, and shortcut
-  tests; the web type check; targeted lint and formatting; and `git diff --check`. Browser testing
-  was not run because it was not requested.
-- Upstream conflict map: `components/compact-chat/` is fork-owned. In `rightPanelStore.ts`, preserve
-  only the `chat` descriptor, one-per-owner replacement, self-target guard, and migration
-  validation. In both sidebars, preserve only the eligible context-menu action. In `ChatView.tsx`,
-  preserve the explicit-target render branch and compact-origin shortcut filter. In
-  `RightPanelTabs.tsx`, preserve the Chat icon and target-title leaf subscription. If upstream
-  ships a target-aware secondary chat, prefer it and remove the fork surface rather than merging
-  full-chat behavior into this compact implementation.
-
-## 2026-08-12 — Add blank side-chat creation
-
-- Upstream baseline: `2e381a50ad`
-- Change: Renamed the thread-menu action to **Open in side surface** and added `chat.newSide`,
-  defaulting to `mod+t`, which creates a blank right-panel chat from either a saved main thread or
-  its local draft. The right-panel surface controls expose the same action, and selected main-chat
-  text can create a prefilled side chat through **Ask in side chat**. Replacing an existing side
-  target requires confirmation; reopening the same target does not. The side-chat composer also
-  supports the main composer's `%` thread, `$` skill, and `@` file or folder reference pickers.
-  Repeating `mod+t` while the Chat surface is visible closes it instead of creating a replacement.
-- Reason: Make a side chat useful before another thread exists and make the action reachable from
-  a configurable keyboard shortcut.
-- Scope: Shared keybinding contracts and defaults, draft-aware right-panel ownership in both web
-  sidebars, blank and selected-text thread creation from `ChatView`, right-panel surface controls,
-  focused tests, and user documentation. The new thread snapshots the main chat's project, model
-  options, runtime/permission mode, interaction mode, branch, and worktree. Server orchestration,
-  provider adapters, desktop-specific code, and mobile remain unchanged.
-- Verification: Passed 150 focused contract, server keybinding, web keybinding, routing, menu,
-  right-panel, and compact Chat tests for the initial implementation, then 43 focused selected-text,
-  right-panel, and compact Chat tests after adding the new entry points, plus 47 focused replacement,
-  selected-text, right-panel, and compact Chat tests after adding confirmation. Passed affected type
-  checks, targeted lint and formatting, and `git diff --check`. Picker parity additionally passed 115
-  focused composer, inline-token, path, skill, and thread-reference tests plus the web type check and
-  targeted lint. In an isolated web environment, confirmed blank creation through the Chat card,
-  Chat availability in the `+` menu, a selected-text side chat with the source reference and Markdown
-  quote prefilled but unsent, replacement Cancel and Confirm behavior, and same-target reopening
-  without a dialog. Browser verification was not rerun for picker parity because it was not requested.
-  The shortcut-toggle follow-up passed 8 focused tests, the web type check, targeted lint and
-  formatting, and a full close-open-close cycle in the isolated dev app.
-
 ## 2026-08-13 - Adopt upstream Copy Thread ID
 
 Upstream `9e201941a` replaces the fork Copy Thread ID action in the sidebar and chat header.
@@ -1437,94 +1290,6 @@ The fork-specific implementation was removed.
   application data remain unchanged.
 - Verification: Passed all 53 focused desktop packaging and fork identity tests, the scripts,
   shared, and desktop type checks, targeted lint and formatting, and `git diff --check`.
-
-## 2026-08-15 — Match the side chat to the main chat
-
-- Upstream baseline: `a5e29edee`
-- Change: Replaced the side chat's hand-built transcript and composer with the same
-  `MessagesTimeline` and `ChatComposer` used by the main chat. The side adapter now supports shared
-  message, activity, image, picker, model, mode, approval, and user-input presentation while every
-  command remains bound to the side thread.
-- Reason: The copied compact UI had already drifted from the main chat in typography, spacing,
-  message rendering, composer styling, and controls.
-- Scope: Fork-owned compact Chat adapter and command builders, focused parity tests, side-chat user
-  guidance, and the superseded compact-surface specification. `ChatView`, server orchestration,
-  contracts, providers, mobile, and other right-panel surfaces are unchanged.
-- Verification: Passed 153 focused side-chat, timeline, composer, mention, footer, right-panel, and
-  replacement tests; the web type check; targeted lint and formatting; and `git diff --check`. In
-  an isolated dev stack, real `package.json` mentions sent successfully from both the main and side
-  composers without unloading the page. Their composer forms also measured at identical vertical
-  bounds after reserving the main chat's context-strip footprint below the side composer.
-- Upstream conflict map: `CompactChatSurface.tsx` remains the target-scoped adapter and imports the
-  two upstream chat components directly. Repair this adapter when their props change. Do not copy
-  their JSX or refactor `ChatView` into a shared controller. If upstream adds a target-aware side
-  chat, remove the fork adapter after verifying owner and target isolation.
-
-## 2026-08-15 — Give side chats their main-thread context
-
-- Upstream baseline: `a5e29edeec`, adapted to Orchestration V2 at `8ed276c246`.
-- Change: Every web or desktop turn sent from a same-environment side surface carries provider-only
-  context naming the owning main thread. After the V2 integration, the provider reads that thread
-  through upstream's `t3_thread_read`. Persisted user messages remain unchanged.
-- Reason: A side chat previously knew its target but the agent had no reliable way to discover the
-  main conversation it was opened beside.
-- Scope: Side-chat send metadata, the V2 run context, and provider prompt projection.
-  Cross-environment side surfaces omit owner context.
-- Verification: The initial 151 focused tests, scoped typechecks, and isolated owner-context check
-  passed. The later V2 live checks recorded above verified owner discovery through `t3_thread_read`.
-
-## 2026-08-15 — Make newly created side chats transient
-
-- Upstream baseline: `6a2e4a683`
-- Change: Side chats created through `chat.newSide` or **Ask in side chat** now stay out of the
-  creating client's thread collections and search results. Closing or replacing their side surface
-  deletes the T3 thread. A LocalStorage cleanup queue deletes threads left behind by app quit or a
-  crash after their environment reconnects. Threads opened through **Open in side surface** remain
-  persistent.
-- Reason: Short-lived follow-up chats should not accumulate in T3's thread history, but adding a
-  server visibility field or provider-specific transient sessions would create broad upstream
-  conflicts and inconsistent provider behavior.
-- Scope: Fork-owned transient registry and launch cleanup; narrow right-panel descriptor,
-  creation, replacement, close, thread-collection, and search seams; focused tests and web user
-  documentation. Server contracts, database projections, provider adapters, desktop IPC, and
-  native mobile are unchanged.
-- Verification: Passed 80 focused transient-registry, right-panel, replacement, compact Chat, and
-  command-palette tests; the web type check; targeted lint and formatting; and `git diff --check`.
-- Upstream conflict map: `transientSideChatStore.ts` and `TransientSideChatCleanup.tsx` own the
-  LocalStorage queue and deletion retry. In `rightPanelStore.ts`, preserve only the optional
-  transient Chat marker and persistence filter. In `ChatView.tsx` and both sidebars, preserve the
-  open, replacement, and close cleanup calls. In `state/entities.ts` and `state/queries.ts`, keep the
-  local collection and content-search filters. If upstream adds a server-owned unlisted or
-  transient thread model, prefer it and remove this client registry instead of maintaining both.
-
-## 2026-09-12 — Provider history deletion for transient side chats
-
-- Upstream baseline: `b1e223e2b0`
-- Change: Transient side-chat closure, replacement, and startup cleanup now call a dedicated
-  server RPC that resolves the native session from the existing provider binding, stops it, and
-  deletes its Codex, Claude, or OpenCode history. Failed cleanup stays in the existing browser
-  registry. Other providers retain T3-only cleanup.
-- Reason: Temporary conversations should not accumulate provider history. Native lineage and
-  unreadable-history checks fail explicitly; there is no cascading or guessed-file deletion.
-- Scope: Isolated provider deletion modules and Claude SDK worker, one RPC contract/handler,
-  the existing transient web/desktop hook, and a small provider admission guard. Pending/completed
-  markers use the existing runtime payload to prevent later resume and support retries, without
-  a database migration. Ordinary thread deletion is unchanged. Native mobile has no transient
-  side-chat hook to change.
-- Verification: Focused provider, lifecycle, provider-service, registry, authorization, and WebSocket
-  tests; scoped server/web/contracts type checks; targeted lint/formatting; server bundle and
-  bundled Claude worker smoke test. Browser E2E used an isolated dev server and provider homes
-  with real Codex Terra, Claude Sonnet, and OpenCode Terra turns. Verified native history removal on close/replacement, blank-chat cleanup, and preservation
-  of the main thread. A Claude child-transcript fixture caused refusal and remained queued; after
-  removing it, page-startup retry deleted the provider history.
-- Provider constraint: Closing Codex during first-session startup can leave an empty rollout.
-  Codex 0.154.0 refuses both reading and deleting that file through its API. Cleanup returns an
-  error and retains the job; retries require the provider history to become readable or be repaired.
-  The native regression test prevents mistaking this state for an absent session.
-- Upstream conflict map: Most behavior lives in new modules. Integration seams are the provider
-  service admission wrappers, WebSocket registration/authorization, shared RPC schema, transient
-  cleanup hook, and Claude worker bundle entry. Revisit the narrow raw Codex descendant query when
-  its generated client exposes that experimental filter.
 
 ## 2026-09-20 - Integrate upstream 0.0.42
 
@@ -1634,3 +1399,39 @@ The fork-specific implementation was removed.
 - Verification: 88 focused packaging and desktop identity tests passed, including a real macOS
   fixture that verifies a sealed app and rejects a modified resource. The scripts type check and
   targeted lint passed. Ad-hoc signing does not provide Apple Developer ID trust or notarization.
+
+## 2026-10-31 - Adopt upstream side chats, tables, and appearance controls
+
+- Upstream baseline: `15fe283272`, following `03d1a909153d`. Integrates 1,078 upstream
+  commits on `integration/upstream-2026-10-31`, starting from fork commit `6d17da0c4b`.
+- Replaced the fork side-chat implementation with upstream's native side chats. Removed the
+  transient registry, provider-history deletion, context injection, replacement/reuse behavior,
+  sidebar side-chat actions and indicators, compact-chat renderer, and fork side-chat shortcut.
+  Selected-text actions remain. Each side-chat selection opens a native tab with an unsent
+  citation draft; the new-thread action keeps its quote and source-thread reference.
+- Adopted upstream Markdown tables without downstream renderer or stylesheet changes. Adopted
+  upstream's environment artwork chooser, with Forge artwork as the default for Fork builds.
+  Users can choose other artwork, the version pill, or none. Fork artwork uses the theme's text
+  colors and fits upstream's compact send-button artwork without stretching past its bounds.
+- Preserved named and colored worktrees, directory rename and reuse, existing-thread workspace
+  editing, workspace grouping, Postponed, Undo restoration, project navigation, custom shortcuts,
+  prompt navigation, scoped/global thread references, account usage exclusions, HTML citations
+  and preview storage compatibility, H3, Fork identity, and local macOS signature verification.
+  Adapted selection handling to React Compiler and retained upstream's native panel lifecycle.
+- Verification: 1,548 focused regression tests passed, with five opt-in cases skipped. One
+  existing macOS storage-cleanup test still fails when its deliberately corrupted Git file
+  produces a failure rather than the expected kept result. The cleanup implementation matches
+  upstream. All 172 focused Chromium cases passed, including native side-chat selection drafts,
+  workspace dialogs, selection actions, Markdown, HTML frames, shortcuts, and panel behavior.
+  Fork component compiler coverage, affected package and scripts typechecks, targeted lint,
+  unused-file/dependency/export checks, and web/server bundles passed.
+- The integrated Browser-panel pass used isolated copied stopped-thread data and a disposable
+  Git project. Personal with Luna at low effort completed main and native side-chat turns.
+  Verified both selection actions, native Bring back and side-chat history, Markdown tables,
+  F2, Postpone/restore, settlement/Undo, continue-workspace drafts, worktree creation, switching,
+  reuse, directory rename and color selection, scoped/global references, project filtering and
+  clearing, usage inclusion toggling, grouping and H3 settings, and light/dark artwork choices.
+  Layout bounds and page overflow were checked. Screenshot and recording capture timed out, so
+  no screenshot-based visual sign-off is claimed. Native mobile UI, installed Electron shell,
+  installers, and remote/tunnel modes were not exercised. No live database or release channel
+  was changed. Nothing was published.

@@ -1,14 +1,13 @@
 import type { AssistantCitation, ScopedThreadRef } from "@t3tools/contracts";
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
   assistantCitationSource,
   serializeAssistantCitation,
 } from "@t3tools/shared/assistantCitations";
 
-import { useComposerDraftStore, type DraftId } from "./composerDraftStore";
-import { useRightPanelStore } from "./rightPanelStore";
+import { type DraftId } from "./composerDraftStore";
 import { formatInlineContextReference } from "./lib/composerContextReferences";
-import { threadContextRecord, threadContextReference } from "./lib/composerContextRecords";
+import { threadContextRecord } from "@t3tools/shared/composerContextReferences";
+import { threadContextReference } from "./lib/composerContextRecords";
 
 export type SelectedTextThreadAction = "ask-in-new-thread" | "ask-in-side-chat";
 
@@ -43,26 +42,6 @@ export function buildAskInNewThreadPrompt(input: {
 
 export function buildAskInSideChatPrompt(assistantCitation: AssistantCitation): string {
   return `${serializeAssistantCitation(assistantCitation)} `;
-}
-
-/** Append to the owner's transient draft and return the target composer to focus. */
-export function reuseSelectedTextSideChatDraft(
-  owner: ScopedThreadRef,
-  prompt: string,
-): ScopedThreadRef | null {
-  const panelStore = useRightPanelStore.getState();
-  const surface = panelStore.byThreadKey[scopedThreadKey(owner)]?.surfaces.find(
-    (surface) => surface.kind === "chat" && surface.transient === true,
-  );
-  if (surface?.kind !== "chat") return null;
-
-  const target = { environmentId: surface.environmentId, threadId: surface.threadId };
-  const draftStore = useComposerDraftStore.getState();
-  const existingPrompt = draftStore.getComposerDraft(target)?.prompt ?? "";
-  const separator = existingPrompt.length > 0 && !/\s$/.test(existingPrompt) ? " " : "";
-  draftStore.setPrompt(target, `${existingPrompt}${separator}${prompt}`);
-  panelStore.activateSurface(owner, surface.id);
-  return target;
 }
 
 /** Prefill the exact draft returned by navigation, including reused project drafts. */

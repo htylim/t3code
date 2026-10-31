@@ -1,4 +1,4 @@
-/** Keep bundler externals aligned with staged production dependencies. */
+/** Keep bundler externals aligned with the staged production dependency list. */
 const DESKTOP_RUNTIME_EXTERNAL_PREFIXES = [
   "@napi-rs/keyring",
   "@crowecawcaw/xa11y",

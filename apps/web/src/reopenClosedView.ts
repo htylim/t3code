@@ -1,4 +1,3 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 
 import type { OpenPreviewMutation } from "./browser/openFileInPreview";
@@ -15,6 +14,8 @@ export interface ReopenOwnerState {
   environmentKnown: boolean;
   catalogReady: boolean;
   ownerExists: boolean;
+  /** False only for a side chat tab whose thread is gone from the shell. */
+  sideChatExists: boolean;
   shellLive: boolean;
   panel: ThreadRightPanelState;
 }
@@ -31,7 +32,7 @@ export function planNextReopen(
       drop.push(entry);
       continue;
     }
-    if (!owner.ownerExists) {
+    if (!owner.ownerExists || !owner.sideChatExists) {
       if (owner.shellLive) continue;
       break;
     }
@@ -132,13 +133,11 @@ export async function reopenClosedView(
         if (surface.title) panels.renameDevice(ref, surface.id, surface.title);
       } else panels.open(ref, "device");
       break;
-    case "chat":
-      // Transient side chats delete their target when closed and cannot be restored.
-      if (surface.transient) return false;
-      panels.openChat(ref, scopeThreadRef(surface.environmentId, surface.threadId));
-      break;
     case "pull-request":
       panels.openPullRequest(ref, surface);
+      break;
+    case "side-chat":
+      panels.openSideChat(ref, surface.threadId);
       break;
     default:
       panels.open(ref, surface.kind);

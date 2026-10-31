@@ -1,9 +1,9 @@
+import { useEffect, useState } from "react";
 import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
 import { ChevronDownIcon } from "lucide-react";
-import { useState } from "react";
 
 import { useComposerMenuProps } from "./chat/composerEventScope";
-import { ThemeColorPickerPanel } from "./settings/ThemeColorPicker";
+import { createFrameCommitter, ThemeColorPickerPanel } from "./settings/ThemeColorPicker";
 import { Button } from "./ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 
@@ -19,6 +19,9 @@ export function WorktreeColorPicker({
   onChange: (color: string) => void;
   onOpen?: () => void;
 }) {
+  const [committer] = useState(createFrameCommitter);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- commits the last custom color when its picker unmounts
+  useEffect(() => committer.flush, [committer]);
   const floatingLayerProps = useComposerMenuProps();
   const [custom, setCustom] = useState(false);
   return (
@@ -67,7 +70,12 @@ export function WorktreeColorPicker({
             Custom color
           </Button>
           {custom ? (
-            <ThemeColorPickerPanel label="Worktree" value={color} onChange={onChange} />
+            <ThemeColorPickerPanel
+              committer={committer}
+              label="Worktree"
+              value={color}
+              onChange={onChange}
+            />
           ) : null}
         </div>
       </PopoverPopup>

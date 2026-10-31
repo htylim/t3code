@@ -13,7 +13,6 @@ import type { ThreadPanelPresentation } from "./rightPanelLayout";
 import type { ChatFileAttachment } from "./types";
 
 const RIGHT_PANEL_KINDS = [
-  "chat",
   "diff",
   "files",
   "file",
@@ -22,6 +21,7 @@ const RIGHT_PANEL_KINDS = [
   "terminal",
   "pull-request",
   "pull-requests",
+  "side-chat",
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -35,13 +35,6 @@ export interface DeviceTabTarget {
 }
 
 export type RightPanelSurface =
-  | {
-      id: `chat:${string}:${string}`;
-      kind: "chat";
-      environmentId: ScopedThreadRef["environmentId"];
-      threadId: ScopedThreadRef["threadId"];
-      transient?: true;
-    }
   | { id: `browser:${string}`; kind: "preview"; resourceId: string }
   | { id: "browser:new"; kind: "preview"; resourceId: null }
   | { id: "device" | `device:${string}`; kind: "device"; target?: DeviceTabTarget; title?: string }
@@ -82,15 +75,12 @@ export type RightPanelSurface =
       url?: string;
       detailTab?: PullRequestDetailTab;
     }
-  | { id: "pull-requests"; kind: "pull-requests" };
+  | { id: "pull-requests"; kind: "pull-requests" }
+  | { id: `side-chat:${string}`; kind: "side-chat"; threadId: ThreadId };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
-// v9 removed the "plan" surface kind (plans render inline in the transcript).
-// v10 keys pull-request surfaces by reference instead of a singleton tab.
-// v11 stops persisting the pull-request list's shared panel, so a restart opens the page fresh.
-// v15 retains fork chat surfaces alongside upstream thread-panel preferences.
-const RIGHT_PANEL_STORAGE_VERSION = 15;
-/** A fixed workspace-level ref: each PR surface carries its own real environment. */
+const RIGHT_PANEL_STORAGE_VERSION = 14;
+
 export const PULL_REQUESTS_PANEL_REF = scopeThreadRef(
   EnvironmentId.make("pull-requests-panel"),
   ThreadId.make("pull-requests-panel"),
@@ -121,6 +111,7 @@ interface RightPanelStoreState {
   userActionRevisionByThreadKey: Record<string, number>;
   closeRevisionByThreadKey: Record<string, number>;
   getUserActionRevision: (ref: ScopedThreadRef) => number;
+  markUserAction: (ref: ScopedThreadRef) => number;
   /** Refused if the user chose a panel after expectedUserActionRevision was read. */
   openProactive: (
     ref: ScopedThreadRef,
@@ -132,13 +123,9 @@ interface RightPanelStoreState {
   ) => boolean;
   open: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "chat" | "file" | "terminal" | "pull-request">,
+    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat">,
   ) => void;
-  openChat: (
-    owner: ScopedThreadRef,
-    target: ScopedThreadRef,
-    options?: { transient?: boolean },
-  ) => void;
+  openSideChat: (ref: ScopedThreadRef, threadId: ThreadId) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
   renameDevice: (ref: ScopedThreadRef, surfaceId: string, title: string) => void;
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
@@ -196,7 +183,7 @@ interface RightPanelStoreState {
   toggleVisibility: (ref: ScopedThreadRef) => void;
   toggle: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "chat" | "file" | "terminal" | "pull-request">,
+    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat">,
   ) => void;
   setThreadPanelOpen: (
     ref: ScopedThreadRef,
@@ -219,7 +206,7 @@ const DEFAULT_THREAD_PANEL_VISIBILITY: ThreadPanelVisibility = {
 };
 
 const singletonSurface = (
-  kind: Exclude<RightPanelKind, "chat" | "file" | "preview" | "terminal" | "pull-request">,
+  kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "pull-request" | "side-chat">,
 ): RightPanelSurface => {
   switch (kind) {
     case "diff":
@@ -265,14 +252,6 @@ const terminalSurface = (terminalId: string): RightPanelSurface => ({
   resourceId: terminalId,
   terminalIds: [terminalId],
   activeTerminalId: terminalId,
-});
-
-const chatSurface = (target: ScopedThreadRef, transient: boolean): RightPanelSurface => ({
-  id: `chat:${target.environmentId}:${target.threadId}`,
-  kind: "chat",
-  environmentId: target.environmentId,
-  threadId: target.threadId,
-  ...(transient ? { transient: true as const } : {}),
 });
 
 export type PullRequestSurface = Extract<RightPanelSurface, { kind: "pull-request" }>;
@@ -406,11 +385,39 @@ const automaticUpdate = (
   ...updateThread(state, threadKey, updater),
 });
 
+// A side chat pane has no panel of its own, so its panel actions open in its parent's panel.
+const panelHosts = new Map<string, ScopedThreadRef>();
+
+/** Routes `guest`'s panel actions to `host`'s panel until the returned cleanup runs. */
+export function hostRightPanel(guest: ScopedThreadRef, host: ScopedThreadRef): () => void {
+  const guestKey = scopedThreadKey(guest);
+  panelHosts.set(guestKey, host);
+  return () => {
+    if (panelHosts.get(guestKey) === host) panelHosts.delete(guestKey);
+  };
+}
+
+/** The thread whose panel shows `ref`'s panel actions, so it also owns their browser tabs. */
+export function rightPanelHostRef(ref: ScopedThreadRef): ScopedThreadRef {
+  return panelHosts.get(scopedThreadKey(ref)) ?? ref;
+}
+
 const userAction = (
+  state: RightPanelStoreState,
+  guestKey: string,
+  updater: (current: ThreadRightPanelState) => ThreadRightPanelState,
+  closesView = false,
+): Partial<RightPanelStoreState> => {
+  const host = panelHosts.get(guestKey);
+  const threadKey = host === undefined ? guestKey : scopedThreadKey(host);
+  return userActionOnThread(state, threadKey, updater, closesView);
+};
+
+const userActionOnThread = (
   state: RightPanelStoreState,
   threadKey: string,
   updater: (current: ThreadRightPanelState) => ThreadRightPanelState,
-  closesView = false,
+  closesView: boolean,
 ): Partial<RightPanelStoreState> => ({
   ...updateThread(state, threadKey, (current) => {
     const next = updater(current);
@@ -472,7 +479,6 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
             .map(([threadKey, threadState]) => {
               const validThreadState =
                 threadState && typeof threadState === "object" ? threadState : null;
-              let chatSurfaceSeen = false;
               const surfaces = Array.isArray(validThreadState?.surfaces)
                 ? validThreadState.surfaces.flatMap<RightPanelSurface>((surface) => {
                     const kind = (surface as { kind?: string }).kind;
@@ -484,22 +490,6 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                     ) {
                       const { folderTrail: _invalid, ...rest } = surface;
                       surface = rest;
-                    }
-                    // Dropped surface kind: plans now render inline in the
-                    // transcript (v9).
-                    if (surface.kind === "chat") {
-                      if (
-                        surface.transient === true ||
-                        chatSurfaceSeen ||
-                        typeof surface.environmentId !== "string" ||
-                        typeof surface.threadId !== "string" ||
-                        surface.id !== `chat:${surface.environmentId}:${surface.threadId}` ||
-                        scopedThreadKey(surface) === threadKey
-                      ) {
-                        return [];
-                      }
-                      chatSurfaceSeen = true;
-                      return [surface];
                     }
                     if (surface.kind === "file") {
                       const revealLine =
@@ -640,6 +630,16 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
       closeRevisionByThreadKey: {},
       getUserActionRevision: (ref) =>
         get().userActionRevisionByThreadKey[scopedThreadKey(ref)] ?? 0,
+      markUserAction: (ref) => {
+        const revision = get().getUserActionRevision(ref) + 1;
+        set((state) => ({
+          userActionRevisionByThreadKey: {
+            ...state.userActionRevisionByThreadKey,
+            [scopedThreadKey(ref)]: revision,
+          },
+        }));
+        return revision;
+      },
       openProactive: (ref, request, expectedUserActionRevision, activateExisting = false) => {
         let opened = false;
         set((state) => {
@@ -690,16 +690,6 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             return upsertSurface(current, singletonSurface(kind));
           }),
         ),
-      openChat: (owner, target, options) => {
-        if (scopedThreadKey(owner) === scopedThreadKey(target)) return;
-        set((state) =>
-          userAction(state, scopedThreadKey(owner), (current) => {
-            const surface = chatSurface(target, options?.transient === true);
-            const withoutChat = current.surfaces.filter((entry) => entry.kind !== "chat");
-            return upsertSurface({ ...current, surfaces: withoutChat }, surface);
-          }),
-        );
-      },
       openDevice: (ref, target, automatic = false) =>
         set((state) =>
           (automatic ? automaticUpdate : userAction)(state, scopedThreadKey(ref), (current) => {
@@ -722,6 +712,12 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
               existing ?? surface,
             );
           }),
+        ),
+      openSideChat: (ref, threadId) =>
+        set((state) =>
+          userAction(state, scopedThreadKey(ref), (current) =>
+            upsertSurface(current, { id: `side-chat:${threadId}`, kind: "side-chat", threadId }),
+          ),
         ),
       renameDevice: (ref, surfaceId, title) =>
         set((state) =>
@@ -1024,8 +1020,14 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
               (surface) => surface.id === current.activeSurfaceId,
             );
             const fallbackBrowser = surfaces.find((surface) => surface.kind === "preview");
+            // A closed session tab was the last surface: hide the panel rather than leave it on
+            // the empty picker, as a user close would. A dropped `browser:new` placeholder does not count.
+            const closedLastSessionTab =
+              surfaces.length === 0 &&
+              current.surfaces.some((surface) => surface.kind === "preview" && surface.resourceId);
             return {
               ...current,
+              isOpen: closedLastSessionTab ? false : current.isOpen,
               surfaces,
               activeSurfaceId: activeStillExists
                 ? current.activeSurfaceId
@@ -1155,34 +1157,9 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
       ),
       partialize: (state) => ({
         byThreadKey: Object.fromEntries(
-          Object.entries(state.byThreadKey).flatMap(([threadKey, threadState]) => {
-            if (isPullRequestsPanelKey(threadKey)) return [];
-            const surfaces = threadState.surfaces.filter(
-              (surface) => surface.kind !== "chat" || surface.transient !== true,
-            );
-            if (
-              surfaces.length === 0 &&
-              threadState.proactiveDiffTurnId === undefined &&
-              !threadState.dismissedDeviceSurfaceIds?.length
-            )
-              return [];
-            const activeSurfaceId = surfaces.some(
-              (surface) => surface.id === threadState.activeSurfaceId,
-            )
-              ? threadState.activeSurfaceId
-              : (surfaces.at(-1)?.id ?? null);
-            return [
-              [
-                threadKey,
-                {
-                  ...threadState,
-                  isOpen: threadState.isOpen && activeSurfaceId !== null,
-                  activeSurfaceId,
-                  surfaces,
-                },
-              ],
-            ];
-          }),
+          Object.entries(state.byThreadKey).filter(
+            ([threadKey]) => !isPullRequestsPanelKey(threadKey),
+          ),
         ),
         threadPanelVisibilityByThreadKey: Object.fromEntries(
           Object.entries(state.threadPanelVisibilityByThreadKey).flatMap(
@@ -1214,7 +1191,6 @@ useRightPanelStore.subscribe((next, previous) => {
     for (const surface of closedInOrder) {
       if (
         surface.kind === "terminal" ||
-        (surface.kind === "chat" && surface.transient !== undefined) ||
         (surface.kind === "preview" && surface.resourceId !== null)
       )
         continue;
@@ -1266,39 +1242,6 @@ export function selectActiveRightPanelSurface(
   return selectSelectedRightPanelSurface(byThreadKey, ref);
 }
 
-export interface SideChatThreadState {
-  hasSideChat: boolean;
-  isSideChat: boolean;
-}
-
-/** Derive both sidebar roles from saved chat tabs, including hidden and inactive panels. */
-export function selectSideChatThreadStates(
-  byThreadKey: Record<string, ThreadRightPanelState>,
-): ReadonlyMap<string, SideChatThreadState> {
-  const sideChatThreadStates = new Map<string, SideChatThreadState>();
-  for (const [ownerThreadKey, panelState] of Object.entries(byThreadKey)) {
-    for (const surface of panelState.surfaces) {
-      if (surface.kind !== "chat") continue;
-      const ownerState = sideChatThreadStates.get(ownerThreadKey) ?? {
-        hasSideChat: false,
-        isSideChat: false,
-      };
-      ownerState.hasSideChat = true;
-      sideChatThreadStates.set(ownerThreadKey, ownerState);
-
-      const sideChatThreadKey = scopedThreadKey(surface);
-      const sideChatState = sideChatThreadStates.get(sideChatThreadKey) ?? {
-        hasSideChat: false,
-        isSideChat: false,
-      };
-      sideChatState.isSideChat = true;
-      sideChatThreadStates.set(sideChatThreadKey, sideChatState);
-    }
-  }
-  return sideChatThreadStates;
-}
-
-/** The selected surface even while the panel is hidden, so a layout control can restore it. */
 export function selectSelectedRightPanelSurface(
   byThreadKey: Record<string, ThreadRightPanelState>,
   ref: ScopedThreadRef | null | undefined,

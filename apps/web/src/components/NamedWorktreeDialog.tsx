@@ -111,6 +111,7 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
       : null,
   );
   const refreshSiblings = siblings.refresh;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refreshes the sibling-directory query when the rename dialog mounts
   useEffect(() => {
     refreshSiblings();
   }, [refreshSiblings]);

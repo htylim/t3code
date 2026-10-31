@@ -2,19 +2,32 @@ import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { type ReactElement } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import { act, render } from "../../test/render";
 import "../index.css";
 
 import { filesystemEnvironment } from "../state/filesystem";
-import { selectActiveRightPanelSurface, useRightPanelStore } from "../rightPanelStore";
-
+import { useRightPanelStore } from "../rightPanelStore";
 import { setMarkdownTaskChecked } from "./files/filePreviewMode";
+import { HostImageUrlContext } from "./chat/hostImageUrl";
 
 const { workspaceSearch, filesystemMetadata } = vi.hoisted(() => ({
   workspaceSearch: vi.fn(),
   filesystemMetadata: vi.fn(),
 }));
+const parsedSources = vi.hoisted(() => [] as string[]);
+vi.mock(import("mdast-util-from-markdown"), async (original) => {
+  const actual = await original();
+  return {
+    ...actual,
+    fromMarkdown: ((source: string, ...rest: never[]) => {
+      parsedSources.push(String(source));
+      return (actual.fromMarkdown as (...args: unknown[]) => unknown)(source, ...rest);
+    }) as typeof actual.fromMarkdown,
+  };
+});
+
 vi.mock(import("../state/use-atom-query-runner"), async (original) => ({
   ...(await original()),
   useAtomQueryRunner: ((family: unknown) =>
@@ -98,6 +111,7 @@ it("keeps compact audio playback loaded across signed URL renewals", async () =>
 });
 
 function setup() {
+  parsedSources.length = 0;
   settingsOverrides.mathRenderingEnabled = false;
   renderDiagram.mockReset();
   workspaceSearch.mockReset().mockResolvedValue(AsyncResult.success({ entries: [] }));
@@ -120,6 +134,50 @@ it("shows unavailable audio when a workspace embed has no thread", async () => {
   expect(screen.container.textContent).toContain("Audio unavailable");
   expect(screen.container.textContent).not.toContain("Loading audio");
   expect(screen.container.querySelector("audio")).toBeNull();
+});
+
+it("loads a host image through the page's own route when there is no environment", async () => {
+  setup();
+  const pixel =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  const hostImageUrl = vi.fn((_path: string) => pixel);
+  await using screen = await render(
+    <HostImageUrlContext value={hostImageUrl}>
+      <ChatMarkdown cwd={undefined} text="![Shot](</work/my shot.png>)" />
+    </HostImageUrlContext>,
+  );
+  await expect.element(screen.getByAltText("Shot")).toHaveAttribute("src", pixel);
+  expect(new Set(hostImageUrl.mock.calls.map(([path]) => path))).toEqual(
+    new Set(["/work/my shot.png"]),
+  );
+});
+
+it("reuses the parse of a streaming reply's finished blocks when it remounts", async () => {
+  setup();
+  const message = (
+    <ChatMarkdown cwd="/tmp/project" text={"Finished block\n\nStill growing"} isStreaming />
+  );
+  {
+    await using _first = await render(message);
+  }
+  await using screen = await render(message);
+  await expect.element(screen.getByText("Still growing")).toBeVisible();
+  expect(parsedSources.filter((source) => source.includes("Finished block"))).toHaveLength(1);
+});
+
+it("reuses the parse of a remounted message that has stable extra plugins", async () => {
+  setup();
+  const parsed = vi.fn();
+  const countingPlugins = [() => () => void parsed()];
+  const message = (
+    <ChatMarkdown cwd="/tmp/project" text="Cached text" extraRemarkPlugins={countingPlugins} />
+  );
+  {
+    await using _first = await render(message);
+  }
+  await using screen = await render(message);
+  await expect.element(screen.getByText("Cached text")).toBeVisible();
+  expect(parsed).toHaveBeenCalledTimes(1);
 });
 
 describe("ChatMarkdown favicon privacy", () => {
@@ -261,6 +319,37 @@ describe("ChatMarkdown workspace file opens", () => {
   });
 });
 
+describe("ChatMarkdown skill chips", () => {
+  it("shows the skill's details and opens its instructions", async () => {
+    setup();
+    const threadRef = {
+      environmentId: EnvironmentId.make("workspace"),
+      threadId: ThreadId.make("thread"),
+    };
+    await using screen = await renderText("Run $review now", {
+      threadRef,
+      skills: [
+        {
+          name: "review",
+          displayName: "Review",
+          description: "Reviews the current branch.",
+          path: "/skills/review/SKILL.md",
+          enabled: true,
+        },
+      ],
+    });
+    using openFile = vi
+      .spyOn(useRightPanelStore.getState(), "openFile")
+      .mockImplementation(() => {});
+
+    await userEvent.click(screen.getByRole("button", { name: "Skill Review. Show details" }));
+    await expect.element(page.getByText("Reviews the current branch.")).toBeVisible();
+    await userEvent.click(page.getByRole("button", { name: "View instructions" }));
+
+    expect(openFile).toHaveBeenCalledExactlyOnceWith(threadRef, "/skills/review/SKILL.md");
+  });
+});
+
 describe("ChatMarkdown headings", () => {
   it("never gives two headings the same id, even when a suffix matches another heading", async () => {
     setup();
@@ -277,6 +366,22 @@ describe("ChatMarkdown headings", () => {
       "user-content-install",
       "user-content-install-2",
     ]);
+  });
+});
+
+describe("ChatMarkdown inline code selection", () => {
+  it("selects the whole inline code span on double-click, but only a word in fenced code", async () => {
+    setup();
+    await using screen = await renderText(
+      "Run `migration-gate --dry-run` first.\n\n```txt\nfenced-block word\n```",
+    );
+    await userEvent.dblClick(screen.getByText("migration-gate --dry-run"));
+    expect(window.getSelection()?.toString()).toBe("migration-gate --dry-run");
+
+    window.getSelection()?.removeAllRanges();
+    const fenced = screen.container.querySelector("pre code")!;
+    await userEvent.dblClick(fenced, { position: { x: 4, y: 4 } });
+    expect(window.getSelection()?.toString()).toBe("fenced");
   });
 });
 
@@ -307,50 +412,4 @@ describe("ChatMarkdown Windows file links", () => {
       expect(fileHrefs(container)).toEqual([]);
     }
   });
-});
-
-describe("ChatMarkdown visualization links", () => {
-  it.each([false, true])(
-    "opens a completed streaming marker in the file panel with parseRawHtml=%s",
-    async (parseRawHtml) => {
-      const threadRef = {
-        environmentId: EnvironmentId.make("visualization-environment"),
-        threadId: ThreadId.make("visualization-thread"),
-      };
-      const path = "/tmp/project/.t3/visualizations/side-surface-icons.html";
-      const marker = `\uE200visualize\uE202${JSON.stringify({ path })}\uE201`;
-      const markdown = (text: string, isStreaming: boolean) => (
-        <ChatMarkdown
-          cwd="/tmp/project"
-          threadRef={threadRef}
-          text={text}
-          isStreaming={isStreaming}
-          parseRawHtml={parseRawHtml}
-        />
-      );
-      const { container, rerender } = await render(
-        markdown(`Options:\n\n${marker.slice(0, -1)}`, true),
-      );
-      try {
-        expect(container.querySelectorAll("a")).toHaveLength(0);
-        await rerender(markdown(`Options:\n\n${marker}\n\nChoose one.`, true));
-        const fileLink = container.querySelector<HTMLAnchorElement>("a");
-        expect(fileLink?.getAttribute("data-markdown-copy")).toContain(
-          `[side-surface-icons.html](${path})`,
-        );
-        expect(container.textContent).not.toContain("\uE200visualize");
-        await act(() => fileLink!.click());
-        expect(
-          selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, threadRef),
-        ).toMatchObject({
-          kind: "file",
-          relativePath: ".t3/visualizations/side-surface-icons.html",
-        });
-        await rerender(markdown(`Options:\n\n${marker}\n\nChoose one.`, false));
-        expect(container.querySelector("a")?.getAttribute("href")).toBe(path);
-      } finally {
-        useRightPanelStore.setState({ byThreadKey: {}, userActionRevisionByThreadKey: {} });
-      }
-    },
-  );
 });

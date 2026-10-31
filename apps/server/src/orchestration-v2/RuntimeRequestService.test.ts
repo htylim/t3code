@@ -10,7 +10,6 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProjectionStore from "./ProjectionStore.ts";
@@ -60,7 +59,7 @@ it.effect(
               } as never),
           }),
           Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({
-            get: () => Effect.succeed(Option.some({ respondToRuntimeRequest } as never)),
+            get: () => Effect.succeedSome({ respondToRuntimeRequest } as never),
           }),
         ),
       ),
@@ -76,8 +75,12 @@ it.effect(
       assert.include(String(delivered?.question), '"text": "Use a native table."');
       assert.include(String(delivered?.question), '"kind": "html-attachment"');
       assert.notInclude(String(delivered?.question), "t3-citation://");
-      assert.equal((delivered?.options as string[])[0], "Keep this option");
-      assert.include((delivered?.options as string[])[1]!, '"comment": "Explain this choice."');
+      const deliveredOptions = delivered?.options;
+      assert.isArray(deliveredOptions);
+      if (!Array.isArray(deliveredOptions))
+        throw new Error("Expected the provider answer options.");
+      assert.equal(deliveredOptions[0], "Keep this option");
+      assert.include(String(deliveredOptions[1]), '"comment": "Explain this choice."');
       assert.deepEqual(delivered?.structured, { selected: true });
       assert.equal(answers.question, quote);
       assert.deepEqual(answers.options, ["Keep this option", quote]);
@@ -95,11 +98,9 @@ it.effect.each(["expired", "resolved"] as const)(
       (_input: ProviderAdapter.ProviderAdapterV2RuntimeRequestResponseInput) => Effect.void,
     );
     const getSession = vi.fn(() =>
-      Effect.succeed(
-        Option.some({
-          respondToRuntimeRequest,
-        } as never),
-      ),
+      Effect.succeedSome({
+        respondToRuntimeRequest,
+      } as never),
     );
     const projection = {
       runtimeRequests: [

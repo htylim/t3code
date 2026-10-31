@@ -4,7 +4,7 @@ export { isTimelinePromptKeybindingCommand } from "@t3tools/contracts";
 
 export const TIMELINE_PROMPT_VIEW_OFFSET = 24;
 
-const COMPACT_CHAT_SURFACE_SELECTOR = "[data-compact-chat-surface]";
+const SIDE_CHAT_PANE_SELECTOR = "[data-side-chat-pane]";
 const IGNORED_PROMPT_NAVIGATION_SELECTOR = [
   '[data-slot="dialog"]',
   '[role="dialog"]',
@@ -55,8 +55,8 @@ export function timelineOwnsPromptNavigation(
         : null;
   if (target?.closest(IGNORED_PROMPT_NAVIGATION_SELECTOR)) return false;
 
-  const viewportCompactSurface = viewport.closest(COMPACT_CHAT_SURFACE_SELECTOR);
-  const targetCompactSurface = target?.closest(COMPACT_CHAT_SURFACE_SELECTOR) ?? null;
+  const viewportCompactSurface = viewport.closest(SIDE_CHAT_PANE_SELECTOR);
+  const targetCompactSurface = target?.closest(SIDE_CHAT_PANE_SELECTOR) ?? null;
   return viewportCompactSurface
     ? viewportCompactSurface === targetCompactSurface
     : targetCompactSurface === null;

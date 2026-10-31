@@ -160,6 +160,7 @@ describe("project switch integration", () => {
       open: true,
       mode: "files",
       openIntent: null,
+      session: 0,
     };
 
     const handled = handleProjectSwitchShortcut({
@@ -178,6 +179,7 @@ describe("project switch integration", () => {
       open: true,
       mode: "command",
       openIntent: { kind: "project-switch" },
+      session: 1,
     });
 
     const entries = buildSidebarProjectPickerEntries({
