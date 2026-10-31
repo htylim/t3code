@@ -5,9 +5,17 @@ import { resolveWorktreeDisplay } from "./worktreeDisplay";
 const defaultColor = "#808080";
 
 describe("worktree display", () => {
-  it("excludes the local checkout and a worktree that has not been provisioned", () => {
+  it("excludes scratch folders, the local checkout, and unprovisioned worktrees", () => {
     expect(resolveWorktreeDisplay({ worktreePath: null })).toBeNull();
     expect(resolveWorktreeDisplay({ worktreePath: "/repo", projectCwd: "/repo" })).toBeNull();
+    expect(
+      resolveWorktreeDisplay({
+        worktreePath: "/scratch/2026-10-29-schedule-reviews",
+        projectCwd: "/scratch",
+        isScratchProject: true,
+        savedColor: "#8b5cf6",
+      }),
+    ).toBeNull();
   });
 
   it.each(["t3-abcd1234", "t3code-abcd1234", "billing-fix"])(

@@ -5,17 +5,19 @@ export interface WorktreeDisplay {
   readonly color: string;
 }
 
-/** Describe every assigned worktree from its current directory and optional saved color. */
+/** Describe assigned Git worktrees, excluding scratch folders and the local checkout. */
 export function resolveWorktreeDisplay({
   worktreePath,
   projectCwd,
   savedColor,
+  isScratchProject = false,
 }: {
   worktreePath: string | null;
   projectCwd?: string | null | undefined;
   savedColor?: string | undefined;
+  isScratchProject?: boolean | undefined;
 }): WorktreeDisplay | null {
-  if (!worktreePath || worktreePath === projectCwd) return null;
+  if (isScratchProject || !worktreePath || worktreePath === projectCwd) return null;
   const directoryName =
     worktreePath
       .replace(/[\\/]+$/, "")
