@@ -2739,6 +2739,10 @@ export default function ChatView(props: ChatViewProps) {
           return false;
         openThreadFind(activeThreadKey);
       },
+      "chat.newSide": ({ event }) => {
+        if (!sideChat.available) return false;
+        if (!event.repeat) openSideChatStable();
+      },
       "composer.cycleHost": ({ event }) => {
         if (!canChangeEnvironment) return false;
         if (event.repeat) return;

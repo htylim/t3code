@@ -172,6 +172,7 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
     when: "!terminalFocus && !terminalOpen && !rightPanelOpen",
   },
   { key: "mod+shift+t", command: "view.reopenClosed" },
+  { key: "mod+t", command: "chat.newSide", when: "!terminalFocus && !previewFocus" },
   { key: "mod+d", command: "diff.toggle", when: "!terminalFocus" },
   { key: "mod+shift+j", command: "preview.toggle" },
   { key: "mod+r", command: "preview.refresh", when: "previewFocus" },

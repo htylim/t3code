@@ -18,6 +18,23 @@ const CITATION_HIGHLIGHT_OPACITY = "--assistant-citation-highlight-opacity";
 const CITATION_HIGHLIGHT_PEAK = 0.45;
 const COMMENT_HIGHLIGHT_NAME = "t3-assistant-citation-comment";
 
+/** Anchor a comment popup to the final visible line of the cited passage. */
+export function createAssistantCitationCommentAnchor(anchor: AssistantCitationSourceAnchor) {
+  return {
+    contextElement: anchor.source,
+    getBoundingClientRect: () => {
+      if (anchor.kind === "html") return anchor.getBoundingClientRect();
+      const rects = anchor.range.getClientRects();
+      const rect = rects.item(rects.length - 1) ?? anchor.range.getBoundingClientRect();
+      // Keep horizontally clipped code and table selections inside the source's width.
+      const bounds = anchor.source.getBoundingClientRect();
+      const left = Math.min(Math.max(rect.left, bounds.left), bounds.right);
+      const right = Math.max(Math.min(rect.right, bounds.right), left);
+      return new DOMRect(left, rect.top, right - left, rect.height);
+    },
+  };
+}
+
 export function observeAssistantCitationCommentSource({
   anchor,
   citation,

@@ -3,6 +3,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type ReactNode, useLayoutEffect } from "react";
 import { cn } from "~/lib/utils";
+import { useClientSettings } from "~/hooks/useSettings";
 import {
   animateSidebarLayoutChanges,
   sidebarMarkerId,
@@ -107,6 +108,7 @@ export function SidebarDragBoundary(props: {
   );
 }
 
+/** Render a sidebar shelf toggle using the device's Fork interface preference. */
 export function SidebarSectionHeader(props: {
   marker: "working-header" | "postponed-header" | "snoozed-header" | "settled-header";
   label: string;
@@ -121,6 +123,7 @@ export function SidebarSectionHeader(props: {
   };
 }) {
   const shelf = props.marker.replace("-header", "");
+  const forkUiChanges = useClientSettings((settings) => settings.forkUiChanges);
   return (
     <SortableSidebarMarker
       marker={props.marker}
@@ -133,6 +136,7 @@ export function SidebarSectionHeader(props: {
         data-sidebar-row={`shelf:${shelf}`}
         onClick={props.toggle.onToggle}
         expanded={props.toggle.expanded}
+        showLineWithAccessory={forkUiChanges}
         tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
         data-testid={`sidebar-${shelf}-shelf-toggle`}
         accessory={<span className="font-normal tabular-nums">{props.count}</span>}

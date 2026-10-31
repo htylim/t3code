@@ -363,6 +363,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "appearance-interface",
   },
   {
+    id: "fork-ui-changes",
+    title: "Fork UI Changes",
+    to: "/settings/fork",
+    searchTerms: ["sidebar section lines separators accordion postponed settled"],
+    forkOnly: true,
+  },
+  {
     id: "fork-group-sidebar-workspaces",
     title: "Group threads by workspace",
     to: "/settings/fork",

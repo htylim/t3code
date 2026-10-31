@@ -1035,7 +1035,7 @@ it.effect("a side chat opened during the parent's first turn starts from a diges
     yield* fork("side-chat-busy-fork", parentId, sideChatId);
     const created = yield* orchestrator.getThreadProjection(sideChatId);
     assert.isTrue(created.thread.lineage.sideChat);
-    assert.equal(created.thread.runtimeMode, "approval-required");
+    assert.equal(created.thread.runtimeMode, "full-access");
     assert.isNull(created.thread.forkedFrom);
     assert.deepEqual(created.contextTransfers[0]?.sourcePoint, { threadId: parentId });
 

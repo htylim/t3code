@@ -370,6 +370,7 @@ export function buildKeybindingCommandOptions(
 }
 
 export function commandLabel(command: KeybindingCommand): string {
+  if (command === "chat.newSide") return "Chat: Start Side Chat";
   if (command === "chat.newLocalContinueWorkspace") return "Chat: New Local (Continue Workspace)";
   if (command === "workspace.focusNext") return "Focus Next Workspace Area";
   if (command === "workspace.focusPrevious") return "Focus Previous Workspace Area";

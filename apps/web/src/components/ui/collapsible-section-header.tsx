@@ -8,18 +8,21 @@ const tones = {
   accent: { label: "text-primary", line: "bg-primary/50" },
 } as const;
 
+/** Render a section toggle with an optional trailing accessory and separator. */
 export function CollapsibleSectionHeader({
   children,
   expanded,
   tone = "muted",
   variant = "default",
   accessory,
+  showLineWithAccessory = false,
   ...buttonProps
 }: Omit<ComponentProps<"button">, "className" | "style" | "aria-expanded"> & {
   expanded: boolean;
   tone?: keyof typeof tones;
   variant?: "default" | "panel";
   accessory?: ReactNode;
+  showLineWithAccessory?: boolean;
 }) {
   return (
     <button
@@ -35,8 +38,11 @@ export function CollapsibleSectionHeader({
       <span className="shrink-0">{children}</span>
       <span
         aria-hidden
-        // A header with a trailing count drops its rule so it doesn't read as a leader.
-        className={cn("h-px min-w-2 flex-1", tones[tone].line, accessory && "invisible")}
+        className={cn(
+          "h-px min-w-2 flex-1",
+          tones[tone].line,
+          accessory && !showLineWithAccessory && "invisible",
+        )}
       />
       {accessory}
       <ChevronDownIcon

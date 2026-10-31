@@ -485,21 +485,22 @@ describe("server model preferences", () => {
   });
 });
 
-describe("ClientSettings fork workspace grouping", () => {
-  it("enables grouping for older saved preferences", () => {
-    expect(decodeClientSettings({}).forkGroupSidebarWorkspaces).toBe(true);
-  });
-
-  it.each([true, false])("preserves the grouping preference %s", (forkGroupSidebarWorkspaces) => {
-    expect(decodeClientSettings({ forkGroupSidebarWorkspaces }).forkGroupSidebarWorkspaces).toBe(
-      forkGroupSidebarWorkspaces,
-    );
-    expect(decodeClientSettingsPatch({ forkGroupSidebarWorkspaces })).toEqual({
-      forkGroupSidebarWorkspaces,
+describe.each(["forkGroupSidebarWorkspaces", "forkUiChanges"] as const)(
+  "ClientSettings %s",
+  (settingKey) => {
+    it("enables the preference for older saved settings", () => {
+      expect(decodeClientSettings({})[settingKey]).toBe(true);
     });
-  });
 
-  it("rejects invalid grouping preferences", () => {
-    expect(() => decodeClientSettingsPatch({ forkGroupSidebarWorkspaces: "enabled" })).toThrow();
-  });
-});
+    it.each([true, false])("preserves the preference %s", (enabled) => {
+      expect(decodeClientSettings({ [settingKey]: enabled })[settingKey]).toBe(enabled);
+      expect(decodeClientSettingsPatch({ [settingKey]: enabled })).toEqual({
+        [settingKey]: enabled,
+      });
+    });
+
+    it("rejects invalid preferences", () => {
+      expect(() => decodeClientSettingsPatch({ [settingKey]: "enabled" })).toThrow();
+    });
+  },
+);

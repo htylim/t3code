@@ -13,6 +13,7 @@ import {
 
 /** Edit the fork preferences saved on this device. */
 export function ForkSettings() {
+  const forkUiChanges = useClientSettings((settings) => settings.forkUiChanges);
   const forkGroupSidebarWorkspaces = useClientSettings(
     (settings) => settings.forkGroupSidebarWorkspaces,
   );
@@ -22,6 +23,31 @@ export function ForkSettings() {
 
   return (
     <SettingsPageContainer>
+      <SettingsSection id="fork-interface" title="Interface">
+        <SettingsRow
+          {...searchableSetting("fork-ui-changes")}
+          description="Enable Fork interface tweaks, including sidebar section lines. Saved on this device."
+          resetAction={
+            forkUiChanges !== DEFAULT_CLIENT_SETTINGS.forkUiChanges ? (
+              <SettingResetButton
+                label="Fork UI Changes"
+                onClick={() =>
+                  persistClientSettingsPatch({
+                    forkUiChanges: DEFAULT_CLIENT_SETTINGS.forkUiChanges,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              aria-label="Fork UI Changes"
+              checked={forkUiChanges}
+              onCheckedChange={(checked) => persistClientSettingsPatch({ forkUiChanges: checked })}
+            />
+          }
+        />
+      </SettingsSection>
       <SettingsSection id="fork-sidebar" title="Sidebar">
         <SettingsRow
           {...searchableSetting("fork-group-sidebar-workspaces")}

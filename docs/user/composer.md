@@ -144,7 +144,9 @@ On web and desktop, select text within one assistant response or HTML preview an
 around it.
 
 Choose **Ask in new thread** to start an unsent draft with the selected passage and a source
-reference. **Ask in side chat** opens a new side-chat tab with an unsent citation. Side chats
+reference. **Ask in side chat** first lets you add an optional comment, just like Cite.
+Save opens a new side-chat tab with the quote and comment in an unsent citation. Cancel
+leaves without creating a side chat. Side chats
 inherit the main thread's context and follow the [standard side-chat lifecycle](./thread-sidebar.md#side-chats).
 
 Quotes from HTML previews identify the source attachment and include its title. The agent

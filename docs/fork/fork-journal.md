@@ -1,5 +1,97 @@
 # Fork journal
 
+## 2026-10-31 - Inherit the parent permission mode in side chats
+
+- Upstream baseline: `5fe18d79ac`.
+- Side chats inherit their parent's permission mode at creation and keep it for the
+  first provider turn. Remove the forced Supervised mode in both paths. Web and desktop
+  also copy pending parent composer mode changes, including `/side` sends. Server
+  inheritance applies to all clients and providers; modes remain independently editable.
+- Verification: reproduced the creation and first-turn overrides with failing tests.
+  All 59 focused fork and provider-turn server tests and four side-chat browser cases
+  passed. The browser cases cover both permission modes, pending composer changes,
+  unsent selection drafts, Cmd+T, and immediate sends. Web/server typechecks and targeted
+  lint passed. Provider calls were mocked; Personal was unavailable in dev.
+  Pre-commit checks also refreshed the stale MCP schema size snapshot to its measured
+  46,291 bytes; tool definitions and agent instructions are unchanged by this update.
+
+## 2026-10-31 - Comment before asking about a selection in side chat
+
+- Upstream baseline: `5fe18d79ac`.
+- Ask in side chat now opens Cite's optional comment editor at the selected passage.
+  Save attaches the comment to the original citation and opens an unsent side-chat draft.
+  Cancel creates no side chat. Reuse the comment editor, dismissal rules, source highlight,
+  and shared popup anchor for assistant messages and HTML previews. New-thread selection
+  actions keep their existing behavior. Web and desktop share this toolbar; mobile is unchanged.
+- Verification: reproduced immediate creation before the comment step; focused browser
+  coverage checks save with a comment, blank save, cancel, and preserved selection identity.
+  Citation-chip, HTML-bridge, side-chat, and selected-text prompt tests passed. Web typecheck
+  and targeted lint passed. The isolated dev client confirmed popup focus, source highlighting,
+  text entry, Escape cancellation, and highlight cleanup. No live provider calls or live-state writes.
+
+## 2026-10-31 - Restore the side-chat action and shortcut
+
+- Upstream baseline: `5fe18d79ac`.
+- Restore the `chat.newSide` command ID so existing saved shortcuts remain valid.
+  New configurations default to Mod+T outside terminals and previews. Expose
+  Chat: Start Side Chat in Keybindings and Start side chat in the command palette.
+- Keyboard and palette creation use the same side-chat hook as `/side` and the right
+  panel, opening an unsent tab with the existing permission and source-thread guards.
+  Web and desktop share the action. Mobile's native side-chat controls are unchanged.
+- Verification: reproduced missing Mod+T resolution before the fix; 91 focused shortcut,
+  settings, server-default synchronization, and contracts tests plus 15 browser tests passed.
+  The browser side-chat case presses Cmd+T and checks a new unsent tab while retaining the
+  parent composer's text. Contracts/shared/web typechecks and targeted lint passed.
+  The isolated dev client confirmed the saved legacy binding, settings label, and palette
+  action. Provider calls were mocked; Personal was unavailable in dev. No live-state writes.
+
+## 2026-10-31 - Keep Settled project icons in color
+
+- Upstream baseline: `5fe18d79ac`.
+- Keep Settled project icons in full color, including search results. Remove the blanket
+  descendant text override so each control keeps its own color. Match upstream's muted
+  title color for receded Settled rows.
+- Keep the existing worktree-pill prefix before compact-row titles. Fork UI Changes
+  is independent of these icon-color corrections.
+- Verification: 92 focused sidebar/worktree-display tests; web typecheck; targeted format
+  and lint. A separate dev server used a disposable copy of development state with short,
+  long, missing-pill, and long-worktree-name fixtures. Before/after captures and geometry
+  checks covered 256px and 440px sidebars, light/dark appearance, idle icon colors, and
+  opening/cancelling Rename without navigating the thread. The pill-layout experiment
+  was reverted after visual review; web typecheck and lint passed after restoring the prefix.
+  No provider turns, live-state writes, or publication.
+
+## 2026-10-31 - Reconcile workspace cards with upstream
+
+- Upstream baseline: `5fe18d79ac`. Its sidebar card code is unchanged from `15fe283272`.
+- Remove the redesign's stale grayscale icon rule and conflicting typography classes from
+  the fork's shared workspace header and branch footer. Reuse upstream's metadata and
+  title-line icons for single cards, including compact cards without branch metadata.
+- Keep workspace grouping, card actions, and worktree pills. Workspace grouping controls
+  the grouped layout; these upstream corrections do not depend on Fork UI Changes.
+  Web and desktop share this component. Mobile is unchanged.
+- Verification: 107 focused sidebar logic, grouping, and postponed tests; web typecheck;
+  targeted formatting and lint. The isolated dev server verified grouped and single cards,
+  grouping off/on, independence from Fork UI Changes, idle icon colors, the workspace
+  Snooze menu, and light/dark appearance. Before/after captures confirm removal of grayscale
+  and the empty metadata row. No provider turns, live-state writes, or publication.
+
+## 2026-10-31 - Gate new Fork interface tweaks
+
+- Upstream baseline: `15fe283272`.
+- Add the device-local Fork UI Changes toggle in Settings → Fork, enabled by default
+  for existing and new preferences. Gate new Fork interface tweaks behind this setting.
+  Existing workspace grouping and wordmark preferences remain independent.
+- Restore horizontal lines beside sidebar shelf labels and counts while enabled.
+  Disabling the toggle restores upstream's hidden lines. Web and desktop share these
+  headers; mobile's separate sidebar is unchanged.
+- Verification: 80 focused contracts, settings persistence, and settings search tests;
+  contracts/web typechecks; targeted formatting and lint. An isolated dev server and
+  Browser panel verified both Postponed and Settled, expanded and collapsed states,
+  immediate toggle updates, both saved values after reload, and reset to the enabled
+  default. Captured light/dark appearance and enabled/disabled states. No provider turns,
+  live-state writes, installed-app changes, or publication.
+
 ## 2026-10-25 - Keep hidden sidebar actions out of the row layout
 
 - Upstream baseline: `03d1a90915`.

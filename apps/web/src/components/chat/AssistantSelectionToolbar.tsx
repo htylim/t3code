@@ -24,6 +24,15 @@ import {
 } from "~/lib/selectionActions";
 import { Button } from "../ui/button";
 import { BackgroundThreadContext } from "./backgroundThread";
+import { withAssistantCitationComment } from "@t3tools/shared/assistantCitations";
+import { Popover, PopoverPopup } from "../ui/popover";
+import { AssistantCitationCommentEditor } from "./AssistantCitationCommentEditor";
+import { resolveAssistantCitationCommentDismissal } from "./assistantCitationCommentDismissal";
+import { composerFloatingLayerProps } from "./composerEventScope";
+import {
+  createAssistantCitationCommentAnchor,
+  observeAssistantCitationCommentSource,
+} from "./AssistantCitationSource";
 
 export type AssistantToolbarSelection = {
   citation: AssistantCitation;
@@ -52,10 +61,26 @@ export function AssistantSelectionToolbar({
   portalContainer?: HTMLElement;
 }) {
   const [nativeSelection, setSelection] = useState<AssistantToolbarSelection | null>(null);
+  const [sideChatComment, setSideChatComment] = useState<{
+    selection: AssistantToolbarSelection;
+    portalContainer: HTMLElement;
+  } | null>(null);
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
+  const draftCommentRef = useRef<string | null>(null);
   const selection = externalSelection === undefined ? nativeSelection : externalSelection;
   const toolbarRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<ReturnType<typeof observeSelectionActions> | null>(null);
   const backgroundThread = use(BackgroundThreadContext);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- highlights the selected source while its comment popup is open and closes it if the source disappears
+  useEffect(() => {
+    if (!sideChatComment) return;
+    return observeAssistantCitationCommentSource({
+      anchor: sideChatComment.selection.sourceAnchor,
+      citation: sideChatComment.selection.citation,
+      onUnavailable: () => setSideChatComment(null),
+    });
+  }, [sideChatComment]);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the toolbar DOM node and clamps its position inside the window before paint
   useLayoutEffect(() => {
@@ -199,13 +224,74 @@ export function AssistantSelectionToolbar({
     };
   }, [backgroundThread, externalSelection, threadRef, viewport]);
 
-  if (!selection) return null;
-  const tooLong = selection.citation.text.length > ASSISTANT_CITATION_MAX_TEXT_LENGTH;
   const dismiss = () => {
     actionsRef.current?.cancel();
     onDismissExternal?.();
     setSelection(null);
   };
+  if (sideChatComment) {
+    const captured = sideChatComment.selection;
+    /** Open the unsent side chat only after the citation comment is saved. */
+    const saveComment = (comment: string) => {
+      if (!onAskAboutSelection) return false;
+      setSideChatComment(null);
+      dismiss();
+      void onAskAboutSelection(
+        "ask-in-side-chat",
+        withAssistantCitationComment(captured.citation, comment),
+        captured.selectedMarkdown,
+      );
+      return true;
+    };
+    return createPortal(
+      <Popover
+        open
+        onOpenChange={(open, details) => {
+          if (open) return;
+          const dismissal = resolveAssistantCitationCommentDismissal({
+            reason: details.reason,
+            draft: draftCommentRef.current,
+            savedComment: captured.citation.comment,
+          });
+          if (dismissal.kind === "keep-open") {
+            details.cancel();
+            return;
+          }
+          if (dismissal.kind === "commit") saveComment(dismissal.comment);
+          else setSideChatComment(null);
+        }}
+      >
+        <PopoverPopup
+          {...composerFloatingLayerProps}
+          aria-label="Edit citation comment"
+          width="md"
+          padding="compact"
+          side="bottom"
+          align="end"
+          anchor={createAssistantCitationCommentAnchor(captured.sourceAnchor)}
+          initialFocus={() => {
+            commentInputRef.current?.focus({ preventScroll: true });
+            return false;
+          }}
+          finalFocus={false}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <AssistantCitationCommentEditor
+            citation={captured.citation}
+            inputRef={commentInputRef}
+            onSubmit={saveComment}
+            onDraftChange={(comment) => {
+              draftCommentRef.current = comment;
+            }}
+            onCancel={() => setSideChatComment(null)}
+          />
+        </PopoverPopup>
+      </Popover>,
+      sideChatComment.portalContainer,
+    );
+  }
+  if (!selection) return null;
+  const tooLong = selection.citation.text.length > ASSISTANT_CITATION_MAX_TEXT_LENGTH;
   const cite = () => {
     if (tooLong || !onCite(selection.citation, selection.sourceAnchor)) return false;
     if (onClearExternal) onClearExternal();
@@ -215,10 +301,16 @@ export function AssistantSelectionToolbar({
   };
   const ask = (action: SelectedTextThreadAction) => {
     if (tooLong || !onAskAboutSelection) return;
+    if (action === "ask-in-side-chat") {
+      draftCommentRef.current = null;
+      setSideChatComment({ selection, portalContainer: portalContainer ?? document.body });
+    }
     if (onClearExternal) onClearExternal();
     else window.getSelection()?.removeAllRanges();
     dismiss();
-    void onAskAboutSelection(action, selection.citation, selection.selectedMarkdown);
+    if (action !== "ask-in-side-chat") {
+      void onAskAboutSelection(action, selection.citation, selection.selectedMarkdown);
+    }
   };
   return createPortal(
     <div

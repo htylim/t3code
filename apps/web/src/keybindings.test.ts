@@ -386,6 +386,25 @@ describe("shortcutLabelForCommand", () => {
 });
 
 describe("thread navigation helpers", () => {
+  it.each([
+    { platform: "MacIntel", metaKey: true, ctrlKey: false },
+    { platform: "Linux", metaKey: false, ctrlKey: true },
+  ])(
+    "starts side chats with the default modifier on $platform",
+    ({ platform, metaKey, ctrlKey }) => {
+      const shortcut = event({ key: "t", metaKey, ctrlKey });
+      assert.strictEqual(
+        resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, { platform }),
+        "chat.newSide",
+      );
+      for (const context of [{ terminalFocus: true }, { previewFocus: true }]) {
+        assert.isNull(
+          resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, { platform, context }),
+        );
+      }
+    },
+  );
+
   it("never shows jump hints while the terminal is focused, even with an unrestricted binding", () => {
     assert.isFalse(
       shouldShowThreadJumpHintsForModifiers(event({ metaKey: true }), DEFAULT_BINDINGS, {

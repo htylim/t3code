@@ -265,14 +265,19 @@ it.effect("rejects in-progress and rolled-back fork sources", () =>
   }),
 );
 
-it.effect("marks only requested forks as supervised side chats", () =>
+it.effect("marks only requested forks as side chats and inherits the parent runtime mode", () =>
   Effect.gen(function* () {
     const sourceRun = makeSourceRun("completed");
-    const sideChat = yield* planFork(sourceRun, makeSourceProjection(sourceRun), {
-      sideChat: true,
-    });
-    assert.isTrue(sideChat.targetThread.lineage.sideChat);
-    assert.equal(sideChat.targetThread.runtimeMode, "approval-required");
+    for (const runtimeMode of ["full-access", "approval-required"] as const) {
+      const source = makeSourceProjection(sourceRun);
+      const sideChat = yield* planFork(
+        sourceRun,
+        { ...source, thread: { ...source.thread, runtimeMode } },
+        { sideChat: true },
+      );
+      assert.isTrue(sideChat.targetThread.lineage.sideChat);
+      assert.equal(sideChat.targetThread.runtimeMode, runtimeMode);
+    }
 
     const sideChatSource = makeSourceProjection(sourceRun);
     const sideChatProjection = {

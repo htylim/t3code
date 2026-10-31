@@ -1077,9 +1077,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
 
   const rowSurfaceClassName = cn(
     "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-    variantAction === "unsettle" &&
-      !props.isActive &&
-      "[&:not(:hover):not(:focus-within)_*]:text-secondary-label",
     props.isActive
       ? "bg-sidebar-row-active text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
       : isSelected || props.sweepAction !== null
@@ -1137,6 +1134,20 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     isActive: props.isActive,
   });
 
+  const isSettledSlimRow = variant === "slim" && variantAction === "unsettle";
+  const slimWorktreePill =
+    variant === "slim" && !props.workspaceRowPosition && worktreeDisplay ? (
+      <WorktreePill
+        threadRef={threadRef}
+        projectRef={
+          thread.projectId ? scopeProjectRef(thread.environmentId, thread.projectId) : null
+        }
+        projectCwd={props.project?.workspaceRoot}
+        worktreePath={thread.worktreePath}
+        worktree={worktreeDisplay}
+        className="max-w-1/2"
+      />
+    ) : null;
   const title =
     isRenaming && canOperateThread ? (
       <ThreadRenameInput
@@ -1147,9 +1158,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       />
     ) : (
       <span
-        aria-hidden={
-          variant === "slim" && !props.workspaceRowPosition && worktreeDisplay ? undefined : true
-        }
+        aria-hidden={slimWorktreePill ? undefined : true}
         className={cn(
           "min-w-0 flex-1 text-start text-sm transition-opacity motion-reduce:transition-none",
           shouldRecede ? "font-normal" : "font-medium",
@@ -1157,17 +1166,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             ? cn(
                 "truncate",
                 shouldRecede
-                  ? "text-secondary-label text-foreground/75 group-hover/sidebar-row:text-foreground group-focus-visible/sidebar-row:text-foreground"
-                  : isUnread || isWoke || status === "input" || status === "request"
-                    ? "text-foreground"
-                    : status === "failed"
-                      ? "text-foreground/95"
-                      : "text-foreground/90 text-foreground",
+                  ? "text-foreground/75 group-hover/sidebar-row:text-foreground group-focus-visible/sidebar-row:text-foreground"
+                  : status === "failed" && !isUnread && !isWoke
+                    ? "text-foreground/95"
+                    : "text-foreground",
               )
             : cn(
                 "truncate group-focus-within/sidebar-row:text-foreground group-hover/sidebar-row:text-foreground",
                 shouldRecede
-                  ? "text-secondary-label/70"
+                  ? isSettledSlimRow
+                    ? "text-secondary-label"
+                    : "text-secondary-label/70"
                   : props.isActive || isWoke || status === "input" || status === "request"
                     ? "text-foreground"
                     : isUnread
@@ -1178,18 +1187,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         )}
         dir={textDirection(thread.title)}
       >
-        {variant === "slim" && !props.workspaceRowPosition && worktreeDisplay ? (
+        {slimWorktreePill ? (
           <>
-            <WorktreePill
-              threadRef={{ environmentId: thread.environmentId, threadId: thread.id }}
-              projectRef={
-                thread.projectId ? scopeProjectRef(thread.environmentId, thread.projectId) : null
-              }
-              projectCwd={props.project?.workspaceRoot}
-              worktreePath={thread.worktreePath}
-              worktree={worktreeDisplay}
-              className="max-w-1/2"
-            />
+            {slimWorktreePill}
             {" / "}
           </>
         ) : null}
@@ -1391,7 +1391,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 <span
                   className={cn(
                     "flex shrink-0 items-center transition-opacity",
-                    (!props.isActive || variantAction === "unsettle") &&
+                    !props.isActive &&
+                      !isSettledSlimRow &&
                       "opacity-40 grayscale group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
                   )}
                 >
@@ -1561,21 +1562,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const workspaceHeader = (
     <>
       {props.project ? (
-        <ProjectFavicon
-          project={props.project}
-          className={cn(
-            "size-4 shrink-0",
-            !props.isActive &&
-              "opacity-60 grayscale group-focus-visible/sidebar-row:opacity-100 group-focus-visible/sidebar-row:grayscale-0 group-any-hover/sidebar-row:opacity-100 group-any-hover/sidebar-row:grayscale-0 group-any-hover/workspace-header:opacity-100 group-any-hover/workspace-header:grayscale-0",
-          )}
-        />
+        <ProjectFavicon project={props.project} className="size-4 shrink-0" />
       ) : null}
-      <div
-        className={cn(
-          "flex min-w-0 flex-1 items-center gap-1.5 text-secondary-label text-xs",
-          shouldRecede ? "font-normal" : "font-medium font-normal",
-        )}
-      >
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 font-normal text-secondary-label text-xs">
         {props.projectDisplayName ? (
           <span className={cn("min-w-0 truncate", worktreeDisplay && "max-w-1/2")}>
             {props.projectDisplayName}
@@ -1611,7 +1600,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       {workspaceBranch ? (
         <>
           <ThreadWorktreeIndicator thread={thread} />
-          <span className="flex min-w-0 flex-1 text-muted-foreground/40 text-inherit">
+          <span className="flex min-w-0 flex-1">
             <MiddleTruncate value={workspaceBranch} showTitle={false} />
           </span>
         </>
@@ -1620,11 +1609,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           <EnvironmentMachineIcon
             aria-hidden
             kind={props.environmentMachine}
-            className="size-3 shrink-0 text-muted-foreground/40"
+            className="size-3 shrink-0"
           />
-          <span className="min-w-0 flex-1 truncate text-muted-foreground/40">
-            {props.scratchMachineLabel}
-          </span>
+          <span className="min-w-0 flex-1 truncate">{props.scratchMachineLabel}</span>
         </>
       ) : (
         <span className="flex-1" />
@@ -1641,6 +1628,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         // Adjacent rows keep threads as direct list children for drag, selection, and motion.
         "list-none [content-visibility:auto]",
         !props.workspaceRowPosition && "py-0.5 [contain-intrinsic-size:auto_78px]",
+        !props.workspaceRowPosition && metaLineEmpty && "[contain-intrinsic-size:auto_58px]",
         !props.workspaceRowPosition && props.separateCards && "mb-1",
         props.workspaceRowPosition === "first" && "mt-0.5 [contain-intrinsic-size:auto_65px]",
         props.workspaceRowPosition === "middle" && "-mt-px [contain-intrinsic-size:auto_36px]",
@@ -1769,6 +1757,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               props.workspaceRowPosition
                 ? "flex h-9 items-center"
                 : "h-[4.875rem] py-(--sidebar-content-inset)",
+              !props.workspaceRowPosition && metaLineEmpty && "h-auto",
             )}
           >
             <div className="flex h-5 min-w-0 flex-1 items-center gap-1.5">
@@ -1990,47 +1979,16 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             </div>
             {!props.workspaceRowPosition ? (
               <>
-                <div className="mt-1 flex min-w-0">
+                <div className="mt-1 flex min-w-0 items-center gap-1.5">
                   {title}
                   {isRegeneratingTitle ? (
                     <span role="status" className="sr-only">
                       Regenerating title
                     </span>
                   ) : null}
+                  {titleLineIcons}
                 </div>
-                <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
-                  {workspaceFooter}
-                  {terminalStatusIcon}
-                  {prBadge}
-                  {diff ? (
-                    <span className="shrink-0 font-mono">
-                      <span className="text-diff-addition-foreground">
-                        +{formatDiffCount(diff.insertions)}
-                      </span>{" "}
-                      <span className="text-diff-deletion-foreground">
-                        −{formatDiffCount(diff.deletions)}
-                      </span>
-                    </span>
-                  ) : null}
-                  <span
-                    aria-hidden
-                    className="pointer-events-none ml-auto inline-flex shrink-0 items-center gap-1"
-                  >
-                    {isRemote && !showsScratchMachine ? (
-                      <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
-                        <EnvironmentMachineIcon
-                          aria-hidden
-                          kind={props.environmentMachine}
-                          className="size-3.5"
-                        />
-                      </span>
-                    ) : null}
-                    <SidebarProviderStack
-                      thread={thread}
-                      providerEntryByInstanceId={props.providerEntryByInstanceId}
-                    />
-                  </span>
-                </div>
+                {metaLine}
               </>
             ) : null}
           </div>
@@ -2178,16 +2136,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
           }
         >
           {props.project ? (
-            <ProjectFavicon
-              project={props.project}
-              className={cn(
-                "size-4 shrink-0 transition-opacity",
-                props.isSettled &&
-                  !props.isRouteActive &&
-                  !props.isHighlighted &&
-                  "opacity-40 grayscale group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
-              )}
-            />
+            <ProjectFavicon project={props.project} className="size-4 shrink-0" />
           ) : null}
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="flex min-w-0 items-center gap-2.5">

@@ -328,13 +328,14 @@ A side chat lets you ask a question about a thread without adding to it. It star
 with what the thread knows, and the thread keeps working while you ask.
 
 On web and desktop, start a message with `/side` or `/btw`, then your question.
-You can also choose **Side chat** from the **+** menu in the right panel. The side
-chat opens as a tab there, with its own composer. Side chats do not show in the
-sidebar. Find one again under **Side chats** in thread details.
+To open an empty side chat, press **Cmd+T** on macOS or **Ctrl+T** on Windows and Linux,
+choose **Start side chat** in the command palette, or choose **Side chat** from the right
+panel's **+** menu. Change the shortcut under **Settings → Keybindings → Chat: Start Side Chat**.
+The side chat opens as a tab in the right panel, with its own composer. Side chats do not
+show in the sidebar. Find one again under **Side chats** in thread details.
 
-A side chat works in the same folder as the thread. Its first reply asks before it
-edits files or runs commands. After that, it uses the permission mode you choose
-in its composer.
+A side chat works in the same folder and starts with the parent thread's permission
+mode. You can change its mode independently in its composer.
 
 To use what you learned, choose **Bring back**. The thread gets the side chat with
 your next message there. Bring back is available while the thread is idle.

@@ -4,6 +4,7 @@ import {
   requestSidebarProjectFilterScopeIfFiltered,
 } from "../sidebarProjectFilterBus";
 import { requestThreadRename } from "../threadRenameBus";
+import { useSideChat } from "./chat/useSideChat";
 import { shouldMountDefaultSidebar } from "./AppSidebarLayout.logic";
 import type { Project } from "../types";
 import { buildProjectActionItems } from "./CommandPalette.logic";
@@ -475,6 +476,23 @@ function OpenCommandPaletteDialog(props: {
   const activeThreadServerConfig = useServerConfigs().get(
     activeThread?.environmentId ?? ("" as EnvironmentId),
   );
+  const canOperateActiveThread = useEnvironmentScope(
+    activeThread?.environmentId ?? null,
+    AuthOrchestrationOperateScope,
+  );
+  const sideChat = useSideChat({
+    threadRef:
+      activeThread &&
+      canOperateActiveThread &&
+      activeThreadServerConfig?.environment.capabilities.sideChats === true &&
+      activeThread.lineage.sideChat !== true &&
+      activeThread.lineage.relationshipToParent !== "subagent"
+        ? scopeThreadRef(activeThread.environmentId, activeThread.id)
+        : null,
+    onError: (description) => {
+      toastManager.add({ type: "error", title: "Could not start side chat", description });
+    },
+  });
   const canShareActiveThreadWithGuest = useAtomValue(
     canShareWithGuestAtom(activeThread?.environmentId ?? ("" as EnvironmentId)),
   );
@@ -1360,6 +1378,20 @@ function OpenCommandPaletteDialog(props: {
       run: async () => {
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
         requestThreadRename(scopeThreadRef(activeThread.environmentId, activeThread.id));
+      },
+    });
+  }
+
+  if (sideChat.available) {
+    actionItems.push({
+      kind: "action",
+      value: "action:start-side-chat",
+      searchTerms: ["side chat", "side question", "btw"],
+      title: "Start side chat",
+      icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "chat.newSide",
+      run: async () => {
+        await sideChat.open();
       },
     });
   }
@@ -2525,6 +2557,7 @@ function OpenCommandPaletteDialog(props: {
       event.keyCode !== 229 &&
       (command === "chat.new" ||
         command === "chat.newLocal" ||
+        command === "chat.newSide" ||
         command === "chat.newWithoutProject");
     const matchingItem =
       isJump || isNewThread
