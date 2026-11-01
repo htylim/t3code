@@ -256,6 +256,11 @@ it.effect(
           }),
         );
         yield* git.authorize(registry, env);
+        const color = createCommandPermissions(runtime, WS_METHODS.workspaceChooseColor);
+        expect(registry.get(color.permissionAtom(env))).toBe(false);
+        expect((yield* color.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
+          AuthOrchestrationOperateScope,
+        );
         const prepare = createCommandPermissions(runtime, WS_METHODS.gitPreparePullRequestThread);
         const input = {
           cwd: "/repo",
@@ -278,6 +283,7 @@ it.effect(
         );
         expect(registry.get(prepare.permissionAtom(env, input))).toBe(true);
         yield* prepare.authorize(registry, env, input);
+        yield* color.authorize(registry, env);
       }),
     ),
 );

@@ -1,5 +1,6 @@
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 
+import { WorkspaceColorSettings } from "./WorkspaceColorSettings";
 import { FORK_SETTINGS_AVAILABLE } from "./forkSettingsAvailability";
 import { useClientSettings, persistClientSettingsPatch } from "../../hooks/useSettings";
 import { Switch } from "../ui/switch";
@@ -23,6 +24,7 @@ export function ForkSettings() {
 
   return (
     <SettingsPageContainer>
+      <WorkspaceColorSettings />
       <SettingsSection id="fork-interface" title="Interface">
         <SettingsRow
           {...searchableSetting("fork-ui-changes")}

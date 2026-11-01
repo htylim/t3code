@@ -97,14 +97,17 @@ export function createFrameCommitter() {
 
 type FrameCommitter = ReturnType<typeof createFrameCommitter>;
 
+/** Edit a color at the theme popover's fixed width or fill the enclosing workspace picker. */
 export function ThemeColorPickerPanel({
   label,
   value,
+  width = "fixed",
   committer,
   onChange,
 }: {
   label: string;
   value: string;
+  width?: "fixed" | "full";
   committer: FrameCommitter;
   onChange: (value: string) => void;
 }) {
@@ -156,8 +159,9 @@ export function ThemeColorPickerPanel({
     onChange(nextColor + alphaSuffix);
   };
 
+  // The inputs must not widen a popup whose width is determined by its palette.
   return (
-    <div className="w-72">
+    <div className={width === "full" ? "w-full min-w-0 [contain:inline-size]" : "w-72"}>
       <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold text-foreground">{label}</p>

@@ -9,6 +9,7 @@ import * as Schema from "effect/Schema";
 import { useEffect, useId, useState } from "react";
 import { create } from "zustand";
 
+import { chooseAutomaticWorkspaceColor } from "../workspaceColors";
 import { useWorktreeDisplay } from "../hooks/useWorktreeDisplay";
 import { DraftId, useComposerDraftStore } from "../composerDraftStore";
 import {
@@ -82,7 +83,11 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
   const initialName = request.worktreePath.split(/[\\/]/).at(-1) ?? request.worktreePath;
   const initialColor = worktreeDisplay?.color ?? DEFAULT_SOFT_PILL_COLOR;
   const [name, setName] = useState(worktreeDisplay?.name ?? initialName);
-  const [color, setColor] = useState(initialColor);
+  const initialColorMode = useNamedWorktreeStore(
+    (state) => state.worktrees[namedWorktreeKey(projectRef, request.worktreePath)]?.colorMode,
+  );
+  const [color, setColor] = useState<string>(initialColor);
+  const [colorMode, setColorMode] = useState(initialColorMode);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [rejectedName, setRejectedName] = useState<string | null>(null);
@@ -153,7 +158,11 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
       validationMessage = "Checking directory names and thread history...";
   }
   if (running) validationMessage = "Stop running agents in this worktree before editing it.";
-  const unchanged = !renaming && color === initialColor && worktreePath === request.worktreePath;
+  const unchanged =
+    !renaming &&
+    color === initialColor &&
+    colorMode === initialColorMode &&
+    worktreePath === request.worktreePath;
   const disabled = saving || !!validationMessage || unchanged;
 
   /** Move once, then update every saved or draft thread before closing the editor. */
@@ -212,7 +221,19 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
       }
       refreshArchivedThreadsForEnvironment(projectRef.environmentId);
     }
-    useNamedWorktreeStore.getState().setColor(projectRef, savedPath, color);
+    const contextThread = threads.find(
+      (thread) => thread.worktreePath === request.worktreePath || thread.worktreePath === savedPath,
+    );
+    const resolvedColor =
+      colorMode === "auto"
+        ? await chooseAutomaticWorkspaceColor(
+            projectRef,
+            contextThread ? { threadId: contextThread.id } : {},
+          )
+        : { color };
+    useNamedWorktreeStore
+      .getState()
+      .setColor(projectRef, savedPath, resolvedColor.color, colorMode, resolvedColor.pending);
     setSaving(false);
     closeWorktreeEditor(request);
   }
@@ -263,8 +284,16 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
               <SoftPillColorPicker
                 label="Worktree"
                 color={color}
+                colorMode={colorMode}
+                onModeChange={(nextColor, mode) => {
+                  setColor(nextColor);
+                  setColorMode(mode);
+                }}
                 disabled={saving || running}
-                onChange={(nextColor) => setColor(nextColor ?? DEFAULT_SOFT_PILL_COLOR)}
+                onChange={(nextColor) => {
+                  setColor(nextColor ?? DEFAULT_SOFT_PILL_COLOR);
+                  setColorMode(undefined);
+                }}
               />
               <div className="min-w-0">
                 <SoftPill color={color}>{directoryName || currentName}</SoftPill>

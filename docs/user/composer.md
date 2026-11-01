@@ -20,6 +20,12 @@ The Git branch still gets its normal generated name. Named worktrees use the sam
 Editing the name or opening the color picker selects New worktree. Your choice stays selected when
 you close the picker.
 
+In Fork settings, choose **Default Workspace Color** to preselect a preset, **Random**, or **Auto**
+for new workspaces. Random chooses once from the nine presets. For Auto, add colors and matching
+instructions under **Color Picker Prompts**. Auto uses the first prompt and project context, then
+keeps that color when other threads reuse the workspace. Choose **Fallback color** for when no rule matches or color selection is unavailable.
+You can override either mode with a preset or custom color. These settings are saved on this device.
+
 The Workspace picker lists named worktrees by directory and branch, with busy or dirty status.
 Colors are saved in this browser or desktop profile and do not sync between devices.
 Use a row's menu to rename an available worktree, copy its path, or remove it while keeping the branch.

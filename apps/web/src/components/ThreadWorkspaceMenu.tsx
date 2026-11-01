@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AuthOrchestrationOperateScope, type ScopedThreadRef } from "@t3tools/contracts";
+import { chooseAutomaticWorkspaceColor } from "../workspaceColors";
 import { useRef, useState } from "react";
 import { create } from "zustand";
 
@@ -210,7 +211,13 @@ export function ThreadWorkspaceMenu({
       });
       if (created._tag === "Failure") throw squashAtomCommandFailure(created);
       const worktree = created.value.worktree;
-      useNamedWorktreeStore.getState().setColor(projectRef, worktree.path, selection.color);
+      const color =
+        selection.colorMode === "auto"
+          ? await chooseAutomaticWorkspaceColor(projectRef, thread ? { threadId: thread.id } : {})
+          : { color: selection.color };
+      useNamedWorktreeStore
+        .getState()
+        .setColor(projectRef, worktree.path, color.color, selection.colorMode, color.pending);
       try {
         await assignWorkspace({ worktreePath: worktree.path, branch: worktree.refName });
       } catch (cause) {

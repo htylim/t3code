@@ -5,6 +5,7 @@ import { type ChatAttachment, type ModelSelection, TextGenerationError } from "@
 import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@t3tools/shared/git";
 import { extractJsonObject } from "@t3tools/shared/schemaJson";
 
+import { buildWorkspaceColorPrompt } from "./workspaceColorPrompt.ts";
 import type { ProviderTextGeneration } from "./textGeneration.ts";
 import {
   buildBranchNamePrompt,
@@ -168,6 +169,14 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
   });
 
   return {
+    generateWorkspaceColor: Effect.fn(`${name}.generateWorkspaceColor`)(function* (input) {
+      return yield* run({
+        operation: "generateWorkspaceColor",
+        cwd: input.cwd,
+        modelSelection: input.modelSelection,
+        ...buildWorkspaceColorPrompt(input),
+      });
+    }),
     generateCommitMessage,
     generatePrContent,
     generateBranchName,

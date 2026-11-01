@@ -1,4 +1,4 @@
-import type { ScopedProjectRef, ThreadId } from "@t3tools/contracts";
+import { WorkspaceColorMode, type ScopedProjectRef, type ThreadId } from "@t3tools/contracts";
 import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
 import * as Schema from "effect/Schema";
 import { create } from "zustand";
@@ -6,17 +6,25 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
 
-const NamedWorktreeSelection = Schema.Struct({ name: Schema.String, color: Schema.String });
+const WorktreeColor = Schema.Struct({
+  color: Schema.String,
+  colorMode: Schema.optionalKey(WorkspaceColorMode),
+  autoPending: Schema.optionalKey(Schema.Boolean),
+});
+const NamedWorktreeSelection = Schema.Struct({ name: Schema.String, ...WorktreeColor.fields });
 export type NamedWorktreeSelection = typeof NamedWorktreeSelection.Type;
 const PersistedNamedWorktrees = Schema.Struct({
   selections: Schema.Record(Schema.String, NamedWorktreeSelection),
-  worktrees: Schema.Record(Schema.String, Schema.Struct({ color: Schema.String })),
+  worktrees: Schema.Record(Schema.String, WorktreeColor),
 });
 const decodePersistedNamedWorktrees = Schema.decodeUnknownSync(PersistedNamedWorktrees);
 
 interface NamedWorktreeState {
   selections: Record<string, NamedWorktreeSelection>;
-  worktrees: Record<string, { color: string }>;
+  worktrees: Record<
+    string,
+    { color: string; colorMode?: WorkspaceColorMode; autoPending?: boolean }
+  >;
   /** Save a draft name and color. An empty name keeps automatic directory naming. */
   select: (
     projectRef: ScopedProjectRef,
@@ -29,7 +37,13 @@ interface NamedWorktreeState {
     threads: readonly { id: ThreadId; worktreePath: string | null }[],
   ) => void;
   /** Save the color of an existing named worktree. */
-  setColor: (projectRef: ScopedProjectRef, worktreePath: string, color: string) => void;
+  setColor: (
+    projectRef: ScopedProjectRef,
+    worktreePath: string,
+    color: string,
+    colorMode?: WorkspaceColorMode,
+    autoPending?: boolean,
+  ) => void;
   /** Keep the saved color when the workspace menu moves a directory. */
   move: (projectRef: ScopedProjectRef, oldPath: string, newPath: string) => void;
   /** Remove the saved color after successful manual removal. */
@@ -58,7 +72,12 @@ export const useNamedWorktreeStore = create<NamedWorktreeState>()(
         const key = namedWorktreeKey(projectRef, threadId);
         const current = get().selections[key];
         if (!current && !selection) return;
-        if (current?.name === selection?.name && current?.color === selection?.color) return;
+        if (
+          current?.name === selection?.name &&
+          current?.color === selection?.color &&
+          current?.colorMode === selection?.colorMode
+        )
+          return;
         const selections = { ...get().selections };
         if (selection) selections[key] = selection;
         else delete selections[key];
@@ -78,8 +97,14 @@ export const useNamedWorktreeStore = create<NamedWorktreeState>()(
           // Explicit names must match before a pending choice can claim the directory's color.
           if (selection.name && directoryName !== selection.name) continue;
           const worktreeKey = namedWorktreeKey(projectRef, thread.worktreePath);
-          if (worktrees[worktreeKey]?.color !== selection.color) {
-            worktrees[worktreeKey] = { color: selection.color };
+          if (
+            worktrees[worktreeKey]?.color !== selection.color ||
+            worktrees[worktreeKey]?.colorMode !== selection.colorMode
+          ) {
+            worktrees[worktreeKey] = {
+              color: selection.color,
+              ...(selection.colorMode ? { colorMode: selection.colorMode } : {}),
+            };
             changed = true;
           }
           // Automatic naming moves the temporary directory after provisioning records it.
@@ -90,10 +115,24 @@ export const useNamedWorktreeStore = create<NamedWorktreeState>()(
         }
         if (changed) set({ selections, worktrees });
       },
-      setColor: (projectRef, worktreePath, color) => {
+      setColor: (projectRef, worktreePath, color, colorMode, autoPending) => {
         const key = namedWorktreeKey(projectRef, worktreePath);
-        if (get().worktrees[key]?.color === color) return;
-        set({ worktrees: { ...get().worktrees, [key]: { color } } });
+        if (
+          get().worktrees[key]?.color === color &&
+          get().worktrees[key]?.colorMode === colorMode &&
+          get().worktrees[key]?.autoPending === autoPending
+        )
+          return;
+        set({
+          worktrees: {
+            ...get().worktrees,
+            [key]: {
+              color,
+              ...(colorMode ? { colorMode } : {}),
+              ...(autoPending ? { autoPending } : {}),
+            },
+          },
+        });
       },
       move: (projectRef, oldPath, newPath) => {
         const oldKey = namedWorktreeKey(projectRef, oldPath);

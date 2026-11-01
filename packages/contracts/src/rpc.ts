@@ -75,6 +75,7 @@ import {
   AcpRegistrySetProviderInput,
   AcpRegistrySetProviderResult,
 } from "./acpRegistry.ts";
+import { ChooseWorkspaceColorInput, ChooseWorkspaceColorResult } from "./workspaceColor.ts";
 import { ExternalLauncherError, LaunchEditorInput } from "./editor.ts";
 import {
   AuthAccessStreamError,
@@ -453,6 +454,7 @@ export const WS_METHODS = {
   vcsPull: "vcs.pull",
   vcsRefreshStatus: "vcs.refreshStatus",
   vcsListRefs: "vcs.listRefs",
+  workspaceChooseColor: "workspace.chooseColor",
   vcsCreateWorktree: "vcs.createWorktree",
   vcsRenameWorktree: "vcs.renameWorktree",
   vcsRemoveWorktree: "vcs.removeWorktree",
@@ -1496,6 +1498,12 @@ const WsVcsListRefsRpc = Rpc.make(WS_METHODS.vcsListRefs, {
   error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
 });
 
+const WsWorkspaceChooseColorRpc = Rpc.make(WS_METHODS.workspaceChooseColor, {
+  payload: ChooseWorkspaceColorInput,
+  success: ChooseWorkspaceColorResult,
+  error: EnvironmentAuthorizationError,
+});
+
 const WsVcsCreateWorktreeRpc = Rpc.make(WS_METHODS.vcsCreateWorktree, {
   // Worktrees use the managed folder; required null path preserves compatibility with older servers.
   payload: Schema.Struct({ ...VcsCreateWorktreeInput.fields, path: Schema.Null }),
@@ -2126,6 +2134,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsGitResolvePullRequestRpc,
   WsGitPreparePullRequestThreadRpc,
   WsVcsListRefsRpc,
+  WsWorkspaceChooseColorRpc,
   WsVcsCreateWorktreeRpc,
   WsVcsRenameWorktreeRpc,
   WsVcsRemoveWorktreeRpc,

@@ -3,6 +3,8 @@ import { WorktreeDirectoryName } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { useId, useState } from "react";
 
+import { getClientSettings } from "../hooks/useSettings";
+import { createWorkspaceColorSelection } from "../workspaceColorSelection";
 import { useWorkspaceChoices } from "../hooks/useWorkspaceChoices";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
 import { resolveWorktreeStatusWord } from "./BranchToolbar.logic";
@@ -45,7 +47,11 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
   const currentPath = props.activeWorktreePath ?? props.projectCwd;
   const [destination, setDestination] = useState(currentPath);
   const [name, setName] = useState("");
-  const [color, setColor] = useState(DEFAULT_SOFT_PILL_COLOR);
+  const [initialColor] = useState(() =>
+    createWorkspaceColorSelection(getClientSettings().forkDefaultWorkspaceColor),
+  );
+  const [color, setColor] = useState(initialColor.color);
+  const [colorMode, setColorMode] = useState(initialColor.colorMode);
   const nameInputId = useId();
   const creating = destination === newWorktreeChoice;
   const directoryName = name.trim();
@@ -60,7 +66,11 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
   async function changeWorkspace() {
     if (disabled) return;
     const accepted = creating
-      ? await props.onNewWorktreeSelect({ name: directoryName, color })
+      ? await props.onNewWorktreeSelect({
+          name: directoryName,
+          color,
+          ...(colorMode ? { colorMode } : {}),
+        })
       : await props.onUseWorktree({ branch: null, worktreePath: destination });
     if (accepted !== false) props.onOpenChange?.(false);
   }
@@ -143,7 +153,15 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
                   aria-invalid={invalidName}
                   onChange={(event) => setName(event.target.value)}
                 />
-                <WorktreeColorPicker color={color} disabled={props.envLocked} onChange={setColor} />
+                <WorktreeColorPicker
+                  color={color}
+                  colorMode={colorMode}
+                  disabled={props.envLocked}
+                  onChange={(color, mode) => {
+                    setColor(color);
+                    setColorMode(mode);
+                  }}
+                />
               </div>
               {invalidName ? (
                 <p className="text-sm text-destructive">

@@ -87,7 +87,7 @@ it("starts empty with color enabled and selects ordinary creation", async () => 
   expect(surface.onSelect).toHaveBeenCalledWith(null);
 });
 
-it("keeps editing and color selection open until the creation row is selected", async () => {
+it("keeps workspace editing open after choosing a color until the creation row is selected", async () => {
   await using surface = await createTestSurface();
 
   await typeName("  billing-fix  ");
@@ -254,7 +254,73 @@ it("offers gray alongside existing colors", async () => {
   const graySwatch = page.getByRole("button", { name: "Gray worktree color", exact: true });
   expect(graySwatch.element().getAttribute("aria-pressed")).toBe("true");
   await userEvent.click(page.getByRole("button", { name: "Violet worktree color" }));
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
   await userEvent.click(graySwatch);
   await selectRow();
   expect(surface.onSelect).toHaveBeenCalledWith({ name: "billing-fix", color: "#808080" });
+});
+
+it("keeps mode choices distinct from their resolved color and clears Auto for a preset", async () => {
+  await using surface = await createTestSurface();
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
+  await userEvent.hover(page.getByRole("button", { name: "Auto", exact: true }));
+  await expect.element(page.getByText("Auto", { exact: true })).toBeVisible();
+  await userEvent.click(page.getByRole("button", { name: "Auto", exact: true }));
+  expect(surface.onSelectionChange).toHaveBeenLastCalledWith({
+    name: "",
+    color: "#808080",
+    colorMode: "auto",
+  });
+  await expect
+    .element(page.getByRole("button", { name: "Worktree color", exact: true }))
+    .toHaveAttribute("aria-expanded", "false");
+  await expect.element(page.getByRole("menuitemradio")).toBeVisible();
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
+  await expect
+    .element(page.getByRole("button", { name: "Auto", exact: true }))
+    .toHaveAttribute("aria-pressed", "true");
+  await userEvent.click(page.getByRole("button", { name: "Auto", exact: true }));
+  await expect
+    .element(page.getByRole("button", { name: "Worktree color", exact: true }))
+    .toHaveAttribute("aria-expanded", "false");
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
+  await userEvent.click(page.getByRole("button", { name: "Teal worktree color", exact: true }));
+  expect(surface.onSelectionChange).toHaveBeenLastCalledWith({ name: "", color: "#14b8a6" });
+  await expect
+    .element(page.getByRole("button", { name: "Worktree color", exact: true }))
+    .toHaveAttribute("aria-expanded", "false");
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
+  await expect
+    .element(page.getByRole("button", { name: "Auto", exact: true }))
+    .toHaveAttribute("aria-pressed", "false");
+  await userEvent.click(page.getByRole("button", { name: "Custom color", exact: true }));
+  await expect
+    .element(page.getByRole("button", { name: "Custom color", exact: true }))
+    .toHaveAttribute("aria-pressed", "true");
+  await expect
+    .element(page.getByRole("button", { name: "Teal worktree color", exact: true }))
+    .toHaveAttribute("aria-pressed", "false");
+  await userEvent.fill(page.getByLabelText("Worktree picker hex value"), "#123456");
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
+  expect(surface.onSelectionChange).toHaveBeenLastCalledWith({ name: "", color: "#123456" });
+  await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
+  await expect
+    .element(page.getByRole("button", { name: "Custom color", exact: true }))
+    .toHaveAttribute("aria-pressed", "true");
+  using _random = vi.spyOn(Math, "random").mockReturnValue(0.999);
+  await userEvent.click(page.getByRole("button", { name: "Random", exact: true }));
+  expect(surface.onSelectionChange).toHaveBeenLastCalledWith({
+    name: "",
+    color: "#f43f5e",
+    colorMode: "random",
+  });
+  await expect
+    .element(page.getByRole("button", { name: "Worktree color", exact: true }))
+    .toHaveAttribute("aria-expanded", "false");
+  await selectRow();
+  expect(surface.onSelect).toHaveBeenLastCalledWith({
+    name: "",
+    color: "#f43f5e",
+    colorMode: "random",
+  });
 });

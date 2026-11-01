@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
-import { ChevronDownIcon } from "lucide-react";
+import type { WorkspaceColorMode } from "@t3tools/contracts";
+import { createWorkspaceColorSelection } from "../workspaceColorSelection";
+import { WorkspaceColorOptions } from "./WorkspaceColorOptions";
+import { SparklesIcon, ShuffleIcon, ChevronDownIcon } from "lucide-react";
 
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { createFrameCommitter, ThemeColorPickerPanel } from "./settings/ThemeColorPicker";
@@ -10,13 +13,23 @@ import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 /** Choose a worktree color while keeping the workspace menu open. */
 export function WorktreeColorPicker({
   color,
+  ariaLabel = "Worktree color",
+  colorMode,
+  allowModes = true,
+  allowCustom = true,
+  showLabel = false,
   disabled,
   onChange,
   onOpen,
 }: {
+  ariaLabel?: string;
+  allowModes?: boolean;
+  allowCustom?: boolean;
+  showLabel?: boolean;
   color: string;
+  colorMode?: WorkspaceColorMode | undefined;
   disabled: boolean;
-  onChange: (color: string) => void;
+  onChange: (color: string, colorMode?: WorkspaceColorMode) => void;
   onOpen?: () => void;
 }) {
   const [committer] = useState(createFrameCommitter);
@@ -24,57 +37,88 @@ export function WorktreeColorPicker({
   useEffect(() => committer.flush, [committer]);
   const floatingLayerProps = useComposerMenuProps();
   const [custom, setCustom] = useState(false);
+  const [open, setOpen] = useState(false);
+  const ModeIcon = colorMode === "auto" ? SparklesIcon : ShuffleIcon;
+  const presetLabel =
+    SOFT_PILL_COLOR_PRESETS.find((preset) => preset.color === color)?.label ?? "Custom";
+  const modeLabel = colorMode === "auto" ? "Auto" : "Random";
+  /** Commit a discrete choice and close the color popover. */
+  function chooseColor(nextColor: string, nextMode?: WorkspaceColorMode) {
+    committer.flush();
+    onChange(nextColor, nextMode);
+    setCustom(false);
+    setOpen(false);
+  }
+
   return (
     <Popover
-      onOpenChange={(open) => {
-        if (open) onOpen?.();
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) committer.flush();
+        setOpen(nextOpen);
+        if (nextOpen) onOpen?.();
       }}
     >
       <PopoverTrigger
         render={<Button variant="ghost" size="compact" disabled={disabled} />}
-        aria-label="Worktree color"
+        aria-label={ariaLabel}
       >
-        <span
-          aria-hidden
-          className="size-3 rounded-full border border-foreground/15"
-          style={{ backgroundColor: color }}
-        />
+        {colorMode ? (
+          <ModeIcon className="size-3" />
+        ) : (
+          <span
+            aria-hidden
+            className="size-3 rounded-full border border-foreground/15"
+            style={{ backgroundColor: color }}
+          />
+        )}
+        {showLabel ? <span>{colorMode ? modeLabel : presetLabel}</span> : null}
         <ChevronDownIcon className="size-3" />
       </PopoverTrigger>
-      <PopoverPopup align="end" side="top" padding="compact" {...floatingLayerProps}>
+      {/* Reposition on expansion so the compact popup's height limit cannot clip the editor. */}
+      <PopoverPopup
+        align="end"
+        side={custom ? "bottom" : "top"}
+        padding="compact"
+        {...floatingLayerProps}
+      >
         <div
-          className="grid gap-2"
+          className="grid w-max gap-2"
           onKeyDown={(event) => {
             if (event.key !== "Escape") event.stopPropagation();
           }}
         >
-          <div className="flex items-center gap-2">
-            {SOFT_PILL_COLOR_PRESETS.map((preset) => (
-              <button
-                key={preset.color}
-                type="button"
-                aria-label={`${preset.label} worktree color`}
-                aria-pressed={color.toLowerCase() === preset.color}
-                onClick={() => onChange(preset.color)}
-                className="size-5 cursor-pointer rounded-full border border-foreground/15 outline-none aria-pressed:ring-2 aria-pressed:ring-inset aria-pressed:ring-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground"
-                style={{ backgroundColor: preset.color }}
-              />
-            ))}
-          </div>
-          <Button
-            variant="ghost"
-            size="compact"
-            onClick={() => setCustom(!custom)}
-            aria-expanded={custom}
-          >
-            Custom color
-          </Button>
+          <WorkspaceColorOptions
+            color={color}
+            colorMode={colorMode}
+            customOpen={custom}
+            disabled={disabled}
+            onColorChange={chooseColor}
+            onModeChange={
+              allowModes
+                ? (mode) => {
+                    const selection = createWorkspaceColorSelection(mode);
+                    chooseColor(selection.color, selection.colorMode);
+                  }
+                : undefined
+            }
+            onCustomClick={
+              allowCustom
+                ? () => {
+                    committer.flush();
+                    onChange(color);
+                    setCustom(!custom);
+                  }
+                : undefined
+            }
+          />
           {custom ? (
             <ThemeColorPickerPanel
+              width="full"
               committer={committer}
               label="Worktree"
               value={color}
-              onChange={onChange}
+              onChange={(customColor) => onChange(customColor)}
             />
           ) : null}
         </div>

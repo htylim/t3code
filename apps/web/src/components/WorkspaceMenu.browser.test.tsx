@@ -1,9 +1,13 @@
+vi.mock("../hooks/useSettings", () => ({
+  getClientSettings: () => ({ forkDefaultWorkspaceColor: "#808080" }),
+}));
 import { act, render as renderScreen } from "../../test/render";
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { useState } from "react";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
+vi.mock("./NamedWorktreeDialog", () => ({ requestNamedWorktreeEdit: vi.fn() }));
 vi.mock("../state/entities", () => ({ useThreadShellsForProjectRefs: () => [] }));
 vi.mock("../lib/archivedThreadsState", () => ({
   refreshArchivedThreadsForEnvironment: vi.fn(),

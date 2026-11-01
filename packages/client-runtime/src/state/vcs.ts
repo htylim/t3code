@@ -311,6 +311,10 @@ export function createVcsEnvironmentAtoms<R, E>(
       concurrency: vcsCommandConcurrency,
       onSettled: invalidateRefs,
     }),
+    chooseWorkspaceColor: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:workspace:choose-color",
+      tag: WS_METHODS.workspaceChooseColor,
+    }),
     createWorktree: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:vcs:create-worktree",
       tag: WS_METHODS.vcsCreateWorktree,

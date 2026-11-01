@@ -1,78 +1,70 @@
+import type { WorkspaceColorMode } from "@t3tools/contracts";
 import { useEffect, useState } from "react";
-import {
-  DEFAULT_SOFT_PILL_COLOR,
-  SOFT_PILL_COLOR_PRESETS,
-} from "@t3tools/client-runtime/soft-pill-colors";
-import { createFrameCommitter, ThemeColorPickerPanel } from "./settings/ThemeColorPicker";
-import { Button } from "./ui/button";
-import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
+import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 
-/** Choose a preset or a custom color without committing the editor's draft. */
+import { createWorkspaceColorSelection } from "../workspaceColorSelection";
+import { WorkspaceColorOptions } from "./WorkspaceColorOptions";
+import { createFrameCommitter, ThemeColorPickerPanel } from "./settings/ThemeColorPicker";
+
+/** Choose a preset, a mode, or a custom color without saving the enclosing dialog. */
 export function SoftPillColorPicker({
   color,
+  colorMode,
+  onModeChange,
   label,
   disabled,
   onChange,
 }: {
   readonly color: string | null;
+  readonly colorMode?: WorkspaceColorMode | undefined;
+  readonly onModeChange?: (color: string, mode: WorkspaceColorMode) => void;
   readonly label: string;
   readonly disabled: boolean;
   readonly onChange: (color: string | null) => void;
 }) {
   const [committer] = useState(createFrameCommitter);
+  const [customOpen, setCustomOpen] = useState(false);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- commits the last custom color when its picker unmounts
   useEffect(() => committer.flush, [committer]);
   return (
     <fieldset disabled={disabled} className="grid gap-3">
       <legend className="mb-2 text-sm font-medium">{label} color</legend>
-      <div className="flex flex-wrap items-center gap-2">
-        {SOFT_PILL_COLOR_PRESETS.map((preset) => (
-          <button
-            key={preset.color}
-            type="button"
-            aria-label={`${preset.label} ${label.toLowerCase()} color`}
-            aria-pressed={color?.toLowerCase() === preset.color}
-            disabled={disabled}
-            onClick={() => onChange(preset.color)}
-            className="size-7 shrink-0 cursor-pointer rounded-full border border-foreground/15 outline-none aria-pressed:ring-2 aria-pressed:ring-inset aria-pressed:ring-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground disabled:cursor-default disabled:opacity-50"
-            style={{ backgroundColor: preset.color }}
-          />
-        ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant={color === null ? "secondary" : "outline"}
-          size="compact"
-          aria-pressed={color === null}
-          disabled={disabled}
-          onClick={() => onChange(null)}
-        >
-          Default
-        </Button>
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button type="button" variant="outline" size="compact" disabled={disabled}>
-                <span
-                  aria-hidden
-                  className="size-3.5 rounded-full border border-foreground/15"
-                  style={{ backgroundColor: color ?? DEFAULT_SOFT_PILL_COLOR }}
-                />
-                Custom color
-              </Button>
-            }
-          />
-          <PopoverPopup align="start" side="bottom" padding="none" sideOffset={8}>
-            <ThemeColorPickerPanel
-              committer={committer}
-              label={label}
-              value={color ?? DEFAULT_SOFT_PILL_COLOR}
-              onChange={onChange}
-            />
-          </PopoverPopup>
-        </Popover>
-      </div>
+      <WorkspaceColorOptions
+        label={label}
+        color={color ?? DEFAULT_SOFT_PILL_COLOR}
+        colorMode={colorMode}
+        customOpen={customOpen}
+        disabled={disabled}
+        size="default"
+        onColorChange={(nextColor) => {
+          committer.flush();
+          setCustomOpen(false);
+          onChange(nextColor);
+        }}
+        onModeChange={
+          onModeChange
+            ? (mode) => {
+                committer.flush();
+                setCustomOpen(false);
+                onModeChange(createWorkspaceColorSelection(mode).color, mode);
+              }
+            : undefined
+        }
+        onCustomClick={() => {
+          committer.flush();
+          onChange(color ?? DEFAULT_SOFT_PILL_COLOR);
+          setCustomOpen(!customOpen);
+        }}
+      />
+      {customOpen ? (
+        <ThemeColorPickerPanel
+          width="full"
+          committer={committer}
+          label={label}
+          value={color ?? DEFAULT_SOFT_PILL_COLOR}
+          onChange={onChange}
+        />
+      ) : null}
     </fieldset>
   );
 }

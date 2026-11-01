@@ -40,6 +40,7 @@ export class TextGeneration extends Context.Service<TextGeneration, ProviderText
 ) {}
 
 type TextGenerationOp =
+  | "generateWorkspaceColor"
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
@@ -127,6 +128,13 @@ export const make = Effect.gen(function* () {
     );
   });
   return TextGeneration.of({
+    generateWorkspaceColor: Effect.fn("TextGeneration.generateWorkspaceColor")(function (input) {
+      return generate("generateWorkspaceColor", input.modelSelection, (service, modelSelection) =>
+        service.generateWorkspaceColor
+          ? service.generateWorkspaceColor({ ...input, modelSelection })
+          : Effect.succeed({ color: input.fallbackColor }),
+      );
+    }),
     generateCommitMessage: Effect.fn("TextGeneration.generateCommitMessage")(function (input) {
       return generate("generateCommitMessage", input.modelSelection, (service, modelSelection) =>
         service.generateCommitMessage({ ...input, modelSelection }),

@@ -4,6 +4,7 @@ import type {
   ModelSelection,
   PullRequestReviewGuide,
   TextGenerationError,
+  WorkspaceColorRule,
 } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
 
@@ -97,7 +98,21 @@ export type ReviewGuideGenerationResult = Omit<
   "headSha" | "generatedAt" | "modelSelection"
 >;
 
+export interface WorkspaceColorGenerationInput {
+  cwd: string;
+  projectName: string;
+  message: string;
+  rules: ReadonlyArray<WorkspaceColorRule>;
+  fallbackColor: string;
+  modelSelection: ModelSelection;
+}
+
 export interface ProviderTextGeneration {
+  /** Classify the first prompt against user-authored workspace color rules. */
+  readonly generateWorkspaceColor?: (
+    input: WorkspaceColorGenerationInput,
+  ) => Effect.Effect<{ color: string }, TextGenerationError>;
+
   readonly generateCommitMessage: (
     input: CommitMessageGenerationInput,
   ) => Effect.Effect<CommitMessageGenerationResult, TextGenerationError>;

@@ -504,3 +504,34 @@ describe.each(["forkGroupSidebarWorkspaces", "forkUiChanges"] as const)(
     });
   },
 );
+
+describe("ClientSettings workspace colors", () => {
+  it.each(["#123456", "#ABCDEF", "#808080", "random", "auto"])(
+    "round-trips the default workspace color %s",
+    (color) => {
+      const settings = decodeClientSettings({ forkDefaultWorkspaceColor: color });
+      expect(encodeClientSettings(settings).forkDefaultWorkspaceColor).toBe(color);
+      expect(decodeClientSettingsPatch({ forkDefaultWorkspaceColor: color })).toEqual({
+        forkDefaultWorkspaceColor: color,
+      });
+    },
+  );
+
+  it.each(["#123", "custom", "red"])("rejects an invalid default color %s", (color) => {
+    expect(() => decodeClientSettingsPatch({ forkDefaultWorkspaceColor: color })).toThrow();
+  });
+});
+
+describe("ClientSettings workspace fallback color", () => {
+  it.each(["#123456", "#ABCDEF", "#808080"])("round-trips fallback %s", (color) => {
+    const settings = decodeClientSettings({ forkWorkspaceFallbackColor: color });
+    expect(encodeClientSettings(settings).forkWorkspaceFallbackColor).toBe(color);
+    expect(decodeClientSettingsPatch({ forkWorkspaceFallbackColor: color })).toEqual({
+      forkWorkspaceFallbackColor: color,
+    });
+  });
+
+  it.each(["random", "auto", "#123", "red"])("rejects invalid fallback %s", (color) => {
+    expect(() => decodeClientSettingsPatch({ forkWorkspaceFallbackColor: color })).toThrow();
+  });
+});

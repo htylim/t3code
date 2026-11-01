@@ -4,6 +4,9 @@ import * as Schema from "effect/Schema";
 import { PlusIcon } from "lucide-react";
 import { useState } from "react";
 
+import type { WorkspaceColorMode } from "@t3tools/contracts";
+import { getClientSettings } from "../hooks/useSettings";
+import { createWorkspaceColorSelection } from "../workspaceColorSelection";
 import type { NamedWorktreeSelection } from "../namedWorktreeStore";
 import { Input } from "./ui/input";
 import { MenuRadioItem } from "./ui/menu";
@@ -28,18 +31,31 @@ export function NewWorktreeRow({
   onSelectionChange?: (selection: NamedWorktreeSelection | null) => void;
 }) {
   const [name, setName] = useState(selection?.name ?? "");
-  const [color, setColor] = useState(selection?.color ?? DEFAULT_SOFT_PILL_COLOR);
+  const [initialColor] = useState(
+    () => selection ?? createWorkspaceColorSelection(getClientSettings().forkDefaultWorkspaceColor),
+  );
+  const [color, setColor] = useState(initialColor.color);
+  const [colorMode, setColorMode] = useState(initialColor.colorMode);
   const directoryName = name.trim();
   const invalid = directoryName.length > 0 && !isWorktreeDirectoryName(directoryName);
 
   /** Save valid choices while letting the caller decide whether to close the menu. */
-  function saveSelection(nextName: string, nextColor: string, commit: typeof onSelectionChange) {
+  function saveSelection(
+    nextName: string,
+    nextColor: string,
+    commit: typeof onSelectionChange,
+    nextMode: WorkspaceColorMode | null = colorMode ?? null,
+  ) {
     const nextDirectoryName = nextName.trim();
     if (disabled || (nameRequired && !nextDirectoryName)) return;
     if (nextDirectoryName && !isWorktreeDirectoryName(nextDirectoryName)) return;
     commit?.(
-      nextDirectoryName || nextColor !== DEFAULT_SOFT_PILL_COLOR
-        ? { name: nextDirectoryName, color: nextColor }
+      nextDirectoryName || nextColor !== DEFAULT_SOFT_PILL_COLOR || nextMode
+        ? {
+            name: nextDirectoryName,
+            color: nextColor,
+            ...(nextMode ? { colorMode: nextMode } : {}),
+          }
         : null,
     );
   }
@@ -102,11 +118,13 @@ export function NewWorktreeRow({
           >
             <WorktreeColorPicker
               color={color}
+              colorMode={colorMode}
               disabled={disabled}
               onOpen={() => saveSelection(name, color, onSelectionChange)}
-              onChange={(nextColor) => {
+              onChange={(nextColor, nextMode) => {
                 setColor(nextColor);
-                saveSelection(name, nextColor, onSelectionChange);
+                setColorMode(nextMode);
+                saveSelection(name, nextColor, onSelectionChange, nextMode ?? null);
               }}
             />
           </span>

@@ -1,3 +1,4 @@
+import { WorkspaceColorChoice, WorkspaceColorHex, WorkspaceColorRule } from "./workspaceColor.ts";
 import { EasDeviceHostConfigs, SimlockDeviceHostConfigs, SshDeviceHostConfigs } from "./device.ts";
 import {
   AuthOrchestrationOperateScope,
@@ -425,6 +426,15 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE)),
   ),
   forkGroupSidebarWorkspaces: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  forkDefaultWorkspaceColor: WorkspaceColorChoice.pipe(
+    Schema.withDecodingDefault(Effect.succeed("#808080" as const)),
+  ),
+  forkWorkspaceFallbackColor: WorkspaceColorHex.pipe(
+    Schema.withDecodingDefault(Effect.succeed("#808080")),
+  ),
+  forkColorPickerPrompts: Schema.Array(WorkspaceColorRule).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   forkUiChanges: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   forkUseH3Wordmark: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   glassOpacity: GlassOpacity.pipe(
@@ -1753,6 +1763,11 @@ export const ClientSettingsPatch = Schema.Struct({
   diffLayout: Schema.optionalKey(DiffLayout),
   environmentIdentificationMode: Schema.optionalKey(EnvironmentIdentificationMode),
   forkGroupSidebarWorkspaces: Schema.optionalKey(Schema.Boolean),
+  forkDefaultWorkspaceColor: Schema.optionalKey(WorkspaceColorChoice),
+  forkWorkspaceFallbackColor: Schema.optionalKey(WorkspaceColorHex),
+  forkColorPickerPrompts: Schema.optionalKey(
+    Schema.Array(WorkspaceColorRule).check(Schema.isMaxLength(100)),
+  ),
   forkUiChanges: Schema.optionalKey(Schema.Boolean),
   forkUseH3Wordmark: Schema.optionalKey(Schema.Boolean),
   glassOpacity: Schema.optionalKey(GlassOpacity),

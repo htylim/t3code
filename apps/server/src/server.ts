@@ -63,6 +63,7 @@ import * as CheckpointStore from "./checkpointing/CheckpointStore.ts";
 import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts";
 import * as SourceControlSignIn from "./sourceControl/SourceControlSignIn.ts";
 import { BUILT_IN_SOURCE_CONTROL_DRIVER_LIST } from "./sourceControl/sourceControlDefinitions.ts";
+import * as WorkspaceColors from "./workspace/WorkspaceColors.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import * as SecretResolver from "./secrets/SecretResolver.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
@@ -385,6 +386,11 @@ const layerGitManager = GitManager.layer.pipe(
 );
 
 const layerGit = Layer.empty.pipe(
+  Layer.provideMerge(
+    WorkspaceColors.layer.pipe(
+      Layer.provide(Layer.merge(ProjectionStoreV2.layer, ProjectStore.layer)),
+    ),
+  ),
   Layer.provideMerge(layerGitManager),
   Layer.provideMerge(GitVcsDriver.layer),
 );

@@ -1,3 +1,9 @@
+vi.mock("../hooks/useSettings", () => ({
+  getClientSettings: () => ({ forkDefaultWorkspaceColor: "#808080" }),
+}));
+vi.mock("../workspaceColors", () => ({
+  chooseAutomaticWorkspaceColor: async () => ({ color: "#808080" }),
+}));
 import { act, render as renderScreen } from "../../test/render";
 import "../index.css";
 import { EnvironmentId, GitCommandError, ProjectId, ThreadId } from "@t3tools/contracts";
@@ -659,7 +665,9 @@ it("creates a named worktree only after the dialog's final confirmation", async 
   await userEvent.fill(page.getByLabelText("Worktree name"), "billing-fix");
   await userEvent.click(page.getByRole("button", { name: "Worktree color", exact: true }));
   await userEvent.click(page.getByRole("button", { name: "Teal worktree color" }));
-  await userEvent.keyboard("{Escape}");
+  await expect
+    .element(page.getByRole("button", { name: "Worktree color", exact: true }))
+    .toHaveAttribute("aria-expanded", "false");
   expect(state.rename).not.toHaveBeenCalled();
   expect(state.update).not.toHaveBeenCalled();
   await userEvent.click(page.getByRole("button", { name: "Change worktree", exact: true }));

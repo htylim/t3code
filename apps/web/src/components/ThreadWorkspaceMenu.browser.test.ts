@@ -1,3 +1,6 @@
+vi.mock("../workspaceColors", () => ({
+  chooseAutomaticWorkspaceColor: async () => ({ color: "#808080" }),
+}));
 import { act, render as renderScreen } from "../../test/render";
 import { createElement, useLayoutEffect } from "react";
 import { expect, it, vi } from "vite-plus/test";

@@ -1,3 +1,7 @@
+import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
+import { getClientSettings } from "../../hooks/useSettings";
+import { createWorkspaceColorSelection } from "../../workspaceColorSelection";
+import { chooseAutomaticWorkspaceColor } from "../../workspaceColors";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../../namedWorktreeStore";
 import {
   mergeDirectPreviewAnnotation,
@@ -1346,6 +1350,40 @@ export function useComposerSend(input: ComposerSendInput) {
           ? scopeThreadRef(environmentId, threadIdForSend)
           : null;
       if (backgroundThreadRef) beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
+      if (baseBranchForWorktree) {
+        const projectRef = scopeProjectRef(environmentId, activeProject.id);
+        const colorSelection = namedWorktreeSelection ?? {
+          name: "",
+          ...createWorkspaceColorSelection(getClientSettings().forkDefaultWorkspaceColor),
+        };
+        const color =
+          colorSelection.colorMode === "auto"
+            ? (await chooseAutomaticWorkspaceColor(projectRef, { message: promptForSend })).color
+            : colorSelection.color;
+        if (
+          namedWorktreeSelection ||
+          colorSelection.colorMode ||
+          color !== DEFAULT_SOFT_PILL_COLOR
+        ) {
+          useNamedWorktreeStore
+            .getState()
+            .select(projectRef, threadIdForSend, { ...colorSelection, color });
+        }
+      } else if (activeMessageCount === 0 && activeThread.worktreePath) {
+        const projectRef = scopeProjectRef(environmentId, activeProject.id);
+        const savedColor =
+          useNamedWorktreeStore.getState().worktrees[
+            namedWorktreeKey(projectRef, activeThread.worktreePath)
+          ];
+        if (savedColor?.colorMode === "auto" && savedColor.autoPending) {
+          const color = (
+            await chooseAutomaticWorkspaceColor(projectRef, { message: promptForSend })
+          ).color;
+          useNamedWorktreeStore
+            .getState()
+            .setColor(projectRef, activeThread.worktreePath, color, "auto");
+        }
+      }
       const startPromise = startThreadTurn({
         environmentId,
         input: {

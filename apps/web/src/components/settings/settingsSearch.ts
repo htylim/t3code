@@ -377,6 +377,27 @@ export const SETTINGS_SEARCH_ITEMS = [
     forkOnly: true,
   },
   {
+    id: "fork-default-workspace-color",
+    title: "Default Workspace Color",
+    to: "/settings/fork",
+    searchTerms: ["worktree preset random auto automatic color"],
+    forkOnly: true,
+  },
+  {
+    id: "fork-workspace-fallback-color",
+    title: "Fallback color",
+    to: "/settings/fork",
+    searchTerms: ["workspace worktree auto no match default color"],
+    forkOnly: true,
+  },
+  {
+    id: "fork-color-picker-prompts",
+    title: "Color Picker Prompts",
+    to: "/settings/fork",
+    searchTerms: ["worktree automatic rules first prompt color"],
+    forkOnly: true,
+  },
+  {
     id: "fork-wordmark",
     title: "Use H3 wordmark",
     to: "/settings/fork",

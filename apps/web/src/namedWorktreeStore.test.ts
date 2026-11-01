@@ -71,7 +71,7 @@ describe("named worktree metadata", () => {
     const store = useNamedWorktreeStore.getState();
     const oldPath = "/worktrees/billing-fix";
     const newPath = "/worktrees/billing-v2";
-    store.select(projectRef, threadId, selection);
+    store.select(projectRef, threadId, { ...selection, colorMode: "auto" });
     store.record(projectRef, [{ id: threadId, worktreePath: oldPath }]);
     store.move(projectRef, oldPath, newPath);
     expect(
@@ -80,6 +80,13 @@ describe("named worktree metadata", () => {
     expect(
       useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, newPath)]?.color,
     ).toBe(selection.color);
+    expect(
+      useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, newPath)]?.colorMode,
+    ).toBe("auto");
+    store.setColor(projectRef, newPath, "#3b82f6");
+    expect(
+      useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, newPath)]?.colorMode,
+    ).toBeUndefined();
     store.forget(projectRef, newPath);
     expect(useNamedWorktreeStore.getState().worktrees).toEqual({});
   });

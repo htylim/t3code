@@ -1527,3 +1527,17 @@ The fork-specific implementation was removed.
   no screenshot-based visual sign-off is claimed. Native mobile UI, installed Electron shell,
   installers, and remote/tunnel modes were not exercised. No live database or release channel
   was changed. Nothing was published.
+
+## 2026-10-31 - Choose workspace colors from the first prompt
+
+- Upstream baseline: `15fe283272`. Adds device-local default and fallback workspace colors,
+  Random selection from the nine presets, and Auto rules classified from the first prompt
+  and project context. Auto uses the title-generation model selection and keeps fork metadata
+  outside upstream's database schema.
+- The workspace picker, edit dialog, and Fork settings share one palette with tooltips,
+  evenly spaced choices, and full-width custom editors. Settings support custom hex colors.
+- Verification: focused settings and workspace regressions, affected package typechecks, lint,
+  and compiler coverage passed. Six live color evaluations passed on Personal with Luna Low,
+  including custom fallback and prompt-injection cases. Browser-panel captures verified settings,
+  workspace selection, editing, persistence, and Custom-open layouts at 110% text and 768px width.
+  Native mobile, installed desktop launch, and remote connections were not exercised.
