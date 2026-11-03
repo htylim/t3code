@@ -1,5 +1,49 @@
 # Fork journal
 
+## 2026-11-03 - Integrate upstream through cefb544af3
+
+- Upstream baseline: `cefb544af3c98224874419198c0359b652ca3c94`, 482 commits after
+  `15fe2832727893cbdd2214383f9f971474849695`. Local merge `3236ab0e6a` starts from
+  `b7c2eb9c1a` on `review-upstream-commits`. Shared `main` and `fork` remain unchanged.
+  Upstream migrations match the reviewed upstream snapshot, with no fork migration.
+- Retain fork behavior on upstream's updated components and services. Side chats keep parent
+  permission inheritance inside upstream's managed-policy checks. A regression test verifies
+  rejection when the inherited mode exceeds the organization ceiling. Preserve account usage
+  exclusions alongside upstream provider/model filters, workspace management and grouping,
+  Postponed, selection actions, HTML citations, navigation, colors, and Fork identity.
+- Preserve upstream's secure randomness, nonblocking session scanning, sidebar accessibility,
+  citation direction, visible-thread selectors, and desktop bytecode preparation. Adapt fork
+  test layers to Effect 4.1.2 and update the measured MCP schema budget. No incoming feature
+  replaces a maintained fork feature in this batch.
+- Changed-file verification against the pinned upstream ancestor passed formatting, lint,
+  unused-code/dependency/export checks, GraphQL checks, affected typechecks, and 113 fork
+  React Compiler cases. Tests passed 2,714 cases, skipped five, and failed two cases below.
+  Web and server production bundles passed. Focused permission and adapter reruns passed.
+- The isolated dev server used copied stopped-thread data and a disposable Git project.
+  Verified worktree rename and shared path updates, existing-thread workspace changes,
+  removal of a detached disposable worktree, grouped/single cards, Postponed restoration on
+  a new message, settlement/Undo, F2, scoped/global thread-reference insertion, project
+  switching/filter clearing, prompt navigation, hover reveal, account inclusion toggles,
+  Auto color match/fallback, and saved Fork settings/reset. Personal with Luna Low completed
+  main and side-chat turns; the side chat retained Full access on its first turn. Selected-text
+  actions retained unsent citations/comments and new-thread source context. Rendered HTML
+  verified sandboxed scripts, storage compatibility, and citation source/comment identity.
+  Forge light/dark assets loaded. Settings had no horizontal overflow at 530px.
+- Two tests remain unresolved. The previously recorded storage-cleanup case expects a corrupt
+  Git file to produce `kept`; this host produces `failed`. An incoming session-scanner test
+  returns no remote for an unblocked neighboring repository while another read is blocked.
+  The same focused test fails with the scanner source restored byte-for-byte from upstream.
+  Neither failure demonstrates a fork regression; the changed-file check is still not green.
+- Visual verification is incomplete. Retained 25 valid before captures, but Browser-panel
+  screenshot and recording calls time out. Two blank branding-fixture captures do not count
+  as evidence. After captures and direct image comparisons remain pending. Approval review
+  rejected another-browser fallback because it could expose unrelated signed-in state.
+  H3 settings persistence passed; the rendered H3 wordmark, native mobile UI, installed
+  Electron shell, installers, and remote/tunnel connections were not exercised in this pass.
+  No live database, installed app, or shared release branch changed. Nothing was published.
+- Updated channel guidance: `fork` is continuous and `main` is stable, at or behind `fork`.
+  Added missing maintained-feature intent and the reusable [upstream merge procedure](upstream-merges.md).
+
 ## 2026-10-31 - Inherit the parent permission mode in side chats
 
 - Upstream baseline: `5fe18d79ac`.

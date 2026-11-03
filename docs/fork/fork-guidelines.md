@@ -40,6 +40,9 @@ Do not use `main` as an upstream mirror or move it during routine upstream integ
 rewrite the shared `fork` branch. Updating shared branches, pushing, and publishing require the
 developer's explicit consent.
 
+Follow [Upstream merges](upstream-merges.md) for the review, baseline captures, integration, and
+verification procedure.
+
 ## Make changes
 
 For a focused change:
@@ -253,7 +256,8 @@ version commit to `main`.
 
 Release from the branch the developer explicitly names. Use `fork` only when no other source branch
 was requested, and never merge, fast-forward, reset, or otherwise move `fork` to prepare a release
-from another branch. Never release from `main`. Review the selected worktree and commit everything
+from another branch. Stable releases may use `main` after an explicitly authorized promotion from
+the tested `fork` snapshot. Review the selected worktree and commit everything
 intended to ship. An unrelated untracked file can remain, but do not release tracked changes that
 are not committed.
 
@@ -403,8 +407,9 @@ replacement of an unpublished local tag may be done only after the replacement a
 verification above. Before pushing a branch or tag, or creating a GitHub Release, get explicit
 approval. After approval, push only the fork tag and create a GitHub Release containing the verified
 DMG and ZIP. Push the selected source branch only when the developer explicitly asks for that too.
-Do not push or update `fork` for a release sourced from another branch. Do not publish npm packages,
-deploy hosted channels, update `main`, or attach upstream auto-update metadata.
+Do not push or update `fork` for a release sourced from another branch. Promoting `main` requires
+separate explicit authorization. Do not publish npm packages, deploy hosted channels, or attach
+upstream auto-update metadata.
 
 Prepare release notes outside the worktree and set `release_notes_file` to their absolute path.
 Include the source commit, changes, architecture, minimum macOS version, manual-update behavior,
