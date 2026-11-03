@@ -3,6 +3,9 @@
 ## 2026-10-31 - Inherit the parent permission mode in side chats
 
 - Upstream baseline: `5fe18d79ac`.
+- Reason: Side chats should support Auto without upstream forcing Supervised for their first
+  turn. Inheriting the parent's chosen mode avoids a separate default and preserves an explicit
+  Supervised choice. Organization policy ceilings still apply.
 - Side chats inherit their parent's permission mode at creation and keep it for the
   first provider turn. Remove the forced Supervised mode in both paths. Web and desktop
   also copy pending parent composer mode changes, including `/side` sends. Server
@@ -18,6 +21,8 @@
 ## 2026-10-31 - Comment before asking about a selection in side chat
 
 - Upstream baseline: `5fe18d79ac`.
+- Reason: Add a question to a selected passage before opening its side chat, without sending
+  immediately or losing the source citation.
 - Ask in side chat now opens Cite's optional comment editor at the selected passage.
   Save attaches the comment to the original citation and opens an unsent side-chat draft.
   Cancel creates no side chat. Reuse the comment editor, dismissal rules, source highlight,
@@ -32,6 +37,8 @@
 ## 2026-10-31 - Restore the side-chat action and shortcut
 
 - Upstream baseline: `5fe18d79ac`.
+- Reason: Open a native side chat from the keyboard or command palette, including saved bindings
+  from earlier fork versions, without discarding the parent draft.
 - Restore the `chat.newSide` command ID so existing saved shortcuts remain valid.
   New configurations default to Mod+T outside terminals and previews. Expose
   Chat: Start Side Chat in Keybindings and Start side chat in the command palette.
@@ -46,6 +53,8 @@
   action. Provider calls were mocked; Personal was unavailable in dev. No live-state writes.
 
 ## 2026-10-31 - Keep Settled project icons in color
+
+- Reason: Keep projects recognizable in Settled and search results without dimming their identifying colors.
 
 - Upstream baseline: `5fe18d79ac`.
 - Keep Settled project icons in full color, including search results. Remove the blanket
@@ -63,6 +72,8 @@
 
 ## 2026-10-31 - Reconcile workspace cards with upstream
 
+- Reason: Keep grouped workspace cards consistent with upstream typography and project identity while showing shared checkout context once.
+
 - Upstream baseline: `5fe18d79ac`. Its sidebar card code is unchanged from `15fe283272`.
 - Remove the redesign's stale grayscale icon rule and conflicting typography classes from
   the fork's shared workspace header and branch footer. Reuse upstream's metadata and
@@ -77,6 +88,8 @@
   and the empty metadata row. No provider turns, live-state writes, or publication.
 
 ## 2026-10-31 - Gate new Fork interface tweaks
+
+- Reason: Let users disable new Fork interface tweaks without losing independent workspace grouping or branding choices.
 
 - Upstream baseline: `15fe283272`.
 - Add the device-local Fork UI Changes toggle in Settings → Fork, enabled by default
@@ -93,6 +106,8 @@
   live-state writes, installed-app changes, or publication.
 
 ## 2026-10-25 - Keep hidden sidebar actions out of the row layout
+
+- Reason: Use the full row width for idle metadata and reveal actions only when they can be used.
 
 - Upstream baseline: `03d1a90915`.
 - Hidden row actions no longer reserve width beside timestamps and provider icons. Hover,
@@ -156,6 +171,8 @@
   installed-app changes, push, PR, or publication occurred.
 
 ## 2026-10-25 - Cite rendered HTML passages
+
+- Reason: Ask about a specific passage in a rendered visualization with its source and optional comment, just as in ordinary assistant text.
 
 - Upstream baseline: `d53873b6a4`.
 - Web and desktop HTML previews use the regular citation controls, comments, and source navigation.
@@ -332,6 +349,8 @@
 
 ## 2026-10-17 - Shared sidebar cards by workspace
 
+- Reason: Show which threads share a physical checkout and let users manage that workspace as a group without merging thread state.
+
 - Upstream baseline: `da7c4f234db3`.
 - The current web and desktop sidebar groups threads with the same environment, physical
   project, and workspace inside each section except Settled. Singletons retain their existing
@@ -463,8 +482,7 @@
   the existing Git creation, status, and metadata commands without adding a separate workspace API.
   The composer and dialog share workspace queries and reuse-list rules through `useWorkspaceChoices`.
   Manual directory renames preserve local colors, and manual removal forgets them.
-  Generic color presets and soft-pill components belong to worktree labels. The former tag
-  feature is retired across clients and server code.
+  Generic color presets and soft-pill components belong to worktree labels.
 - Verification: The optional-name color fix passed 17 unit tests, 35 Chromium tests, the web
   typecheck, and targeted lint. It covers color selection without a name, clearing an entered name,
   gray defaults, persistence, and preserving color through automatic directory naming.
@@ -569,9 +587,10 @@
   Existing-thread editing adds only the optional idle guard to metadata updates in contracts,
   client command forwarding, and the orchestrator; automatic provisioning does not opt into it.
 
-This journal explains the fork differences that we still maintain. Features replaced by upstream
-keep only a short adoption note. Git preserves their removed implementation details and verification
-history. Dated merge checks describe what was tested at that time, not additional features to restore.
+This journal explains the fork differences that we still maintain. When a fork feature is removed
+or replaced by upstream, delete its documentation and merge instructions. Do not add a retirement
+entry or instructions to keep it removed. Git preserves the history. Dated merge checks describe
+what was tested at that time, not additional features to restore.
 
 Add an entry for meaningful changes to product behavior, architecture, branding, builds, operations,
 or fork policy. Skip mechanical edits and changes that do not alter the fork's relationship with
@@ -636,26 +655,6 @@ upstream.
 - Scope: Fork development and verification instructions, including side chats and MCP tests.
 - Verification: Confirmed `codex_personal` in the live provider catalog. The isolated dev
   configuration enables only Personal. Instructions passed formatting and diff checks.
-
-## 2026-10-17 - Retire thread tags
-
-- Upstream baseline: `da7c4f234db3`, merged into the named-worktree branch.
-- Change: Remove thread tag UI, keyboard and palette actions, subscriptions, RPC contracts,
-  server storage, and inheritance across web, desktop, and mobile. Named-worktree labels keep
-  the generic soft-pill components and palette without depending on tag code.
-- Reason: Named worktrees identify the working directory and replace the separate thread label.
-- Scope: Existing tag sidecar files remain untouched. Obsolete inheritance effects need a separate
-  one-time cleanup so old outbox payloads do not require a tag decoder. The original fork migration
-  63 was removed on October 19 because its ID collided with upstream. Thread messages, worktree
-  metadata, and unrelated queued provider effects remain unchanged.
-- Verification: All six changed packages passed scoped typechecks. Focused suites passed
-  397 unit/server tests and 26 Chromium tests. Chromium tests ran against an identical temporary
-  web-source copy because Vitest's browser mocks fail under the checkout's spaced path.
-  Targeted lint passed with existing warnings. The isolated Browser panel verified both context
-  menus, the worktree dialog and palette, and absence of tag commands from the command palette.
-- Upstream conflict map: Preserve the removed tag entry points when merging. The palette now
-  lives in `softPillColors.ts`. Databases that recorded `63 / RemoveThreadTagEffects` need the
-  separately executed history correction in the fork guidelines before upstream's 63 can run.
 
 ## 2026-10-10 - Integrate upstream through October 10
 
@@ -817,6 +816,8 @@ Upstream's new panel-menu command remains configurable; the fork's side-chat sho
 
 ## 2026-10-06 - Postpone threads without a timer
 
+- Reason: Park a thread until the user resumes it, without choosing a wake time or marking the work finished.
+
 - Upstream baseline: `efecd3cf8b`.
 - The current web and desktop sidebar has a Postponed section with normal thread cards,
   single and bulk Postpone thread and Un-postpone thread actions, and a remembered collapse state.
@@ -853,6 +854,8 @@ Upstream's new panel-menu command remains configurable; the fork's side-chat sho
   verification was not performed.
 
 ## 2026-10-05 - Exclude individual Claude and Codex accounts from usage
+
+- Reason: Exclude a provider account from Cost and Tokens while keeping its limits and ability to run agents.
 
 - Upstream baseline: `efecd3cf8b`.
 - Web and desktop provider settings can exclude a Claude or Codex account's history from Cost
@@ -1263,10 +1266,11 @@ restored against upstream's context records, as documented above.
 - Upstream baseline: `e60821f0e`
 - Change: Established `fork` as the downstream integration branch and added fork-specific guidance
   and this journal under `docs/fork`.
-- Reason: Keep `main` as an upstream mirror while making downstream intent and drift easy to audit.
+- Reason: Make downstream intent and drift easy to audit. `main` is the stable release channel;
+  `fork` is the continuous release and integration channel.
 - Scope: Repository workflow and documentation only; no runtime behavior changed.
-- Verification: Confirmed `main` tracks `upstream/main`, `fork` tracks `origin/fork`, and both began
-  at the same upstream commit.
+- Verification: Both branches began at the same upstream commit. Current branch policy is in
+  [Fork guidelines](fork-guidelines.md#branches-and-remotes).
 
 ## 2026-08-02 — Add Fork desktop identity
 
@@ -1529,6 +1533,8 @@ The fork-specific implementation was removed.
   was changed. Nothing was published.
 
 ## 2026-10-31 - Choose workspace colors from the first prompt
+
+- Reason: Identify workspaces by purpose without manually choosing a color every time. Let first-prompt rules choose the color, with a predictable fallback.
 
 - Upstream baseline: `15fe283272`. Adds device-local default and fallback workspace colors,
   Random selection from the nine presets, and Auto rules classified from the first prompt

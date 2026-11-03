@@ -7,8 +7,10 @@ Keep the fork easy to update, audit, and maintain.
 
 - `upstream` points to `pingdotgg/t3code`.
 - `origin` points to `htylim/t3code`.
-- `main` tracks `upstream/main` and must not contain custom commits.
-- `fork` tracks `origin/fork` and is the integration branch for our changes.
+- `main` tracks `origin/main` and is our stable release channel, including fork changes.
+- `fork` tracks `origin/fork` and is our continuous release and integration channel.
+- `main` stays at or behind `fork`. Promote a tested `fork` snapshot to `main` when preparing
+  an explicitly requested stable release. Both branches may point to the same commit.
 - Create focused feature branches from `fork` for larger changes.
 
 Check the setup with:
@@ -20,21 +22,23 @@ git branch -vv
 
 ## Update from upstream
 
-Fast-forward `main`, push the same state to the fork, then merge it into `fork`:
+Fetch upstream and review the commits since the last integrated upstream ancestor. Merge the
+reviewed snapshot on a focused integration branch based on `fork`:
 
 ```bash
-git switch main
 git fetch upstream
-git merge --ff-only upstream/main
-git push origin main
-
 git switch fork
-git merge main
-git push origin fork
+git switch -c integration/upstream-YYYY-MM-DD
+git merge --no-commit <reviewed-upstream-commit>
 ```
 
-Do not resolve upstream conflicts on `main`. Resolve them on `fork` or a feature branch so `main`
-remains an exact upstream mirror. Do not rewrite the shared `fork` branch.
+Capture and verify maintained fork features before merging, then resolve conflicts and verify
+them again on the integration branch. Adopt upstream implementations and extend only the missing
+fork behavior. Do not treat files changed on both sides as competing product requirements.
+
+Do not use `main` as an upstream mirror or move it during routine upstream integration. Do not
+rewrite the shared `fork` branch. Updating shared branches, pushing, and publishing require the
+developer's explicit consent.
 
 ## Make changes
 
@@ -433,9 +437,10 @@ desktop app.
 
 ## Record downstream drift
 
-Update `fork-journal.md` when a change creates or removes a meaningful difference from upstream.
-Record the reason, scope, upstream baseline, and verification. Do not repeat commit-by-commit detail
-that Git already preserves.
+Update `fork-journal.md` when a change creates or changes a maintained difference from upstream.
+Record the reason, scope, upstream baseline, and verification. When a fork feature is removed or
+replaced by upstream, delete its documentation and merge instructions instead of adding a retirement
+entry. Git preserves the history.
 
 ## License and distribution
 

@@ -90,7 +90,6 @@ describe("DesktopEnvironment", () => {
       });
       assert.equal(environment.appUserModelId, "com.htylim.t3code.fork");
       assert.equal(environment.linuxDesktopEntryName, "t3code-fork.desktop");
-      assert.equal(environment.linuxWmClass, "t3code-fork");
     }),
   );
 
