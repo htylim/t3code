@@ -35,18 +35,20 @@ afterEach(() => {
 });
 
 describe("client settings hydration", () => {
-  it.each([true, false])(
-    "restores workspace grouping %s after fresh hydration",
-    async (forkGroupSidebarWorkspaces) => {
-      await persistClientSettingsPatch({ forkGroupSidebarWorkspaces });
-      const savedSettings = persistenceMocks.setClientSettings.mock.calls[0]![0];
-      expect(savedSettings.forkGroupSidebarWorkspaces).toBe(forkGroupSidebarWorkspaces);
-      __resetClientSettingsPersistenceForTests();
-      persistenceMocks.getClientSettings.mockResolvedValue(savedSettings);
-      await ensureClientSettingsHydrated();
-      expect(getClientSettings().forkGroupSidebarWorkspaces).toBe(forkGroupSidebarWorkspaces);
-    },
-  );
+  it.each([
+    ["forkGroupSidebarWorkspaces", true],
+    ["forkGroupSidebarWorkspaces", false],
+    ["forkUseH3WorkspacePicker", true],
+    ["forkUseH3WorkspacePicker", false],
+  ] as const)("restores %s %s after fresh hydration", async (settingKey, enabled) => {
+    await persistClientSettingsPatch({ [settingKey]: enabled });
+    const savedSettings = persistenceMocks.setClientSettings.mock.calls[0]![0];
+    expect(savedSettings[settingKey]).toBe(enabled);
+    __resetClientSettingsPersistenceForTests();
+    persistenceMocks.getClientSettings.mockResolvedValue(savedSettings);
+    await ensureClientSettingsHydrated();
+    expect(getClientSettings()[settingKey]).toBe(enabled);
+  });
 
   it("persists T3 and restores that choice after a fresh hydration", async () => {
     await persistClientSettingsPatch({ forkUseH3Wordmark: false });

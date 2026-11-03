@@ -465,6 +465,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode
       ? ["Environment identification"]
       : []),
+    ...(settings.forkUseH3WorkspacePicker !== DEFAULT_UNIFIED_SETTINGS.forkUseH3WorkspacePicker
+      ? ["Workspace picker"]
+      : []),
     ...(settings.forkUseH3Wordmark !== DEFAULT_UNIFIED_SETTINGS.forkUseH3Wordmark
       ? ["Fork wordmark"]
       : []),
@@ -647,6 +650,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
       contextWindowMeterEnabled: DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled,
       environmentIdentificationMode: DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode,
+      forkUseH3WorkspacePicker: DEFAULT_UNIFIED_SETTINGS.forkUseH3WorkspacePicker,
       forkUseH3Wordmark: DEFAULT_UNIFIED_SETTINGS.forkUseH3Wordmark,
       glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity,
       panelAnimationDurationMs: DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs,

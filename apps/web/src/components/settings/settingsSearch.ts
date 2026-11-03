@@ -373,6 +373,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "appearance-interface",
   },
   {
+    id: "fork-workspace-picker",
+    title: "Enable H3 Workspace picker",
+    to: "/settings/fork",
+    searchTerms: ["original upstream T3 worktree dropdown named color"],
+    forkOnly: true,
+  },
+  {
     id: "fork-ui-changes",
     title: "Fork UI Changes",
     to: "/settings/fork",
