@@ -1,151 +1,270 @@
 # Upstream merges
 
-Merge upstream while keeping the fork's intended behavior and making the next merge no harder.
-Use this procedure with the current [fork journal](fork-journal.md) and
-[fork guidelines](fork-guidelines.md). The journal explains why maintained differences exist.
+Use this runbook when asked to integrate upstream into the fork. Complete the review,
+implementation, verification, and local installable build without asking the maintainer to decide
+each commit or resolve routine implementation choices. The final decision is the maintainer's
+acceptance of the tested build before updating `fork`.
 
-## Establish the exact scope
+Read the root instructions, [fork guidelines](fork-guidelines.md), and current
+[fork journal](fork-journal.md) first. This runbook defines the procedure. The journal records why
+maintained fork behavior exists. Source and tests establish what still exists today.
 
-Inspect the working tree and remotes before changing anything. Preserve existing edits. Use an
-isolated review branch based on the requested fork snapshot. Do not move `main` or `fork` merely
-to prepare an integration. `fork` is the continuous channel; `main` is the stable channel and
-stays at or behind it.
+## 1. Pin the source and destination
+
+Inspect the checkout, remotes, existing edits, and worktrees. Preserve unrelated work.
 
 ```bash
 git status --short
 git remote -v
+git worktree list --porcelain
 git fetch --all --prune
-git rev-parse HEAD upstream/main
-git merge-base HEAD upstream/main
-git log --first-parent --merges -6 --oneline
+git rev-parse HEAD fork main origin/fork origin/main upstream/main
+git log --first-parent --merges -8 --format='%H %P %s'
 ```
 
-Confirm the merge base against the actual upstream parent of the previous integration. Journal
-dates, release tags, and local `main` are not reliable substitutes. Record the full fork head,
-upstream baseline, and upstream target SHA outside the worktree. Use that target SHA for the
-rest of the integration so another fetch cannot expand the reviewed scope.
+Record the original fork head, stable head, upstream baseline, and incoming target as full SHAs
+outside the repository. Confirm that `upstream` is pingdotgg/t3code and `origin` is our fork.
 
-## Compare feature intent
+Use the upstream parent of the previous integration to identify the last integrated upstream
+snapshot. Check it against `git merge-base fork upstream/main` and commit ancestry. A journal date,
+release version, local `main`, or merge subject alone does not establish the baseline.
 
-Read every incoming commit subject, then inspect the implementation and tests of changes relevant
-to fork behavior. Compare both baseline-to-upstream and baseline-to-fork diffs. Reconcile the
-journal with current source; historical verification entries are not a list of features to restore.
-Add a missing reason to the maintained feature's journal entry before deciding what replaces it.
+Work on an integration branch based on the requested fork snapshot. Reuse the task's existing
+integration branch when appropriate. If another checkout is needed, create a worktree beside the
+current one using absolute paths. Do not switch a shared checkout out from under another session.
 
-Classify behavior, not filenames:
+Merge the pinned upstream SHA throughout this task. Another fetch must not silently enlarge the
+reviewed batch. Leave `main`, `fork`, and their remote branches unchanged during preparation.
 
-- No replacement. Keep the fork feature and bring upstream's changes. Shared files and changed
-  APIs identify integration work, not competing requirements.
-- Full replacement. Adopt upstream and remove the fork implementation, its entry points,
-  contracts, settings, tests, dependencies, and obsolete documentation. Check for unused pieces.
-- Partial replacement. Adopt upstream's implementation and extend it with the missing fork
-  behavior as if implementing that extension today. Do not paste the old implementation over it.
+`fork` is the continuous channel. `main` is stable and stays at or behind `fork`. Equality is fine.
+Neither branch is an upstream-only mirror.
 
-Ask what upstream actually lets the user do. Provider/model usage filtering does not replace
-excluding one provider account. Thread tags do not replace identifying and managing physical
-worktrees. An organization permission ceiling does not require forcing every side chat into
-Supervised mode. Keep parent-mode inheritance within the upstream policy checks.
+## 2. Establish the maintained fork behavior
 
-Upstream directs the architecture. Prefer existing components and services, narrow extensions,
-and separate fork modules when an extension would otherwise require a large rewrite. Fork
-metadata stays outside upstream's database schema. Never add a fork migration, renumber an
-upstream migration, or hide a data repair in startup.
-
-## Capture and verify the baseline
-
-Use the `test-t3-app` skill and this worktree's ignored `.t3` state. Retain the dev server's terminal
-session and read its actual ports. Never point it at live state or set `VITE_HTTP_URL` or
-`VITE_WS_URL`. A missing dependency install or denied localhost bind is a setup problem to fix
-before testing.
-
-Use copied stopped-thread data for meaningful history. Follow the existing seeding helper and
-SQLite fixture guidance. Use a disposable Git project for rename, deletion, checkout changes,
-and agent turns. Copied thread paths can still refer to real checkouts, so do not mutate those
-workspaces. Disable automatic worktree cleanup in the isolated settings.
-
-Derive a verification matrix from the maintained feature entries and actual fork diff. For each
-feature, record its intent, UI entry points, baseline behavior, screenshots, and focused tests.
-Some features, such as packaging checks, have no running web UI; record the appropriate artifact
-or test evidence instead.
-
-Capture each visible feature before merging. Include relevant grouped and single rows, menus,
-dialogs, notices, keyboard entry points, light/dark appearance, and narrow layouts. Save captures
-outside the worktree with stable feature names and record the viewport and settings. Inspect the
-images: a saved path does not prove a capture contains the intended state.
-
-Verify behavior as well as appearance. Separate a pre-existing failure from a regression. Fix a
-small pre-existing defect if it fits the integration; report a larger one without turning the
-merge into another project. Run live provider tests only on Personal with Luna at low effort,
-explicitly verifying the account, model, and background text-generation defaults before sending.
-
-Before changing source, retain a consistent backup of the isolated database and relevant device
-preferences. Exclude pairing credentials from screenshots, commits, and reports.
-
-## Integrate the reviewed snapshot
-
-Stop the dev server using its retained terminal session before dependency and persistence changes.
-Merge the pinned SHA on the review branch:
+Compare both sides from the upstream baseline:
 
 ```bash
-git merge --no-commit <reviewed-upstream-commit>
+git log --reverse --oneline <upstream-baseline>..<upstream-target>
+git diff --stat <upstream-baseline> <upstream-target>
+git diff --stat <upstream-baseline> <fork-head>
+git diff --name-only <upstream-baseline> <upstream-target>
+git diff --name-only <upstream-baseline> <fork-head>
+```
+
+Read every incoming subject. Inspect the implementation and tests for changes that touch fork
+behavior, its dependencies, shared contracts, persistence, or packaging. File overlap helps find
+integration work; it does not establish that upstream replaces a fork feature.
+
+Build a verification matrix outside the repository. Give each maintained feature its intended
+outcome, current implementation, affected entry points, baseline result, focused tests, before/after
+captures, live result, and remaining limits. Include non-UI behavior such as background command
+stopping, cleanup, storage, desktop identity, Connect configuration, and signature verification.
+
+Reconcile the journal against the actual fork diff. Historical verification entries are not
+instructions to restore obsolete code. When a maintained feature lacks its reason, add that reason
+to its existing journal entry. Infer it from recorded decisions, tests, and behavior. Ask only when
+a material product decision remains ambiguous after that investigation.
+
+## 3. Decide replacements by intent
+
+Apply these rules without asking the maintainer to classify every incoming change.
+
+| Upstream behavior                          | Required action                                                                                            |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Does not replace our intended outcome      | Bring upstream's changes and preserve the fork behavior. Adapt to changed APIs or components where needed. |
+| Fully supplies our intended outcome        | Adopt upstream and remove the entire fork implementation.                                                  |
+| Supplies only part of our intended outcome | Adopt upstream first, then implement the missing behavior as a small extension of its new implementation.  |
+
+For a partial replacement, design the extension as if implementing it today on the incoming
+upstream snapshot. Do not preserve the old implementation verbatim or replace upstream's approach
+with it. Upstream directs product architecture.
+
+For a full replacement, remove obsolete entry points, contracts, services, settings, helpers,
+tests, dependencies, and documentation. Check for remaining references and unused code. Existing
+stored data must remain readable; authorized cleanup is a separate operation, never a migration.
+
+Use these established intents when assessing overlaps:
+
+- Side chats should support Auto rather than upstream forcing Supervised on the first turn.
+  Parent-mode inheritance is the existing small extension and preserves an explicit Supervised
+  choice. Keep upstream's organization ceilings and policy failures.
+- Usage exclusions omit a provider account from Cost and Tokens. Provider/model filters do not
+  replace this. Compose account selection with upstream aggregation and cache invalidation.
+- Worktree controls identify the physical checkout, group its threads, and allow manual management,
+  including directory rename and removal. Git performance or cleanup fixes do not replace them.
+- Native thread tags do not replace worktree names or colors. Do not revive retired fork tags.
+- Shared sidebar, citation, browser, and desktop files can change without replacing fork behavior.
+  Retain upstream accessibility, rendering optimizations, authorization, and failure handling.
+
+Prefer existing services and components with narrow extensions. When extending one would require
+a large upstream rewrite, keep separate fork components and logic instead. Do not rearchitect
+upstream to preserve the fork.
+
+Never add a fork-owned database migration, claim a migration number, alter upstream migration
+history, or hide a repair in startup. Store fork metadata outside upstream's database schema.
+Follow [Database compatibility](fork-guidelines.md#database-compatibility).
+
+## 4. Verify and capture the baseline before changing code
+
+Use the `test-t3-app` skill for the integrated web/desktop UI. Use `test-t3-mobile` for native
+mobile when applicable. Retain the isolated dev server's terminal session and actual ports.
+Use this worktree's ignored `.t3` state. Never point a dev server at live userdata or set
+`VITE_HTTP_URL` or `VITE_WS_URL`.
+
+Seed meaningful stopped-thread data using the existing helper and SQLite fixture guidance.
+Copied thread paths can still point to real checkouts. Use a disposable Git project for all
+workspace rename, deletion, checkout changes, and provider turns. Disable automatic worktree
+cleanup in the isolated settings. Back up the isolated database consistently and retain relevant
+device preferences before the merge.
+
+Exercise every matrix feature at baseline. Capture each visible feature, including its dialogs,
+menus, grouped and single rows, notices, selection drafts, light/dark appearance, and relevant
+narrow layouts. Record actual CSS viewport dimensions, screenshot dimensions, and settings.
+Save images and logs outside the repository with stable feature names. Inspect every image.
+Blank, stale, clipped, or unreadably blurry images are evidence gaps, not successful captures.
+
+Run the focused fork regressions at baseline. Record existing failures so the integrated run can
+distinguish them from regressions. Fix a small existing defect when it fits the integration.
+Report a larger detour instead of expanding the task.
+
+Use Replay for provider-independent streaming checks. When real provider behavior is required,
+use only Personal with Luna at low reasoning effort. Verify the selected account, model, and
+background title/text-generation defaults before sending. Do not inherit an expensive model
+from copied threads or use another account.
+
+## 5. Merge and adapt
+
+Stop only the isolated dev server you started, using its retained terminal session, before
+dependency or persistence changes.
+
+```bash
+git merge --no-commit <upstream-target>
 git diff --name-only --diff-filter=U
 ```
 
-Inspect each conflict and the surrounding code on both sides. Do not resolve whole files by
-choosing ours or theirs. Delete a replaced component rather than retaining an unused compatibility
-copy. Keep upstream's rendering optimizations, policy failures, authorization, and Git cleanup when
-adding fork behavior. Check automatically merged files too.
+Inspect each conflict and surrounding code from both parents. Resolve behavior rather than taking
+whole files from ours or theirs. Review automatically merged files too, especially imports, props,
+test setup, policy handling, and dependency upgrades.
 
-Install the merged dependency versions. Library upgrades can require changes to fork-only imports,
-test helpers, and service layers even when Git reports no conflict. Incoming tests may also need
-required fork props or contracts. Preserve meaningful upstream regression assertions.
+Install the merged dependency versions. Changes such as Effect upgrades can require explicit
+service layers in fork-only tests even when there was no textual conflict. Preserve upstream's
+regression assertions and add focused tests for the behavior changed by the integration.
 
-Keep upstream migrations byte-for-byte unchanged. Do not repair live databases as part of this
-procedure. Any necessary live maintenance is a separate, explicitly authorized operation.
+Upstream migrations must match the pinned target byte-for-byte. Inspect the migration registry and
+its migrations directory explicitly. Never repair a live database during an upstream merge.
 
-## Verify the integrated fork
+Record the local integration commit once conflicts and required adaptations are resolved. A local
+commit is a reviewable checkpoint, not permission to update a release branch.
 
-Restart the isolated dev server and exercise every feature in the matrix. Compare after captures
-with the corresponding before captures under the same viewport and settings. Upstream can change
-the design, but fork controls must still look consistent and support the intended workflows.
+## 6. Verify the integrated behavior
 
-Test the complete behavior, including cancellation, restoration, persistence after reload, and
-permission or busy-state guards. Check applicable web, desktop, mobile, provider, and remote paths
-from the root instructions. Distinguish browser verification of shared desktop UI from testing
-the Electron shell or a native mobile client.
+Restart the isolated dev server and repeat every matrix workflow. Test entry points and outcomes,
+including keyboard actions, cancellation, Undo/restoration, persistence after reload, shared
+workspace updates, permission ceilings, busy guards, and actual service behavior.
 
-Extend existing focused tests at the lowest layer that demonstrates a regression. Run the fork's
-existing regression files, affected package typechecks, and web/server builds. Do not replace
-these with an explicitly repo-wide test command. After recording the local merge, run:
+Compare after images with their corresponding before images under the same settings and viewport.
+Upstream may change the design. Fork controls must remain coherent with it and must still satisfy
+their intended outcome. Screenshots prove appearance; automated tests and live actions prove
+behavior. One does not replace the other.
+
+Cover applicable clients, providers, MCP/service paths, and connection modes from the root
+instructions. Browser checks of shared desktop UI do not establish that the installed Electron
+app launches. Packaging tests do not establish a native mobile or remote/tunnel pass.
+
+Run existing focused fork regression files, affected package typechecks, and web/server builds.
+After the local merge commit, check maintained fork differences against the pinned upstream ancestor:
 
 ```bash
-vp run check:changed <reviewed-upstream-commit>
+vp run check:changed <upstream-target>
 ```
 
-Using the upstream ancestor here checks the maintained fork differences. Before the merge commit,
-the tool's merge-base comparison also includes the entire incoming upstream batch. Still run the
-normal changed-file check required by the repository before an authorized push.
+Before that merge commit, merge-base selection can include the entire incoming upstream batch.
+Do not substitute an explicitly repo-wide command for the repository's changed-file workflow.
 
-A screenshot timeout is not a visual pass. Try recovery within the built-in Browser panel, retain
-valid captures, and report the exact missing comparisons. If clicks work while captures time out,
-ask the maintainer to close and reopen the panel, then reacquire the tab and restore its viewport.
-Opening another tab in the same panel did not recover capture in the November 3 integration;
-reopening the panel did. Inspect replacement captures before counting them as evidence.
-Follow the current browser instructions
-before using another browser. If approval review rejects a fallback, report its reason and obtain
-explicit consent before trying again. Limit any approved fallback to the isolated dev application.
-A source merge may be committed for review while verification is blocked, but the integration is
-not fully verified until the remaining checks pass or the maintainer explicitly accepts the
-limitation.
+For every failed or skipped test, record its name, reason, impact, and evidence. Reproduce uncertain
+failures against the baseline or unchanged upstream implementation without disturbing shared
+branches. Restore the integrated source afterward. Do not make a failure disappear with retries,
+sleeps, weaker assertions, or wider timeouts. Missing prerequisites are setup work to resolve when
+practical. A skip is not a pass.
 
-## Record and hand back
+A screenshot timeout is not a visual pass. If clicks work while capture times out, ask the
+maintainer to close and reopen this thread's Browser panel. Reacquire the tab, restore the viewport,
+and inspect fresh captures. Opening another tab alone did not fix this in the November 3 merge;
+reopening the panel did. Follow current browser instructions for any fallback. If approval review
+rejects one, report the reason and obtain explicit permission before retrying it.
 
-Update maintained intent and changed operating guidance in place. Remove documentation belonging
-to deleted fork implementations. Add a concise integration journal entry with the exact upstream
-baseline, adaptations, evidence, pre-existing failures, and unverified paths. Keep temporary logs,
-screenshots, checklists, and research notes outside the repository.
+## 7. Prepare the evidence and update documentation
 
-Report the review branch and commit, retained or replaced behavior, test results, and any outstanding
-verification. Verify that shared branch heads did not move. Updating `fork`, promoting `fork` to
-`main`, pushing, opening a PR, installing an app, and publishing are separate actions requiring
-explicit consent. Follow the release runbook only when a release is requested.
+Update maintained feature intent and operating guidance in place. Remove documentation for deleted
+fork implementations. Add a concise journal entry with the upstream baseline/target, fork source,
+adaptations, tests, live checks, and limits. Keep temporary matrices, logs, screenshots, and build
+notes outside the repository.
+
+Provide a browsable before/after comparison and exact test output. Label repeated screenshots,
+after-only states, invalid captures, tests covered only by automation, and workflows not exercised.
+Do not say "fully verified" when tests fail, prerequisites caused skips, or required live paths
+remain untested. Explain the practical limits so the maintainer can make an informed decision.
+
+Fix integration regressions before building the candidate. Keep unrelated baseline/upstream
+failures explicit. Ask the maintainer to accept those limits at sign-off rather than quietly
+treating them as successful checks.
+
+## 8. Build the local installable candidate
+
+Build from the committed integration snapshot before updating `fork`. Follow the
+[desktop packaging procedure](fork-guidelines.md#release-the-fork-desktop-app) for version selection,
+focused packaging checks, detached build isolation, exact version stamping, and artifact verification.
+
+For a local review build, stop before tagging, pushing, or publishing. No release or GitHub upload
+is needed. Use the next unused numeric `0.1.0-fork.N` version after checking local tags, remote tags,
+published releases, and existing candidate artifacts. Record the full source commit and architecture.
+Build in a disposable detached worktree beside the current worktree, using absolute paths.
+Do not change source manifests by hand or build over a running development checkout.
+
+Verify the DMG and ZIP, both contained app signatures, bundle identifier, embedded commit, exact
+app/server/client versions, architecture, minimum macOS version, and absence of the upstream update
+feed. Smoke-test the packaged server and client using fresh temporary state. Do not launch against
+the daily-use database or Electron profile.
+
+Keep the DMG, checksum, and a short verification record accessible after removing the build
+worktree. Give the maintainer installation instructions and known failures. Explain that Fork shares
+userdata with the daily-use T3 app, requires a backup and quitting the other app before launch,
+and uses ad-hoc signing without Developer ID or notarization. Link the documented per-app
+[Gatekeeper approval steps](fork-guidelines.md#gatekeeper-approval-for-local-builds).
+
+## 9. Wait for DMG sign-off
+
+Stop here for the maintainer to install and test the candidate. Building the DMG is not permission
+to update `fork`. Do not install it, replace the running app, move release branches, or publish
+anything on the maintainer's behalf.
+
+Record which commit/version the maintainer tested and any accepted limits. If a correction changes
+shipped code, rebuild, rerun affected checks, and obtain sign-off on the replacement candidate.
+A response that explicitly approves the build and asks to merge is sufficient; do not ask again.
+
+## 10. Update fork only after authorization
+
+Once the maintainer signs off and authorizes the merge, recheck the integration head and the current
+`fork` head. Confirm that the candidate still represents the code being promoted.
+
+If `fork` is still an ancestor of the approved integration, fast-forward it in the checkout that
+owns that branch. This preserves the upstream merge commit and reviewed history:
+
+```bash
+git merge-base --is-ancestor <current-fork-head> <approved-integration-head>
+git -C <absolute-fork-checkout> status --short
+git -C <absolute-fork-checkout> merge --ff-only <approved-integration-head>
+```
+
+Respect existing edits and active processes in that checkout. Do not force an update or reset a
+shared branch. If `fork` advanced independently, integrate its new work into the review branch,
+repeat affected verification, and rebuild for sign-off when shipped code changed.
+
+Leave `main` unchanged. Promoting stable, pushing a branch, opening a PR, and publishing a release
+each need the authorization appropriate to that action. A local merge request alone does not
+authorize them. Before an authorized push, complete the repository's required changed-file check
+and disclose any accepted failures.
+
+Report the final integration and fork SHAs, artifact version and source commit, sign-off, accepted
+limits, and whether anything was pushed. Verify that `main` did not move. Keep the dev server and
+panel available for inspection; ending the assistant turn is not teardown.
