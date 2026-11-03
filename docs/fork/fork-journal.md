@@ -34,13 +34,18 @@
   returns no remote for an unblocked neighboring repository while another read is blocked.
   The same focused test fails with the scanner source restored byte-for-byte from upstream.
   Neither failure demonstrates a fork regression; the changed-file check is still not green.
-- Visual verification is incomplete. Retained 25 valid before captures, but Browser-panel
-  screenshot and recording calls time out. Two blank branding-fixture captures do not count
-  as evidence. After captures and direct image comparisons remain pending. Approval review
-  rejected another-browser fallback because it could expose unrelated signed-in state.
-  H3 settings persistence passed; the rendered H3 wordmark, native mobile UI, installed
-  Electron shell, installers, and remote/tunnel connections were not exercised in this pass.
-  No live database, installed app, or shared release branch changed. Nothing was published.
+- Browser capture initially timed out while clicks and page reads worked. Closing and reopening
+  the Browser panel restored capture; another browser was unnecessary. Retained 25 before
+  captures and matching after states, plus dark artwork and rendered H3/T3 component captures.
+  Compared the controls, dialogs, pills, grouped cards, notices, pickers, and HTML panels.
+  No fork-specific layout regression was found. Before images are blurry, so these comparisons
+  establish layout and control consistency rather than pixel equality. Two blank before
+  branding fixtures do not count as evidence; rendered H3/T3 and Forge passed afterward in
+  light and dark modes using the application's React runtime.
+- Native mobile UI, installed Electron shell, installers, and remote/tunnel connections were
+  not exercised in this pass. Background-command stopping, delegate worktree cleanup, and
+  desktop packaging used automated coverage rather than new live workflows. No live database,
+  installed app, or shared release branch changed. Nothing was published.
 - Updated channel guidance: `fork` is continuous and `main` is stable, at or behind `fork`.
   Added missing maintained-feature intent and the reusable [upstream merge procedure](upstream-merges.md).
 

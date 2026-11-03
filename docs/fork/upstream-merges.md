@@ -127,7 +127,11 @@ the tool's merge-base comparison also includes the entire incoming upstream batc
 normal changed-file check required by the repository before an authorized push.
 
 A screenshot timeout is not a visual pass. Try recovery within the built-in Browser panel, retain
-valid captures, and report the exact missing comparisons. Follow the current browser instructions
+valid captures, and report the exact missing comparisons. If clicks work while captures time out,
+ask the maintainer to close and reopen the panel, then reacquire the tab and restore its viewport.
+Opening another tab in the same panel did not recover capture in the November 3 integration;
+reopening the panel did. Inspect replacement captures before counting them as evidence.
+Follow the current browser instructions
 before using another browser. If approval review rejects a fallback, report its reason and obtain
 explicit consent before trying again. Limit any approved fallback to the isolated dev application.
 A source merge may be committed for review while verification is blocked, but the integration is
