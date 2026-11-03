@@ -1,7 +1,7 @@
 import { page, userEvent } from "vite-plus/test/browser";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { render } from "../../../test/render";
+import { act, fakeTimers, render } from "../../../test/render";
 import { Sidebar, SidebarProvider, SidebarRail, SidebarTrigger, useSidebar } from "./sidebar";
 
 function CollapseFromInside() {
@@ -33,6 +33,42 @@ function Harness(props: { readonly onResize?: (width: number) => void }) {
 }
 
 describe("Sidebar", () => {
+  it("allows clicks while peeking and becomes inert again when dismissed", async () => {
+    await page.viewport(1280, 800);
+    const onSelectThread = vi.fn();
+    await using screen = await render(
+      <SidebarProvider defaultOpen={false}>
+        <Sidebar peekOnHover>
+          <button type="button" onClick={onSelectThread}>
+            Select thread
+          </button>
+        </Sidebar>
+        <SidebarTrigger />
+      </SidebarProvider>,
+      { router: false /* exercises sidebar interaction without routing */ },
+    );
+    using _timers = fakeTimers();
+    const sidebar = screen.container.querySelector<HTMLElement>('[data-slot="sidebar"]')!;
+    expect(sidebar.inert).toBe(true);
+
+    await act(() => {
+      document.dispatchEvent(
+        new PointerEvent("pointermove", { pointerType: "mouse", clientX: 2, clientY: 100 }),
+      );
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(sidebar.dataset.peek).toBe("true");
+    expect(sidebar.inert).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Select thread" }));
+    expect(onSelectThread).toHaveBeenCalledOnce();
+    expect(sidebar.dataset.state).toBe("collapsed");
+
+    await userEvent.keyboard("{Escape}");
+    await vi.waitFor(() => expect(sidebar.inert).toBe(true));
+    expect(sidebar.dataset.peek).toBeUndefined();
+  });
+
   it("hands focus to the outside trigger when it collapses around the focused control", async () => {
     await page.viewport(1280, 800);
     await using screen = await render(<Harness />, { router: false /* no routes involved */ });

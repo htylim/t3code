@@ -1,5 +1,15 @@
 # Fork journal
 
+## 2026-11-03 - Restore clicks in the hover sidebar
+
+- Upstream baseline: `cefb544af3`. Apply on top of fork commit `39290a8eb9`.
+- Upstream's collapsed sidebar wrapper stayed inert during hover reveal, blocking clicks
+  throughout the panel. Clear the wrapper's inert state while the hover panel is open.
+  Web and desktop share the fix; native mobile is unchanged.
+- Verification: the new Chromium regression failed before the fix. All 18 focused sidebar
+  and hover tests passed afterward, including clicks, dismissal, and the saved collapsed state.
+  Installed desktop verification was not run.
+
 ## 2026-11-03 - Integrate upstream through cefb544af3
 
 - Upstream baseline: `cefb544af3c98224874419198c0359b652ca3c94`, 482 commits after
