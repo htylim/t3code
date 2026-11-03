@@ -12,6 +12,7 @@ import type {
   OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
+import * as DateTime from "effect/DateTime";
 import { sanitizeNewRefName } from "@t3tools/shared/git";
 import { toSortableTimestamp } from "@t3tools/client-runtime/state/thread-sort";
 export { deriveLocalBranchNameFromRemoteRef, sanitizeNewRefName } from "@t3tools/shared/git";
@@ -413,6 +414,32 @@ export function resolveWorktreeRows(input: {
     });
   }
   return [...rows.values()].sort((left, right) => left.dirName.localeCompare(right.dirName));
+}
+
+/** Orders worktrees by their latest thread activity or visit, with unknown dates last. */
+export function resolveRecentWorktreeRows(
+  rows: readonly WorktreeRow[],
+  threads: readonly Pick<
+    OrchestrationV2ThreadShell,
+    "worktreePath" | "updatedAt" | "lastVisitedAt"
+  >[],
+) {
+  const lastUsedByPath = new Map<string, number>();
+  for (const thread of threads) {
+    if (!thread.worktreePath) continue;
+    const updatedAt = DateTime.toEpochMillis(thread.updatedAt);
+    const visitedAt = thread.lastVisitedAt ? DateTime.toEpochMillis(thread.lastVisitedAt) : 0;
+    const lastUsedAt = Math.max(updatedAt, visitedAt);
+    const previousLastUsedAt = lastUsedByPath.get(thread.worktreePath) ?? 0;
+    lastUsedByPath.set(thread.worktreePath, Math.max(previousLastUsedAt, lastUsedAt));
+  }
+  return rows
+    .map((row) => ({ ...row, lastUsedAt: lastUsedByPath.get(row.worktreePath) ?? null }))
+    .sort(
+      (left, right) =>
+        (right.lastUsedAt ?? 0) - (left.lastUsedAt ?? 0) ||
+        left.dirName.localeCompare(right.dirName),
+    );
 }
 
 /** Busy takes precedence over uncommitted changes and unpushed commits. */

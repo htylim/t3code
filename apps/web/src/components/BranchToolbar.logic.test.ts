@@ -6,6 +6,7 @@ import {
 import { type VcsRef } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import { dedupeRemoteBranchesWithLocalMatches } from "@t3tools/shared/git";
+import * as DateTime from "effect/DateTime";
 import {
   deriveLocalBranchNameFromRemoteRef,
   resolveBranchSelectionTarget,
@@ -14,6 +15,7 @@ import {
   resolveBranchToolbarPrBranch,
   resolveLocalCheckoutBranchMismatch,
   resolveWorktreeRows,
+  resolveRecentWorktreeRows,
   resolveWorktreeStatusWord,
   resolveWorktreeUnpushedWarning,
   sanitizeNewRefName,
@@ -341,6 +343,36 @@ describe("workspace rows", () => {
     });
     expect(rows.map((row) => row.dirName)).toEqual(["alpha", "current", "zeta"]);
     expect(rows.every((row) => !row.isBusy && row.isIdle)).toBe(true);
+  });
+
+  it("sorts worktrees by the latest activity or visit across their threads, with unknown dates last", () => {
+    const rows = resolveWorktreeRows({
+      refs: [
+        ref("alpha", "/trees/alpha"),
+        ref("beta", "/trees/beta"),
+        ref("gamma", "/trees/gamma"),
+        ref("delta", "/trees/delta"),
+      ],
+      threads: [],
+      activeProjectCwd: "/repo",
+      activeWorktreePath: "/trees/alpha",
+    });
+    const older = DateTime.makeUnsafe("2026-11-01T12:00:00Z");
+    const newer = DateTime.makeUnsafe("2026-11-02T12:00:00Z");
+    const recentRows = resolveRecentWorktreeRows(rows, [
+      { worktreePath: "/trees/alpha", updatedAt: older },
+      { worktreePath: "/trees/beta", updatedAt: older, lastVisitedAt: newer },
+      { worktreePath: "/trees/gamma", updatedAt: newer },
+      { worktreePath: "/trees/beta", updatedAt: older },
+      { worktreePath: null, updatedAt: newer },
+    ]);
+    expect(recentRows.map((row) => row.dirName)).toEqual(["beta", "gamma", "alpha", "delta"]);
+    expect(recentRows.map((row) => row.lastUsedAt)).toEqual([
+      DateTime.toEpochMillis(newer),
+      DateTime.toEpochMillis(newer),
+      DateTime.toEpochMillis(older),
+      null,
+    ]);
   });
 
   it("keeps a selected worktree visible in order while its ref is unavailable", () => {
