@@ -1,3 +1,4 @@
+import { FORK_RELEASES_URL } from "@t3tools/shared/forkDesktopRelease";
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
 import { ExternalLinkIcon } from "lucide-react";
 
@@ -152,7 +153,12 @@ export function SidebarUpdateReleaseNotes({
         })}
         {state.omittedReleaseCount > 0 ? (
           <div className="mt-3">
-            <ReleaseLink releaseUrl={getDesktopUpdateReleaseHistoryUrl()} shell={shell}>
+            <ReleaseLink
+              releaseUrl={
+                state.manualDownload ? FORK_RELEASES_URL : getDesktopUpdateReleaseHistoryUrl()
+              }
+              shell={shell}
+            >
               {`${state.omittedReleaseCount} older ${state.omittedReleaseCount === 1 ? "release" : "releases"} on GitHub`}
             </ReleaseLink>
           </div>

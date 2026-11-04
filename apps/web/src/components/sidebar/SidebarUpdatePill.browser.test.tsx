@@ -117,6 +117,23 @@ describe("SidebarUpdatePill release notes", () => {
 });
 
 describe("SidebarUpdatePill update everything", () => {
+  it("keeps a manual Fork download available when provider updates are pending", async () => {
+    setup(
+      {
+        ...nightlyUpdate([]),
+        manualDownload: true,
+        channel: "latest",
+        currentVersion: "0.1.0-fork.900001",
+        availableVersion: "0.1.0-fork.900002",
+      },
+      { hasUpdates: true },
+    );
+    await using screen = await render(<SidebarUpdatePill />);
+    await expect
+      .element(screen.getByRole("button", { name: /Download Fork 0.1.0-fork.900002/ }))
+      .toBeVisible();
+  });
+
   it("does not refocus the update button after a pointer cancel", async () => {
     setup(null, { hasUpdates: true });
     await using screen = await render(<SidebarUpdatePill />);

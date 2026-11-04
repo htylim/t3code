@@ -228,9 +228,12 @@ function SidebarUpdateControl() {
   const action = state ? resolveDesktopUpdateButtonAction(state) : "none";
   const isDownloading = state?.status === "downloading";
   const localUpdateVersion =
-    state && action !== "none" ? getDesktopUpdateDownloadedVersion(state) : null;
+    state && !state.manualDownload && action !== "none"
+      ? getDesktopUpdateDownloadedVersion(state)
+      : null;
   const everything = useUpdateEverything(localUpdateVersion);
-  const runsEverything = everything.hasUpdates && !isDownloading;
+  const runsEverything =
+    everything.hasUpdates && !isDownloading && !(state?.manualDownload && action === "download");
   const run = useUpdateEverythingRun();
   const isRunningEverything = run !== null;
   const showCheckIcon = shouldShowDesktopUpdateCheckIcon({
@@ -358,13 +361,13 @@ function SidebarUpdateControl() {
     setIsActionPending(true);
     const result = await settlePromise(() =>
       everything.run({
-        ...(bridge && action === "download"
+        ...(bridge && !state?.manualDownload && action === "download"
           ? {
               downloadLocal: (reportError) =>
                 downloadLocalUpdate(bridge, { notifyDownloaded: false, reportError }),
             }
           : {}),
-        ...(bridge && action !== "none"
+        ...(bridge && !state?.manualDownload && action !== "none"
           ? { installLocal: (reportError) => installLocalUpdate(bridge, reportError) }
           : {}),
       }),

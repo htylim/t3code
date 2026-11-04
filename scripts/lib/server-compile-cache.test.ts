@@ -106,12 +106,23 @@ it("seeds relocated cache entries without allowing writes into shipped resources
     expect(seedPreparedCache(prepared, active, "matching")).toBe(true);
     const key = cacheKey(active, NodePath.join(root, "resources", manifest.entries[0]!.module));
     expect(NodeFS.readFileSync(NodePath.join(active, key), "utf8")).toBe("prepared bytes");
-    // Node persists by replacing the directory entry, never by overwriting the linked inode.
-    NodeFS.rmSync(NodePath.join(active, key));
+    // Cache rewrites must not write through seeded files into the signed bundle.
     NodeFS.writeFileSync(NodePath.join(active, key), "runtime replacement");
     expect(NodeFS.readFileSync(NodePath.join(prepared, "12345678"), "utf8")).toBe("prepared bytes");
     expect(seedPreparedCache(prepared, active, "matching")).toBe(true);
     expect(NodeFS.readFileSync(NodePath.join(active, key), "utf8")).toBe("runtime replacement");
+    NodeFS.rmSync(NodePath.join(active, key));
+    NodeFS.linkSync(NodePath.join(prepared, "12345678"), NodePath.join(active, key));
+    const oldCachePath = NodePath.join(active, "87654321");
+    NodeFS.linkSync(NodePath.join(prepared, "12345678"), oldCachePath);
+    expect(seedPreparedCache(prepared, active, "matching")).toBe(true);
+    NodeFS.writeFileSync(
+      oldCachePath,
+      "runtime replacement for a module absent from the new manifest",
+    );
+    expect(NodeFS.readFileSync(NodePath.join(prepared, "12345678"), "utf8")).toBe("prepared bytes");
+    NodeFS.writeFileSync(NodePath.join(active, key), "runtime replacement after upgrading");
+    expect(NodeFS.readFileSync(NodePath.join(prepared, "12345678"), "utf8")).toBe("prepared bytes");
     const missing = { module: "app.asar/apps/server/dist/missing.mjs", file: "87654321" };
     for (const entries of [
       [...manifest.entries, missing],

@@ -7,6 +7,8 @@ import {
   type DesktopUpdateCheckResult,
   type DesktopUpdateState,
 } from "@t3tools/contracts";
+import { isForkDesktopVersion } from "@t3tools/shared/desktopBuildIdentity";
+import * as ForkDesktopUpdates from "./ForkDesktopUpdates.ts";
 import { errorTag } from "@t3tools/shared/observability";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -362,6 +364,10 @@ function isArm64HostRunningIntelBuild(runtimeInfo: DesktopRuntimeInfo): boolean 
 
 /** @public */
 export const make = Effect.gen(function* () {
+  const forkEnvironment = yield* DesktopEnvironment.DesktopEnvironment;
+  if (forkEnvironment.platform === "darwin" && isForkDesktopVersion(forkEnvironment.appVersion)) {
+    return yield* ForkDesktopUpdates.make;
+  }
   const config = yield* DesktopConfig.DesktopConfig;
   const pool = yield* DesktopBackendPool.DesktopBackendPool;
   const desktopState = yield* DesktopState.DesktopState;

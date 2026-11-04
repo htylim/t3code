@@ -1,3 +1,4 @@
+import { showDesktopUpdateDownloadedToast } from "../desktopUpdate.toast";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
@@ -35,6 +36,7 @@ import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
+  getDesktopUpdateActionError,
   getDesktopUpdateDisabledReason,
   getDesktopUpdateInstallConfirmationMessage,
   isDesktopUpdateButtonDisabled,
@@ -194,15 +196,32 @@ function AboutVersionSection() {
     const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
 
     if (action === "download") {
-      void bridge.downloadUpdate().catch((error: unknown) => {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not download update",
-            description: error instanceof Error ? error.message : "Download failed.",
-          }),
-        );
-      });
+      void bridge
+        .downloadUpdate()
+        .then((result) => {
+          if (result.completed && result.state.manualDownload) {
+            showDesktopUpdateDownloadedToast(bridge, result.state);
+          }
+          const actionError = getDesktopUpdateActionError(result);
+          if (actionError) {
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Could not download update",
+                description: actionError,
+              }),
+            );
+          }
+        })
+        .catch((error: unknown) => {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not download update",
+              description: error instanceof Error ? error.message : "Download failed.",
+            }),
+          );
+        });
       return;
     }
 
@@ -292,7 +311,9 @@ function AboutVersionSection() {
     actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
   const description =
     action === "download" || action === "install"
-      ? "Update available."
+      ? updateState?.manualDownload
+        ? "Download the DMG in your browser, then quit Fork and replace the app in Applications."
+        : "Update available."
       : (getDesktopUpdateDisabledReason(updateState, updatesDenial) ??
         "Current version of the application.");
 
@@ -321,7 +342,7 @@ function AboutVersionSection() {
           </Tooltip>
         }
       />
-      {hasDesktopBridge ? (
+      {hasDesktopBridge && !updateState?.manualDownload ? (
         <SettingsRow
           {...searchableSetting("update-track")}
           description={

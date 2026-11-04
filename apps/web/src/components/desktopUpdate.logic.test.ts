@@ -29,6 +29,11 @@ const baseState: DesktopUpdateState = {
 };
 
 describe("desktop update button state", () => {
+  it("links fork versions to their own release tags", () => {
+    expect(getDesktopUpdateReleaseUrl("0.1.0-fork.24")).toBe(
+      "https://github.com/htylim/t3code/releases/tag/fork-v0.1.0-fork.24",
+    );
+  });
   it("keeps retry action available after a download error", () => {
     const state: DesktopUpdateState = {
       ...baseState,

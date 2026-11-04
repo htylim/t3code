@@ -33,6 +33,16 @@ describe("resolveStartupRecoveryOffer", () => {
   it("offers a newer version before going back", () => {
     expect(
       resolveStartupRecoveryOffer(
+        updateState({
+          manualDownload: true,
+          status: "available",
+          availableVersion: "0.1.0-fork.10",
+        }),
+        "0.1.0-fork.9",
+      ),
+    ).toEqual({ _tag: "Releases" });
+    expect(
+      resolveStartupRecoveryOffer(
         updateState({ status: "available", availableVersion: "0.1.4" }),
         "0.1.2",
       ),

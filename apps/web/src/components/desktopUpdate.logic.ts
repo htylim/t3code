@@ -1,3 +1,5 @@
+import { isForkDesktopVersion } from "@t3tools/shared/desktopBuildIdentity";
+import { FORK_RELEASES_URL } from "@t3tools/shared/forkDesktopRelease";
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
 
 export type DesktopUpdateButtonAction = "download" | "install" | "none";
@@ -32,6 +34,9 @@ export function getDesktopUpdateReleaseUrl(
 ): string | null {
   const normalizedVersion = version?.trim();
   if (!normalizedVersion) return null;
+  if (isForkDesktopVersion(normalizedVersion)) {
+    return `${FORK_RELEASES_URL}/tag/fork-v${encodeURIComponent(normalizedVersion)}`;
+  }
   return `${desktopReleaseRepositoryUrl(repository)}/tag/v${encodeURIComponent(normalizedVersion)}`;
 }
 
@@ -93,6 +98,9 @@ export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string
     getDesktopUpdateDownloadedVersion(state) === state.notAppliedVersion
   ) {
     return `Update ${state.notAppliedVersion} did not apply. Click to retry.`;
+  }
+  if (state.manualDownload && state.status === "available") {
+    return `Download Fork ${state.availableVersion} in your browser. Quit Fork, open the DMG, and replace the app in Applications.`;
   }
   if (state.status === "available") {
     return `Update ${state.availableVersion ?? "available"} ready to download`;

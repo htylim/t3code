@@ -15,7 +15,11 @@ import * as Path from "effect/Path";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
-import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
+import {
+  resolveDesktopBaseDir,
+  resolveDesktopStateDir,
+  resolveDesktopMockUpdateHome,
+} from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 import type { OtlpProtocol } from "@t3tools/shared/observability";
 
@@ -153,8 +157,15 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const homeDirectory = input.homeDirectory;
   const devServerUrl = config.devServerUrl;
   const isDevelopment = Option.isSome(devServerUrl);
-  const appDataDirectory =
-    input.platform === "win32"
+  const mockUpdateHome = resolveDesktopMockUpdateHome({
+    mockUpdates: config.mockUpdates,
+    t3Home: config.t3Home,
+    homeDirectory,
+    path,
+  });
+  const appDataDirectory = Option.isSome(mockUpdateHome)
+    ? path.join(mockUpdateHome.value, "mock-electron")
+    : input.platform === "win32"
       ? Option.getOrElse(config.appDataDirectory, () =>
           path.join(homeDirectory, "AppData", "Roaming"),
         )

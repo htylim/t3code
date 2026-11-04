@@ -1644,3 +1644,58 @@ The fork-specific implementation was removed.
   including custom fallback and prompt-injection cases. Browser-panel captures verified settings,
   workspace selection, editing, persistence, and Custom-open layouts at 110% text and 768px width.
   Native mobile, installed desktop launch, and remote connections were not exercised.
+
+## 2026-11-04 - Add a macOS desktop release channel
+
+- Upstream baseline remains `15fe283272`. Stable Fork releases use a local `main` snapshot,
+  numeric `-fork.N` versions, and `fork-v` tags. A preparation command builds in a disposable
+  sibling worktree and writes the DMGs, ZIPs, checksums, release notes, and update manifest.
+  It does not tag, publish, move shared branches, build mobile, or deploy upstream services.
+- macOS Fork checks a fork-owned manifest on the Latest GitHub Release. Existing sidebar and
+  Settings actions open the exact version's DMG in the browser, with manual replacement
+  instructions. Native automatic installation and upstream track switching remain unavailable
+  for this distribution mode. Remote update requests fail with manual installation guidance.
+- Ad-hoc signing and the shared runtime data directory remain unchanged. Existing Fork builds
+  need one manual update before they can discover releases.
+- Verification: 80 focused updater, remote update, startup recovery, link, and Chromium sidebar
+  tests passed. Type checks, unused-code checks, and affected React compiler checks passed.
+  The preparation command help ran successfully. A packaged desktop build, native installation,
+  and a published two-version update were not exercised. Nothing was published.
+
+## 2026-11-04 - Rehearse the local desktop update channel
+
+- Added a loopback update fixture using the existing mock-update flags. It requires an absolute
+  test home outside the daily-use T3 directory and isolates Electron profiles below that home,
+  so packaged copies can be tested without sharing the installed app's browser databases.
+  Managed update policy takes precedence. Added updater diagnostics and a clock-controlled
+  startup/polling regression case.
+- Built Apple Silicon test versions `0.1.0-fork.900001` and `0.1.0-fork.900002`. Verified DMG
+  integrity and strict recursive app signatures for the DMG and ZIP copies. Downloaded B from
+  the loopback server, matched its SHA-256 to the build artifact, and replaced only the temporary
+  test installation with B. Both the test database and Electron profile remained under the
+  temporary rehearsal directory. No installed app, shared branch, tag, or release was changed.
+- The native A app offered the manual DMG download in Settings; B showed the exact new version
+  and Up to Date using the same isolated profile. A macOS Keychain approval prompt for
+  `t3code Safe Storage` blocked relaunches until the developer approved it. Isolating the profile
+  does not isolate the system Keychain.
+- Fixed a sidebar priority bug found during native verification: pending provider updates could
+  hide an available manual Fork download. A failing Chromium regression now passes alongside
+  the existing sidebar cases. The fix is in source and is not included in these earlier DMGs.
+- Verification: 62 focused updater, environment-isolation, and fixture-server tests and all five
+  sidebar Chromium cases passed; affected type checks and lint passed. The developer authorized
+  live browser use after the Browser panel reported unavailable. The current UI and real updater
+  service were also exercised through a temporary loopback-only Electron bridge adapter. Browser
+  download approval was declined, so the actual download click remains unverified and was not
+  retried. The earlier HTTP download and checksum check are separate evidence.
+
+## 2026-11-04 - Publish stable Fork releases from main
+
+- `making-fork-releases.md` is the release runbook linked from the fork instructions. It covers
+  committing and testing work, merging into `fork`, promoting the pinned snapshot to `main`,
+  building in a disposable checkout, verifying both artifacts, and publishing the complete
+  release and update manifest as Latest. The old duplicated procedure was removed.
+- Prepared server bytecode now seeds independent runtime cache files. Older symlinks and hard
+  links are removed from that runtime cache before seeding, including entries no longer present
+  in the release manifest. Runtime writes must not alter a signed app bundle after installation.
+  A regression reproduced writes into shipped resources before the fix and now checks both
+  in-place rewrites and upgrades from linked caches.

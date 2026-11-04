@@ -51,10 +51,12 @@ export function showDesktopUpdateDownloadedToast(
   const releaseUrl = getDesktopUpdateReleaseUrl(getDesktopUpdateDownloadedVersion(state));
   toastManager.add({
     type: "success",
-    title: "Update downloaded",
+    title: state.manualDownload ? "Download opened in your browser" : "Update downloaded",
     description: (
       <>
-        Restart the app from the update button to install it.
+        {state.manualDownload
+          ? "When the download finishes, quit Fork, open the DMG, and replace the app in Applications."
+          : "Restart the app from the update button to install it."}
         {releaseUrl ? <ReleaseNotesLink releaseUrl={releaseUrl} shell={shell} /> : null}
       </>
     ),

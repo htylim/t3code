@@ -1,5 +1,6 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { isForkDesktopVersion } from "@t3tools/shared/desktopBuildIdentity";
 import type { DesktopUpdateState } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -11,6 +12,9 @@ import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopState from "../app/DesktopState.ts";
@@ -39,6 +43,12 @@ export interface UpdatesHarnessOptions {
   readonly installRecord?: string | undefined;
   readonly policy?: DesktopUpdatePolicy.UpdatePolicy;
   readonly appVersion?: string;
+  readonly processArch?: string;
+  readonly runningUnderArm64Translation?: boolean;
+  readonly forkManifest?: unknown;
+  readonly mockUpdates?: boolean;
+  readonly forkHttpStatus?: number;
+  readonly openDownload?: boolean;
   /** Starts from in-memory settings with this track saved, as after a restart. */
   readonly savedChannel?: DesktopAppSettings.DesktopSettings["updateChannel"];
   /** Adds a WSL backend beside the primary, as on a Windows host with WSL enabled. */
@@ -56,6 +66,8 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   const listeners = new Map<string, Set<(...args: readonly unknown[]) => void>>();
   const sentStates: DesktopUpdateState[] = [];
   const installSteps: string[] = [];
+  const externalUrls: unknown[] = [];
+  const manifestUrls: string[] = [];
 
   const addListener = (eventName: string, listener: (...args: readonly unknown[]) => void) => {
     const eventListeners = listeners.get(eventName) ?? new Set();
@@ -176,19 +188,21 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     dirname: "/repo/apps/desktop/src",
     homeDirectory: `/tmp/t3-desktop-updates-home-${process.pid}`,
     platform: options.platform ?? "darwin",
-    processArch: "x64",
+    processArch: options.processArch ?? "x64",
     appVersion: options.appVersion ?? "1.2.3",
     appPath: "/repo",
     isPackaged: true,
     resourcesPath: "/missing/resources",
-    runningUnderArm64Translation: false,
+    runningUnderArm64Translation: options.runningUnderArm64Translation ?? false,
   }).pipe(
     Layer.provide(
       Layer.mergeAll(
         NodeServices.layer,
         DesktopConfig.layerTest({
           T3CODE_HOME: `/tmp/t3-desktop-updates-test-${process.pid}`,
-          T3CODE_DESKTOP_MOCK_UPDATES: "true",
+          T3CODE_DESKTOP_MOCK_UPDATES: String(
+            options.mockUpdates ?? !isForkDesktopVersion(options.appVersion ?? ""),
+          ),
           T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT: "4141",
           ...options.env,
         }),
@@ -274,6 +288,34 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
 
   const layer = DesktopUpdates.layer.pipe(
     Layer.provide(layerFileSystem),
+    Layer.provide(
+      Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) => {
+          manifestUrls.push(request.url);
+          return Effect.succeed(
+            HttpClientResponse.fromWeb(
+              request,
+              new Response(JSON.stringify(options.forkManifest ?? {}), {
+                status: options.forkHttpStatus ?? 200,
+              }),
+            ),
+          );
+        }),
+      ),
+    ),
+    Layer.provide(
+      Layer.succeed(ElectronShell.ElectronShell, {
+        openExternal: Effect.fn("test.openExternal")((url) =>
+          Effect.sync(() => {
+            externalUrls.push(url);
+            return options.openDownload ?? true;
+          }),
+        ),
+        openSystemSettings: Effect.fn("test.openSystemSettings")(() => Effect.succeed(false)),
+        copyText: Effect.fn("test.copyText")(() => Effect.void),
+      }),
+    ),
     Layer.provide(DesktopUpdatePolicy.layerTest(options.policy)),
     Layer.provideMerge(layerUpdater),
     Layer.provideMerge(layerWindow),
@@ -283,7 +325,9 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     Layer.provideMerge(
       DesktopConfig.layerTest({
         T3CODE_HOME: `/tmp/t3-desktop-updates-test-${process.pid}`,
-        T3CODE_DESKTOP_MOCK_UPDATES: "true",
+        T3CODE_DESKTOP_MOCK_UPDATES: String(
+          options.mockUpdates ?? !isForkDesktopVersion(options.appVersion ?? ""),
+        ),
         T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT: "4141",
         ...options.env,
       }),
@@ -294,6 +338,8 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
 
   return {
     layer,
+    externalUrls,
+    manifestUrls,
     checkCount: () => checkCount,
     quitAndInstalls: () => quitAndInstallCount,
     installSteps,

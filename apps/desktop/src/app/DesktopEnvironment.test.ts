@@ -93,6 +93,32 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
+  it.effect("isolates mock-update Electron profiles only with a separate absolute home", () =>
+    Effect.gen(function* () {
+      const isolated = yield* makeEnvironment(
+        { appVersion: "0.1.0-fork.1", isPackaged: true },
+        {
+          T3CODE_HOME: "/tmp/fork-update-rehearsal",
+          T3CODE_DESKTOP_MOCK_UPDATES: "true",
+        },
+      );
+      assert.equal(isolated.stateDir, "/tmp/fork-update-rehearsal/userdata");
+      assert.equal(isolated.appDataDirectory, "/tmp/fork-update-rehearsal/mock-electron");
+      for (const home of [
+        undefined,
+        "relative-home",
+        "/Users/alice/.t3",
+        "/Users/alice/.t3/userdata",
+      ]) {
+        const regular = yield* makeEnvironment(
+          {},
+          { T3CODE_HOME: home, T3CODE_DESKTOP_MOCK_UPDATES: "true" },
+        );
+        assert.equal(regular.appDataDirectory, "/Users/alice/Library/Application Support");
+      }
+    }),
+  );
+
   it.effect("uses a configured app user model id override", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment(

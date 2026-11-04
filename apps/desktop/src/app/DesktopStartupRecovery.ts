@@ -1,3 +1,5 @@
+import { isForkDesktopVersion } from "@t3tools/shared/desktopBuildIdentity";
+import { FORK_RELEASES_URL } from "@t3tools/shared/forkDesktopRelease";
 import type { DesktopUpdateState } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -42,6 +44,7 @@ export function resolveStartupRecoveryOffer(
   update: DesktopUpdateState,
   lastStartedVersion: string | null,
 ): StartupRecoveryOffer {
+  if (update.manualDownload) return { _tag: "Releases" };
   if (update.status === "downloading" && update.availableVersion !== null) {
     return {
       _tag: "Downloading",
@@ -146,6 +149,9 @@ export const listen: Effect.Effect<
   const { primaryBackendStartup, quitting } = yield* DesktopState.DesktopState;
   const updates = yield* DesktopUpdates.DesktopUpdates;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
+  const releasesUrl = isForkDesktopVersion(environment.appVersion)
+    ? FORK_RELEASES_URL
+    : RELEASES_URL;
   const electronApp = yield* ElectronApp.ElectronApp;
   const electronShell = yield* ElectronShell.ElectronShell;
   const electronTheme = yield* ElectronTheme.ElectronTheme;
@@ -208,11 +214,13 @@ export const listen: Effect.Effect<
       }
       case "reinstall":
         if (current._tag === "Reinstall") {
-          yield* electronShell.openExternal(`${RELEASES_URL}/tag/v${current.version}`);
+          yield* electronShell.openExternal(
+            `${releasesUrl}/tag/${isForkDesktopVersion(current.version) ? "fork-v" : "v"}${current.version}`,
+          );
         }
         return;
       case "releases":
-        yield* electronShell.openExternal(RELEASES_URL);
+        yield* electronShell.openExternal(releasesUrl);
         return;
       case "copy": {
         const failure = yield* Ref.get(failureRef);

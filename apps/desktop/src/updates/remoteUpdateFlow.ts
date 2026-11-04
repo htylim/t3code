@@ -41,6 +41,14 @@ export function nextRemoteDesktopUpdateStep(
       reason: disabledReason ?? "Automatic updates are disabled on this machine.",
     };
   }
+  if (state.manualDownload) {
+    return {
+      action: "done",
+      outcome: "failed",
+      reason:
+        "This Fork build requires a manual DMG installation on that Mac. Download the update from its desktop app.",
+    };
+  }
   // Reinstalling a failed version disrupts threads without updating; retries require the local user.
   if (
     state.notAppliedVersion !== undefined &&

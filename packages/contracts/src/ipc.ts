@@ -271,6 +271,7 @@ export interface DesktopRuntimeInfo {
 }
 
 export interface DesktopUpdateState {
+  readonly manualDownload?: boolean;
   enabled: boolean;
   status: DesktopUpdateStatus;
   channel: DesktopUpdateChannel;
@@ -333,6 +334,8 @@ export const DesktopUpdateStateSchema = Schema.Struct({
   errorContext: Schema.NullOr(Schema.Literals(["check", "download", "install"])),
   canRetry: Schema.Boolean,
   notAppliedVersion: Schema.optionalKey(Schema.String),
+  /** Manual updates open a DMG download and never restart the app to install. */
+  manualDownload: Schema.optionalKey(Schema.Boolean),
 });
 
 export const DesktopCliCommandStateSchema = Schema.Struct({

@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./forkDesktopRelease": {
+      "types": "./src/forkDesktopRelease.ts",
+      "import": "./src/forkDesktopRelease.ts"
+    },
     "./forkUsageDashboard": {
       "types": "./src/forkUsageDashboard.ts",
       "import": "./src/forkUsageDashboard.ts"

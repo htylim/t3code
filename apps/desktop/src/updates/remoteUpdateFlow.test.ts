@@ -51,6 +51,15 @@ describe("nextRemoteDesktopUpdateStep", () => {
   });
 
   it("fails immediately when updates are disabled, preferring the known reason", () => {
+    assert.deepEqual(
+      nextRemoteDesktopUpdateStep(makeState({ manualDownload: true }), NO_ATTEMPTS, null),
+      {
+        action: "done",
+        outcome: "failed",
+        reason:
+          "This Fork build requires a manual DMG installation on that Mac. Download the update from its desktop app.",
+      },
+    );
     const state = makeState({ enabled: false, status: "disabled" });
     assert.deepEqual(nextRemoteDesktopUpdateStep(state, NO_ATTEMPTS, "dev build"), {
       action: "done",

@@ -23,6 +23,7 @@ export const cacheKey = (active: string, filename: string) =>
     .toString(16)
     .padStart(8, "0");
 
+/** Seed writable runtime copies without linking writes back into signed resources. */
 export function seedPreparedCache(prepared: string, active: string, runtime: string): boolean {
   try {
     const manifest: unknown = JSON.parse(
@@ -40,6 +41,14 @@ export function seedPreparedCache(prepared: string, active: string, runtime: str
       manifest.entries.length === 0
     )
       return false;
+    // Older releases left links for modules that may be absent from the new manifest.
+    for (const cacheFile of NodeFS.readdirSync(active)) {
+      const cachePath = NodePath.join(active, cacheFile);
+      const existingCache = NodeFS.lstatSync(cachePath, { throwIfNoEntry: false });
+      if (existingCache?.isSymbolicLink() || (existingCache?.isFile() && existingCache.nlink > 1)) {
+        NodeFS.unlinkSync(cachePath);
+      }
+    }
     for (const entry of manifest.entries) {
       if (
         typeof entry?.module !== "string" ||
@@ -54,9 +63,7 @@ export function seedPreparedCache(prepared: string, active: string, runtime: str
         cacheKey(active, NodePath.join(NodePath.dirname(prepared), entry.module)),
       );
       try {
-        // Node replaces cache files atomically. A directory link would instead allow writes into signed resources.
-        if (process.platform === "win32") NodeFS.linkSync(source, destination);
-        else NodeFS.symlinkSync(source, destination);
+        NodeFS.copyFileSync(source, destination, NodeFS.constants.COPYFILE_EXCL);
       } catch {}
       if (!NodeFS.existsSync(destination)) return false;
     }
@@ -75,7 +82,8 @@ export function enablePreparedServerCache(entry: string, cacheRoot: string): boo
     const prepared = NodePath.join(resources, "server-compile-cache");
     if (process.env.APPIMAGE && !NodeFS.existsSync(NodePath.join(prepared, "manifest.json")))
       return false;
-    const identity = NodeZlib.crc32(resources).toString(16);
+    // Do not reuse older cache directories containing links when prepared metadata is unavailable.
+    const identity = `${NodeZlib.crc32(resources).toString(16)}-copies`;
     NodeFS.mkdirSync(NodePath.join(cacheRoot, "server"), { recursive: true });
     const directory = process.env.APPIMAGE
       ? NodeFS.mkdtempSync(NodePath.join(cacheRoot, "server", "appimage-"))
