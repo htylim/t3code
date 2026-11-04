@@ -36,6 +36,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   latestWorktreeActivity,
   managedWorktreeRows,
+  sortWorktreesByActivity,
   worktreeInactivityDays,
 } from "./ForkWorktreesSettings.logic";
 import { FORK_SETTINGS_AVAILABLE } from "./forkSettingsAvailability";
@@ -79,6 +80,7 @@ export function ForkWorktreesSettings() {
   const projects: Array<{ project: SidebarProjectGroupMember; title: string }> = [];
   for (const group of groups) {
     for (const project of group.memberProjects) {
+      if (project.isScratch) continue;
       if (!environmentIds.has(project.environmentId)) continue;
       if (selectedMembers && !selectedMembers.has(project)) continue;
       projects.push({ project, title: group.displayName });
@@ -188,6 +190,7 @@ export function ForkWorktreesSettings() {
             project={project}
             title={title}
             search={search}
+            hideEmpty={selectedMembers === null}
             now={new Date(`${nowMinute}:00.000Z`)}
             cleaning={cleaning}
             selected={selected}
@@ -222,6 +225,7 @@ function ProjectWorktrees({
   now,
   connected,
   supported,
+  hideEmpty,
   cleaning,
   selected,
   pending,
@@ -234,6 +238,7 @@ function ProjectWorktrees({
   readonly now: Date;
   readonly connected: boolean;
   readonly supported: boolean;
+  readonly hideEmpty: boolean;
   readonly cleaning: boolean;
   readonly selected: ReadonlyMap<string, WorktreeCleanupTarget>;
   readonly pending: boolean;
@@ -251,11 +256,15 @@ function ProjectWorktrees({
   const canRemove = useAtomValue(
     vcsEnvironment.removeWorktree.permissionAtom(project.environmentId),
   );
-  const rows = managedWorktreeRows(
-    choices.refsQuery.data?.refs ?? [],
-    choices.rows,
+  const rows = sortWorktreesByActivity(
+    managedWorktreeRows(
+      choices.refsQuery.data?.refs ?? [],
+      choices.rows,
+      project.workspaceRoot,
+      choices.refsQuery.data?.mainWorktreePath,
+    ),
+    choices.threads,
     project.workspaceRoot,
-    choices.refsQuery.data?.mainWorktreePath,
   );
   const query = search.trim().toLowerCase();
   const visibleRows = rows.filter((row) =>
@@ -287,6 +296,16 @@ function ProjectWorktrees({
   const selectedCount = selectableTargets.filter((target) =>
     selected.has(worktreeCleanupKey(target)),
   ).length;
+
+  if (
+    hideEmpty &&
+    connected &&
+    supported &&
+    choices.refsQuery.data &&
+    !choices.refsQuery.error &&
+    visibleRows.length === 0
+  )
+    return null;
 
   return (
     <SettingsGroup>
@@ -330,9 +349,6 @@ function ProjectWorktrees({
           Status
         </span>
       </div>
-      {connected && supported && choices.refsQuery.data && visibleRows.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">No matching worktrees.</p>
-      ) : null}
       {!connected ? (
         <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
           Environment offline. Reconnect to manage its worktrees.
@@ -349,8 +365,10 @@ function ProjectWorktrees({
         <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
           Loading worktrees...
         </p>
-      ) : choices.refsQuery.data.refs.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">No Git worktrees found.</p>
+      ) : visibleRows.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-muted-foreground">
+          {rows.length === 0 ? "No worktrees found." : "No matching worktrees."}
+        </p>
       ) : (
         visibleRows.map((row) => (
           <ManagedWorktreeRow
