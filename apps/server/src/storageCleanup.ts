@@ -1,6 +1,7 @@
 import {
   GitCommandError,
   ForkWorktreeActivityError,
+  ForkWorktreeCleanupStatusError,
   OrchestrationV2AppThreadJson,
   OrchestrationV2ProviderSessionJson,
 } from "@t3tools/contracts";
@@ -19,6 +20,8 @@ import type {
   ForkWorktreeActivityResult,
   ForkWorktreeSizeInput,
   ForkWorktreeSizeResult,
+  ForkWorktreeCleanupStatusInput,
+  ForkWorktreeCleanupStatusResult,
 } from "@t3tools/contracts";
 import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
@@ -95,6 +98,19 @@ const worktreeCleanupEnabled = (rules: WorktreeCleanupRules) =>
   rules.worktreeOnMerge ||
   rules.worktreeOnDelete ||
   rules.worktreeUnchanged;
+
+/** Shared worktrees use the most protective local-file rule among their projects. */
+function worktreeLocalChangesRules(
+  rules: readonly WorktreeCleanupRules[],
+  fallback: WorktreeCleanupRules,
+) {
+  return (
+    rules.find((policy) => policy.worktreeKeepWhen === "any-local-files") ??
+    rules.find((policy) => policy.worktreeKeepWhen === "uncommitted-changes") ??
+    rules[0] ??
+    fallback
+  );
+}
 
 function anyWorktreePolicy(
   settings: ServerSettings,
@@ -271,6 +287,9 @@ export class StorageCleanup extends Context.Service<
     readonly getWorktreeActivity: (
       input: ForkWorktreeActivityInput,
     ) => Effect.Effect<ForkWorktreeActivityResult, ForkWorktreeActivityError>;
+    readonly getWorktreeCleanupStatus: (
+      input: ForkWorktreeCleanupStatusInput,
+    ) => Effect.Effect<ForkWorktreeCleanupStatusResult, ForkWorktreeCleanupStatusError>;
     readonly getWorktreeSize: (
       input: ForkWorktreeSizeInput,
     ) => Effect.Effect<ForkWorktreeSizeResult, GitCommandError>;
@@ -444,32 +463,33 @@ const make = Effect.gen(function* () {
       const snapshot = yield* projections
         .getShellSnapshot({ threadIds })
         .pipe(NodeSqliteClient.readOnly);
-      const activityByPath = new Map<string, number>();
-      const settledByPath = new Map<string, boolean>();
-      for (const thread of [...snapshot.threads, ...snapshot.archivedThreads]) {
-        if (thread.worktreePath === null) continue;
-        const latestActivityAt = Math.max(
-          storageCleanupActivityAt(thread),
-          thread.latestVisibleMessage === null
-            ? 0
-            : DateTime.toEpochMillis(thread.latestVisibleMessage.updatedAt),
-        );
-        settledByPath.set(
-          thread.worktreePath,
-          (settledByPath.get(thread.worktreePath) ?? true) && thread.settledOverride === "settled",
-        );
-        activityByPath.set(
-          thread.worktreePath,
-          Math.max(activityByPath.get(thread.worktreePath) ?? 0, latestActivityAt),
-        );
-      }
-      return {
-        worktrees: Array.from(activityByPath, ([worktreePath, latestActivityAt]) => ({
+      const threadsByPath = Map.groupBy(
+        [...snapshot.threads, ...snapshot.archivedThreads],
+        (thread) => thread.worktreePath,
+      );
+      const worktrees: ForkWorktreeActivityResult["worktrees"][number][] = [];
+      for (const [worktreePath, threads] of threadsByPath) {
+        if (worktreePath === null) continue;
+        const threadsById = new Map(threads.map((thread) => [thread.id, thread]));
+        let latestActivityAt = 0;
+        for (const thread of threads) {
+          latestActivityAt = Math.max(
+            latestActivityAt,
+            storageCleanupActivityAt(thread),
+            thread.latestVisibleMessage === null
+              ? 0
+              : DateTime.toEpochMillis(thread.latestVisibleMessage.updatedAt),
+          );
+        }
+        worktrees.push({
           worktreePath,
           latestActivityAt,
-          threadsSettled: settledByPath.get(worktreePath)!,
-        })),
-      };
+          threadsSettled: threads.every(
+            (thread) => worktreeSettlementAt(thread, threadsById) !== null,
+          ),
+        });
+      }
+      return { worktrees };
     },
     Effect.mapError(
       (cause) =>
@@ -486,6 +506,23 @@ const make = Effect.gen(function* () {
     const projects = yield* projectStore.listShells();
     return { projects, threads: [...snapshot.threads, ...snapshot.archivedThreads] };
   });
+
+  /** Include deleted owners when their cleanup policy still controls a shared checkout. */
+  const readDeletedWorktreeThreads = Effect.fn("StorageCleanup.readDeletedWorktreeThreads")(
+    function* () {
+      const rows = yield* sql<{ payload_json: string; workspaceRoot: string }>`
+        SELECT t.payload_json, p.workspace_root AS "workspaceRoot"
+        FROM orchestration_v2_projection_threads t
+        JOIN projection_projects p ON p.project_id = t.project_id
+        WHERE t.deleted_at IS NOT NULL
+      `.pipe(NodeSqliteClient.readOnly);
+      return (yield* Effect.forEach(rows, (row) =>
+        decodeCleanupThread(row.payload_json).pipe(
+          Effect.map((thread) => ({ ...thread, workspaceRoot: row.workspaceRoot })),
+        ),
+      )).filter((thread) => thread.worktreePath !== null && thread.branch !== null);
+    },
+  );
 
   const containsProjectRoot = Effect.fn("StorageCleanup.containsProjectRoot")(function* (
     worktreePath: string,
@@ -716,6 +753,80 @@ const make = Effect.gen(function* () {
     return file === undefined ? null : `has ignored files (${file})`;
   });
 
+  /** Inspect local-file protection without fetching remotes or running cleanup. */
+  const getWorktreeCleanupStatus = Effect.fn("StorageCleanup.getWorktreeCleanupStatus")(
+    function* (input: ForkWorktreeCleanupStatusInput) {
+      const requestedPaths = new Set(
+        input.worktreePaths.map((directory) => path.resolve(directory)),
+      );
+      if (requestedPaths.size === 0) return { worktrees: [] };
+      const associations = yield* projections
+        .getThreadWorktreePaths({ includeArchived: true })
+        .pipe(NodeSqliteClient.readOnly);
+      const threadIds = associations
+        .filter((thread) => requestedPaths.has(path.resolve(thread.worktreePath)))
+        .map((thread) => thread.threadId);
+      const snapshot = yield* projections
+        .getShellSnapshot({ threadIds })
+        .pipe(NodeSqliteClient.readOnly);
+      const liveByPath = Map.groupBy(
+        [...snapshot.threads, ...snapshot.archivedThreads].filter(
+          (thread) => thread.worktreePath !== null,
+        ),
+        (thread) => path.resolve(thread.worktreePath!),
+      );
+      const deletedByPath = Map.groupBy(yield* readDeletedWorktreeThreads(), (thread) =>
+        path.resolve(thread.worktreePath!),
+      );
+      const settings = yield* settingsService.getSettings;
+      const fallback = resolveWorktreeCleanup(settings, input.projectId);
+      const worktrees = yield* Effect.forEach(
+        [...requestedPaths],
+        (worktreePath) =>
+          Effect.gen(function* () {
+            const liveThreads = liveByPath.get(worktreePath) ?? [];
+            const deletedThreads = deletedByPath.get(worktreePath) ?? [];
+            const deletedOwner = deletedThreads.find(
+              (thread) =>
+                resolveWorktreeCleanup(settings, thread.projectId).worktreeOnDelete &&
+                worktreeOwner([thread, ...liveThreads]) === thread,
+            );
+            const members =
+              deletedOwner !== undefined || liveThreads.length === 0
+                ? [...deletedThreads, ...liveThreads]
+                : liveThreads;
+            const rules = worktreeLocalChangesRules(
+              members.map((thread) => resolveWorktreeCleanup(settings, thread.projectId)),
+              fallback,
+            );
+            const inspection = yield* localChangesReason(worktreePath, rules).pipe(Effect.result);
+            if (inspection._tag === "Failure")
+              return {
+                worktreePath,
+                keepWhen: rules.worktreeKeepWhen,
+                status: "unavailable" as const,
+                reason: "Unable to inspect local files.",
+              };
+            return {
+              worktreePath,
+              keepWhen: rules.worktreeKeepWhen,
+              status: inspection.success === null ? ("clean" as const) : ("dirty" as const),
+              reason: inspection.success,
+            };
+          }),
+        { concurrency: 2 },
+      );
+      return { worktrees };
+    },
+    Effect.mapError(
+      (cause) =>
+        new ForkWorktreeCleanupStatusError({
+          message: "Unable to inspect worktree cleanup protection.",
+          cause,
+        }),
+    ),
+  );
+
   const submoduleRemoval = Effect.fn("StorageCleanup.submoduleRemoval")(
     function* (cwd: string, rules: WorktreeCleanupRules) {
       const inspect = (args: string[], maxOutputBytes = 64 * 1024) =>
@@ -875,17 +986,7 @@ const make = Effect.gen(function* () {
       );
       if (root !== null && !isFilesystemRoot(root, path)) roots.push(root);
     }
-    const deletedRows = yield* sql<{ payload_json: string; workspaceRoot: string }>`
-          SELECT t.payload_json, p.workspace_root AS "workspaceRoot"
-          FROM orchestration_v2_projection_threads t
-          JOIN projection_projects p ON p.project_id = t.project_id
-          WHERE t.deleted_at IS NOT NULL
-        `.pipe(NodeSqliteClient.readOnly);
-    const deletedThreads = (yield* Effect.forEach(deletedRows, (row) =>
-      decodeCleanupThread(row.payload_json).pipe(
-        Effect.map((thread) => ({ ...thread, workspaceRoot: row.workspaceRoot })),
-      ),
-    )).filter((thread) => thread.worktreePath !== null && thread.branch !== null);
+    const deletedThreads = yield* readDeletedWorktreeThreads();
     const snapshot = yield* readThreads();
     const refreshedDefaultRefs = new Map<string, Set<string>>();
     const defaultBranches = new Map<string, string | null>();
@@ -929,10 +1030,10 @@ const make = Effect.gen(function* () {
       const settings = resolveWorktreeCleanup(serverSettings, thread.projectId);
       const checkUnchanged = policies.some((policy) => policy.settings.worktreeUnchanged);
       const checkMerged = policies.some((policy) => policy.settings.worktreeOnMerge);
-      const localChangesPolicy =
-        policies.find((policy) => policy.settings.worktreeKeepWhen === "any-local-files") ??
-        policies.find((policy) => policy.settings.worktreeKeepWhen === "uncommitted-changes") ??
-        policies[0]!;
+      const localChangesRules = worktreeLocalChangesRules(
+        policies.map((policy) => policy.settings),
+        settings,
+      );
       const owner = worktreeOwner(members);
       const project = deleted
         ? { workspaceRoot: thread.workspaceRoot }
@@ -987,7 +1088,7 @@ const make = Effect.gen(function* () {
           return keep("not a linked worktree");
         if (yield* branchChanged(worktreePath, thread.branch))
           return keep("repository or branch changed");
-        const changes = yield* localChangesReason(worktreePath, localChangesPolicy.settings);
+        const changes = yield* localChangesReason(worktreePath, localChangesRules);
         if (changes !== null) return keep(changes);
         if (
           group.some(
@@ -1223,7 +1324,7 @@ const make = Effect.gen(function* () {
           head.commitSha
         )
           return keep("commit changed since check");
-        const finalChanges = yield* localChangesReason(worktreePath, localChangesPolicy.settings);
+        const finalChanges = yield* localChangesReason(worktreePath, localChangesRules);
         if (finalChanges !== null) return keep(finalChanges);
         const currentSettings = yield* settingsService.getSettings;
         if (
@@ -1239,12 +1340,12 @@ const make = Effect.gen(function* () {
         )
           return keep("settings changed since check");
         // Clean only untracked files. Ordinary worktrees retain Git's final tracked-edit check.
-        if (localChangesPolicy.settings.worktreeKeepWhen === "tracked-changes")
+        if (localChangesRules.worktreeKeepWhen === "tracked-changes")
           yield* cleanupGit(worktreePath, ["clean", "-ffdx"], "git clean");
-        const submodules = yield* submoduleRemoval(worktreePath, localChangesPolicy.settings);
+        const submodules = yield* submoduleRemoval(worktreePath, localChangesRules);
         if (submodules.reason !== null) return keep(submodules.reason);
         if (submodules.force) {
-          const changes = yield* localChangesReason(worktreePath, localChangesPolicy.settings);
+          const changes = yield* localChangesReason(worktreePath, localChangesRules);
           if (changes !== null) return keep(changes);
         }
         yield* removeLinkedWorktree({
@@ -1530,6 +1631,7 @@ const make = Effect.gen(function* () {
   yield* start();
   return StorageCleanup.of({
     getWorktreeActivity,
+    getWorktreeCleanupStatus,
     getWorktreeSize,
     runNow,
     latestReport: SubscriptionRef.get(reportRef),

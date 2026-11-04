@@ -2,6 +2,7 @@ import {
   supportsForkWorktrees,
   type OrchestrationV2ThreadShell,
   type ScopedProjectRef,
+  type ForkWorktreeCleanupStatusResult,
 } from "@t3tools/contracts";
 import { GitBranchIcon, InfoIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
@@ -246,6 +247,10 @@ function ProjectWorktrees({
   readonly onSelectionChange: (targets: readonly WorktreeCleanupTarget[], checked: boolean) => void;
   readonly projectRoots: readonly string[];
 }) {
+  const { environments } = useSettingsScope();
+  const cleanupStatusSupported =
+    environments.find((environment) => environment.environmentId === project.environmentId)
+      ?.serverConfig?.environment.capabilities.fork?.worktrees?.cleanupStatus === true;
   const projectRef = { environmentId: project.environmentId, projectId: project.id };
   const choices = useWorkspaceChoices({
     projectRef,
@@ -287,6 +292,20 @@ function ProjectWorktrees({
     `${title} ${project.workspaceRoot} ${project.environmentLabel ?? ""} ${row.dirName} ${row.refName ?? ""}`
       .toLowerCase()
       .includes(query),
+  );
+  const protection = useEnvironmentQuery(
+    supported && connected && cleanupStatusSupported
+      ? vcsEnvironment.worktreeCleanupStatus({
+          environmentId: project.environmentId,
+          input: {
+            projectId: project.id,
+            worktreePaths: visibleRows.map((row) => row.worktreePath),
+          },
+        })
+      : null,
+  );
+  const protectionByPath = new Map(
+    protection.data?.worktrees.map((worktree) => [worktree.worktreePath, worktree]),
   );
 
   const targets = visibleRows.map((row): WorktreeCleanupTarget => ({
@@ -363,14 +382,18 @@ function ProjectWorktrees({
           excluded. Actual freed space may differ.
         </WorktreeColumnHelp>
         <WorktreeColumnHelp label="Threads" centered>
-          Active means at least one associated thread is not marked settled. Settled means all
-          associated threads are marked settled, including archived threads. No threads means none
-          are associated. Loading or Unavailable means thread state could not yet be determined.
+          Settled means all associated threads are settled under the cleanup rules, including
+          archived threads. Subagents and side chats can inherit settlement from a parent in the
+          same worktree. Active means at least one thread is not settled. No threads means none are
+          associated. Loading or Unavailable means thread state could not yet be determined. Settled
+          does not mean eligible for automatic cleanup.
         </WorktreeColumnHelp>
         <WorktreeColumnHelp label="Status" centered>
-          Clean means no uncommitted files. Dirty means there are uncommitted changes. Busy means a
-          thread has queued or active agent work. Loading means Git status is being checked.
-          Unavailable means that check failed. Clean does not mean eligible for automatic cleanup.
+          Dirty means local files prevent automatic cleanup under the effective Keep worktrees with
+          local changes policy. Clean means no files trigger that protection. Shared worktrees use
+          the most protective policy among their associated projects. Busy means a thread has queued
+          or active agent work. Unavailable means protection could not be checked. Clean does not
+          mean eligible for automatic cleanup; age, settlement and other safeguards still apply.
         </WorktreeColumnHelp>
       </div>
       {!connected ? (
@@ -401,6 +424,8 @@ function ProjectWorktrees({
             projectCwd={project.workspaceRoot}
             row={row}
             threads={choices.threads}
+            protection={protectionByPath.get(row.worktreePath) ?? null}
+            protectionUnavailable={!cleanupStatusSupported || Boolean(protection.error)}
             worktreeActivityByPath={worktreeActivityByPath}
             threadsLabel={worktreeThreadsLabel(
               worktreeThreadsByPath.get(row.worktreePath),
@@ -449,6 +474,8 @@ function ManagedWorktreeRow({
   projectCwd,
   row,
   threads,
+  protection,
+  protectionUnavailable,
   worktreeActivityByPath,
   threadsLabel,
   archivedReady,
@@ -464,6 +491,8 @@ function ManagedWorktreeRow({
   readonly projectCwd: string;
   readonly row: WorktreeRow;
   readonly threads: readonly OrchestrationV2ThreadShell[];
+  readonly protection: ForkWorktreeCleanupStatusResult["worktrees"][number] | null;
+  readonly protectionUnavailable: boolean;
   readonly worktreeActivityByPath: ReadonlyMap<string, number>;
   readonly threadsLabel: string;
   readonly archivedReady: boolean;
@@ -479,12 +508,6 @@ function ManagedWorktreeRow({
     useNamedWorktreeStore(
       (state) => state.worktrees[namedWorktreeKey(projectRef, row.worktreePath)]?.color,
     ) ?? DEFAULT_SOFT_PILL_COLOR;
-  const status = useEnvironmentQuery(
-    vcsEnvironment.status({
-      environmentId: projectRef.environmentId,
-      input: { cwd: row.worktreePath, includeRemote: false },
-    }),
-  );
   const busy = threads.some(
     (thread) =>
       (thread.worktreePath ?? projectCwd) === row.worktreePath && isWorktreeThreadRunning(thread),
@@ -498,11 +521,18 @@ function ManagedWorktreeRow({
   let inactivity = "Loading...";
   if (archivedReady)
     inactivity = activityAt === null ? "No threads" : `${worktreeInactivityDays(activityAt, now)}d`;
-  const dirty = status.data !== null && status.data.workingTree.files.length > 0;
   let statusLabel = "Loading...";
-  if (status.error) statusLabel = "Unavailable";
-  else if (busy) statusLabel = "Busy";
-  else if (status.data) statusLabel = dirty ? "Dirty" : "Clean";
+  if (busy) statusLabel = "Busy";
+  else if (protectionUnavailable || protection?.status === "unavailable")
+    statusLabel = "Unavailable";
+  else if (protection) statusLabel = protection.status === "dirty" ? "Dirty" : "Clean";
+  let statusDescription = "Checking local files against the cleanup policy.";
+  if (busy) statusDescription = "Queued or active agent work prevents automatic cleanup.";
+  else if (protectionUnavailable)
+    statusDescription = "Cleanup protection is unavailable. A compatible Fork server is required.";
+  else if (protection)
+    statusDescription =
+      protection.reason ?? "No local files prevent automatic cleanup under the current policy.";
 
   const target = { projectRef, projectCwd, path: row.worktreePath, name: row.dirName };
   let sizeLabel = measurement?.queued ? "Queued..." : "Measuring...";
@@ -572,9 +602,19 @@ function ManagedWorktreeRow({
       <span className="hidden text-center text-xs text-muted-foreground @min-[42rem]/worktree-list:block">
         {threadsLabel}
       </span>
-      <span className="hidden text-center text-xs text-muted-foreground @min-[42rem]/worktree-list:block">
-        {statusLabel}
-      </span>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              className="hidden text-center text-xs text-muted-foreground @min-[42rem]/worktree-list:block"
+              tabIndex={0}
+            />
+          }
+        >
+          {statusLabel}
+        </TooltipTrigger>
+        <TooltipPopup>{statusDescription}</TooltipPopup>
+      </Tooltip>
       {cleaning ? (
         <span />
       ) : (

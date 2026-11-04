@@ -1,12 +1,18 @@
 import * as Schema from "effect/Schema";
 import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { VcsCreateWorktreeResult, VcsListRefsResult } from "./git.ts";
+import { ProjectId } from "./baseSchemas.ts";
+import { WorktreeKeepWhen } from "./worktreeCleanup.ts";
 
 export const FORK_WORKTREES_API_VERSION = 1;
 
 export const ForkCapabilities = Schema.Struct({
   worktrees: Schema.optionalKey(
-    Schema.Struct({ apiVersion: Schema.Int, sizeSubscription: Schema.optionalKey(Schema.Boolean) }),
+    Schema.Struct({
+      apiVersion: Schema.Int,
+      sizeSubscription: Schema.optionalKey(Schema.Boolean),
+      cleanupStatus: Schema.optionalKey(Schema.Boolean),
+    }),
   ),
 });
 export type ForkCapabilities = typeof ForkCapabilities.Type;
@@ -79,6 +85,30 @@ export const ForkWorktreeActivityResult = Schema.Struct({
   ),
 });
 export type ForkWorktreeActivityResult = typeof ForkWorktreeActivityResult.Type;
+
+export const ForkWorktreeCleanupStatusInput = Schema.Struct({
+  projectId: ProjectId,
+  worktreePaths: Schema.Array(TrimmedNonEmptyString),
+});
+export type ForkWorktreeCleanupStatusInput = typeof ForkWorktreeCleanupStatusInput.Type;
+
+export const ForkWorktreeCleanupStatusResult = Schema.Struct({
+  worktrees: Schema.Array(
+    Schema.Struct({
+      worktreePath: Schema.String,
+      keepWhen: WorktreeKeepWhen,
+      status: Schema.Literals(["clean", "dirty", "unavailable"]),
+      reason: Schema.NullOr(Schema.String),
+    }),
+  ),
+});
+export type ForkWorktreeCleanupStatusResult = typeof ForkWorktreeCleanupStatusResult.Type;
+
+/** Inspection failures must not appear as clean worktrees. */
+export class ForkWorktreeCleanupStatusError extends Schema.TaggedError<ForkWorktreeCleanupStatusError>()(
+  "ForkWorktreeCleanupStatusError",
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 /** A failed read must not make existing threads appear absent. */
 export class ForkWorktreeActivityError extends Schema.TaggedError<ForkWorktreeActivityError>()(

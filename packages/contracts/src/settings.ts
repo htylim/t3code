@@ -1,4 +1,6 @@
 import { WorkspaceColorChoice, WorkspaceColorHex, WorkspaceColorRule } from "./workspaceColor.ts";
+import { WorktreeKeepWhen } from "./worktreeCleanup.ts";
+export { WorktreeKeepWhen } from "./worktreeCleanup.ts";
 import { EasDeviceHostConfigs, SimlockDeviceHostConfigs, SshDeviceHostConfigs } from "./device.ts";
 import {
   AuthOrchestrationOperateScope,
@@ -1006,13 +1008,6 @@ const StorageRetentionDays = Schema.NullOr(
 const SettledWorktreeRetentionDays = Schema.NullOr(
   Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 3650 })),
 );
-
-export const WorktreeKeepWhen = Schema.Literals([
-  "any-local-files",
-  "uncommitted-changes",
-  "tracked-changes",
-]);
-export type WorktreeKeepWhen = typeof WorktreeKeepWhen.Type;
 
 export const WorktreeCleanupRules = Schema.Struct({
   worktreeKeepWhen: WorktreeKeepWhen.pipe(

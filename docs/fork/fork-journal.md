@@ -1,5 +1,21 @@
 # Fork journal
 
+## 2026-11-04 - Match worktree status to cleanup protection
+
+- Reason: Worktree Settings showed completed subagents as Active and treated every untracked
+  file as Dirty, even when cleanup was configured to remove untracked files.
+- Upstream baseline is `cefb544af3`. The list uses cleanup's settlement inheritance and
+  local-file inspection. Shared worktrees use their most protective project policy, including
+  deleted owners whose cleanup still controls the checkout. A fork-only read RPC advertises
+  support through an additive capability; older servers show Unavailable instead of guessing.
+- Protection refreshes when cleanup settings change and periodically while the page is open.
+  Tooltips explain the protection reason and distinguish file protection from deletion eligibility.
+- Verification: policy, shared-project, failed-inspection, permission, and capability regressions
+  passed, along with affected type checks, lint, formatting, unused-code and React compiler checks.
+  The broader run passed 300 tests and retained the existing corrupted-Git-file cleanup failure.
+  The Browser panel was unavailable. A localhost preview uses copied T3 Code conversations and
+  disposable worktrees; live application data and worktrees were not changed.
+
 ## 2026-11-04 - Stream worktree size estimates from background workers
 
 - Replace per-row size RPCs in Fork settings with a typed `fork.worktrees.subscribeMeasurements`

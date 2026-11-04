@@ -918,6 +918,15 @@ describe("independent threads sharing a worktree", () => {
         yield* fixture.fs.writeFileString(`${fixture.worktree}/.env`, "local secret");
       if (scenario === "dirty")
         yield* fixture.fs.writeFileString(`${fixture.worktree}/notes.txt`, "keep me");
+      if (scenario === "other-policy-protects-files") {
+        const protection = yield* fixture.service.getWorktreeCleanupStatus({
+          projectId: first.projectId,
+          worktreePaths: [fixture.worktree],
+        });
+        expect(protection.worktrees).toMatchObject([
+          { keepWhen: "any-local-files", status: "dirty" },
+        ]);
+      }
       const report = yield* fixture.service.runNow;
       expect(report.counts).toEqual({ removed: removed ? 1 : 0, kept: removed ? 0 : 1, failed: 0 });
       expect(yield* fixture.fs.exists(fixture.worktree)).toBe(!removed);
@@ -1696,6 +1705,11 @@ it.live(
       const settledThreads = Array.from({ length: 30 }, (_, index) =>
         shell({
           id: ThreadId.make(`settled-${index}`),
+          lineage: {
+            parentThreadId: null,
+            rootThreadId: ThreadId.make(`settled-${index}`),
+            relationshipToParent: null,
+          },
           worktreePath: `${fixture.worktree}-${index}`,
           settledOverride: "settled",
           settledAt: at((-30 + index) * DAY_MS),
@@ -1703,6 +1717,35 @@ it.live(
       );
       fixture.setThreads([
         ...settledThreads,
+        shell({
+          id: ThreadId.make("review-child"),
+          worktreePath: `${fixture.worktree}-1`,
+          lineage: {
+            parentThreadId: ThreadId.make("settled-1"),
+            rootThreadId: ThreadId.make("settled-1"),
+            relationshipToParent: "subagent",
+          },
+        }),
+        shell({
+          id: ThreadId.make("review-grandchild"),
+          worktreePath: `${fixture.worktree}-1`,
+          archivedAt: at(-DAY_MS),
+          lineage: {
+            parentThreadId: ThreadId.make("review-child"),
+            rootThreadId: ThreadId.make("settled-1"),
+            relationshipToParent: "subagent",
+          },
+        }),
+        shell({
+          id: ThreadId.make("side-chat"),
+          worktreePath: `${fixture.worktree}-1`,
+          lineage: {
+            parentThreadId: ThreadId.make("settled-1"),
+            rootThreadId: ThreadId.make("settled-1"),
+            relationshipToParent: "fork",
+            sideChat: true,
+          },
+        }),
         shell({
           id: ThreadId.make("archived"),
           worktreePath: fixture.worktree,
@@ -2105,6 +2148,22 @@ describe("orphan worktree reports", () => {
 });
 
 describe("storage cleanup reports and local file policies", () => {
+  it.live("reports failed inspections without hiding clean worktrees", () =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        const { service, worktree } = yield* cleanupFixture();
+        const protection = yield* service.getWorktreeCleanupStatus({
+          projectId: ProjectId.make("project-1"),
+          worktreePaths: [worktree, `${worktree}-missing`],
+        });
+        expect(protection.worktrees).toMatchObject([
+          { worktreePath: worktree, status: "clean", reason: null },
+          { worktreePath: `${worktree}-missing`, status: "unavailable" },
+        ]);
+      }),
+    ),
+  );
+
   it.live("automatically removes a named directory whose Git branch has a different name", () =>
     runCleanupTest(
       Effect.gen(function* () {
@@ -2484,16 +2543,32 @@ describe("storage cleanup reports and local file policies", () => {
     ["any-local-files", "tracked.txt", "kept"],
     ["uncommitted-changes", "tracked.txt", "kept"],
     ["tracked-changes", "tracked.txt", "kept"],
+    ["any-local-files", "node_modules/cache.txt", "removed"],
   ] as const)("applies %j", ([policy, file, outcome]) =>
     runCleanupTest(
       Effect.gen(function* () {
         const { service, fs, worktree, setPolicy } = yield* cleanupFixture();
         setPolicy(policy);
         expect(yield* service.latestReport).toBeNull();
+        if (file.startsWith("node_modules/"))
+          yield* fs.makeDirectory(`${worktree}/node_modules`, { recursive: true });
         yield* fs.writeFileString(`${worktree}/${file}`, "local data\n");
+        const protection = yield* service.getWorktreeCleanupStatus({
+          projectId: ProjectId.make("project-1"),
+          worktreePaths: [worktree],
+        });
+        expect(protection.worktrees).toMatchObject([
+          {
+            worktreePath: worktree,
+            keepWhen: policy,
+            status: outcome === "kept" ? "dirty" : "clean",
+          },
+        ]);
         const sizes = yield* Effect.forEach(yield* fs.readDirectory(worktree), (name) =>
           allocatedBytes(fs, `${worktree}/${name}`),
         );
+        if (file.startsWith("node_modules/"))
+          sizes.push(yield* allocatedBytes(fs, `${worktree}/${file}`));
         const bytes = sizes.reduce((sum, size) => sum + size, 0);
         const report = yield* service.runNow;
         yield* service.drain;
