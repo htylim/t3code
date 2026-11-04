@@ -437,6 +437,7 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   forkUiChanges: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  forkUseH3WorkspacePicker: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   forkUseH3Wordmark: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   glassOpacity: GlassOpacity.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_GLASS_OPACITY)),
@@ -1807,6 +1808,7 @@ export const ClientSettingsPatch = Schema.Struct({
     Schema.Array(WorkspaceColorRule).check(Schema.isMaxLength(100)),
   ),
   forkUiChanges: Schema.optionalKey(Schema.Boolean),
+  forkUseH3WorkspacePicker: Schema.optionalKey(Schema.Boolean),
   forkUseH3Wordmark: Schema.optionalKey(Schema.Boolean),
   glassOpacity: Schema.optionalKey(GlassOpacity),
   onboardingCompletedAt: Schema.optionalKey(Schema.NullOr(Schema.String)),

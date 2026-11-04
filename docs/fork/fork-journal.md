@@ -30,6 +30,14 @@
   storage-cleanup failure recorded below. Native desktop and remote connections were
   not exercised. No live state or installed app changed.
 
+## 2026-11-03 - Choose between H3 and upstream workspace pickers
+
+- Fork settings now includes Enable H3 Workspace picker, enabled by default and saved on this
+  device. Turning it off restores upstream's local, new, and previous-worktree choices in the
+  composer and details panel. Pending H3 names and creation colors do not affect T3 mode.
+- Web and desktop share the preference and picker components. Native mobile is unchanged.
+- Verification: focused settings and Chromium tests, web typecheck, and targeted lint passed.
+
 ## 2026-11-03 - Restore clicks in the hover sidebar
 
 - Upstream baseline: `cefb544af3`. Apply on top of fork commit `39290a8eb9`.

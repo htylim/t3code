@@ -7,7 +7,14 @@ import type {
   VcsStatusResult,
   ScopedProjectRef,
 } from "@t3tools/contracts";
-import { ChevronDownIcon, FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  FolderGit2Icon,
+  FolderGitIcon,
+  FolderIcon,
+  GitBranchIcon,
+  HistoryIcon,
+} from "lucide-react";
 import {
   useRef,
   useState,
@@ -21,6 +28,7 @@ import {
   type NamedWorktreeSelection,
 } from "../namedWorktreeStore";
 import { useWorkspaceChoices } from "../hooks/useWorkspaceChoices";
+import { formatRelativeTimeLabel } from "../timestampFormat";
 import { NewWorktreeRow } from "./NewWorktreeRow";
 import { shortcutLabelForCommand } from "../keybindings";
 import { primaryServerKeybindingsAtom } from "../state/server";
@@ -29,6 +37,7 @@ import { vcsEnvironment } from "../state/vcs";
 import {
   resolveCurrentWorkspaceLabel,
   resolveLockedWorkspaceLabel,
+  resolveRecentWorktreeRows,
   resolveWorktreeStatusWord,
   type EnvMode,
   type PreviousWorktreeSeed,
@@ -44,7 +53,10 @@ import {
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
-  MenuSeparator,
+  MenuSearchInput,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
   MenuTrigger,
 } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
@@ -226,6 +238,19 @@ function WorkspaceMenuContents(
   },
 ) {
   const { refsQuery, archived, threads, rows, localRef } = useWorkspaceChoices(props);
+  const [worktreesOpen, setWorktreesOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const composerFloatingLayerProps = useComposerMenuProps();
+  const recentRows = resolveRecentWorktreeRows(rows, threads);
+  const selectedWorktreeName = props.activeWorktreePath
+    ? resolveCurrentWorkspaceLabel(props.activeWorktreePath)
+    : null;
+  const searchText = query.trim().toLocaleLowerCase();
+  const filteredRows = recentRows.filter(
+    (row) =>
+      row.dirName.toLocaleLowerCase().includes(searchText) ||
+      row.refName?.toLocaleLowerCase().includes(searchText),
+  );
   return (
     <>
       {props.environmentItems}
@@ -277,26 +302,69 @@ function WorkspaceMenuContents(
             }}
           />
         </MenuGroup>
-        <MenuSeparator />
-        <MenuGroup>
-          <MenuGroupLabel>Worktrees</MenuGroupLabel>
-          {rows.map((row) => (
-            <WorkspaceRow
-              key={row.worktreePath}
-              {...props}
-              row={row}
-              current={row.worktreePath === props.activeWorktreePath}
-              threads={threads}
-              archivedReady={!archived.isLoading && !archived.error}
-            />
-          ))}
-          {refsQuery.error ? (
-            <div className="px-3 py-2 text-xs text-destructive">{refsQuery.error}</div>
-          ) : null}
-          {!rows.length && !refsQuery.isPending ? (
-            <div className="px-3 py-2 text-xs text-muted-foreground">No named worktrees</div>
-          ) : null}
-        </MenuGroup>
+        <MenuSub
+          open={worktreesOpen}
+          onOpenChange={(open) => {
+            setWorktreesOpen(open);
+            if (!open) setQuery("");
+          }}
+        >
+          <MenuSubTrigger data-workspace-initial-focus={props.activeWorktreePath ? "" : undefined}>
+            <HistoryIcon />
+            <span className="min-w-0">
+              <span className="block">Previous worktree</span>
+              {selectedWorktreeName ? (
+                <span className="block truncate text-xs text-muted-foreground">
+                  {selectedWorktreeName}
+                </span>
+              ) : null}
+            </span>
+          </MenuSubTrigger>
+          <MenuSubPopup
+            className="w-[400px] max-w-[calc(100vw-24px)] 2xl:w-[540px]"
+            sideOffset={4}
+            {...composerFloatingLayerProps}
+          >
+            {worktreesOpen ? (
+              <>
+                <MenuSearchInput
+                  autoFocus
+                  aria-label="Search worktrees"
+                  placeholder="Search worktrees..."
+                  value={query}
+                  onChange={(event) => setQuery(event.currentTarget.value)}
+                />
+                <div className="max-h-80 overflow-y-auto overscroll-contain">
+                  <MenuRadioGroup value={props.activeWorktreePath ?? ""}>
+                    {filteredRows.map((row) => (
+                      <WorkspaceRow
+                        key={row.worktreePath}
+                        {...props}
+                        row={row}
+                        lastUsedAt={row.lastUsedAt}
+                        current={row.worktreePath === props.activeWorktreePath}
+                        threads={threads}
+                        archivedReady={!archived.isLoading && !archived.error}
+                      />
+                    ))}
+                  </MenuRadioGroup>
+                  {refsQuery.error ? (
+                    <div className="px-3 py-2 text-xs text-destructive">{refsQuery.error}</div>
+                  ) : null}
+                  {refsQuery.isPending && !refsQuery.data ? (
+                    <div role="status" className="px-3 py-2 text-xs text-muted-foreground">
+                      Loading worktrees...
+                    </div>
+                  ) : !filteredRows.length && !refsQuery.error ? (
+                    <div role="status" className="px-3 py-2 text-xs text-muted-foreground">
+                      {query.trim() ? "No worktrees found" : "No named worktrees"}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+          </MenuSubPopup>
+        </MenuSub>
       </MenuRadioGroup>
     </>
   );
@@ -324,6 +392,7 @@ function WorktreeRowStatus({
 function WorkspaceRow(
   props: WorkspaceMenuProps & {
     row: WorktreeRow;
+    lastUsedAt: number | null;
     threads: readonly OrchestrationV2ThreadShell[];
     current?: boolean;
     archivedReady: boolean;
@@ -350,7 +419,6 @@ function WorkspaceRow(
         setActionsOpen(true);
       }}
       aria-current={props.current || undefined}
-      data-workspace-initial-focus={props.current ? "" : undefined}
       aria-disabled={!props.canUseWorktree}
       onClick={async (event) => {
         if (
@@ -365,27 +433,34 @@ function WorkspaceRow(
         if (accepted !== false) props.close();
       }}
     >
-      <span
-        className={`grid items-center gap-2 ${
-          props.current
-            ? "grid-cols-[0.75rem_minmax(0,1fr)_minmax(0,8rem)_2.5rem_1.25rem]"
-            : "grid-cols-[0.75rem_minmax(0,1fr)_minmax(0,8rem)_1.5rem_1.25rem]"
-        }`}
-      >
+      <span className="grid min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_auto_auto_1.25rem] items-start gap-x-2">
         {color ? (
           <span
             aria-hidden
-            className="size-3 shrink-0 rounded-full"
+            className="mt-1 size-3 shrink-0 rounded-full"
             style={{ backgroundColor: color }}
           />
         ) : (
-          <FolderGitIcon className="size-3 shrink-0" />
+          <FolderGitIcon className="mt-1 size-3 shrink-0" />
         )}
-        <span className="min-w-0 truncate">{row.dirName}</span>
-        <span className="min-w-0 truncate text-right text-xs text-muted-foreground">
-          {row.refName ?? "(detached)"}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">{row.dirName}</span>
+          {row.refName !== row.dirName ? (
+            <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+              <GitBranchIcon aria-hidden className="size-3 shrink-0" />
+              <span className="truncate">{row.refName ?? "(detached)"}</span>
+            </span>
+          ) : null}
         </span>
-        <span className="min-w-0 text-left">
+        {props.lastUsedAt !== null ? (
+          <time
+            className="pt-0.5 text-xs text-muted-foreground"
+            dateTime={new Date(props.lastUsedAt).toISOString()}
+          >
+            {formatRelativeTimeLabel(new Date(props.lastUsedAt).toISOString())}
+          </time>
+        ) : null}
+        <span className="col-start-4 text-left">
           {props.current ? (
             <span className="text-3xs text-muted-foreground">current</span>
           ) : (

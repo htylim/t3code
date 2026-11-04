@@ -505,7 +505,7 @@ describe("server model preferences", () => {
   });
 });
 
-describe.each(["forkGroupSidebarWorkspaces", "forkUiChanges"] as const)(
+describe.each(["forkGroupSidebarWorkspaces", "forkUiChanges", "forkUseH3WorkspacePicker"] as const)(
   "ClientSettings %s",
   (settingKey) => {
     it("enables the preference for older saved settings", () => {

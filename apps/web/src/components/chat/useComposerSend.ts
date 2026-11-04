@@ -847,10 +847,12 @@ export function useComposerSend(input: ComposerSendInput) {
       return;
     }
     const threadIdForSend = activeThread.id;
-    const namedWorktreeSelection =
-      useNamedWorktreeStore.getState().selections[
-        namedWorktreeKey(scopeProjectRef(environmentId, activeProject.id), threadIdForSend)
-      ];
+    const useH3WorkspacePicker = getClientSettings().forkUseH3WorkspacePicker;
+    const namedWorktreeSelection = useH3WorkspacePicker
+      ? useNamedWorktreeStore.getState().selections[
+          namedWorktreeKey(scopeProjectRef(environmentId, activeProject.id), threadIdForSend)
+        ]
+      : undefined;
     const sendSnapshot = snapshotComposerSend({
       prompt: promptForSend,
       images: composerImages,
@@ -1356,7 +1358,7 @@ export function useComposerSend(input: ComposerSendInput) {
           ? scopeThreadRef(environmentId, threadIdForSend)
           : null;
       if (backgroundThreadRef) beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
-      if (baseBranchForWorktree) {
+      if (baseBranchForWorktree && useH3WorkspacePicker) {
         const projectRef = scopeProjectRef(environmentId, activeProject.id);
         const colorSelection = namedWorktreeSelection ?? {
           name: "",

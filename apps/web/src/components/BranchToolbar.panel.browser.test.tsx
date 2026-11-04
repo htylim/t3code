@@ -40,11 +40,14 @@ vi.mock(import("../state/entities"), async (original) => ({
   useThreadShellsForProjectRefs: () => [],
 }));
 
+import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
+import { __setClientSettingsForTests, persistClientSettingsPatch } from "../hooks/useSettings";
 import { BranchToolbar } from "./BranchToolbar";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
 
 /** Own the rendered tree and fixture cleanup for one test. */
-async function createTestSurface() {
+async function createTestSurface(forkUseH3WorkspacePicker = true) {
+  __setClientSettingsForTests({ ...DEFAULT_CLIENT_SETTINGS, forkUseH3WorkspacePicker });
   state.worktreePath = "/tmp/worktree";
   state.branch = "t3/1234abcd";
   useNamedWorktreeStore.setState({ selections: {}, worktrees: {} });
@@ -83,6 +86,7 @@ async function createTestSurface() {
     async [Symbol.asyncDispose]() {
       try {
         vi.unstubAllGlobals();
+        __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
       } finally {
         await screen[Symbol.asyncDispose]();
       }
@@ -90,40 +94,43 @@ async function createTestSurface() {
   };
 }
 
-it("keeps machine choices usable when the combined row's workspace is locked", async () => {
-  await using surface = await createTestSurface();
-  const { container, render } = surface;
+it.each([true, false])(
+  "keeps machine choices usable with a locked workspace and H3 picker %s",
+  async (enabled) => {
+    await using surface = await createTestSurface(enabled);
+    const { container, render } = surface;
 
-  const onEnvironmentChange = vi.fn();
-  await render({
-    onEnvironmentChange,
-    isServerThread: true,
-    availableEnvironments: ["local", "remote"].map((id) => ({
-      environmentId: EnvironmentId.make(id),
-      projectId: ProjectId.make("project"),
-      label: id,
-      isPrimary: id === "local",
-      machine: "server",
-    })),
-  });
-  const trigger = container.querySelector("button")!;
-  expect(trigger.textContent).toBe("local");
-  expect(container.querySelectorAll("button")).toHaveLength(1);
+    const onEnvironmentChange = vi.fn();
+    await render({
+      onEnvironmentChange,
+      isServerThread: true,
+      availableEnvironments: ["local", "remote"].map((id) => ({
+        environmentId: EnvironmentId.make(id),
+        projectId: ProjectId.make("project"),
+        label: id,
+        isPrimary: id === "local",
+        machine: "server",
+      })),
+    });
+    const trigger = container.querySelector("button")!;
+    expect(trigger.textContent).toBe("local");
+    expect(container.querySelectorAll("button")).toHaveLength(1);
 
-  // A ctrl-click is a macOS secondary click; it must not open the menu.
-  await act(async () => {
-    trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, ctrlKey: true }));
-  });
-  expect(document.querySelector('[role="menu"]')).toBeNull();
+    // A ctrl-click is a macOS secondary click; it must not open the menu.
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, ctrlKey: true }));
+    });
+    expect(document.querySelector('[role="menu"]')).toBeNull();
 
-  await userEvent.click(trigger);
-  const newWorktree = [...document.querySelectorAll('[role="menuitemradio"]')].find((option) =>
-    option.textContent?.startsWith("New worktree"),
-  );
-  expect(newWorktree?.getAttribute("aria-disabled")).toBe("true");
-  await userEvent.click(page.getByRole("menuitemradio", { name: "remote" }));
-  expect(onEnvironmentChange).toHaveBeenCalledWith("remote");
-});
+    await userEvent.click(trigger);
+    const newWorktree = [...document.querySelectorAll('[role="menuitemradio"]')].find((option) =>
+      option.textContent?.startsWith("New worktree"),
+    );
+    expect(newWorktree?.getAttribute("aria-disabled")).toBe("true");
+    await userEvent.click(page.getByRole("menuitemradio", { name: "remote" }));
+    expect(onEnvironmentChange).toHaveBeenCalledWith("remote");
+  },
+);
 
 it("shows a started thread's primary machine as a static label in the composer", async () => {
   await using surface = await createTestSurface();
@@ -276,4 +283,30 @@ it("preserves the selected color when automatic naming moves the temporary workt
   expect(
     worktreeLabel?.querySelector<HTMLElement>('[data-slot="soft-pill"]')?.style.backgroundColor,
   ).toContain("20, 184, 166");
+});
+
+it("switches an open panel between the H3 and T3 workspace controls", async () => {
+  await using surface = await createTestSurface();
+  const { container, render } = surface;
+  state.worktreePath = null;
+  const onEnvModeChange = vi.fn();
+  await render({ worktreePath: null, onEnvModeChange });
+  await userEvent.click(container.querySelector("button")!);
+  await expect.element(page.getByRole("textbox", { name: "Worktree name" })).toBeVisible();
+  await userEvent.keyboard("{Escape}");
+
+  await act(async () => {
+    await persistClientSettingsPatch({ forkUseH3WorkspacePicker: false }, async () => {});
+  });
+  await userEvent.click(container.querySelector("button")!);
+  await expect
+    .element(page.getByRole("textbox", { name: "Worktree name" }))
+    .not.toBeInTheDocument();
+  await userEvent.click(page.getByRole("menuitemradio", { name: "New worktree", exact: true }));
+  expect(onEnvModeChange).toHaveBeenCalledWith("worktree");
+  await act(async () => {
+    await persistClientSettingsPatch({ forkUseH3WorkspacePicker: true }, async () => {});
+  });
+  await userEvent.click(container.querySelector("button")!);
+  await expect.element(page.getByRole("textbox", { name: "Worktree name" })).toBeVisible();
 });

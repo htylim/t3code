@@ -77,6 +77,7 @@ describe("searchSettings", () => {
     expect(searchSettings("Group threads by workspace", forkItems)[0]?.id).toBe(
       "fork-group-sidebar-workspaces",
     );
+    expect(searchSettings("H3 Workspace picker", forkItems)[0]?.id).toBe("fork-workspace-picker");
     expect(getSettingsSearchTargetScope("fork-wordmark")?.scope).toBeNull();
     expect(searchSettings("H3", filterAvailableSettingsSearchItems(availability))).toEqual([]);
     expect(

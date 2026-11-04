@@ -27,7 +27,7 @@ vi.mock("../state/query", () => ({
       aheadCount: 0,
       hasUpstream: true,
     },
-    isPending: false,
+    isPending: true,
   }),
 }));
 
@@ -90,7 +90,7 @@ it.each([
   [
     "existing worktree",
     { effectiveEnvMode: "worktree", activeWorktreePath: "/tmp/billing-fix" },
-    '[aria-current="true"]',
+    '[data-slot="menu-sub-trigger"]',
   ],
 ] satisfies [string, Partial<WorkspaceMenuProps>, string][])(
   "focuses the selected %s when opened",
@@ -185,7 +185,7 @@ it.each(["Escape", "outside click", "selection"])(
 
 /** Read the visible worktree names independently of their selected or status labels. */
 function worktreeNames() {
-  const worktreeGroup = document.querySelectorAll('[data-slot="menu-group"]')[1]!;
+  const worktreeGroup = document.querySelector('[data-slot="menu-sub-content"]')!;
   return [...worktreeGroup.querySelectorAll('[role="menuitemradio"]')].map(
     (row) => row.querySelector(".truncate")?.textContent,
   );
@@ -197,22 +197,28 @@ it("keeps a selected existing worktree in its original list position", async () 
 
   const onUseWorktree = vi.fn();
   await openWorkspace({ onUseWorktree });
+  expect(document.querySelector('[data-slot="menu-sub-content"]')).toBeNull();
+  await userEvent.click(page.getByRole("menuitem", { name: /^Previous worktree/ }));
+  await expect.element(page.getByRole("textbox", { name: "Search worktrees" })).toBeVisible();
   expect(worktreeNames()).toEqual(["alpha", "billing-fix", "zeta"]);
-  await userEvent.click(
-    document
-      .querySelectorAll('[data-slot="menu-group"]')[1]!
-      .querySelectorAll<HTMLElement>('[role="menuitemradio"]')[1]!,
-  );
+  const search = page.getByRole("textbox", { name: "Search worktrees" });
+  await userEvent.fill(search, "missing-worktree");
+  await expect.element(page.getByRole("status")).toHaveTextContent("No worktrees found");
+  await userEvent.fill(search, "FEATURE/BILLING");
+  expect(worktreeNames()).toEqual(["billing-fix"]);
+  await userEvent.keyboard("{ArrowDown}{Enter}");
   expect(onUseWorktree).toHaveBeenCalledWith({
     branch: "feature/billing-fix",
     worktreePath: "/tmp/billing-fix",
   });
   await openWorkspace({ effectiveEnvMode: "worktree", activeWorktreePath: "/tmp/billing-fix" });
+  await userEvent.click(page.getByRole("menuitem", { name: /^Previous worktree/ }));
+  await expect.element(page.getByRole("textbox", { name: "Search worktrees" })).toBeVisible();
   expect(worktreeNames()).toEqual(["alpha", "billing-fix", "zeta"]);
   const selectedRow = document.querySelector('[role="menuitemradio"][aria-checked="true"]')!;
   expect(selectedRow.querySelector(".truncate")?.textContent).toBe("billing-fix");
-  expect(selectedRow.closest('[data-slot="menu-group"]')).toBe(
-    document.querySelectorAll('[data-slot="menu-group"]')[1],
+  expect(selectedRow.closest('[data-slot="menu-sub-content"]')).toBe(
+    document.querySelector('[data-slot="menu-sub-content"]'),
   );
 });
 
@@ -221,6 +227,8 @@ it("keeps other automatic worktrees out of the reuse list while showing the curr
   const { openWorkspace } = surface;
 
   await openWorkspace({ effectiveEnvMode: "worktree", activeWorktreePath: "/tmp/t3-1234abcd" });
+  await userEvent.click(page.getByRole("menuitem", { name: /^Previous worktree/ }));
+  await expect.element(page.getByRole("textbox", { name: "Search worktrees" })).toBeVisible();
   expect(worktreeNames()).toEqual(["alpha", "billing-fix", "t3-1234abcd", "zeta"]);
   expect(document.querySelector('[aria-current="true"]')?.textContent).toContain("t3-1234abcd");
 });

@@ -18,14 +18,41 @@ export function ForkSettings() {
   const forkGroupSidebarWorkspaces = useClientSettings(
     (settings) => settings.forkGroupSidebarWorkspaces,
   );
+  const forkUseH3WorkspacePicker = useClientSettings(
+    (settings) => settings.forkUseH3WorkspacePicker,
+  );
   const forkUseH3Wordmark = useClientSettings((settings) => settings.forkUseH3Wordmark);
 
   if (!FORK_SETTINGS_AVAILABLE) return null;
 
   return (
     <SettingsPageContainer>
-      <WorkspaceColorSettings />
       <SettingsSection id="fork-interface" title="Interface">
+        <SettingsRow
+          {...searchableSetting("fork-workspace-picker")}
+          description="Use named worktrees, colors, and workspace management. Turn off to use the original T3 workspace picker. Saved on this device."
+          resetAction={
+            forkUseH3WorkspacePicker !== DEFAULT_CLIENT_SETTINGS.forkUseH3WorkspacePicker ? (
+              <SettingResetButton
+                label="workspace picker"
+                onClick={() =>
+                  persistClientSettingsPatch({
+                    forkUseH3WorkspacePicker: DEFAULT_CLIENT_SETTINGS.forkUseH3WorkspacePicker,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              aria-label="Enable H3 Workspace picker"
+              checked={forkUseH3WorkspacePicker}
+              onCheckedChange={(checked) =>
+                persistClientSettingsPatch({ forkUseH3WorkspacePicker: checked })
+              }
+            />
+          }
+        />
         <SettingsRow
           {...searchableSetting("fork-ui-changes")}
           description="Enable Fork interface tweaks, including sidebar section lines. Saved on this device."
@@ -49,8 +76,6 @@ export function ForkSettings() {
             />
           }
         />
-      </SettingsSection>
-      <SettingsSection id="fork-sidebar" title="Sidebar">
         <SettingsRow
           {...searchableSetting("fork-group-sidebar-workspaces")}
           description="Combine threads in the same project and workspace into one card in the current sidebar. Applies within each section except Settled. Saved on this device."
@@ -76,8 +101,6 @@ export function ForkSettings() {
             />
           }
         />
-      </SettingsSection>
-      <SettingsSection id="fork-branding" title="Branding">
         <SettingsRow
           {...searchableSetting("fork-wordmark")}
           description="Show H3 Code above the sidebar. Turn off to use T3 Code. Saved on this device."
@@ -104,6 +127,7 @@ export function ForkSettings() {
           }
         />
       </SettingsSection>
+      <WorkspaceColorSettings />
     </SettingsPageContainer>
   );
 }
