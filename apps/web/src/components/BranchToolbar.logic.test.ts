@@ -3,7 +3,7 @@ import {
   resolveCurrentWorkspaceLabel,
   resolveLockedWorkspaceLabel,
 } from "./BranchToolbar.logic";
-import { type VcsRef } from "@t3tools/contracts";
+import { MessageId, type VcsRef } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import { dedupeRemoteBranchesWithLocalMatches } from "@t3tools/shared/git";
 import * as DateTime from "effect/DateTime";
@@ -345,13 +345,16 @@ describe("workspace rows", () => {
     expect(rows.every((row) => !row.isBusy && row.isIdle)).toBe(true);
   });
 
-  it("sorts worktrees by the latest activity or visit across their threads, with unknown dates last", () => {
+  it("sorts worktrees by conversation activity, ignoring cleanup and visit timestamps", () => {
     const rows = resolveWorktreeRows({
       refs: [
         ref("alpha", "/trees/alpha"),
         ref("beta", "/trees/beta"),
         ref("gamma", "/trees/gamma"),
         ref("delta", "/trees/delta"),
+        ref("message", "/trees/message"),
+        ref("empty", "/trees/empty"),
+        ref("prompt", "/trees/prompt"),
       ],
       threads: [],
       activeProjectCwd: "/repo",
@@ -359,17 +362,56 @@ describe("workspace rows", () => {
     });
     const older = DateTime.makeUnsafe("2026-11-01T12:00:00Z");
     const newer = DateTime.makeUnsafe("2026-11-02T12:00:00Z");
+    const housekeeping = DateTime.makeUnsafe("2026-11-03T12:00:00Z");
+    const thread = {
+      createdAt: older,
+      updatedAt: older,
+      lastVisitedAt: null,
+      latestUserMessageAt: null,
+      latestVisibleMessage: null,
+    };
+    const cleanedUpThread = {
+      ...thread,
+      worktreePath: "/trees/alpha",
+      latestUserMessageAt: older,
+      latestRunCompletedAt: older,
+      updatedAt: housekeeping,
+      lastVisitedAt: housekeeping,
+    };
     const recentRows = resolveRecentWorktreeRows(rows, [
-      { worktreePath: "/trees/alpha", updatedAt: older },
-      { worktreePath: "/trees/beta", updatedAt: older, lastVisitedAt: newer },
-      { worktreePath: "/trees/gamma", updatedAt: newer },
-      { worktreePath: "/trees/beta", updatedAt: older },
-      { worktreePath: null, updatedAt: newer },
+      cleanedUpThread,
+      { ...thread, worktreePath: "/trees/beta", latestRunRequestedAt: newer },
+      { ...thread, worktreePath: "/trees/gamma", latestRunCompletedAt: newer },
+      { ...thread, worktreePath: "/trees/beta" },
+      {
+        ...thread,
+        worktreePath: "/trees/message",
+        latestVisibleMessage: {
+          id: MessageId.make("reply"),
+          role: "assistant",
+          text: "Done",
+          updatedAt: newer,
+        },
+      },
+      { ...thread, worktreePath: "/trees/prompt", latestUserMessageAt: newer },
+      { ...thread, worktreePath: "/trees/empty" },
+      { ...thread, worktreePath: null, latestRunRequestedAt: housekeeping },
     ]);
-    expect(recentRows.map((row) => row.dirName)).toEqual(["beta", "gamma", "alpha", "delta"]);
+    expect(recentRows.map((row) => row.dirName)).toEqual([
+      "beta",
+      "gamma",
+      "message",
+      "prompt",
+      "alpha",
+      "empty",
+      "delta",
+    ]);
     expect(recentRows.map((row) => row.lastUsedAt)).toEqual([
       DateTime.toEpochMillis(newer),
       DateTime.toEpochMillis(newer),
+      DateTime.toEpochMillis(newer),
+      DateTime.toEpochMillis(newer),
+      DateTime.toEpochMillis(older),
       DateTime.toEpochMillis(older),
       null,
     ]);

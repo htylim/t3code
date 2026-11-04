@@ -416,20 +416,34 @@ export function resolveWorktreeRows(input: {
   return [...rows.values()].sort((left, right) => left.dirName.localeCompare(right.dirName));
 }
 
-/** Orders worktrees by their latest thread activity or visit, with unknown dates last. */
+/** Orders worktrees by conversation activity, excluding read receipts and housekeeping. */
 export function resolveRecentWorktreeRows(
   rows: readonly WorktreeRow[],
   threads: readonly Pick<
     OrchestrationV2ThreadShell,
-    "worktreePath" | "updatedAt" | "lastVisitedAt"
+    | "worktreePath"
+    | "createdAt"
+    | "latestUserMessageAt"
+    | "latestVisibleMessage"
+    | "latestRunRequestedAt"
+    | "latestRunCompletedAt"
   >[],
 ) {
   const lastUsedByPath = new Map<string, number>();
   for (const thread of threads) {
     if (!thread.worktreePath) continue;
-    const updatedAt = DateTime.toEpochMillis(thread.updatedAt);
-    const visitedAt = thread.lastVisitedAt ? DateTime.toEpochMillis(thread.lastVisitedAt) : 0;
-    const lastUsedAt = Math.max(updatedAt, visitedAt);
+    const conversationTimestamps = [
+      thread.createdAt,
+      thread.latestUserMessageAt,
+      thread.latestVisibleMessage?.updatedAt,
+      thread.latestRunRequestedAt,
+      thread.latestRunCompletedAt,
+    ];
+    const lastUsedAt = Math.max(
+      ...conversationTimestamps.map((timestamp) =>
+        timestamp ? DateTime.toEpochMillis(timestamp) : 0,
+      ),
+    );
     const previousLastUsedAt = lastUsedByPath.get(thread.worktreePath) ?? 0;
     lastUsedByPath.set(thread.worktreePath, Math.max(previousLastUsedAt, lastUsedAt));
   }
