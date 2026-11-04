@@ -1,5 +1,27 @@
 # Fork journal
 
+## 2026-11-04 - Stop using saved branch names to block worktree cleanup
+
+- Reason: Agents and external Git commands can rename or switch a worktree's branch while T3's
+  saved thread branch stays unchanged. These stale names must not indefinitely protect an
+  otherwise eligible T3-managed worktree from cleanup.
+- Upstream baseline remains `cefb544af3`. Cleanup allows renamed branches, switched branches,
+  detached HEAD, missing saved branches, and different saved branches among associated threads.
+  It still checks thread activity, project policies, protected files, open sessions and terminals,
+  repository validity, and changes during the sweep. Merge-based eligibility uses the actual
+  checked-out branch and HEAD for its evidence.
+- Upstream integration watchpoint: review future changes to branch synchronization, worktree
+  ownership, and cleanup guards before merging. Preserve this intentional fork behavior unless
+  an upstream change gives us a concrete reason to revise it. Do not restore saved-name equality
+  as a prerequisite for cleanup by age, settlement, or deletion.
+- Regression coverage uses disposable Git repositories for branch changes, detached and absent
+  branch records, shared worktrees, deleted owners, merge evidence, and repository safeguards.
+  All 200 changed-file tests passed, along with formatting, lint, unused-code checks, and affected
+  type checks. A real isolated server received project, thread, and settings commands through RPC.
+  It verified all three file-protection modes, removed five eligible worktrees while retaining
+  their branches, and preserved tracked edits, staged edits, disabled project policies, unmerged
+  commits, unmanaged paths, and a fresh orphan. No live worktree or saved record was changed.
+
 ## 2026-11-04 - Match worktree status to cleanup protection
 
 - Reason: Worktree Settings showed completed subagents as Active and treated every untracked

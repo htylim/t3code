@@ -942,7 +942,7 @@ describe("independent threads sharing a worktree", () => {
 });
 
 describe("shared worktree merge cleanup", () => {
-  it.live.each(["merged", "open", "wrong-head", "disabled-peer"] as const)(
+  it.live.each(["merged", "stale-record", "open", "wrong-head", "disabled-peer"] as const)(
     "checks merged branch evidence for all associated threads (%s)",
     (scenario) =>
       runCleanupTest(
@@ -967,7 +967,10 @@ describe("shared worktree merge cleanup", () => {
             baseRef: "main",
             headSha: scenario === "wrong-head" ? "outdated-head" : head,
           });
-          const first = shell({ branch: "feature", worktreePath: fixture.worktree });
+          const first = shell({
+            branch: scenario === "stale-record" ? "old-name" : "feature",
+            worktreePath: fixture.worktree,
+          });
           const second = shell({
             ...first,
             id: ThreadId.make("independent"),
@@ -986,8 +989,9 @@ describe("shared worktree merge cleanup", () => {
               },
             });
           const report = yield* fixture.service.runNow;
-          expect(report.entries[0]?.outcome).toBe(scenario === "merged" ? "removed" : "kept");
-          expect(yield* fixture.fs.exists(fixture.worktree)).toBe(scenario !== "merged");
+          const removed = scenario === "merged" || scenario === "stale-record";
+          expect(report.entries[0]?.outcome).toBe(removed ? "removed" : "kept");
+          expect(yield* fixture.fs.exists(fixture.worktree)).toBe(!removed);
         }),
       ),
   );
@@ -1159,9 +1163,15 @@ describe("subagent worktree ownership", () => {
           root,
         ]);
       const report = yield* fixture.service.runNow;
-      const removed = ["idle", "grandchild", "isolated-owner", "fork-owner", "side-chat"].includes(
-        scenario,
-      );
+      const removed = [
+        "idle",
+        "grandchild",
+        "isolated-owner",
+        "fork-owner",
+        "side-chat",
+        "null-branch",
+        "stale-branch",
+      ].includes(scenario);
       const shared = [
         "unrelated",
         "fork",
@@ -1180,15 +1190,13 @@ describe("subagent worktree ownership", () => {
             ? "Thread is running or has pending work"
             : shared
               ? "Not settled"
-              : scenario === "null-branch" || scenario === "stale-branch"
-                ? "A thread's branch differs from this worktree's branch"
-                : scenario === "recent-activity"
-                  ? "Settled for 2 of 8 days"
-                  : scenario === "recent-inactive"
-                    ? "Inactive for 2 of 8 days"
-                    : ["recent-grace", "recent-settle", "child-settled-now"].includes(scenario)
-                      ? "Settled moments ago"
-                      : "Not settled",
+              : scenario === "recent-activity"
+                ? "Settled for 2 of 8 days"
+                : scenario === "recent-inactive"
+                  ? "Inactive for 2 of 8 days"
+                  : ["recent-grace", "recent-settle", "child-settled-now"].includes(scenario)
+                    ? "Settled moments ago"
+                    : "Not settled",
       });
     }).pipe(Effect.provide(cleanupTestLayer), Effect.scoped),
   );
@@ -2493,20 +2501,50 @@ describe("storage cleanup reports and local file policies", () => {
       }),
     ),
   );
-  it.live("compares the checked-out branch without a full status", () =>
+  it.live.each(["renamed", "switched", "detached", "unspecified", "shared", "deleted"] as const)(
+    "removes an eligible worktree despite its saved branch (%s)",
+    (scenario) =>
+      runCleanupTest(
+        Effect.gen(function* () {
+          const { service, fs, worktree, command, setThreads, setDeletedThreads } =
+            yield* cleanupFixture();
+          if (scenario === "renamed") yield* command(worktree, ["branch", "-m", "renamed"]);
+          if (scenario === "switched") yield* command(worktree, ["switch", "-c", "other"]);
+          if (scenario === "detached") yield* command(worktree, ["checkout", "--detach"]);
+          if (scenario === "unspecified")
+            setThreads([shell({ branch: null, worktreePath: worktree })]);
+          if (scenario === "shared")
+            setThreads([
+              shell({ branch: "feature", worktreePath: worktree }),
+              shell({
+                id: ThreadId.make("other-thread"),
+                branch: "old-name",
+                worktreePath: worktree,
+              }),
+            ]);
+          if (scenario === "deleted") {
+            setThreads([]);
+            setDeletedThreads([
+              shell({ branch: null, worktreePath: worktree, deletedAt: at(-DAY_MS) }),
+            ]);
+          }
+          const report = yield* service.runNow;
+          expect(report.entries[0]).toMatchObject({
+            outcome: "removed",
+            reason:
+              scenario === "deleted"
+                ? "Thread was deleted"
+                : expect.stringMatching(/^Inactive for \d+ days$/),
+          });
+          expect(yield* fs.exists(worktree)).toBe(false);
+        }),
+      ),
+  );
+
+  it.live("keeps invalid repositories and locked indexes without a full status", () =>
     runCleanupTest(
       Effect.gen(function* () {
-        const { service, fs, repo, worktree, command, setThreads, fullStatusCalls } =
-          yield* cleanupFixture();
-        const changed = { outcome: "kept", reason: "Repository or branch changed" };
-        yield* command(worktree, ["checkout", "--detach"]);
-        expect((yield* service.runNow).entries[0]).toMatchObject(changed);
-        yield* command(worktree, ["switch", "--orphan", "other"]);
-        expect((yield* service.runNow).entries[0]).toMatchObject(changed);
-        yield* command(worktree, ["switch", "-c", "(feature)", "feature"]);
-        setThreads([shell({ branch: "(feature)", worktreePath: worktree })]);
-        expect((yield* service.runNow).entries[0]).toMatchObject(changed);
-        setThreads([shell({ branch: "feature", worktreePath: worktree })]);
+        const { service, fs, repo, worktree, command, fullStatusCalls } = yield* cleanupFixture();
         yield* command(worktree, ["tag", "feature", "feature"]);
         // Newer Git refuses to create a tag named HEAD, but still reads one.
         yield* command(worktree, ["update-ref", "refs/tags/HEAD", "refs/heads/feature"]);
@@ -2526,7 +2564,10 @@ describe("storage cleanup reports and local file policies", () => {
         yield* fs.remove(`${index.trim()}.lock`);
         const gitFile = yield* fs.readFileString(`${worktree}/.git`);
         yield* fs.writeFileString(`${worktree}/.git`, "gitdir: /missing-git-directory\n");
-        expect((yield* service.runNow).entries[0]).toMatchObject(changed);
+        expect((yield* service.runNow).entries[0]).toMatchObject({
+          outcome: "kept",
+          reason: "Repository is unavailable",
+        });
         yield* fs.writeFileString(`${worktree}/.git`, gitFile);
         expect((yield* service.runNow).entries[0]).toMatchObject({ outcome: "removed" });
         expect(fullStatusCalls()).toBe(0);

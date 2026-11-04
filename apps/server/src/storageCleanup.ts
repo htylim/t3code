@@ -520,7 +520,7 @@ const make = Effect.gen(function* () {
         decodeCleanupThread(row.payload_json).pipe(
           Effect.map((thread) => ({ ...thread, workspaceRoot: row.workspaceRoot })),
         ),
-      )).filter((thread) => thread.worktreePath !== null && thread.branch !== null);
+      )).filter((thread) => thread.worktreePath !== null);
     },
   );
 
@@ -663,23 +663,22 @@ const make = Effect.gen(function* () {
     }
   });
 
-  // Use two small Git reads: statusDetailsLocal also diffs and counts for every worktree.
-  const branchChanged = Effect.fn("StorageCleanup.branchChanged")(function* (
+  /** Refuse missing repositories and locked indexes without depending on branch names. */
+  const repositoryUnavailable = Effect.fn("StorageCleanup.repositoryUnavailable")(function* (
     cwd: string,
-    branch: string | null,
   ) {
     const failure = (detail: string) =>
       new GitCommandError({
-        operation: "StorageCleanup.branchChanged",
+        operation: "StorageCleanup.repositoryUnavailable",
         command: "git",
         cwd,
         detail,
       });
     // Return null for missing/non-repository cwd; force untranslated git diagnostics for matching.
-    const read = Effect.fnUntraced(function* (args: string[], allowedExitCode?: number) {
+    const read = Effect.fnUntraced(function* (args: string[]) {
       const result = yield* git
         .execute({
-          operation: "StorageCleanup.branchChanged",
+          operation: "StorageCleanup.repositoryUnavailable",
           cwd,
           args,
           env: { LC_ALL: "C" },
@@ -693,8 +692,13 @@ const make = Effect.gen(function* () {
           ),
         );
       if (result === null) return null;
-      if (result.exitCode === 0 || result.exitCode === allowedExitCode) return result;
-      if (result.stderr.toLowerCase().includes("not a git repository")) return null;
+      if (result.exitCode === 0) return result;
+      const diagnostic = result.stderr.toLowerCase();
+      if (
+        diagnostic.includes("not a git repository") ||
+        diagnostic.includes("gitfile does not point to a valid repository")
+      )
+        return null;
       return yield* failure(
         result.stderr.trim().split(/\r?\n/)[0]?.slice(0, 1000) || "command failed",
       );
@@ -705,12 +709,7 @@ const make = Effect.gen(function* () {
       return yield* failure(
         "Git index is locked. Status will resume when the index lock is removed.",
       );
-    // Detached HEAD exits 1; full refs avoid shortening when a tag shares the branch name.
-    const head = yield* read(["symbolic-ref", "--quiet", "HEAD"], 1);
-    if (head === null) return true;
-    const ref = head.exitCode === 0 ? head.stdout.trim() : "";
-    const name = ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length).trim() : null;
-    return (name?.startsWith("(") ? null : name) !== branch;
+    return false;
   });
 
   const localChangesReason = Effect.fn("StorageCleanup.localChangesReason")(function* (
@@ -1067,13 +1066,8 @@ const make = Effect.gen(function* () {
         if (policies.some((policy) => !worktreeCleanupEnabled(policy.settings)))
           return keep("automatic cleanup is off for an associated project");
         if (project === undefined) return keep("project is unavailable");
-        if (
-          thread.branch === null ||
-          !group.every((member) => storageCleanupThreadIdle(member, now, serverSettings))
-        )
+        if (!group.every((member) => storageCleanupThreadIdle(member, now, serverSettings)))
           return keep(waitForStop("thread is running or has pending work"));
-        if (members.some((member) => member.branch !== thread.branch))
-          return keep("a thread's branch differs from this worktree's branch");
         if (hasTerminal(worktreePath)) return keep(waitForStop("open terminal"));
         // Compare canonical roots while allowing symlinked parents, never symlinked worktree directories.
         const realPath = yield* fs.realPath(worktreePath);
@@ -1086,8 +1080,7 @@ const make = Effect.gen(function* () {
           return keep("contains a project checkout");
         if ((yield* fs.stat(path.join(worktreePath, ".git"))).type !== "File")
           return keep("not a linked worktree");
-        if (yield* branchChanged(worktreePath, thread.branch))
-          return keep("repository or branch changed");
+        if (yield* repositoryUnavailable(worktreePath)) return keep("repository is unavailable");
         const changes = yield* localChangesReason(worktreePath, localChangesRules);
         if (changes !== null) return keep(changes);
         if (
@@ -1209,17 +1202,23 @@ const make = Effect.gen(function* () {
               remote === null
                 ? "no commits beyond the project branch"
                 : "no commits beyond the default branch";
-          if (!eligible && remote !== null && checkMerged && thread.branch !== null) {
-            const pullRequest = yield* gitManager.branchPullRequest(
-              { cwd: worktreePath, branch: thread.branch },
-              { refresh: true },
-            );
-            const merged = storageCleanupPullRequestMerged(pullRequest, {
-              branch: thread.branch,
-              defaultBranch: branch,
-              headSha: head.commitSha,
-              integrated,
-            });
+          if (!eligible && remote !== null && checkMerged) {
+            const currentBranch = yield* git.resolveBranchName(worktreePath, "HEAD");
+            const pullRequest =
+              currentBranch === null
+                ? null
+                : yield* gitManager.branchPullRequest(
+                    { cwd: worktreePath, branch: currentBranch },
+                    { refresh: true },
+                  );
+            const merged =
+              currentBranch !== null &&
+              storageCleanupPullRequestMerged(pullRequest, {
+                branch: currentBranch,
+                defaultBranch: branch,
+                headSha: head.commitSha,
+                integrated,
+              });
             eligible = eligibility.every(
               (policy) =>
                 policy.eligible ||
@@ -1281,7 +1280,7 @@ const make = Effect.gen(function* () {
               const previous = group.find((member) => member.id === shell.id);
               return (
                 previous === undefined ||
-                shell.branch !== thread.branch ||
+                shell.branch !== previous.branch ||
                 shell.projectId !== previous.projectId ||
                 !Equal.equals(shell.lineage, previous.lineage) ||
                 !Equal.equals(shell.settledAt, previous.settledAt) ||
@@ -1317,8 +1316,8 @@ const make = Effect.gen(function* () {
         const bytes = yield* measureWorktree(worktreePath);
         const blockedWhileMeasuring = yield* blockedSinceCheck();
         if (blockedWhileMeasuring !== null) return keep(blockedWhileMeasuring);
-        if (yield* branchChanged(worktreePath, thread.branch))
-          return keep("repository or branch changed since check");
+        if (yield* repositoryUnavailable(worktreePath))
+          return keep("repository is unavailable since check");
         if (
           (yield* git.resolveCommit({ cwd: worktreePath, revision: "HEAD" })).commitSha !==
           head.commitSha
