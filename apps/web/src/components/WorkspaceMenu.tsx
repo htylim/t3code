@@ -1,14 +1,12 @@
+import { WorktreeActionsMenu } from "./WorktreeActionsMenu";
 import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 import { useAtomValue } from "@effect/atom-react";
-import { GitCommandError } from "@t3tools/contracts";
-import * as Schema from "effect/Schema";
 import type {
   EnvironmentId,
   OrchestrationV2ThreadShell,
   VcsStatusResult,
   ScopedProjectRef,
 } from "@t3tools/contracts";
-import * as Cause from "effect/Cause";
 import { ChevronDownIcon, FolderGit2Icon, FolderGitIcon, FolderIcon } from "lucide-react";
 import {
   useRef,
@@ -17,7 +15,6 @@ import {
   type ReactNode,
   type MouseEventHandler,
 } from "react";
-import { requestConfirmDialog } from "../confirmDialog";
 import {
   namedWorktreeKey,
   useNamedWorktreeStore,
@@ -25,33 +22,25 @@ import {
 } from "../namedWorktreeStore";
 import { useWorkspaceChoices } from "../hooks/useWorkspaceChoices";
 import { NewWorktreeRow } from "./NewWorktreeRow";
-import { requestNamedWorktreeEdit } from "./NamedWorktreeDialog";
-import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
-import { readLocalApi } from "../localApi";
 import { shortcutLabelForCommand } from "../keybindings";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { useEnvironmentQuery } from "../state/query";
-import { useAtomCommand } from "../state/use-atom-command";
 import { vcsEnvironment } from "../state/vcs";
 import {
   resolveCurrentWorkspaceLabel,
   resolveLockedWorkspaceLabel,
   resolveWorktreeStatusWord,
-  resolveWorktreeUnpushedWarning,
   type EnvMode,
   type PreviousWorktreeSeed,
   type WorktreeRow,
 } from "./BranchToolbar.logic";
 import { useComposerMenuProps } from "./chat/composerEventScope";
-import { revealInFileExplorerLabelForOs } from "./preview/fileExplorerLabel";
-import { Button } from "./ui/button";
 import { ComposerControl } from "./chat/ComposerControl";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import {
   Menu,
   MenuGroup,
   MenuGroupLabel,
-  MenuItem,
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
@@ -59,8 +48,6 @@ import {
   MenuTrigger,
 } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { toastManager } from "./ui/toast";
-const isGitCommandError = Schema.is(GitCommandError);
 export interface WorkspaceMenuProps {
   environmentId: EnvironmentId;
   projectRef: ScopedProjectRef;
@@ -314,27 +301,6 @@ function WorkspaceMenuContents(
     </>
   );
 }
-/** Explains disabled actions without letting the containing row select. */
-function WorktreeAction(props: {
-  reason: string | null;
-  children: ReactNode;
-  onClick: () => void;
-}) {
-  if (!props.reason)
-    return (
-      <MenuItem closeOnClick={false} onClick={props.onClick}>
-        {props.children}
-      </MenuItem>
-    );
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<div />}>
-        <MenuItem disabled>{props.children}</MenuItem>
-      </TooltipTrigger>
-      <TooltipPopup>{props.reason}</TooltipPopup>
-    </Tooltip>
-  );
-}
 /** Gives busy precedence over the status fetched by its mounted worktree row. */
 function WorktreeRowStatus({
   isBusy,
@@ -369,90 +335,20 @@ function WorkspaceRow(
     (state) => state.worktrees[namedWorktreeKey(props.projectRef, row.worktreePath)],
   );
   const color = metadata?.color || DEFAULT_SOFT_PILL_COLOR;
-  const composerFloatingLayerProps = useComposerMenuProps();
   const [actionsOpen, setActionsOpen] = useState(false);
   const statusQuery = useEnvironmentQuery(
     vcsEnvironment.status({ environmentId: props.environmentId, input: { cwd: row.worktreePath } }),
   );
-  const removeWorktree = useAtomCommand(vcsEnvironment.removeWorktree, { reportFailure: false });
-  const refreshStatus = useAtomCommand(vcsEnvironment.refreshStatus);
-  const localApi = readLocalApi();
-  let renameReason: string | null = row.isIdle ? null : "An agent is running here";
-  let removeReason: string | null = props.current ? "Can't remove the workspace you're in" : null;
-  if (!row.isIdle && !removeReason) removeReason = "An agent is running here";
-  if (!props.archivedReady) {
-    if (!renameReason) renameReason = "Loading thread history";
-    if (!removeReason) removeReason = "Loading thread history";
-  }
-  /** Offers force removal only after Git refuses the initial non-force request. */
-  async function remove() {
-    setActionsOpen(false);
-    props.close();
-    const title = `Remove worktree "${row.dirName}"?`;
-    const message = `${title}\n${row.worktreePath}\nThe branch is kept.`;
-    if (
-      !(await requestConfirmDialog(message, {
-        variant: "destructive",
-        confirmLabel: "Remove worktree",
-      }))
-    )
-      return;
-    const input = { cwd: props.projectCwd, path: row.worktreePath, force: false };
-    let removed = await removeWorktree({ environmentId: props.environmentId, input });
-    if (removed._tag === "Failure") {
-      const failure = Cause.squash(removed.cause);
-      if (!isGitCommandError(failure)) {
-        toastManager.add({
-          type: "error",
-          title: "Unable to remove worktree",
-          description: String(failure),
-        });
-        return;
-      }
-      // The menu has closed, so its row subscription may hold an old snapshot.
-      // Force removal needs the files and unpushed commits that exist now.
-      const refreshedStatus = await refreshStatus({
-        environmentId: props.environmentId,
-        input: { cwd: row.worktreePath },
-      });
-      const status = refreshedStatus._tag === "Success" ? refreshedStatus.value : null;
-      const details = [
-        status
-          ? `${status.workingTree.files.length} uncommitted files`
-          : "Working tree status unavailable",
-        resolveWorktreeUnpushedWarning(status),
-        `${props.threads.filter((thread) => thread.worktreePath === row.worktreePath && thread.archivedAt === null).length} non-archived threads`,
-      ];
-      if (
-        !(await requestConfirmDialog(message, {
-          variant: "destructive",
-          confirmLabel: "Force remove",
-          details,
-        }))
-      )
-        return;
-      removed = await removeWorktree({
-        environmentId: props.environmentId,
-        input: { ...input, force: true },
-      });
-    }
-    if (removed._tag === "Failure") {
-      toastManager.add({
-        type: "error",
-        title: "Unable to remove worktree",
-        description: String(Cause.squash(removed.cause)),
-      });
-      return;
-    }
-    useNamedWorktreeStore.getState().forget(props.projectRef, row.worktreePath);
-    await refreshStatus({ environmentId: props.environmentId, input: { cwd: props.projectCwd } });
-    props.close();
-  }
   return (
     <MenuRadioItem
       closeOnClick={false}
       value={row.worktreePath}
       className="group/worktree"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setActionsOpen(true);
+      }}
       aria-current={props.current || undefined}
       data-workspace-initial-focus={props.current ? "" : undefined}
       aria-disabled={!props.canUseWorktree}
@@ -467,11 +363,6 @@ function WorkspaceRow(
           worktreePath: row.worktreePath,
         });
         if (accepted !== false) props.close();
-      }}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        setActionsOpen(true);
       }}
     >
       <span
@@ -501,73 +392,18 @@ function WorkspaceRow(
             <WorktreeRowStatus isBusy={row.isBusy} status={statusQuery.data} />
           )}
         </span>
-        <Menu open={actionsOpen} onOpenChange={setActionsOpen}>
-          <MenuTrigger
-            aria-label={`Actions for ${row.dirName}`}
-            render={<Button size="icon-micro" variant="ghost-muted" />}
-            onPointerDown={(event) => event.stopPropagation()}
-            onPointerUp={(event) => event.stopPropagation()}
-            onMouseUp={(event) => event.stopPropagation()}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            ···
-          </MenuTrigger>
-          <MenuPopup
-            align="end"
-            onClick={(event) => event.stopPropagation()}
-            onMouseUp={(event) => event.stopPropagation()}
-            {...(props.interactionMode === "standalone" ? {} : composerFloatingLayerProps)}
-          >
-            <WorktreeAction
-              reason={renameReason}
-              onClick={() => {
-                setActionsOpen(false);
-                props.close();
-                requestNamedWorktreeEdit({
-                  projectRef: props.projectRef,
-                  projectCwd: props.projectCwd,
-                  worktreePath: row.worktreePath,
-                });
-              }}
-            >
-              Rename…
-            </WorktreeAction>
-            <MenuItem
-              onClick={() => {
-                void writeTextToClipboard(row.worktreePath, "path").then(
-                  () => toastManager.add({ type: "success", title: "Path copied" }),
-                  (cause: unknown) => toastManager.add({ type: "error", title: String(cause) }),
-                );
-              }}
-            >
-              Copy path
-            </MenuItem>
-            {localApi?.shell.revealPath ? (
-              <MenuItem
-                onClick={() => {
-                  void localApi.shell.revealPath?.(row.worktreePath);
-                }}
-              >
-                {revealInFileExplorerLabelForOs(
-                  navigator.platform.includes("Mac")
-                    ? "darwin"
-                    : navigator.platform.includes("Win")
-                      ? "windows"
-                      : "linux",
-                )}
-              </MenuItem>
-            ) : null}
-            <WorktreeAction
-              reason={removeReason}
-              onClick={() => {
-                void remove();
-              }}
-            >
-              Remove worktree…
-            </WorktreeAction>
-          </MenuPopup>
-        </Menu>
+        <WorktreeActionsMenu
+          open={actionsOpen}
+          onOpenChange={setActionsOpen}
+          projectRef={props.projectRef}
+          projectCwd={props.projectCwd}
+          row={row}
+          threads={props.threads}
+          archivedReady={props.archivedReady}
+          current={props.current ?? false}
+          standalone={props.interactionMode === "standalone"}
+          close={props.close}
+        />
       </span>
     </MenuRadioItem>
   );

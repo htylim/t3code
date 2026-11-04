@@ -21,6 +21,7 @@ export type SettingsPath =
   | "/settings/diagnostics"
   | "/settings/appearance"
   | "/settings/fork"
+  | "/settings/fork-worktrees"
   | "/settings/chat"
   | "/settings/diffs"
   | "/settings/keybindings"
@@ -94,6 +95,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
   "/settings/fork": "Fork",
+  "/settings/fork-worktrees": "Fork - Worktrees",
   "/settings/chat": "Chat",
   "/settings/diffs": "Diffs & pull requests",
   "/settings/keybindings": "Keybindings",
@@ -125,6 +127,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       "/settings/general",
       "/settings/appearance",
       "/settings/fork",
+      "/settings/fork-worktrees",
       "/settings/chat",
       "/settings/diffs",
       "/settings/keybindings",
@@ -371,6 +374,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/appearance",
     searchTerms: ["dev nightly latest channel artwork pill label hide none"],
     targetId: "appearance-interface",
+  },
+  {
+    id: "fork-worktree-management",
+    title: "Manage worktrees",
+    to: "/settings/fork-worktrees",
+    searchTerms: ["rename remove delete path inactivity workspace"],
+    forkOnly: true,
   },
   {
     id: "fork-ui-changes",
@@ -1244,6 +1254,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/general": null,
   "/settings/appearance": null,
   "/settings/fork": null,
+  "/settings/fork-worktrees": "project-defaults",
   "/settings/chat": null,
   "/settings/diffs": null,
   "/settings/snap-shot": null,

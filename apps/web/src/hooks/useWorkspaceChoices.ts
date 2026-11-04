@@ -14,6 +14,7 @@ export function useWorkspaceChoices(props: {
   projectCwd: string;
   activeWorktreePath: string | null;
   activeBranch: string | null;
+  includeUnnamed?: boolean;
 }) {
   const refsQuery = useEnvironmentQuery(
     vcsEnvironment.listRefs({
@@ -54,6 +55,7 @@ export function useWorkspaceChoices(props: {
     activeBranch: props.activeBranch,
   }).filter(
     (row) =>
+      props.includeUnnamed ||
       row.worktreePath === props.activeWorktreePath ||
       isNamedWorktree(
         row.worktreePath,

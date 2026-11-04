@@ -64,6 +64,15 @@ vp run dev
 Keep each change small enough to review and merge on its own. Follow the upstream architecture and
 coding rules unless this directory documents an intentional fork-specific exception.
 
+## Worktree RPC compatibility
+
+Worktree management RPC extensions live under `fork.worktrees.*`, with their schemas in
+`packages/contracts/src/forkWorktrees.ts`. Servers advertise the supported API version under
+`capabilities.fork.worktrees`; clients check it before sending fork-only requests. Increment
+that API version for incompatible payload or behavior changes. Keep upstream operation names
+and payloads available for their upstream behavior. Do not change the global orchestration
+protocol version to advertise a fork feature.
+
 ## Database compatibility
 
 **NEVER introduce a fork-owned database migration.** Keeping this fork mergeable with upstream is

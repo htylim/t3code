@@ -1,4 +1,12 @@
 import {
+  ForkWorktreeSizeInput,
+  ForkWorktreeSizeResult,
+  ForkWorktreeRenameInput,
+  ForkWorktreeRenameResult,
+  ForkWorktreeListInput,
+  ForkWorktreeListResult,
+} from "./forkWorktrees.ts";
+import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -142,8 +150,6 @@ import {
   GitPullRequestRefInput,
   VcsPullResult,
   VcsRemoveWorktreeInput,
-  VcsRenameWorktreeInput,
-  VcsRenameWorktreeResult,
   GitResolvePullRequestResult,
   GitRunStackedActionInput,
   VcsStatusInput,
@@ -455,9 +461,11 @@ export const WS_METHODS = {
   vcsPull: "vcs.pull",
   vcsRefreshStatus: "vcs.refreshStatus",
   vcsListRefs: "vcs.listRefs",
+  forkWorktreeList: "fork.worktrees.list",
+  forkWorktreeSize: "fork.worktrees.size",
   workspaceChooseColor: "workspace.chooseColor",
   vcsCreateWorktree: "vcs.createWorktree",
-  vcsRenameWorktree: "vcs.renameWorktree",
+  forkWorktreeRename: "fork.worktrees.rename",
   vcsRemoveWorktree: "vcs.removeWorktree",
   vcsCreateRef: "vcs.createRef",
   vcsSwitchRef: "vcs.switchRef",
@@ -1507,6 +1515,18 @@ const WsVcsListRefsRpc = Rpc.make(WS_METHODS.vcsListRefs, {
   error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
 });
 
+const WsForkWorktreeListRpc = Rpc.make(WS_METHODS.forkWorktreeList, {
+  payload: ForkWorktreeListInput,
+  success: ForkWorktreeListResult,
+  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
+});
+
+const WsForkWorktreeSizeRpc = Rpc.make(WS_METHODS.forkWorktreeSize, {
+  payload: ForkWorktreeSizeInput,
+  success: ForkWorktreeSizeResult,
+  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
+});
+
 const WsWorkspaceChooseColorRpc = Rpc.make(WS_METHODS.workspaceChooseColor, {
   payload: ChooseWorkspaceColorInput,
   success: ChooseWorkspaceColorResult,
@@ -1520,9 +1540,9 @@ const WsVcsCreateWorktreeRpc = Rpc.make(WS_METHODS.vcsCreateWorktree, {
   error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
 });
 
-const WsVcsRenameWorktreeRpc = Rpc.make(WS_METHODS.vcsRenameWorktree, {
-  payload: VcsRenameWorktreeInput,
-  success: VcsRenameWorktreeResult,
+const WsForkWorktreeRenameRpc = Rpc.make(WS_METHODS.forkWorktreeRename, {
+  payload: ForkWorktreeRenameInput,
+  success: ForkWorktreeRenameResult,
   error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
 });
 
@@ -2153,9 +2173,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsGitResolvePullRequestRpc,
   WsGitPreparePullRequestThreadRpc,
   WsVcsListRefsRpc,
+  WsForkWorktreeListRpc,
+  WsForkWorktreeSizeRpc,
   WsWorkspaceChooseColorRpc,
   WsVcsCreateWorktreeRpc,
-  WsVcsRenameWorktreeRpc,
+  WsForkWorktreeRenameRpc,
   WsVcsRemoveWorktreeRpc,
   WsVcsCreateRefRpc,
   WsVcsSwitchRefRpc,

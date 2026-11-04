@@ -180,6 +180,7 @@ interface GitRepositoryPaths {
 }
 
 interface GitRefsSnapshot {
+  readonly mainWorktreePath: string | null;
   readonly localBranches: ReadonlyArray<VcsRef>;
   readonly remoteBranches: ReadonlyArray<VcsRef>;
   readonly detachedWorktrees: ReadonlyArray<VcsRef>;
@@ -3931,6 +3932,12 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
             worktreePath: path.normalize(path.resolve(ref.worktreePath)),
           }))
         : [];
+    // Git lists the main checkout first, including bare repositories without a branch ref.
+    const firstWorktreeField = worktreeListResult.stdout.split("\0", 1)[0];
+    const mainWorktreePath =
+      worktreeListResult.exitCode === 0 && firstWorktreeField?.startsWith("worktree ")
+        ? path.normalize(path.resolve(firstWorktreeField.slice("worktree ".length)))
+        : null;
     // Without `core.worktree`, Git reports a separate git dir as the main checkout.
     const normalizedGitCommonDir = path.normalize(path.resolve(gitCommonDir));
     const existingWorktreeEntries = yield* Effect.filter(
@@ -4001,6 +4008,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         : left.ref.name.localeCompare(right.ref.name);
 
     return {
+      mainWorktreePath,
       localBranches: localBranches.toSorted(byRecencyThenName).map(({ ref }) => ref),
       remoteBranches: remoteBranches.toSorted(byRecencyThenName).map(({ ref }) => ref),
       detachedWorktrees: existingWorktreeEntries.filter((ref) => ref.isDetached),
@@ -4155,6 +4163,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           })),
         ];
         return {
+          mainWorktreePath: snapshot.mainWorktreePath,
           refs: worktreeRefs,
           isRepo: true,
           hasPrimaryRemote: snapshot.hasPrimaryRemote,

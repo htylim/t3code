@@ -1,5 +1,35 @@
 # Fork journal
 
+## 2026-11-03 - Manage and clean worktrees in Fork settings
+
+- Upstream baseline: `cefb544af3`. Applied on fork commit `5e59793252`.
+- Add Fork - Worktrees directly below Fork, with the existing project and environment
+  selectors, grouped checkout rows, shared management actions, and thread inactivity.
+  The existing Fork settings page stays intact. Web and desktop share this page;
+  native mobile navigation is unchanged.
+- Cleanup mode adds row and group selection, per-worktree reclaimable-space estimates,
+  and a selected total in the search row without shifting the tables. Exclude project
+  checkouts and repository main directories from this management list. Reuse the server's
+  bounded disk measurement, excluding shared hardlinks and dependency stores, through an
+  authorized read-only RPC with cached sizes.
+  Unknown sizes remain explicit. No database migration or new persistence is needed.
+- Size measurements never control selection or removal. Identify main checkouts through
+  Git's worktree listing and use only already available estimates in confirmations.
+- Fork listing, size, and rename use `fork.worktrees.*` RPCs and separate contracts.
+  Advertise `capabilities.fork.worktrees.apiVersion = 1`; clients reject missing or unknown
+  versions before sending these requests. Main-checkout metadata stays out of upstream's
+  `vcs.listRefs` response. Rename entry points and settings are gated per environment;
+  upstream deletion retains its existing payload and permission requirements.
+- Confirm destructive cleanup once, explicitly warn about uncommitted changes, and
+  recheck each target before removal. Protect project checkouts and running agents.
+  Newly dirty or failed targets stay selected. Keep Git branches and thread history.
+- Verification: focused cleanup and allocation tests, affected typechecks, lint, and
+  React Compiler coverage passed. The isolated browser verified selection, totals,
+  warning cancellation, successful clean batch removal with branches retained, and
+  narrow layouts. Changed-file checks still reproduce the existing corrupt Git-file
+  storage-cleanup failure recorded below. Native desktop and remote connections were
+  not exercised. No live state or installed app changed.
+
 ## 2026-11-03 - Restore clicks in the hover sidebar
 
 - Upstream baseline: `cefb544af3`. Apply on top of fork commit `39290a8eb9`.

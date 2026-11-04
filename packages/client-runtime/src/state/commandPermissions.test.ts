@@ -244,6 +244,10 @@ it.effect(
         const registry = yield* setup;
         registry.set(sessions(env), AsyncResult.success(grant(true)));
         const git = createCommandPermissions(runtime, WS_METHODS.vcsInit);
+        const rename = createCommandPermissions(runtime, WS_METHODS.forkWorktreeRename);
+        expect((yield* rename.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
+          AuthSourceControlWriteScope,
+        );
         expect((yield* git.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
           AuthSourceControlWriteScope,
         );
@@ -256,6 +260,7 @@ it.effect(
           }),
         );
         yield* git.authorize(registry, env);
+        yield* rename.authorize(registry, env);
         const color = createCommandPermissions(runtime, WS_METHODS.workspaceChooseColor);
         expect(registry.get(color.permissionAtom(env))).toBe(false);
         expect((yield* color.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(

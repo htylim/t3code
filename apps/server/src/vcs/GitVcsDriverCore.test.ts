@@ -4745,6 +4745,15 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
         assert.equal(worktrees.nextCursor, null);
         assert.equal(worktrees.totalCount, 2);
         assert.equal(
+          worktrees.mainWorktreePath,
+          yield* (yield* FileSystem.FileSystem).realPath(cwd),
+        );
+        const fromLinkedCheckout = yield* driver.listRefs({
+          cwd: worktreePath,
+          worktreesOnly: true,
+        });
+        assert.equal(fromLinkedCheckout.mainWorktreePath, worktrees.mainWorktreePath);
+        assert.equal(
           worktrees.refs.every((ref) => !ref.isRemote && ref.worktreePath !== null),
           true,
         );

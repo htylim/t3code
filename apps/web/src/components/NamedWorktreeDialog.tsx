@@ -1,8 +1,13 @@
+import { useEnvironment } from "../state/environments";
 import { useEnvironmentScope } from "../state/session";
 import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 import { useAtomValue } from "@effect/atom-react";
 import type { OrchestrationV2ThreadShell, ScopedProjectRef } from "@t3tools/contracts";
-import { AuthOrchestrationOperateScope, GitCommandError } from "@t3tools/contracts";
+import {
+  AuthOrchestrationOperateScope,
+  GitCommandError,
+  supportsForkWorktrees,
+} from "@t3tools/contracts";
 import { getBrowseParentPath } from "@t3tools/client-runtime/state/projects";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import * as Schema from "effect/Schema";
@@ -78,6 +83,10 @@ export function NamedWorktreeDialogHost() {
 /** Keep rejected edits open and retain the moved path if updating a thread needs a retry. */
 function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
   const { projectRef, projectCwd } = request;
+  const environment = useEnvironment(projectRef.environmentId);
+  const worktreeRenameSupported = supportsForkWorktrees(
+    environment?.serverConfig?.environment.capabilities,
+  );
   const worktreeDisplay = useWorktreeDisplay(projectRef, request.worktreePath, projectCwd);
   const [worktreePath, setWorktreePath] = useState(request.worktreePath);
   const initialName = request.worktreePath.split(/[\\/]/).at(-1) ?? request.worktreePath;
@@ -150,7 +159,9 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
   if (directoryName === rejectedName)
     validationMessage = "A directory with that name already exists.";
   if (renaming && !validationMessage) {
-    if (!canRename || !canUpdateThreads)
+    if (!worktreeRenameSupported)
+      validationMessage = "Rename requires a compatible Fork server on this environment.";
+    else if (!canRename || !canUpdateThreads)
       validationMessage = "This connection cannot rename worktrees.";
     else if (archived.error || siblings.error)
       validationMessage = "Unable to check the worktree. Reconnect and try again.";

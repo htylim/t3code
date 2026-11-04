@@ -13,15 +13,15 @@ import {
   type VcsCreateWorktreeInput,
   type VcsCreateWorktreeResult,
   type VcsListRefsInput,
-  type VcsListRefsResult,
+  type ForkWorktreeListResult,
   type GitManagerServiceError,
   type GitPreparePullRequestThreadInput,
   type GitPreparePullRequestThreadResult,
   type GitPullRequestRefInput,
   type VcsPullResult,
   type VcsRemoveWorktreeInput,
-  type VcsRenameWorktreeInput,
-  type VcsRenameWorktreeResult,
+  type ForkWorktreeRenameInput,
+  type ForkWorktreeRenameResult,
   type GitResolvePullRequestResult,
   type GitRunStackedActionInput,
   type GitRunStackedActionResult,
@@ -75,7 +75,7 @@ export class GitWorkflowService extends Context.Service<
     ) => Effect.Effect<GitPreparePullRequestThreadResult, GitManagerServiceError>;
     readonly listRefs: (
       input: VcsListRefsInput,
-    ) => Effect.Effect<VcsListRefsResult, GitCommandError>;
+    ) => Effect.Effect<ForkWorktreeListResult, GitCommandError>;
     readonly createWorktree: (
       input: VcsCreateWorktreeInput,
       options?: GitVcsDriver.CreateWorktreeOptions,
@@ -105,8 +105,8 @@ export class GitWorkflowService extends Context.Service<
     >;
     /** Moves a worktree to a sibling directory without renaming its branch. */
     readonly renameWorktree: (
-      input: VcsRenameWorktreeInput,
-    ) => Effect.Effect<VcsRenameWorktreeResult, GitCommandError>;
+      input: ForkWorktreeRenameInput,
+    ) => Effect.Effect<ForkWorktreeRenameResult, GitCommandError>;
     readonly resolveWorktreeBaseRemote: GitVcsDriver.GitVcsDriver["Service"]["resolveWorktreeBaseRemote"];
     readonly fetchWorktreeBaseCommit: (input: {
       readonly cwd: string;
@@ -166,7 +166,7 @@ function nonRepositoryStatus(): VcsStatusResult {
   };
 }
 
-function nonRepositoryListRefs(): VcsListRefsResult {
+function nonRepositoryListRefs(): ForkWorktreeListResult {
   return {
     refs: [],
     isRepo: false,

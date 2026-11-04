@@ -8,6 +8,7 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import { ForkCapabilities } from "./forkWorktrees.ts";
 import { SourceControlProviderKind } from "./sourceControl.ts";
 
 export const ORCHESTRATION_PROTOCOL_VERSION = 2;
@@ -70,6 +71,7 @@ export const ServerSelfUpdateCapability = Schema.Literals([
 export type ServerSelfUpdateCapability = typeof ServerSelfUpdateCapability.Type;
 
 export const ExecutionEnvironmentCapabilities = Schema.Struct({
+  fork: ForwardCompatibleOptional(ForkCapabilities),
   repositoryIdentity: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   connectionProbe: Schema.optionalKey(Schema.Boolean),
   attachmentUploads: Schema.optionalKey(Schema.Boolean),

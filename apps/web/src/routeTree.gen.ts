@@ -36,6 +36,7 @@ import { Route as ChatSettingsLabsRouteImport } from './routes/_chat.settings.la
 import { Route as ChatSettingsKeybindingsRouteImport } from './routes/_chat.settings.keybindings'
 import { Route as ChatSettingsIntegrationsRouteImport } from './routes/_chat.settings.integrations'
 import { Route as ChatSettingsGeneralRouteImport } from './routes/_chat.settings.general'
+import { Route as ChatSettingsForkWorktreesRouteImport } from './routes/_chat.settings.fork-worktrees'
 import { Route as ChatSettingsForkRouteImport } from './routes/_chat.settings.fork'
 import { Route as ChatSettingsDiffsRouteImport } from './routes/_chat.settings.diffs'
 import { Route as ChatSettingsDiagnosticsRouteImport } from './routes/_chat.settings.diagnostics'
@@ -189,6 +190,12 @@ const ChatSettingsGeneralRoute = ChatSettingsGeneralRouteImport.update({
   path: '/general',
   getParentRoute: () => ChatSettingsRoute,
 } as any)
+const ChatSettingsForkWorktreesRoute =
+  ChatSettingsForkWorktreesRouteImport.update({
+    id: '/fork-worktrees',
+    path: '/fork-worktrees',
+    getParentRoute: () => ChatSettingsRoute,
+  } as any)
 const ChatSettingsForkRoute = ChatSettingsForkRouteImport.update({
   id: '/fork',
   path: '/fork',
@@ -287,6 +294,7 @@ export interface FileRoutesByFullPath {
   '/settings/diagnostics': typeof ChatSettingsDiagnosticsRoute
   '/settings/diffs': typeof ChatSettingsDiffsRoute
   '/settings/fork': typeof ChatSettingsForkRoute
+  '/settings/fork-worktrees': typeof ChatSettingsForkWorktreesRoute
   '/settings/general': typeof ChatSettingsGeneralRoute
   '/settings/integrations': typeof ChatSettingsIntegrationsRoute
   '/settings/keybindings': typeof ChatSettingsKeybindingsRoute
@@ -329,6 +337,7 @@ export interface FileRoutesByTo {
   '/settings/diagnostics': typeof ChatSettingsDiagnosticsRoute
   '/settings/diffs': typeof ChatSettingsDiffsRoute
   '/settings/fork': typeof ChatSettingsForkRoute
+  '/settings/fork-worktrees': typeof ChatSettingsForkWorktreesRoute
   '/settings/general': typeof ChatSettingsGeneralRoute
   '/settings/integrations': typeof ChatSettingsIntegrationsRoute
   '/settings/keybindings': typeof ChatSettingsKeybindingsRoute
@@ -373,6 +382,7 @@ export interface FileRoutesById {
   '/_chat/settings/diagnostics': typeof ChatSettingsDiagnosticsRoute
   '/_chat/settings/diffs': typeof ChatSettingsDiffsRoute
   '/_chat/settings/fork': typeof ChatSettingsForkRoute
+  '/_chat/settings/fork-worktrees': typeof ChatSettingsForkWorktreesRoute
   '/_chat/settings/general': typeof ChatSettingsGeneralRoute
   '/_chat/settings/integrations': typeof ChatSettingsIntegrationsRoute
   '/_chat/settings/keybindings': typeof ChatSettingsKeybindingsRoute
@@ -417,6 +427,7 @@ export interface FileRouteTypes {
     | '/settings/diagnostics'
     | '/settings/diffs'
     | '/settings/fork'
+    | '/settings/fork-worktrees'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
@@ -459,6 +470,7 @@ export interface FileRouteTypes {
     | '/settings/diagnostics'
     | '/settings/diffs'
     | '/settings/fork'
+    | '/settings/fork-worktrees'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
@@ -502,6 +514,7 @@ export interface FileRouteTypes {
     | '/_chat/settings/diagnostics'
     | '/_chat/settings/diffs'
     | '/_chat/settings/fork'
+    | '/_chat/settings/fork-worktrees'
     | '/_chat/settings/general'
     | '/_chat/settings/integrations'
     | '/_chat/settings/keybindings'
@@ -720,6 +733,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatSettingsGeneralRouteImport
       parentRoute: typeof ChatSettingsRoute
     }
+    '/_chat/settings/fork-worktrees': {
+      id: '/_chat/settings/fork-worktrees'
+      path: '/fork-worktrees'
+      fullPath: '/settings/fork-worktrees'
+      preLoaderRoute: typeof ChatSettingsForkWorktreesRouteImport
+      parentRoute: typeof ChatSettingsRoute
+    }
     '/_chat/settings/fork': {
       id: '/_chat/settings/fork'
       path: '/fork'
@@ -834,6 +854,7 @@ interface ChatSettingsRouteChildren {
   ChatSettingsDiagnosticsRoute: typeof ChatSettingsDiagnosticsRoute
   ChatSettingsDiffsRoute: typeof ChatSettingsDiffsRoute
   ChatSettingsForkRoute: typeof ChatSettingsForkRoute
+  ChatSettingsForkWorktreesRoute: typeof ChatSettingsForkWorktreesRoute
   ChatSettingsGeneralRoute: typeof ChatSettingsGeneralRoute
   ChatSettingsIntegrationsRoute: typeof ChatSettingsIntegrationsRoute
   ChatSettingsKeybindingsRoute: typeof ChatSettingsKeybindingsRoute
@@ -864,6 +885,7 @@ const ChatSettingsRouteChildren: ChatSettingsRouteChildren = {
   ChatSettingsDiagnosticsRoute: ChatSettingsDiagnosticsRoute,
   ChatSettingsDiffsRoute: ChatSettingsDiffsRoute,
   ChatSettingsForkRoute: ChatSettingsForkRoute,
+  ChatSettingsForkWorktreesRoute: ChatSettingsForkWorktreesRoute,
   ChatSettingsGeneralRoute: ChatSettingsGeneralRoute,
   ChatSettingsIntegrationsRoute: ChatSettingsIntegrationsRoute,
   ChatSettingsKeybindingsRoute: ChatSettingsKeybindingsRoute,

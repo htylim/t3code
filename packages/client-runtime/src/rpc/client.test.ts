@@ -3,6 +3,7 @@ import {
   type RelayClientInstallProgressEvent,
   type ServerLifecycleStreamEvent,
   WS_METHODS,
+  type ServerConfig,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
@@ -26,7 +27,13 @@ import {
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import * as RpcSession from "../rpc/session.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
-import { runStream, subscribe, subscribeDynamicWithSession } from "./client.ts";
+import {
+  requestGuarded,
+  RpcPermissionGuard,
+  runStream,
+  subscribe,
+  subscribeDynamicWithSession,
+} from "./client.ts";
 
 const TARGET = new PrimaryConnectionTarget({
   environmentId: EnvironmentId.make("environment-1"),
@@ -80,6 +87,88 @@ const makeHarness = Effect.fn("TestEnvironmentRpc.makeHarness")(function* () {
 });
 
 describe("environment RPC", () => {
+  it.effect(
+    "checks the active destination's fork API before sending, without gating upstream deletion",
+    () =>
+      Effect.gen(function* () {
+        const calls: string[] = [];
+        const client = {
+          [WS_METHODS.forkWorktreeRename]: () =>
+            Effect.sync(() => {
+              calls.push("rename");
+              return { worktree: { path: "/trees/renamed", refName: "review" } };
+            }),
+          [WS_METHODS.forkWorktreeSize]: () =>
+            Effect.sync(() => {
+              calls.push("size");
+              return { isLinkedWorktree: true, reclaimableBytes: null };
+            }),
+          [WS_METHODS.forkWorktreeList]: () =>
+            Effect.sync(() => {
+              calls.push("list");
+              return {
+                refs: [],
+                isRepo: true,
+                hasPrimaryRemote: false,
+                nextCursor: null,
+                totalCount: 0,
+              };
+            }),
+          [WS_METHODS.vcsRemoveWorktree]: () =>
+            Effect.sync(() => {
+              calls.push("delete");
+            }),
+        } as unknown as WsRpcProtocolClient;
+        const { activeSession, supervisor } = yield* makeHarness();
+        const request = <A, E, R>(operation: Effect.Effect<A, E, R>) =>
+          operation.pipe(
+            Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+            Effect.provideService(RpcPermissionGuard, { authorize: () => Effect.void }),
+            Effect.exit,
+          );
+        for (const apiVersion of [undefined, 1, 2]) {
+          calls.length = 0;
+          const config = {
+            environment: {
+              capabilities: {
+                repositoryIdentity: true,
+                ...(apiVersion === undefined ? {} : { fork: { worktrees: { apiVersion } } }),
+              },
+            },
+          } as ServerConfig;
+          yield* SubscriptionRef.set(
+            activeSession,
+            Option.some({ ...session(client), initialConfig: Effect.succeed(config) }),
+          );
+          const results = [
+            yield* request(
+              requestGuarded(WS_METHODS.forkWorktreeRename, {
+                cwd: "/repo",
+                path: "/trees/review",
+                newDirName: "renamed",
+              }),
+            ),
+            yield* request(
+              requestGuarded(WS_METHODS.forkWorktreeSize, { cwd: "/repo", path: "/trees/review" }),
+            ),
+            yield* request(requestGuarded(WS_METHODS.forkWorktreeList, { cwd: "/repo" })),
+          ];
+          expect(results.map((result) => result._tag)).toEqual(
+            apiVersion === 1
+              ? ["Success", "Success", "Success"]
+              : ["Failure", "Failure", "Failure"],
+          );
+          expect(calls).toEqual(apiVersion === 1 ? ["rename", "size", "list"] : []);
+        }
+        yield* SubscriptionRef.set(activeSession, Option.some(session(client)));
+        expect(
+          (yield* request(
+            requestGuarded(WS_METHODS.vcsRemoveWorktree, { cwd: "/repo", path: "/trees/review" }),
+          ))._tag,
+        ).toBe("Success");
+        expect(calls).toEqual(["delete"]);
+      }),
+  );
   it.effect("binds finite streaming commands to one active session", () =>
     Effect.gen(function* () {
       const firstEvents = yield* Queue.unbounded<RelayClientInstallProgressEvent>();

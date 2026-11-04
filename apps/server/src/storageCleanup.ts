@@ -14,9 +14,13 @@ import type {
   WorktreeCleanupRules,
   StorageCleanupReport,
   StorageCleanupReportEntry,
+  ForkWorktreeSizeInput,
+  ForkWorktreeSizeResult,
 } from "@t3tools/contracts";
 import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
+import * as Cache from "effect/Cache";
+import * as Semaphore from "effect/Semaphore";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Layer from "effect/Layer";
@@ -238,6 +242,9 @@ export function storageCleanupPullRequestMerged(
 export class StorageCleanup extends Context.Service<
   StorageCleanup,
   {
+    readonly getWorktreeSize: (
+      input: ForkWorktreeSizeInput,
+    ) => Effect.Effect<ForkWorktreeSizeResult, GitCommandError>;
     readonly runNow: Effect.Effect<StorageCleanupReport, ServerSettingsError>;
     readonly latestReport: Effect.Effect<StorageCleanupReport | null>;
     readonly reports: Stream.Stream<StorageCleanupReport | null>;
@@ -367,6 +374,31 @@ const make = Effect.gen(function* () {
     Effect.timeout("30 seconds"),
     Effect.orElseSucceed(() => null),
   );
+
+  const measurementSlots = yield* Semaphore.make(2);
+  const measuredSizes = yield* Cache.makeWith(
+    (worktreePath: string) => measurementSlots.withPermits(1)(measureWorktree(worktreePath)),
+    { capacity: 256, timeToLive: () => "1 minute" },
+  );
+
+  /** Estimate only a registered linked worktree, never an arbitrary directory or shared Git store. */
+  const getWorktreeSize = Effect.fn("StorageCleanup.getWorktreeSize")(function* (
+    input: ForkWorktreeSizeInput,
+  ) {
+    const target = pathKey(path.resolve(input.cwd, input.path));
+    const refs = yield* git.listRefs({ cwd: input.cwd, worktreesOnly: true });
+    const registered = refs.refs.some(
+      (ref) => ref.worktreePath !== null && pathKey(ref.worktreePath) === target,
+    );
+    if (!registered) return { isLinkedWorktree: false, reclaimableBytes: null };
+    const linked = yield* fs.stat(path.join(target, ".git")).pipe(
+      Effect.map((stat) => stat.type === "File"),
+      Effect.orElseSucceed(() => false),
+    );
+    if (!linked) return { isLinkedWorktree: false, reclaimableBytes: null };
+    const bytes = yield* Cache.get(measuredSizes, target);
+    return { isLinkedWorktree: true, reclaimableBytes: bytes };
+  });
 
   // Large snapshots take seconds; use the reader worker instead of blocking the event loop.
   const readThreads = Effect.fn("StorageCleanup.readThreads")(function* () {
@@ -1380,6 +1412,7 @@ const make = Effect.gen(function* () {
   });
   yield* start();
   return StorageCleanup.of({
+    getWorktreeSize,
     runNow,
     latestReport: SubscriptionRef.get(reportRef),
     reports: SubscriptionRef.changes(reportRef),

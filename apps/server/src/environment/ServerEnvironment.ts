@@ -1,3 +1,4 @@
+import { FORK_WORKTREES_API_VERSION } from "@t3tools/contracts";
 import {
   EnvironmentId,
   ORCHESTRATION_PROTOCOL_VERSION,
@@ -217,6 +218,7 @@ export const make = Effect.gen(function* () {
     orchestrationProtocolVersion: ORCHESTRATION_PROTOCOL_VERSION,
     ...(databaseMigration === undefined ? {} : { databaseMigration }),
     capabilities: {
+      fork: { worktrees: { apiVersion: FORK_WORKTREES_API_VERSION } },
       repositoryIdentity: true,
       connectionProbe: true,
       attachmentUploads: true,

@@ -91,6 +91,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/diagnostics": WrenchIcon,
   "/settings/appearance": PaletteIcon,
   "/settings/fork": GitBranchIcon,
+  "/settings/fork-worktrees": FolderTreeIcon,
   "/settings/chat": MessageSquareTextIcon,
   "/settings/diffs": FileDiffIcon,
   "/settings/projects": PanelsTopLeftIcon,
@@ -136,7 +137,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const scopeSearch = validateSettingsScopeSearch(currentSearch);
   const activePath = SETTINGS_DETAIL_PAGE_PARENTS[pathname] ?? pathname;
   const navPaths = SETTINGS_NAV_GROUPS.flatMap((group) => group.paths).filter(
-    (path) => path !== "/settings/fork" || FORK_SETTINGS_AVAILABLE,
+    (path) => !path.startsWith("/settings/fork") || FORK_SETTINGS_AVAILABLE,
   );
   const sectionNavigation = useSettingsSectionNavigation(
     navPaths.find((to) => activePath === to || activePath.startsWith(`${to}/`)) ??
@@ -407,7 +408,9 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                       ) : null}
                       <SidebarMenu role="presentation">
                         {group.paths
-                          .filter((to) => to !== "/settings/fork" || FORK_SETTINGS_AVAILABLE)
+                          .filter(
+                            (to) => !to.startsWith("/settings/fork") || FORK_SETTINGS_AVAILABLE,
+                          )
                           .map((to) => {
                             const Icon = SETTINGS_SECTION_ICONS[to];
                             const isActive = activePath === to || activePath.startsWith(`${to}/`);

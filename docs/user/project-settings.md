@@ -196,6 +196,20 @@ such as another drive, set **Settings → Worktrees → Worktree location** to a
 `D:\worktrees` or `~/worktrees`. The setting is per machine. Existing worktrees stay where they
 are, and cleanup covers both the default folder and the custom one.
 
+## Manual worktree cleanup in Fork
+
+Open **Settings > Fork - Worktrees** to manage existing worktrees by project and environment.
+Update each selected environment to a compatible Fork server to use this page and rename worktrees.
+Choose **Delete Worktrees...**, select the worktrees to remove, then choose **Delete selected**.
+Review the space estimate and confirm removal. Branches and thread history are kept.
+Worktrees containing project checkouts or running agents cannot be selected.
+
+If a selection has uncommitted changes, the confirmation warns that removal permanently deletes
+those changes. A worktree that gains changes after confirmation is kept for another review.
+Size is an estimate of reclaimable disk space, excluding shared files and dependency stores;
+unavailable sizes are shown separately rather than counted as zero.
+Sizes are informational. You can select and remove a worktree while its size is loading or unavailable.
+
 ## Storage cleanup
 
 Open **Settings → Worktrees → Cleanup** to enable automatic cleanup on one machine or all connected

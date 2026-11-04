@@ -24,6 +24,7 @@ const state = vi.hoisted(() => ({
   refreshStatus: vi.fn(),
   parentContextMenu: vi.fn(),
   allowed: true,
+  forkWorktreesSupported: true,
   entries: ["/trees/alpha", "/trees/beta"],
   live: [] as TestThread[],
   threadRevision: 0,
@@ -128,6 +129,17 @@ vi.mock("../state/session", () => ({
   useEnvironmentScope: () => state.allowed,
   readEnvironmentScope: () => state.allowed,
 }));
+vi.mock("../state/environments", () => ({
+  useEnvironment: () => ({
+    serverConfig: {
+      environment: {
+        capabilities: {
+          fork: state.forkWorktreesSupported ? { worktrees: { apiVersion: 1 } } : undefined,
+        },
+      },
+    },
+  }),
+}));
 vi.mock("../state/use-atom-command", () => ({
   useAtomCommand: (command: { kind?: string }) =>
     command.kind === "refreshStatus" ? state.refreshStatus : state.rename,
@@ -191,6 +203,7 @@ async function createTestSurface() {
     .mockReset()
     .mockResolvedValue({ _tag: "Success", value: { isRepo: true, refName: "main" } });
   state.allowed = true;
+  state.forkWorktreesSupported = true;
   state.entries = ["/trees/alpha", "/trees/beta"];
   state.live = [{ id: "live", projectId: "project", worktreePath, status: "completed" }];
   state.archived = [{ id: "archived", projectId: "project", worktreePath, status: "completed" }];
@@ -407,6 +420,19 @@ it("changes worktrees from the pill context menu without opening the parent thre
   await userEvent.click(page.getByText("Rename worktree", { exact: true }));
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Rename worktree");
   expect(state.parentContextMenu).not.toHaveBeenCalled();
+  await userEvent.click(button("Cancel"));
+});
+
+it("disables rename when the destination lacks the fork API", async () => {
+  await using surface = await createTestSurface();
+  state.forkWorktreesSupported = false;
+  await surface.openEditor();
+  await renameTo("gamma");
+  expect(button("Save").disabled).toBe(true);
+  expect(document.querySelector('[role="status"]')?.textContent).toContain(
+    "compatible Fork server",
+  );
+  expect(state.rename).not.toHaveBeenCalled();
   await userEvent.click(button("Cancel"));
 });
 

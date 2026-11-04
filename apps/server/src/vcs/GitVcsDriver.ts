@@ -28,11 +28,11 @@ import {
   type ReviewDiffFileContentsResult,
   type VcsInitInput,
   type VcsListRefsInput,
-  type VcsListRefsResult,
+  type ForkWorktreeListResult,
   type VcsPullResult,
   type VcsRemoveWorktreeInput,
-  type VcsRenameWorktreeInput,
-  type VcsRenameWorktreeResult,
+  type ForkWorktreeRenameInput,
+  type ForkWorktreeRenameResult,
   type VcsStatusInput,
   type VcsStatusResult,
   type WorktreeSubmodules,
@@ -364,7 +364,7 @@ export class GitVcsDriver extends Context.Service<
     ) => Effect.Effect<string | null, GitCommandError>;
     readonly listRefs: (
       input: VcsListRefsInput,
-    ) => Effect.Effect<VcsListRefsResult, GitCommandError>;
+    ) => Effect.Effect<ForkWorktreeListResult, GitCommandError>;
     readonly pullCurrentBranch: (cwd: string) => Effect.Effect<VcsPullResult, GitCommandError>;
     readonly createWorktree: (
       input: VcsCreateWorktreeInput,
@@ -418,8 +418,8 @@ export class GitVcsDriver extends Context.Service<
     ) => Effect.Effect<void, GitCommandError>;
     /** Moves a worktree to a sibling directory without renaming its branch. */
     readonly renameWorktree: (
-      input: VcsRenameWorktreeInput,
-    ) => Effect.Effect<VcsRenameWorktreeResult, GitCommandError>;
+      input: ForkWorktreeRenameInput,
+    ) => Effect.Effect<ForkWorktreeRenameResult, GitCommandError>;
     /** Tracks the start point like `git branch` does. */
     readonly createBranch: (input: GitCreateBranchInput) => Effect.Effect<void, GitCommandError>;
     readonly writeConfigValue: (

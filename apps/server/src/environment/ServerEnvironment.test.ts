@@ -1,6 +1,6 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { ORCHESTRATION_PROTOCOL_VERSION } from "@t3tools/contracts";
+import { ORCHESTRATION_PROTOCOL_VERSION, FORK_WORKTREES_API_VERSION } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Deferred from "effect/Deferred";
@@ -106,6 +106,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("ServerEnvironmen
           Effect.provideService(HostProcess.IsExecutable, false),
           Effect.provideService(HostProcess.Platform, "linux"),
           Effect.provideService(HostProcess.Environment, {}),
+        );
+        expect(descriptor.capabilities.fork?.worktrees?.apiVersion).toBe(
+          FORK_WORKTREES_API_VERSION,
         );
         expect(descriptor.capabilities.serverInstallation).toEqual(
           mode === "web" ? { kind: "npm-global", prefix } : undefined,

@@ -181,16 +181,6 @@ export const GitPreparePullRequestThreadInput = Schema.Struct({
 });
 export type GitPreparePullRequestThreadInput = typeof GitPreparePullRequestThreadInput.Type;
 
-export const VcsRenameWorktreeInput = Schema.Struct({
-  cwd: TrimmedNonEmptyStringSchema,
-  path: TrimmedNonEmptyStringSchema,
-  newDirName: TrimmedNonEmptyStringSchema,
-});
-export type VcsRenameWorktreeInput = typeof VcsRenameWorktreeInput.Type;
-
-export const VcsRenameWorktreeResult = Schema.Struct({ worktree: VcsWorktree });
-export type VcsRenameWorktreeResult = typeof VcsRenameWorktreeResult.Type;
-
 export const VcsRemoveWorktreeInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   path: TrimmedNonEmptyStringSchema,

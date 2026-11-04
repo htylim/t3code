@@ -1,9 +1,10 @@
 import {
   type EnvironmentId,
   type VcsListRefsInput,
-  type VcsListRefsResult,
+  type ForkWorktreeListResult,
   type VcsStatusResult,
   WS_METHODS,
+  supportsForkWorktrees,
 } from "@t3tools/contracts";
 import { applyGitStatusStreamEvent } from "@t3tools/shared/git";
 import * as Duration from "effect/Duration";
@@ -17,6 +18,7 @@ import { Atom, AtomRegistry } from "effect/reactivity";
 
 import {
   createEnvironmentRpcCommand,
+  createEnvironmentRpcQueryAtomFamily,
   createEnvironmentRpcSubscriptionAtomFamily,
   createEnvironmentSubscriptionAtomFamily,
 } from "./runtime.ts";
@@ -24,7 +26,12 @@ import type { EnvironmentRegistry } from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import { safeErrorLogAttributes } from "../errors/safeLog.ts";
 import * as Persistence from "../platform/persistence.ts";
-import { request, subscribe, type EnvironmentRpcInput } from "../rpc/client.ts";
+import {
+  request,
+  getInitialServerConfig,
+  subscribe,
+  type EnvironmentRpcInput,
+} from "../rpc/client.ts";
 import { followStreamInEnvironment } from "./runtime.ts";
 import { vcsCommandConcurrency, vcsCommandScheduler } from "./vcsCommandScheduler.ts";
 import {
@@ -62,7 +69,7 @@ export const commitVcsRefsRefresh = Effect.fn("CachedVcsRefsState.commitRefresh"
   input: {
     readonly environmentId: EnvironmentId;
     readonly cwd: string;
-    readonly refs: VcsListRefsResult;
+    readonly refs: ForkWorktreeListResult;
     readonly expectedRevision: number;
     readonly persist: boolean;
   },
@@ -116,6 +123,23 @@ export const commitVcsRefsRefresh = Effect.fn("CachedVcsRefsState.commitRefresh"
   );
 });
 
+/** Use fork metadata only when the destination advertises this API version. */
+const readVcsRefs = Effect.fn("VcsState.readRefs")(function* (input: VcsListRefsInput) {
+  if (input.worktreesOnly) {
+    const supported = yield* getInitialServerConfig().pipe(
+      Effect.map((config) => supportsForkWorktrees(config.environment.capabilities)),
+      Effect.orElseSucceed(() => false),
+    );
+    if (supported)
+      return yield* request(WS_METHODS.forkWorktreeList, {
+        cwd: input.cwd,
+        ...(input.refresh === undefined ? {} : { refresh: input.refresh }),
+      });
+  }
+  const refs: ForkWorktreeListResult = yield* request(WS_METHODS.vcsListRefs, input);
+  return refs;
+});
+
 /**
  * Filtered or paginated lists intentionally stay live-only: treating a
  * partial result as a complete offline list would make branch selection
@@ -131,7 +155,7 @@ export const makeCachedVcsRefsChanges = Effect.fn("CachedVcsRefsState.makeChange
   const cache = yield* Persistence.EnvironmentCacheStore;
   const environmentId = supervisor.target.environmentId;
   const useCache = canUseVcsRefsCache(input);
-  const cached =
+  const cached: Option.Option<ForkWorktreeListResult> =
     useCache && persistedCacheReadable
       ? yield* cache.loadVcsRefs(environmentId, input.cwd).pipe(
           Effect.catch((error) =>
@@ -141,11 +165,11 @@ export const makeCachedVcsRefsChanges = Effect.fn("CachedVcsRefsState.makeChange
                 cwd: input.cwd,
                 ...safeErrorLogAttributes(error),
               }),
-              Effect.as(Option.none<VcsListRefsResult>()),
+              Effect.as(Option.none<ForkWorktreeListResult>()),
             ),
           ),
         )
-      : Option.none<VcsListRefsResult>();
+      : Option.none<ForkWorktreeListResult>();
   const refresh = Effect.fn("CachedVcsRefsState.refresh")(function* () {
     const revisionAtom = serverRefsRevisionAtom(
       `${environmentId.length}:${environmentId}${input.cwd}`,
@@ -154,8 +178,7 @@ export const makeCachedVcsRefsChanges = Effect.fn("CachedVcsRefsState.makeChange
       expectedRevision !== undefined &&
       registry !== undefined &&
       expectedRevision > registry.get(revisionAtom);
-    const refs = yield* request(
-      WS_METHODS.vcsListRefs,
+    const refs = yield* readVcsRefs(
       bypassServerSnapshot ? { ...input, refresh: true } : input,
     ).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
     const persist = cache.saveVcsRefs(environmentId, input.cwd, refs).pipe(
@@ -181,7 +204,7 @@ export const makeCachedVcsRefsChanges = Effect.fn("CachedVcsRefsState.makeChange
       persist: useCache,
     });
     if (committed && bypassServerSnapshot) registry.set(revisionAtom, expectedRevision);
-    return committed ? Option.some(refs) : Option.none<VcsListRefsResult>();
+    return committed ? Option.some(refs) : Option.none<ForkWorktreeListResult>();
   });
 
   const cachedRefs = Stream.fromEffect(Effect.succeed(cached)).pipe(
@@ -289,6 +312,16 @@ export function createVcsEnvironmentAtoms<R, E>(
 
   return {
     listRefs,
+    readWorktrees: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:fork:read-worktrees",
+      tag: WS_METHODS.forkWorktreeList,
+    }),
+    worktreeSize: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:vcs:worktree-size",
+      tag: WS_METHODS.forkWorktreeSize,
+      staleTimeMs: 60_000,
+      idleTtlMs: 60_000,
+    }),
     // An uncached read for decisions that must match the repository now, not
     // the persisted list a picker renders from.
     readRefs: createEnvironmentRpcCommand(runtime, {
@@ -336,7 +369,7 @@ export function createVcsEnvironmentAtoms<R, E>(
     }),
     renameWorktree: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:vcs:rename-worktree",
-      tag: WS_METHODS.vcsRenameWorktree,
+      tag: WS_METHODS.forkWorktreeRename,
       scheduler: vcsCommandScheduler,
       concurrency: vcsCommandConcurrency,
       onSettled: invalidateRefs,

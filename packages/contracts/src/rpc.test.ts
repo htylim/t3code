@@ -4,8 +4,31 @@ import * as Schema from "effect/Schema";
 
 import { ORCHESTRATION_V2_WS_METHODS } from "./orchestrationV2.ts";
 import { WS_METHODS, WsRpcGroup } from "./rpc.ts";
+import { ForkWorktreeListResult } from "./forkWorktrees.ts";
+import { VcsListRefsResult } from "./git.ts";
+
+const decodeUpstreamRefs = Schema.decodeSync(VcsListRefsResult);
+const decodeForkWorktrees = Schema.decodeSync(ForkWorktreeListResult);
 
 describe("WebSocket RPC contracts", () => {
+  it("isolates fork worktree methods and metadata from upstream contracts", () => {
+    for (const method of ["fork.worktrees.list", "fork.worktrees.size", "fork.worktrees.rename"]) {
+      expect([...WsRpcGroup.requests.keys()]).toContain(method);
+    }
+    for (const method of ["vcs.worktreeSize", "vcs.renameWorktree"]) {
+      expect([...WsRpcGroup.requests.keys()]).not.toContain(method);
+    }
+    const result = {
+      refs: [],
+      isRepo: true,
+      hasPrimaryRemote: false,
+      nextCursor: null,
+      totalCount: 0,
+      mainWorktreePath: "/repo",
+    };
+    expect(decodeUpstreamRefs(result)).not.toHaveProperty("mainWorktreePath");
+    expect(decodeForkWorktrees(result).mainWorktreePath).toBe("/repo");
+  });
   it("rejects server-internal commands sent to dispatchCommand", () => {
     const dispatchCommand = WsRpcGroup.requests.get(ORCHESTRATION_V2_WS_METHODS.dispatchCommand);
     if (dispatchCommand === undefined) throw new Error("dispatchCommand is not registered");

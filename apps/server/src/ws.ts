@@ -3069,10 +3069,13 @@ export const layerWsRpc = (
             .preparePullRequestThread(input)
             .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.vcsListRefs]: (input) => gitWorkflow.listRefs(input),
+        [WS_METHODS.forkWorktreeList]: (input) =>
+          gitWorkflow.listRefs({ ...input, worktreesOnly: true }),
+        [WS_METHODS.forkWorktreeSize]: (input) => storageCleanup.getWorktreeSize(input),
         [WS_METHODS.workspaceChooseColor]: (input) => workspaceColors.choose(input),
         [WS_METHODS.vcsCreateWorktree]: (input) =>
           gitWorkflow.createWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
-        [WS_METHODS.vcsRenameWorktree]: (input) => gitWorkflow.renameWorktree(input),
+        [WS_METHODS.forkWorktreeRename]: (input) => gitWorkflow.renameWorktree(input),
         [WS_METHODS.vcsRemoveWorktree]: (input) =>
           gitWorkflow.removeWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.vcsCreateRef]: (input) =>

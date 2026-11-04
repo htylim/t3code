@@ -1818,7 +1818,7 @@ describe("storage cleanup reports and local file policies", () => {
   it.live("reports allocated bytes of single-link files without following symlinks", () =>
     runCleanupTest(
       Effect.gen(function* () {
-        const { service, fs, worktree, setPolicy } = yield* cleanupFixture();
+        const { service, fs, repo, worktree, setPolicy } = yield* cleanupFixture();
         setPolicy("tracked-changes");
         const sizes = yield* Effect.forEach(yield* fs.readDirectory(worktree), (name) =>
           allocatedBytes(fs, `${worktree}/${name}`),
@@ -1833,8 +1833,21 @@ describe("storage cleanup reports and local file policies", () => {
         yield* fs.symlink(outside, `${worktree}/node_modules/directory-link`);
         yield* fs.symlink(`${outside}/external`, `${worktree}/node_modules/file-link`);
         yield* fs.symlink(`${outside}/missing`, `${worktree}/node_modules/dangling-link`);
-        const report = yield* service.runNow;
         const bytes = sizes.reduce((sum, size) => sum + size, 0);
+        expect(yield* service.getWorktreeSize({ cwd: worktree, path: worktree })).toEqual({
+          isLinkedWorktree: true,
+          reclaimableBytes: bytes,
+        });
+        expect(yield* fs.exists(worktree)).toBe(true);
+        expect(yield* service.getWorktreeSize({ cwd: repo, path: repo })).toEqual({
+          isLinkedWorktree: false,
+          reclaimableBytes: null,
+        });
+        expect(yield* service.getWorktreeSize({ cwd: worktree, path: outside })).toEqual({
+          isLinkedWorktree: false,
+          reclaimableBytes: null,
+        });
+        const report = yield* service.runNow;
         expect(report.entries[0]).toMatchObject({ outcome: "removed", bytes, files: null });
         expect(report.bytesFreed).toBe(bytes);
         expect(yield* fs.readFileString(`${outside}/external`)).toBe("must not count");

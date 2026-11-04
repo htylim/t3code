@@ -6,6 +6,7 @@ import {
   type ClientGuardedRpcTag,
   ORCHESTRATION_V2_WS_METHODS,
   WS_METHODS,
+  supportsForkWorktrees,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -195,6 +196,21 @@ export const requestGuarded = Effect.fn("EnvironmentRpc.request")(function* <
     "rpc.method": tag,
   });
   const session = yield* currentSession();
+  if (
+    tag === WS_METHODS.forkWorktreeList ||
+    tag === WS_METHODS.forkWorktreeSize ||
+    tag === WS_METHODS.forkWorktreeRename
+  ) {
+    const supported = yield* session.initialConfig.pipe(
+      Effect.map((config) => supportsForkWorktrees(config.environment.capabilities)),
+      Effect.orElseSucceed(() => false),
+    );
+    if (!supported)
+      return yield* new EnvironmentRpcUnavailableError({
+        environmentId: supervisor.target.environmentId,
+        message: "This environment requires a compatible Fork server for worktree management.",
+      });
+  }
   yield* authorizeRequest(tag, input);
   const observer = yield* EnvironmentRpcRequestObserver;
   const method = session.client[tag] as (
