@@ -316,6 +316,12 @@ export function createVcsEnvironmentAtoms<R, E>(
       label: "environment-data:fork:read-worktrees",
       tag: WS_METHODS.forkWorktreeList,
     }),
+    worktreeActivity: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:vcs:worktree-activity",
+      tag: WS_METHODS.forkWorktreeActivity,
+      staleTimeMs: 0,
+      idleTtlMs: 0,
+    }),
     worktreeSize: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:vcs:worktree-size",
       tag: WS_METHODS.forkWorktreeSize,

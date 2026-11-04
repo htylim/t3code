@@ -12,7 +12,12 @@ const decodeForkWorktrees = Schema.decodeSync(ForkWorktreeListResult);
 
 describe("WebSocket RPC contracts", () => {
   it("isolates fork worktree methods and metadata from upstream contracts", () => {
-    for (const method of ["fork.worktrees.list", "fork.worktrees.size", "fork.worktrees.rename"]) {
+    for (const method of [
+      "fork.worktrees.list",
+      "fork.worktrees.size",
+      "fork.worktrees.rename",
+      "fork.worktrees.activity",
+    ]) {
       expect([...WsRpcGroup.requests.keys()]).toContain(method);
     }
     for (const method of ["vcs.worktreeSize", "vcs.renameWorktree"]) {

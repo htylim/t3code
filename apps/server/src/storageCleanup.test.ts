@@ -386,10 +386,14 @@ const cleanupFixture = (
           ),
       } as unknown as ProjectStore.ProjectStoreV2["Service"]),
       Effect.provideService(ProjectionStore.ProjectionStoreV2, {
-        getShellSnapshot: (input?: { location?: string }) =>
+        getShellSnapshot: (input?: { location?: string; threadIds?: readonly ThreadId[] }) =>
           Effect.sync(() => {
             snapshotReads++;
-            const visible = threads.filter((thread) => thread.deletedAt === null);
+            const visible = threads.filter(
+              (thread) =>
+                thread.deletedAt === null &&
+                (input?.threadIds === undefined || input.threadIds.includes(thread.id)),
+            );
             return {
               threads:
                 input?.location === "archive"
@@ -1383,6 +1387,54 @@ describe("deleted thread worktrees", () => {
     }).pipe(Effect.provide(cleanupTestLayer), Effect.scoped),
   );
 });
+
+it.live(
+  "reports worktree activity across projects including older settled and archived threads",
+  () =>
+    Effect.gen(function* () {
+      const fixture = yield* cleanupFixture();
+      const settledThreads = Array.from({ length: 30 }, (_, index) =>
+        shell({
+          id: ThreadId.make(`settled-${index}`),
+          worktreePath: `${fixture.worktree}-${index}`,
+          settledOverride: "settled",
+          settledAt: at((-30 + index) * DAY_MS),
+        }),
+      );
+      fixture.setThreads([
+        ...settledThreads,
+        shell({
+          id: ThreadId.make("archived"),
+          worktreePath: fixture.worktree,
+          archivedAt: at(-DAY_MS),
+          latestRunCompletedAt: at(-2 * DAY_MS),
+        }),
+        shell({
+          id: ThreadId.make("deleted"),
+          worktreePath: `${fixture.worktree}-deleted`,
+          deletedAt: at(-DAY_MS),
+        }),
+        shell({
+          id: ThreadId.make("other-project"),
+          projectId: ProjectId.make("other"),
+          worktreePath: `${fixture.worktree}-0`,
+          latestUserMessageAt: at(-DAY_MS),
+        }),
+      ]);
+      const activity = yield* fixture.service.getWorktreeActivity({
+        worktreePaths: [`${fixture.worktree}-0`, fixture.worktree],
+      });
+      expect(activity.worktrees).toHaveLength(2);
+      expect(activity.worktrees).toContainEqual({
+        worktreePath: `${fixture.worktree}-0`,
+        latestActivityAt: NOW_MS - DAY_MS,
+      });
+      expect(activity.worktrees).toContainEqual({
+        worktreePath: fixture.worktree,
+        latestActivityAt: NOW_MS - 2 * DAY_MS,
+      });
+    }).pipe(runCleanupTest),
+);
 
 describe("orphan worktree reports", () => {
   it.live("keeps orphan results visible when thread results fill the report", () =>

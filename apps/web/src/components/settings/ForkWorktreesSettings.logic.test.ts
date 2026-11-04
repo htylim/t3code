@@ -38,6 +38,11 @@ it("uses the most recent activity across all associated threads, regardless of c
     DateTime.toEpochMillis(latestActivity),
   );
   expect(latestWorktreeActivity(threads, "/trees/missing", "/repo")).toBeNull();
+  const olderActivity = Date.parse("2026-10-10T12:00:00Z");
+  const worktreeActivityByPath = new Map([["/trees/older-settled", olderActivity]]);
+  expect(
+    latestWorktreeActivity(threads, "/trees/older-settled", "/repo", worktreeActivityByPath),
+  ).toBe(olderActivity);
 });
 
 it("includes user messages and running turns, and associates null worktree paths with the local checkout", () => {

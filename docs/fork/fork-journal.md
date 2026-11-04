@@ -1699,3 +1699,21 @@ The fork-specific implementation was removed.
   in the release manifest. Runtime writes must not alter a signed app bundle after installation.
   A regression reproduced writes into shipped resources before the fix and now checks both
   in-place rewrites and upgrades from linked caches.
+
+## 2026-11-04 - Count older settled threads in worktree settings
+
+- Upstream baseline remains `15fe283272`. Worktree settings read activity for the listed worktree paths
+  across projects through `fork.worktrees.activity`, including older settled and archived threads.
+  The sidebar's paginated thread list no longer determines whether a worktree has threads.
+  Inactivity sorting uses the same summary, and failed reads cannot produce "No threads".
+- The additive read RPC requires orchestration read permission and returns only worktree paths
+  and activity timestamps. Cleanup policies and persisted thread associations remain unchanged.
+- Verification: the regression failed before the fix. Changed-file checks passed formatting,
+  lint, unused-code checks, affected-package type checks, and React compiler checks. Of 214
+  focused tests, 213 passed. The Git cleanup case "compares the checked-out branch without a
+  full status" also fails against unchanged HEAD sources.
+- Browser-panel verification used isolated `.t3` state with 63 settled threads and older
+  entries still behind "Show 25 more". Both parent-project and subproject rows showed
+  `thread-grouping` at 18 days and the older review worktree at 11 days. A genuinely unused
+  fixture kept "No threads". The shared-project lookup regression failed before its fix and passed
+  afterward. The live database and installed app were unchanged.

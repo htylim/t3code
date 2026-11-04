@@ -3072,6 +3072,7 @@ export const layerWsRpc = (
         [WS_METHODS.forkWorktreeList]: (input) =>
           gitWorkflow.listRefs({ ...input, worktreesOnly: true }),
         [WS_METHODS.forkWorktreeSize]: (input) => storageCleanup.getWorktreeSize(input),
+        [WS_METHODS.forkWorktreeActivity]: (input) => storageCleanup.getWorktreeActivity(input),
         [WS_METHODS.workspaceChooseColor]: (input) => workspaceColors.choose(input),
         [WS_METHODS.vcsCreateWorktree]: (input) =>
           gitWorkflow.createWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),

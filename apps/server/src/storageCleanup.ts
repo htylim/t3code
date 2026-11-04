@@ -1,5 +1,6 @@
 import {
   GitCommandError,
+  ForkWorktreeActivityError,
   OrchestrationV2AppThreadJson,
   OrchestrationV2ProviderSessionJson,
 } from "@t3tools/contracts";
@@ -14,6 +15,8 @@ import type {
   WorktreeCleanupRules,
   StorageCleanupReport,
   StorageCleanupReportEntry,
+  ForkWorktreeActivityInput,
+  ForkWorktreeActivityResult,
   ForkWorktreeSizeInput,
   ForkWorktreeSizeResult,
 } from "@t3tools/contracts";
@@ -242,6 +245,9 @@ export function storageCleanupPullRequestMerged(
 export class StorageCleanup extends Context.Service<
   StorageCleanup,
   {
+    readonly getWorktreeActivity: (
+      input: ForkWorktreeActivityInput,
+    ) => Effect.Effect<ForkWorktreeActivityResult, ForkWorktreeActivityError>;
     readonly getWorktreeSize: (
       input: ForkWorktreeSizeInput,
     ) => Effect.Effect<ForkWorktreeSizeResult, GitCommandError>;
@@ -399,6 +405,51 @@ const make = Effect.gen(function* () {
     const bytes = yield* Cache.get(measuredSizes, target);
     return { isLinkedWorktree: true, reclaimableBytes: bytes };
   });
+
+  /** Include older settled and archived threads without sending their conversations to the client. */
+  const getWorktreeActivity = Effect.fn("StorageCleanup.getWorktreeActivity")(
+    function* (input: ForkWorktreeActivityInput) {
+      const requestedPaths = new Set(input.worktreePaths);
+      if (requestedPaths.size === 0) return { worktrees: [] };
+      const associations = yield* projections
+        .getThreadWorktreePaths({ includeArchived: true })
+        .pipe(NodeSqliteClient.readOnly);
+      const threadIds = associations
+        .filter((thread) => requestedPaths.has(thread.worktreePath))
+        .map((thread) => thread.threadId);
+      if (threadIds.length === 0) return { worktrees: [] };
+      const snapshot = yield* projections
+        .getShellSnapshot({ threadIds })
+        .pipe(NodeSqliteClient.readOnly);
+      const activityByPath = new Map<string, number>();
+      for (const thread of [...snapshot.threads, ...snapshot.archivedThreads]) {
+        if (thread.worktreePath === null) continue;
+        const latestActivityAt = Math.max(
+          storageCleanupActivityAt(thread),
+          thread.latestVisibleMessage === null
+            ? 0
+            : DateTime.toEpochMillis(thread.latestVisibleMessage.updatedAt),
+        );
+        activityByPath.set(
+          thread.worktreePath,
+          Math.max(activityByPath.get(thread.worktreePath) ?? 0, latestActivityAt),
+        );
+      }
+      return {
+        worktrees: Array.from(activityByPath, ([worktreePath, latestActivityAt]) => ({
+          worktreePath,
+          latestActivityAt,
+        })),
+      };
+    },
+    Effect.mapError(
+      (cause) =>
+        new ForkWorktreeActivityError({
+          message: "Unable to load worktree thread activity.",
+          cause,
+        }),
+    ),
+  );
 
   // Large snapshots take seconds; use the reader worker instead of blocking the event loop.
   const readThreads = Effect.fn("StorageCleanup.readThreads")(function* () {
@@ -1412,6 +1463,7 @@ const make = Effect.gen(function* () {
   });
   yield* start();
   return StorageCleanup.of({
+    getWorktreeActivity,
     getWorktreeSize,
     runNow,
     latestReport: SubscriptionRef.get(reportRef),

@@ -36,7 +36,11 @@ describe("RPC authorization scopes", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.forkWorktreeRename)).toBe(
       AuthSourceControlWriteScope,
     );
-    for (const method of [WS_METHODS.forkWorktreeSize, WS_METHODS.forkWorktreeList]) {
+    for (const method of [
+      WS_METHODS.forkWorktreeSize,
+      WS_METHODS.forkWorktreeList,
+      WS_METHODS.forkWorktreeActivity,
+    ]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
     }
   });

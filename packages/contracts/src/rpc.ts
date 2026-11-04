@@ -1,4 +1,7 @@
 import {
+  ForkWorktreeActivityError,
+  ForkWorktreeActivityInput,
+  ForkWorktreeActivityResult,
   ForkWorktreeSizeInput,
   ForkWorktreeSizeResult,
   ForkWorktreeRenameInput,
@@ -463,6 +466,7 @@ export const WS_METHODS = {
   vcsListRefs: "vcs.listRefs",
   forkWorktreeList: "fork.worktrees.list",
   forkWorktreeSize: "fork.worktrees.size",
+  forkWorktreeActivity: "fork.worktrees.activity",
   workspaceChooseColor: "workspace.chooseColor",
   vcsCreateWorktree: "vcs.createWorktree",
   forkWorktreeRename: "fork.worktrees.rename",
@@ -1521,6 +1525,12 @@ const WsForkWorktreeListRpc = Rpc.make(WS_METHODS.forkWorktreeList, {
   error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
 });
 
+const WsForkWorktreeActivityRpc = Rpc.make(WS_METHODS.forkWorktreeActivity, {
+  payload: ForkWorktreeActivityInput,
+  success: ForkWorktreeActivityResult,
+  error: Schema.Union([ForkWorktreeActivityError, EnvironmentAuthorizationError]),
+});
+
 const WsForkWorktreeSizeRpc = Rpc.make(WS_METHODS.forkWorktreeSize, {
   payload: ForkWorktreeSizeInput,
   success: ForkWorktreeSizeResult,
@@ -2175,6 +2185,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsVcsListRefsRpc,
   WsForkWorktreeListRpc,
   WsForkWorktreeSizeRpc,
+  WsForkWorktreeActivityRpc,
   WsWorkspaceChooseColorRpc,
   WsVcsCreateWorktreeRpc,
   WsForkWorktreeRenameRpc,

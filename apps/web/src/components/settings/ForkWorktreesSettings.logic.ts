@@ -18,8 +18,9 @@ export function latestWorktreeActivity(
   threads: readonly WorktreeActivityThread[],
   worktreePath: string,
   projectCwd: string,
+  worktreeActivityByPath?: ReadonlyMap<string, number>,
 ): number | null {
-  let latestActivity: number | null = null;
+  let latestActivity = worktreeActivityByPath?.get(worktreePath) ?? null;
   for (const thread of threads) {
     if ((thread.worktreePath ?? projectCwd) !== worktreePath) continue;
     const timestamps = [
@@ -72,11 +73,17 @@ export function sortWorktreesByActivity(
   rows: readonly WorktreeRow[],
   threads: readonly WorktreeActivityThread[],
   projectCwd: string,
+  worktreeActivityByPath?: ReadonlyMap<string, number>,
 ): WorktreeRow[] {
   return rows
     .map((row) => ({
       row,
-      activityAt: latestWorktreeActivity(threads, row.worktreePath, projectCwd),
+      activityAt: latestWorktreeActivity(
+        threads,
+        row.worktreePath,
+        projectCwd,
+        worktreeActivityByPath,
+      ),
     }))
     .sort((left, right) => {
       if (left.activityAt === right.activityAt) return 0;

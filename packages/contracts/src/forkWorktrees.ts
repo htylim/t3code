@@ -52,3 +52,21 @@ export const ForkWorktreeSizeResult = Schema.Struct({
   reclaimableBytes: Schema.NullOr(NonNegativeInt),
 });
 export type ForkWorktreeSizeResult = typeof ForkWorktreeSizeResult.Type;
+
+export const ForkWorktreeActivityInput = Schema.Struct({
+  worktreePaths: Schema.Array(TrimmedNonEmptyString),
+});
+export type ForkWorktreeActivityInput = typeof ForkWorktreeActivityInput.Type;
+
+export const ForkWorktreeActivityResult = Schema.Struct({
+  worktrees: Schema.Array(
+    Schema.Struct({ worktreePath: Schema.String, latestActivityAt: NonNegativeInt }),
+  ),
+});
+export type ForkWorktreeActivityResult = typeof ForkWorktreeActivityResult.Type;
+
+/** A failed read must not make existing threads appear absent. */
+export class ForkWorktreeActivityError extends Schema.TaggedError<ForkWorktreeActivityError>()(
+  "ForkWorktreeActivityError",
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}

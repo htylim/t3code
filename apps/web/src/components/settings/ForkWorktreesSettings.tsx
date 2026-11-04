@@ -256,6 +256,17 @@ function ProjectWorktrees({
   const canRemove = useAtomValue(
     vcsEnvironment.removeWorktree.permissionAtom(project.environmentId),
   );
+  const activity = useEnvironmentQuery(
+    supported && connected
+      ? vcsEnvironment.worktreeActivity({
+          environmentId: project.environmentId,
+          input: { worktreePaths: choices.rows.map((row) => row.worktreePath) },
+        })
+      : null,
+  );
+  const worktreeActivityByPath = new Map(
+    activity.data?.worktrees.map((worktree) => [worktree.worktreePath, worktree.latestActivityAt]),
+  );
   const rows = sortWorktreesByActivity(
     managedWorktreeRows(
       choices.refsQuery.data?.refs ?? [],
@@ -265,6 +276,7 @@ function ProjectWorktrees({
     ),
     choices.threads,
     project.workspaceRoot,
+    worktreeActivityByPath,
   );
   const query = search.trim().toLowerCase();
   const visibleRows = rows.filter((row) =>
@@ -281,7 +293,8 @@ function ProjectWorktrees({
   }));
   const measurements = useWorktreeMeasurements(connected ? targets : []);
   const reasons = new Map<string, string | null>();
-  const archivedReady = !choices.archived.isLoading && !choices.archived.error;
+  const archivedReady =
+    !choices.archived.isLoading && !choices.archived.error && activity.isSuccess;
   for (const row of visibleRows) {
     let reason: string | null = null;
     if (!supported) reason = "Worktree management requires a compatible Fork server.";
@@ -377,6 +390,7 @@ function ProjectWorktrees({
             projectCwd={project.workspaceRoot}
             row={row}
             threads={choices.threads}
+            worktreeActivityByPath={worktreeActivityByPath}
             archivedReady={archivedReady}
             now={now}
             cleaning={cleaning}
@@ -404,7 +418,7 @@ function ProjectWorktrees({
           />
         ))
       )}
-      {choices.archived.error ? (
+      {choices.archived.error || activity.error ? (
         <p role="alert" className="px-4 py-3 text-xs text-destructive">
           Unable to load thread history. Inactivity and management actions are unavailable.
         </p>
@@ -419,6 +433,7 @@ function ManagedWorktreeRow({
   projectCwd,
   row,
   threads,
+  worktreeActivityByPath,
   archivedReady,
   now,
   cleaning,
@@ -432,6 +447,7 @@ function ManagedWorktreeRow({
   readonly projectCwd: string;
   readonly row: WorktreeRow;
   readonly threads: readonly OrchestrationV2ThreadShell[];
+  readonly worktreeActivityByPath: ReadonlyMap<string, number>;
   readonly archivedReady: boolean;
   readonly now: Date;
   readonly cleaning: boolean;
@@ -455,7 +471,12 @@ function ManagedWorktreeRow({
     (thread) =>
       (thread.worktreePath ?? projectCwd) === row.worktreePath && isWorktreeThreadRunning(thread),
   );
-  const activityAt = latestWorktreeActivity(threads, row.worktreePath, projectCwd);
+  const activityAt = latestWorktreeActivity(
+    threads,
+    row.worktreePath,
+    projectCwd,
+    worktreeActivityByPath,
+  );
   let inactivity = "Loading...";
   if (archivedReady)
     inactivity = activityAt === null ? "No threads" : `${worktreeInactivityDays(activityAt, now)}d`;
