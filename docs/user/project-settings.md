@@ -226,7 +226,12 @@ merging, or when they have no commits beyond the default branch. Set settled ret
 to remove a worktree at the next cleanup after settlement. In repositories without remotes,
 unchanged-worktree cleanup compares against the branch checked out in the project workspace;
 if that checkout has a detached HEAD, the worktree is kept. Only T3-managed worktrees are eligible.
-Active sessions and shared worktrees prevent removal. **Keep worktrees with local changes** defaults
+Active sessions and pending work prevent removal. For shared worktrees, inactivity starts at the
+newest activity across all associated threads, including archived threads. Settled retention starts
+when the last thread settles; native subagents and side chats can inherit their parent's settlement.
+Every associated project's cleanup rules and local-change protections must permit removal.
+Deleting one independent thread does not remove a checkout still used by another.
+**Keep worktrees with local changes** defaults
 to **Uncommitted changes**, which protects tracked edits and untracked files but deletes ignored
 files such as `.env` and build output. **Any local files** also protects ignored files other than
 `node_modules`. **Edited tracked files** protects only tracked edits and allows untracked and

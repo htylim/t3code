@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
-import { supportsForkWorktrees } from "./forkWorktrees.ts";
+import { supportsForkWorktrees, supportsForkWorktreeMeasurements } from "./forkWorktrees.ts";
 
 const decodeDescriptor = Schema.decodeUnknownSync(ExecutionEnvironmentDescriptor);
 const descriptor = {
@@ -23,6 +23,26 @@ describe("ExecutionEnvironmentDescriptor", () => {
       });
       expect(supportsForkWorktrees(decoded.capabilities)).toBe(apiVersion === 1);
     }
+    expect(supportsForkWorktreeMeasurements(decodeDescriptor(descriptor).capabilities)).toBe(false);
+    for (const sizeSubscription of [undefined, false, true]) {
+      const capabilities = {
+        fork: {
+          worktrees: {
+            apiVersion: 1,
+            ...(sizeSubscription === undefined ? {} : { sizeSubscription }),
+          },
+        },
+      };
+      const decoded = decodeDescriptor({ ...descriptor, capabilities });
+      expect(supportsForkWorktreeMeasurements(decoded.capabilities)).toBe(
+        sizeSubscription === true,
+      );
+    }
+    expect(
+      supportsForkWorktreeMeasurements({
+        fork: { worktrees: { apiVersion: 2, sizeSubscription: true } },
+      }),
+    ).toBe(false);
     const incompatible = decodeDescriptor({
       ...descriptor,
       capabilities: { ...descriptor.capabilities, fork: { worktrees: { apiVersion: "future" } } },

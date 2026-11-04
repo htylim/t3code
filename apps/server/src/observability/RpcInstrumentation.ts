@@ -181,6 +181,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.gitPreparePullRequestThread]: "git",
   [WS_METHODS.vcsListRefs]: "vcs",
   [WS_METHODS.forkWorktreeList]: "vcs",
+  [WS_METHODS.forkWorktreeMeasurements]: "vcs",
   [WS_METHODS.forkWorktreeSize]: "vcs",
   [WS_METHODS.forkWorktreeActivity]: "vcs",
   [WS_METHODS.workspaceChooseColor]: "workspace",

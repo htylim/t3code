@@ -17,6 +17,7 @@ describe("WebSocket RPC contracts", () => {
       "fork.worktrees.size",
       "fork.worktrees.rename",
       "fork.worktrees.activity",
+      "fork.worktrees.subscribeMeasurements",
     ]) {
       expect([...WsRpcGroup.requests.keys()]).toContain(method);
     }
@@ -33,6 +34,18 @@ describe("WebSocket RPC contracts", () => {
     };
     expect(decodeUpstreamRefs(result)).not.toHaveProperty("mainWorktreePath");
     expect(decodeForkWorktrees(result).mainWorktreePath).toBe("/repo");
+    const subscription = WsRpcGroup.requests.get(WS_METHODS.forkWorktreeMeasurements)!;
+    const decode = Schema.decodeUnknownExit(subscription.payloadSchema);
+    expect(Exit.isSuccess(decode({ worktrees: [{ cwd: "/repo", path: "/trees/review" }] }))).toBe(
+      true,
+    );
+    expect(
+      Exit.isFailure(
+        decode({
+          worktrees: Array.from({ length: 257 }, () => ({ cwd: "/repo", path: "/trees/review" })),
+        }),
+      ),
+    ).toBe(true);
   });
   it("rejects server-internal commands sent to dispatchCommand", () => {
     const dispatchCommand = WsRpcGroup.requests.get(ORCHESTRATION_V2_WS_METHODS.dispatchCommand);

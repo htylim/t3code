@@ -1,5 +1,9 @@
 import type { WorktreeRow } from "../BranchToolbar.logic";
-import type { OrchestrationV2ThreadShell, VcsRef } from "@t3tools/contracts";
+import type {
+  ForkWorktreeActivityResult,
+  OrchestrationV2ThreadShell,
+  VcsRef,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
 type WorktreeActivityThread = Pick<
@@ -92,4 +96,17 @@ export function sortWorktreesByActivity(
       return right.activityAt - left.activityAt;
     })
     .map(({ row }) => row);
+}
+
+/** Keep missing summaries explicit when a server cannot report every associated thread. */
+export function worktreeThreadsLabel(
+  worktree: ForkWorktreeActivityResult["worktrees"][number] | undefined,
+  ready: boolean,
+  unavailable: boolean,
+): string {
+  if (unavailable) return "Unavailable";
+  if (!ready) return "Loading...";
+  if (worktree === undefined) return "No threads";
+  if (worktree.threadsSettled === undefined) return "Unavailable";
+  return worktree.threadsSettled ? "Settled" : "Active";
 }

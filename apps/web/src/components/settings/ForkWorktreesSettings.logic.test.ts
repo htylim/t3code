@@ -6,6 +6,7 @@ import {
   managedWorktreeRows,
   sortWorktreesByActivity,
   worktreeInactivityDays,
+  worktreeThreadsLabel,
 } from "./ForkWorktreesSettings.logic";
 
 /** Build activity fields without unrelated thread metadata. */
@@ -121,4 +122,16 @@ it("sorts by newest thread activity, keeping ties stable and worktrees without t
     "no-threads-b",
   ]);
   expect(rows.map((row) => row.dirName)).toEqual(paths);
+});
+
+it("distinguishes thread settlement, no associations, and unavailable summaries", () => {
+  const summary = { worktreePath: "/trees/review", latestActivityAt: 0 };
+  expect(worktreeThreadsLabel({ ...summary, threadsSettled: false }, true, false)).toBe("Active");
+  expect(worktreeThreadsLabel({ ...summary, threadsSettled: true }, true, false)).toBe("Settled");
+  expect(worktreeThreadsLabel(undefined, true, false)).toBe("No threads");
+  expect(worktreeThreadsLabel(undefined, false, false)).toBe("Loading...");
+  expect(worktreeThreadsLabel(summary, true, false)).toBe("Unavailable");
+  expect(worktreeThreadsLabel({ ...summary, threadsSettled: true }, true, true)).toBe(
+    "Unavailable",
+  );
 });

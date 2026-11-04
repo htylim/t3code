@@ -1,5 +1,57 @@
 # Fork journal
 
+## 2026-11-04 - Stream worktree size estimates from background workers
+
+- Replace per-row size RPCs in Fork settings with a typed `fork.worktrees.subscribeMeasurements`
+  stream. Initial snapshots return cached estimates or queued states immediately. Two server-owned
+  workers scan registered linked worktrees and publish updates. Deduplicate overlapping clients,
+  retain stale bytes during refresh, and bound cached and queued targets to 256 per environment.
+  Completed estimates stay fresh for five minutes. Service shutdown stops workers and subscriptions.
+- Keep the original size RPC and API version for older clients. Advertise the additive
+  `sizeSubscription` capability; clients connected to older servers show unavailable estimates
+  instead of issuing slow size RPCs. Batch large requests and route each subscription to its environment.
+- State, queued work, and results exist only in memory. Add no migrations, database fields,
+  persisted effects, or global protocol version changes. The fork-owned service and RPC names
+  keep the feature removable without database maintenance.
+- Verify with gated synthetic scans, capability and authorization tests, and a real disposable
+  Git worktree containing hardlinks and symlinks. Existing worktrees and installed apps are
+  untouched. Web and desktop share the UI; native mobile navigation is unchanged.
+- Verification: all 34 focused tests and the disposable-worktree scan passed. Changed-file
+  checks passed format, lint, dependency checks, affected typechecks, and React Compiler
+  checks. Of 272 selected tests, 271 passed; the documented corrupt Git-file case remains
+  the only failure.
+
+## 2026-11-04 - Show associated thread settlement in worktree settings
+
+- Add Threads beside Git status, with column help and narrow-layout text. Active means at least
+  one associated thread is not marked settled; Settled requires all associated threads to be
+  marked settled. Worktrees without associations say No threads.
+- Extend the existing activity response with an optional settlement summary across projects,
+  including older settled and archived threads. Older servers remain compatible and show
+  Unavailable when they cannot supply the summary. No additional RPC or disk scan is needed.
+- Web and desktop share the column; native mobile navigation is unchanged. Focused summary and
+  label tests, lint, and contracts, server, and web typechecks passed. The Browser panel reported
+  unavailable, so integrated visual verification could not run.
+
+## 2026-11-04 - Apply automatic cleanup to shared worktrees
+
+- Upstream baseline: `cefb544af3`. Remove upstream's single-owner requirement for automatic
+  cleanup of worktrees shared by independent threads. Use the newest activity and latest
+  required settlement across the worktree, including archived threads. Preserve native
+  subagent and side-chat settlement inheritance within each complete family.
+- Require every associated project's policy to permit removal. Keep the strictest local-file
+  protection, check all threads for pending work, and recheck membership, activity, settlement,
+  project policies, sessions, and Git state before removal. Deletion cleanup groups deleted
+  threads by path and waits for every deletion effect; deleting one independent thread does
+  not remove another's checkout.
+- Server behavior applies to web, desktop, mobile, and remote connections without new RPCs,
+  settings, or persistence. Verification uses synthetic threads and disposable Git repositories;
+  no existing worktrees or live data are removed. The shared-worktree matrix passed all 34
+  cases, including real Git removal, retained branches, merge evidence, and race guards.
+  Changed-file checks passed format, lint, dependency checks, affected typechecks, and React
+  Compiler checks. Of 248 selected tests, 247 passed; the previously documented corrupt
+  Git-file test remains the only failure. The final second-owner deletion-effect cases passed.
+
 ## 2026-11-03 - Manage and clean worktrees in Fork settings
 
 - Upstream baseline: `cefb544af3`. Applied on fork commit `5e59793252`.

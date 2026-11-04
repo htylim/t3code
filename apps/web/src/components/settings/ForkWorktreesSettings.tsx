@@ -38,6 +38,7 @@ import {
   managedWorktreeRows,
   sortWorktreesByActivity,
   worktreeInactivityDays,
+  worktreeThreadsLabel,
 } from "./ForkWorktreesSettings.logic";
 import { FORK_SETTINGS_AVAILABLE } from "./forkSettingsAvailability";
 import { SettingsGroup } from "./SettingsGroup";
@@ -267,6 +268,9 @@ function ProjectWorktrees({
   const worktreeActivityByPath = new Map(
     activity.data?.worktrees.map((worktree) => [worktree.worktreePath, worktree.latestActivityAt]),
   );
+  const worktreeThreadsByPath = new Map(
+    activity.data?.worktrees.map((worktree) => [worktree.worktreePath, worktree]),
+  );
   const rows = sortWorktreesByActivity(
     managedWorktreeRows(
       choices.refsQuery.data?.refs ?? [],
@@ -326,8 +330,8 @@ function ProjectWorktrees({
         className={cn(
           "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-4 py-3",
           cleaning
-            ? "@min-[42rem]/worktree-list:grid-cols-[1rem_0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_1.75rem]"
-            : "@min-[42rem]/worktree-list:grid-cols-[0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_1.75rem]",
+            ? "@min-[42rem]/worktree-list:grid-cols-[1rem_0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_5rem_1.75rem]"
+            : "@min-[42rem]/worktree-list:grid-cols-[0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_5rem_1.75rem]",
         )}
       >
         {cleaning ? (
@@ -358,9 +362,16 @@ function ProjectWorktrees({
           Estimated disk space reclaimable by removal. Shared files and dependency stores are
           excluded. Actual freed space may differ.
         </WorktreeColumnHelp>
-        <span className="hidden text-center text-xs text-muted-foreground @min-[42rem]/worktree-list:block">
-          Status
-        </span>
+        <WorktreeColumnHelp label="Threads" centered>
+          Active means at least one associated thread is not marked settled. Settled means all
+          associated threads are marked settled, including archived threads. No threads means none
+          are associated. Loading or Unavailable means thread state could not yet be determined.
+        </WorktreeColumnHelp>
+        <WorktreeColumnHelp label="Status" centered>
+          Clean means no uncommitted files. Dirty means there are uncommitted changes. Busy means a
+          thread has queued or active agent work. Loading means Git status is being checked.
+          Unavailable means that check failed. Clean does not mean eligible for automatic cleanup.
+        </WorktreeColumnHelp>
       </div>
       {!connected ? (
         <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
@@ -391,6 +402,11 @@ function ProjectWorktrees({
             row={row}
             threads={choices.threads}
             worktreeActivityByPath={worktreeActivityByPath}
+            threadsLabel={worktreeThreadsLabel(
+              worktreeThreadsByPath.get(row.worktreePath),
+              activity.isSuccess,
+              Boolean(activity.error),
+            )}
             archivedReady={archivedReady}
             now={now}
             cleaning={cleaning}
@@ -434,6 +450,7 @@ function ManagedWorktreeRow({
   row,
   threads,
   worktreeActivityByPath,
+  threadsLabel,
   archivedReady,
   now,
   cleaning,
@@ -448,6 +465,7 @@ function ManagedWorktreeRow({
   readonly row: WorktreeRow;
   readonly threads: readonly OrchestrationV2ThreadShell[];
   readonly worktreeActivityByPath: ReadonlyMap<string, number>;
+  readonly threadsLabel: string;
   readonly archivedReady: boolean;
   readonly now: Date;
   readonly cleaning: boolean;
@@ -487,7 +505,7 @@ function ManagedWorktreeRow({
   else if (status.data) statusLabel = dirty ? "Dirty" : "Clean";
 
   const target = { projectRef, projectCwd, path: row.worktreePath, name: row.dirName };
-  let sizeLabel = "Measuring...";
+  let sizeLabel = measurement?.queued ? "Queued..." : "Measuring...";
   if (measurement?.error || (measurement && !measurement.pending && measurement.bytes === null))
     sizeLabel = "Unavailable";
   else if (measurement?.bytes !== null && measurement?.bytes !== undefined)
@@ -499,8 +517,8 @@ function ManagedWorktreeRow({
       className={cn(
         "grid items-center gap-3 px-4 py-3 data-[selected=true]:bg-accent/30",
         cleaning
-          ? "grid-cols-[1rem_0.75rem_minmax(0,1fr)_auto] @min-[42rem]/worktree-list:grid-cols-[1rem_0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_1.75rem]"
-          : "grid-cols-[0.75rem_minmax(0,1fr)_auto] @min-[42rem]/worktree-list:grid-cols-[0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_1.75rem]",
+          ? "grid-cols-[1rem_0.75rem_minmax(0,1fr)_auto] @min-[42rem]/worktree-list:grid-cols-[1rem_0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_5rem_1.75rem]"
+          : "grid-cols-[0.75rem_minmax(0,1fr)_auto] @min-[42rem]/worktree-list:grid-cols-[0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_5rem_1.75rem]",
       )}
     >
       {cleaning ? (
@@ -528,7 +546,7 @@ function ManagedWorktreeRow({
         </span>
         <span className="text-xs text-muted-foreground @min-[42rem]/worktree-list:hidden">
           {activityAt === null ? inactivity : `${inactivity} inactive`} · {sizeLabel} ·{" "}
-          {statusLabel}
+          {threadsLabel} · {statusLabel}
         </span>
       </div>
       <Tooltip>
@@ -550,6 +568,9 @@ function ManagedWorktreeRow({
       </Tooltip>
       <span className="hidden text-right text-xs tabular-nums text-muted-foreground @min-[42rem]/worktree-list:block">
         {sizeLabel}
+      </span>
+      <span className="hidden text-center text-xs text-muted-foreground @min-[42rem]/worktree-list:block">
+        {threadsLabel}
       </span>
       <span className="hidden text-center text-xs text-muted-foreground @min-[42rem]/worktree-list:block">
         {statusLabel}
@@ -578,12 +599,19 @@ function keepSettingsOpen() {}
 function WorktreeColumnHelp({
   label,
   children,
+  centered = false,
 }: {
   readonly label: string;
   readonly children: string;
+  readonly centered?: boolean;
 }) {
   return (
-    <div className="hidden justify-self-end @min-[42rem]/worktree-list:block">
+    <div
+      className={cn(
+        "hidden @min-[42rem]/worktree-list:block",
+        centered ? "justify-self-center" : "justify-self-end",
+      )}
+    >
       <Tooltip>
         <TooltipTrigger
           render={

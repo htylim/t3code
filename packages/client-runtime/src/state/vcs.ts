@@ -322,6 +322,11 @@ export function createVcsEnvironmentAtoms<R, E>(
       staleTimeMs: 0,
       idleTtlMs: 0,
     }),
+    worktreeMeasurements: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:fork:worktree-measurements",
+      tag: WS_METHODS.forkWorktreeMeasurements,
+      idleTtlMs: 0,
+    }),
     worktreeSize: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:vcs:worktree-size",
       tag: WS_METHODS.forkWorktreeSize,

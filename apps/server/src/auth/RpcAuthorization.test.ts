@@ -38,6 +38,7 @@ describe("RPC authorization scopes", () => {
     );
     for (const method of [
       WS_METHODS.forkWorktreeSize,
+      WS_METHODS.forkWorktreeMeasurements,
       WS_METHODS.forkWorktreeList,
       WS_METHODS.forkWorktreeActivity,
     ]) {

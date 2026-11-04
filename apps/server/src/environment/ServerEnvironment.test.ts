@@ -110,6 +110,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("ServerEnvironmen
         expect(descriptor.capabilities.fork?.worktrees?.apiVersion).toBe(
           FORK_WORKTREES_API_VERSION,
         );
+        expect(descriptor.capabilities.fork?.worktrees?.sizeSubscription).toBe(true);
         expect(descriptor.capabilities.serverInstallation).toEqual(
           mode === "web" ? { kind: "npm-global", prefix } : undefined,
         );

@@ -218,7 +218,7 @@ export const make = Effect.gen(function* () {
     orchestrationProtocolVersion: ORCHESTRATION_PROTOCOL_VERSION,
     ...(databaseMigration === undefined ? {} : { databaseMigration }),
     capabilities: {
-      fork: { worktrees: { apiVersion: FORK_WORKTREES_API_VERSION } },
+      fork: { worktrees: { apiVersion: FORK_WORKTREES_API_VERSION, sizeSubscription: true } },
       repositoryIdentity: true,
       connectionProbe: true,
       attachmentUploads: true,

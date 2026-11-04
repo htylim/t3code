@@ -1,5 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
-import { AuthSourceControlWriteScope, supportsForkWorktrees } from "@t3tools/contracts";
+import {
+  AuthSourceControlWriteScope,
+  FORK_WORKTREE_MEASUREMENTS_BATCH_LIMIT,
+  supportsForkWorktrees,
+  supportsForkWorktreeMeasurements,
+} from "@t3tools/contracts";
 import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useRef, useState } from "react";
@@ -26,47 +31,108 @@ import {
 export interface WorktreeMeasurement {
   readonly bytes: number | null;
   readonly pending: boolean;
+  readonly queued?: boolean;
   readonly error: string | null;
+}
+
+/** Match server-normalized paths while sharing estimates across project records. */
+function measurementPathKey(cwd: string, worktreePath: string): string {
+  return JSON.stringify([
+    normalizeProjectPathForComparison(cwd),
+    normalizeProjectPathForComparison(worktreePath),
+  ]);
 }
 
 const measurementsAtom = Atom.family((targetsKey: string) =>
   Atom.make((get) => {
-    const targets = JSON.parse(targetsKey) as readonly WorktreeCleanupTarget[];
+    const [targets, supportedEnvironments] = JSON.parse(targetsKey) as [
+      readonly WorktreeCleanupTarget[],
+      readonly string[],
+    ];
     const measurements = new Map<string, WorktreeMeasurement>();
+    const byEnvironment = new Map<
+      WorktreeCleanupTarget["projectRef"]["environmentId"],
+      WorktreeCleanupTarget[]
+    >();
     for (const target of targets) {
-      const measurement = get(
-        vcsEnvironment.worktreeSize({
-          environmentId: target.projectRef.environmentId,
-          input: { cwd: target.projectCwd, path: target.path },
-        }),
+      const environmentTargets = byEnvironment.get(target.projectRef.environmentId);
+      if (environmentTargets === undefined)
+        byEnvironment.set(target.projectRef.environmentId, [target]);
+      else environmentTargets.push(target);
+    }
+    for (const [environmentId, environmentTargets] of byEnvironment) {
+      if (!supportedEnvironments.includes(environmentId)) {
+        for (const target of environmentTargets)
+          measurements.set(worktreeCleanupKey(target), {
+            bytes: null,
+            pending: false,
+            error: "Update this Fork server to stream worktree sizes.",
+          });
+        continue;
+      }
+      const requested = new Map(
+        environmentTargets.map((target) => [
+          JSON.stringify([target.projectCwd, target.path]),
+          { cwd: target.projectCwd, path: target.path },
+        ]),
       );
-      const size = AsyncResult.getOrElse(measurement, () => null);
-      measurements.set(worktreeCleanupKey(target), {
-        bytes: size?.reclaimableBytes ?? null,
-        pending: measurement.waiting && size === null,
-        error:
-          measurement._tag === "Failure" ? formatEnvironmentQueryError(measurement.cause) : null,
-      });
+      const ordered = [...requested.values()].sort(
+        (left, right) => left.cwd.localeCompare(right.cwd) || left.path.localeCompare(right.path),
+      );
+      const byPath = new Map<string, WorktreeMeasurement>();
+      for (
+        let offset = 0;
+        offset < ordered.length;
+        offset += FORK_WORKTREE_MEASUREMENTS_BATCH_LIMIT
+      ) {
+        const batch = ordered.slice(offset, offset + FORK_WORKTREE_MEASUREMENTS_BATCH_LIMIT);
+        const subscription = get(
+          vcsEnvironment.worktreeMeasurements({ environmentId, input: { worktrees: batch } }),
+        );
+        const snapshot = AsyncResult.getOrElse(subscription, () => null);
+        const snapshotByPath = new Map(
+          snapshot?.worktrees.map((measurement) => [
+            measurementPathKey(measurement.cwd, measurement.path),
+            measurement,
+          ]),
+        );
+        for (const target of batch) {
+          const measurement = snapshotByPath.get(measurementPathKey(target.cwd, target.path));
+          let error: string | null = null;
+          if (subscription._tag === "Failure")
+            error = formatEnvironmentQueryError(subscription.cause);
+          else if (measurement?.state === "unavailable") error = "Space estimate unavailable";
+          byPath.set(measurementPathKey(target.cwd, target.path), {
+            bytes: measurement?.reclaimableBytes ?? null,
+            pending:
+              error === null &&
+              (measurement === undefined ||
+                measurement.state === "queued" ||
+                measurement.state === "measuring"),
+            queued: measurement === undefined || measurement.state === "queued",
+            error,
+          });
+        }
+      }
+      for (const target of environmentTargets)
+        measurements.set(
+          worktreeCleanupKey(target),
+          byPath.get(measurementPathKey(target.projectCwd, target.path))!,
+        );
     }
     return measurements;
   }),
 );
 
-/** Share cached measurements between rows and the selection summary without background polling. */
+/** Share batched size subscriptions per environment and keep selection totals on the same results. */
 export function useWorktreeMeasurements(targets: readonly WorktreeCleanupTarget[]) {
   const { environments } = useEnvironments();
-  const supported = new Set(
-    environments
-      .filter((environment) =>
-        supportsForkWorktrees(environment.serverConfig?.environment.capabilities),
-      )
-      .map((environment) => environment.environmentId),
-  );
-  return useAtomValue(
-    measurementsAtom(
-      JSON.stringify(targets.filter((target) => supported.has(target.projectRef.environmentId))),
-    ),
-  );
+  const supported = environments
+    .filter((environment) =>
+      supportsForkWorktreeMeasurements(environment.serverConfig?.environment.capabilities),
+    )
+    .map((environment) => environment.environmentId);
+  return useAtomValue(measurementsAtom(JSON.stringify([targets, supported])));
 }
 
 /** Sum only known estimates and keep unknown or pending sizes visible to the user. */

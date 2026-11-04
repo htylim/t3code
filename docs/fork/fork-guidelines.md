@@ -71,7 +71,10 @@ Worktree management RPC extensions live under `fork.worktrees.*`, with their sch
 `capabilities.fork.worktrees`; clients check it before sending fork-only requests. Increment
 that API version for incompatible payload or behavior changes. Keep upstream operation names
 and payloads available for their upstream behavior. Do not change the global orchestration
-protocol version to advertise a fork feature.
+protocol version to advertise a fork feature. Additive capabilities can use optional flags within
+that fork descriptor. `sizeSubscription` gates `fork.worktrees.subscribeMeasurements`; keep the
+original `fork.worktrees.size` RPC for older clients. New clients show unavailable estimates on
+servers without the flag instead of starting blocking size requests.
 
 ## Database compatibility
 

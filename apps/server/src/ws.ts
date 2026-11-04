@@ -186,6 +186,7 @@ import * as ServerSettings from "./serverSettings.ts";
 import { invalidateSettingsSecrets } from "./sourceControl/sourceControlHostSecrets.ts";
 import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
+import * as ForkWorktreeMeasurements from "./forkWorktreeMeasurements.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import { terminalOutputStream, withTerminalOutputWindow } from "./terminal/OutputProtocol.ts";
 import * as ServerBrowser from "./preview/ServerBrowser.ts";
@@ -1415,6 +1416,7 @@ export const layerWsRpc = (
       const config = yield* ServerConfig.ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const storageCleanup = yield* StorageCleanup.StorageCleanup;
+      const worktreeMeasurements = yield* ForkWorktreeMeasurements.ForkWorktreeMeasurements;
       const databaseStorage = yield* DatabaseStorage.DatabaseStorage;
       const workspaceColors = yield* WorkspaceColors.WorkspaceColors;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
@@ -3072,6 +3074,7 @@ export const layerWsRpc = (
         [WS_METHODS.forkWorktreeList]: (input) =>
           gitWorkflow.listRefs({ ...input, worktreesOnly: true }),
         [WS_METHODS.forkWorktreeSize]: (input) => storageCleanup.getWorktreeSize(input),
+        [WS_METHODS.forkWorktreeMeasurements]: (input) => worktreeMeasurements.subscribe(input),
         [WS_METHODS.forkWorktreeActivity]: (input) => storageCleanup.getWorktreeActivity(input),
         [WS_METHODS.workspaceChooseColor]: (input) => workspaceColors.choose(input),
         [WS_METHODS.vcsCreateWorktree]: (input) =>

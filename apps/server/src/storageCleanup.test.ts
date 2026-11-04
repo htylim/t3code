@@ -23,6 +23,7 @@ import {
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as ServerConfig from "./config.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
+import * as ForkWorktreeMeasurements from "./forkWorktreeMeasurements.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as Settings from "./serverSettings.ts";
@@ -347,6 +348,11 @@ const cleanupFixture = (
     let sessionLive = true;
     let onLiveCheck: Effect.Effect<void> = Effect.void;
     let outboxStatus: string | null = null;
+    let outboxThreadId: ThreadId | null = null;
+    let pullRequest: Pick<
+      GitManager.GitBranchPullRequest,
+      "state" | "headRef" | "baseRef" | "headSha"
+    > | null = null;
     let fullStatusCalls = 0;
     let snapshotReads = 0;
     let terminalListener: ((event: TerminalMetadataStreamEvent) => Effect.Effect<void>) | undefined;
@@ -425,7 +431,10 @@ const cleanupFixture = (
       Effect.provideService(Orchestrator.OrchestratorV2, {
         streamDomainEvents: Stream.suspend(() => events),
       } as unknown as Orchestrator.OrchestratorV2["Service"]),
-      Effect.provideService(SqlClient.SqlClient, ((strings: TemplateStringsArray) =>
+      Effect.provideService(SqlClient.SqlClient, ((
+        strings: TemplateStringsArray,
+        ...parameters: unknown[]
+      ) =>
         Effect.sync(() =>
           openSessionCwd !== null && strings.join("").includes("projection_provider_sessions")
             ? [
@@ -444,7 +453,9 @@ const cleanupFixture = (
                   }),
                 },
               ]
-            : outboxStatus !== null && strings.join("").includes("orchestration_v2_effect_outbox")
+            : outboxStatus !== null &&
+                (outboxThreadId === null || parameters[0] === outboxThreadId) &&
+                strings.join("").includes("orchestration_v2_effect_outbox")
               ? [{ status: outboxStatus }]
               : strings.join("").includes("deleted_at IS NOT NULL")
                 ? deletedThreads.map((thread) => ({
@@ -460,6 +471,7 @@ const cleanupFixture = (
         )) as unknown as SqlClient.SqlClient),
       Effect.provideService(GitManager.GitManager, {
         invalidateStatus: () => Effect.void,
+        branchPullRequest: () => Effect.sync(() => pullRequest),
       } as unknown as GitManager.GitManager["Service"]),
       Effect.provideService(TerminalManager.TerminalManager, {
         subscribeMetadata: (
@@ -519,8 +531,12 @@ const cleanupFixture = (
       setOnLiveCheck: (hook: Effect.Effect<void>) => {
         onLiveCheck = hook;
       },
-      setOutboxStatus: (status: string | null) => {
+      setPullRequest: (next: typeof pullRequest) => {
+        pullRequest = next;
+      },
+      setOutboxStatus: (status: string | null, threadId: ThreadId | null = null) => {
         outboxStatus = status;
+        outboxThreadId = threadId;
       },
       setDeletedThreads: (next: OrchestrationV2ThreadShell[]) => {
         deletedThreads = next;
@@ -781,6 +797,250 @@ it.live("preserves late tracked edits when submodules were never initialized", (
   ),
 );
 
+describe("independent threads sharing a worktree", () => {
+  it.effect.each([
+    ["inactive", true],
+    ["reversed", true],
+    ["mixed-family", true],
+    ["new-thread", false],
+    ["recent-run", false],
+    ["recent-message", false],
+    ["archived-recent", false],
+    ["visit-only", true],
+    ["running", false],
+    ["pending", false],
+    ["settled", true],
+    ["recent-settlement", false],
+    ["unsettled", false],
+    ["unchanged", true],
+    ["dirty", false],
+    ["other-policy-off", false],
+    ["other-policy-longer", false],
+    ["other-policy-protects-files", false],
+    ["mixed-rules", true],
+  ] as const)("checks every thread before removal (%s)", ([scenario, removed]) =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(NOW_MS);
+      const fixture = yield* cleanupFixture();
+      const settledRule = ["settled", "recent-settlement", "unsettled", "mixed-family"].includes(
+        scenario,
+      );
+      const rules = {
+        ...DEFAULT_SERVER_SETTINGS.storageCleanup,
+        worktreeAfterDays: settledRule || scenario === "unchanged" ? null : 8,
+        worktreeSettledAfterDays: settledRule ? 8 : null,
+        worktreeUnchanged: scenario === "unchanged",
+        worktreeKeepWhen:
+          scenario === "other-policy-protects-files"
+            ? ("tracked-changes" as const)
+            : ("uncommitted-changes" as const),
+      };
+      fixture.setSettings({ storageCleanup: rules });
+      const first = shell({
+        branch: "feature",
+        worktreePath: fixture.worktree,
+        settledAt: at(-20 * DAY_MS),
+      });
+      let second = shell({
+        ...first,
+        id: ThreadId.make("independent"),
+        lineage: {
+          parentThreadId: null,
+          rootThreadId: ThreadId.make("independent"),
+          relationshipToParent: null,
+        },
+        createdAt: scenario === "new-thread" ? at(-DAY_MS) : at(-30 * DAY_MS),
+        latestRunCompletedAt: ["recent-run", "archived-recent"].includes(scenario)
+          ? at(-DAY_MS)
+          : null,
+        latestUserMessageAt: scenario === "recent-message" ? at(-DAY_MS) : null,
+        lastVisitedAt: scenario === "visit-only" ? at(0) : null,
+        archivedAt: scenario === "archived-recent" ? at(-DAY_MS) : null,
+        settledAt:
+          scenario === "unsettled"
+            ? null
+            : scenario === "recent-settlement"
+              ? at(-DAY_MS)
+              : first.settledAt,
+        status: scenario === "running" ? "running" : "idle",
+        pendingBackgroundTasks:
+          scenario === "pending" ? [{ taskId: "pending", kind: "command" }] : [],
+      });
+      if (
+        [
+          "other-policy-off",
+          "other-policy-longer",
+          "mixed-rules",
+          "other-policy-protects-files",
+        ].includes(scenario)
+      ) {
+        second = { ...second, projectId: ProjectId.make("project-2") };
+        fixture.setSettings({
+          projectSettingsOverrides: {
+            [second.projectId]: {
+              worktreeCleanup:
+                scenario === "other-policy-off"
+                  ? { mode: "off" }
+                  : {
+                      mode: "custom",
+                      rules: {
+                        ...rules,
+                        worktreeAfterDays:
+                          scenario === "mixed-rules"
+                            ? null
+                            : scenario === "other-policy-longer"
+                              ? 60
+                              : 8,
+                        worktreeKeepWhen: "any-local-files",
+                        worktreeSettledAfterDays: scenario === "mixed-rules" ? 8 : null,
+                      },
+                    },
+            },
+          },
+        });
+      }
+      const members = [first, second];
+      if (scenario === "mixed-family")
+        members.push(
+          shell({
+            ...first,
+            id: ThreadId.make("child"),
+            settledAt: null,
+            lineage: {
+              parentThreadId: first.id,
+              rootThreadId: first.id,
+              relationshipToParent: "subagent",
+            },
+          }),
+        );
+      fixture.setThreads(scenario === "reversed" ? members.toReversed() : members);
+      if (scenario === "other-policy-protects-files")
+        yield* fixture.fs.writeFileString(`${fixture.worktree}/.env`, "local secret");
+      if (scenario === "dirty")
+        yield* fixture.fs.writeFileString(`${fixture.worktree}/notes.txt`, "keep me");
+      const report = yield* fixture.service.runNow;
+      expect(report.counts).toEqual({ removed: removed ? 1 : 0, kept: removed ? 0 : 1, failed: 0 });
+      expect(yield* fixture.fs.exists(fixture.worktree)).toBe(!removed);
+      const listing = yield* fixture.command(fixture.repo, ["worktree", "list", "--porcelain"]);
+      expect(listing.stdout.includes(`worktree ${fixture.worktree}\n`)).toBe(!removed);
+      expect(
+        (yield* fixture.command(fixture.repo, ["show-ref", "--verify", "refs/heads/feature"]))
+          .stdout,
+      ).not.toBe("");
+      expect((yield* fixture.service.runNow).counts.removed).toBe(0);
+    }).pipe(Effect.provide(cleanupTestLayer), Effect.scoped),
+  );
+});
+
+describe("shared worktree merge cleanup", () => {
+  it.live.each(["merged", "open", "wrong-head", "disabled-peer"] as const)(
+    "checks merged branch evidence for all associated threads (%s)",
+    (scenario) =>
+      runCleanupTest(
+        Effect.gen(function* () {
+          const fixture = yield* cleanupFixture({
+            ...DEFAULT_SERVER_SETTINGS.storageCleanup,
+            worktreeOnMerge: true,
+          });
+          const remote = yield* fixture.fs.makeTempDirectoryScoped({ prefix: "cleanup-remote-" });
+          yield* fixture.command(remote, ["init", "--bare", "-b", "main"]);
+          yield* fixture.command(fixture.repo, ["remote", "add", "origin", remote]);
+          yield* fixture.command(fixture.repo, ["push", "origin", "main"]);
+          yield* fixture.fs.writeFileString(`${fixture.worktree}/tracked.txt`, "feature commit");
+          yield* fixture.command(fixture.worktree, ["commit", "-am", "feature work"]);
+          const head = (yield* fixture.command(fixture.worktree, [
+            "rev-parse",
+            "HEAD",
+          ])).stdout.trim();
+          fixture.setPullRequest({
+            state: scenario === "open" ? "open" : "merged",
+            headRef: "feature",
+            baseRef: "main",
+            headSha: scenario === "wrong-head" ? "outdated-head" : head,
+          });
+          const first = shell({ branch: "feature", worktreePath: fixture.worktree });
+          const second = shell({
+            ...first,
+            id: ThreadId.make("independent"),
+            projectId: ProjectId.make("project-2"),
+            lineage: {
+              parentThreadId: null,
+              rootThreadId: ThreadId.make("independent"),
+              relationshipToParent: null,
+            },
+          });
+          fixture.setThreads([first, second]);
+          if (scenario === "disabled-peer")
+            fixture.setSettings({
+              projectSettingsOverrides: {
+                [second.projectId]: { worktreeCleanup: { mode: "off" } },
+              },
+            });
+          const report = yield* fixture.service.runNow;
+          expect(report.entries[0]?.outcome).toBe(scenario === "merged" ? "removed" : "kept");
+          expect(yield* fixture.fs.exists(fixture.worktree)).toBe(scenario !== "merged");
+        }),
+      ),
+  );
+});
+
+describe("shared worktree removal rechecks", () => {
+  it.live.each([
+    "running",
+    "activity",
+    "settlement",
+    "membership",
+    "project",
+    "policy",
+    "local-files",
+  ] as const)("keeps a shared checkout when %s changes during measurement", (change) =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        const fixture = yield* pausedMeasurementFixture();
+        const first = shell({
+          branch: "feature",
+          worktreePath: fixture.worktree,
+          settledAt: at(-20 * DAY_MS),
+        });
+        const second = shell({
+          ...first,
+          id: ThreadId.make("independent"),
+          lineage: {
+            parentThreadId: null,
+            rootThreadId: ThreadId.make("independent"),
+            relationshipToParent: null,
+          },
+        });
+        fixture.setThreads([first, second]);
+        const cleanup = yield* fixture.service.runNow.pipe(Effect.forkChild);
+        yield* Deferred.await(fixture.measuring);
+        fixture.setThreads([
+          first,
+          {
+            ...second,
+            status: change === "running" ? "running" : "idle",
+            latestUserMessageAt: change === "activity" ? at(0) : null,
+            settledAt: change === "settlement" ? null : second.settledAt,
+            projectId: change === "project" ? ProjectId.make("project-2") : second.projectId,
+          },
+          ...(change === "membership"
+            ? [shell({ ...first, id: ThreadId.make("new-thread") })]
+            : []),
+        ]);
+        if (change === "policy")
+          fixture.setSettings({
+            projectSettingsOverrides: { [second.projectId]: { worktreeCleanup: { mode: "off" } } },
+          });
+        if (change === "local-files")
+          yield* fixture.fs.writeFileString(`${fixture.worktree}/notes.txt`, "new work");
+        yield* Deferred.succeed(fixture.resume, undefined);
+        expect((yield* Fiber.join(cleanup)).entries[0]?.outcome).toBe("kept");
+        expect(yield* fixture.fs.exists(fixture.worktree)).toBe(true);
+      }),
+    ),
+  );
+});
+
 describe("subagent worktree ownership", () => {
   it.effect.each([
     "idle",
@@ -910,9 +1170,9 @@ describe("subagent worktree ownership", () => {
           : scenario === "running" || scenario === "pending"
             ? "Thread is running or has pending work"
             : shared
-              ? "Shared by 2 threads"
+              ? "Not settled"
               : scenario === "null-branch" || scenario === "stale-branch"
-                ? "A subagent thread's branch differs from this worktree's branch"
+                ? "A thread's branch differs from this worktree's branch"
                 : scenario === "recent-activity"
                   ? "Settled for 2 of 8 days"
                   : scenario === "recent-inactive"
@@ -1025,6 +1285,46 @@ describe("deleted thread worktrees", () => {
           reason: "Thread was deleted",
         });
         expect(yield* fixture.fs.exists(fixture.worktree)).toBe(false);
+      }).pipe(Effect.provide(cleanupTestLayer), Effect.scoped),
+  );
+
+  it.effect.each(["all-deleted", "one-live", "pending-deletion", "cleanup-off"] as const)(
+    "checks independent deleted threads together (%s)",
+    (scenario) =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW_MS);
+        const fixture = yield* cleanupFixture({
+          ...DEFAULT_SERVER_SETTINGS.storageCleanup,
+          worktreeOnDelete: true,
+        });
+        const first = parent(fixture.worktree);
+        let second = shell({
+          ...first,
+          id: ThreadId.make("independent"),
+          lineage: {
+            parentThreadId: null,
+            rootThreadId: ThreadId.make("independent"),
+            relationshipToParent: null,
+          },
+        });
+        fixture.setDeletedThreads(scenario === "one-live" ? [first] : [first, second]);
+        fixture.setThreads(scenario === "one-live" ? [{ ...second, deletedAt: null }] : []);
+        if (scenario === "pending-deletion") fixture.setOutboxStatus("pending", second.id);
+        if (scenario === "cleanup-off") {
+          second = { ...second, projectId: ProjectId.make("project-2") };
+          fixture.setDeletedThreads([first, second]);
+          fixture.setSettings({
+            projectSettingsOverrides: { [second.projectId]: { worktreeCleanup: { mode: "off" } } },
+          });
+        }
+        const report = yield* fixture.service.runNow;
+        const removed = scenario === "all-deleted";
+        expect(report.counts).toEqual({
+          removed: removed ? 1 : 0,
+          kept: removed ? 0 : 1,
+          failed: 0,
+        });
+        expect(yield* fixture.fs.exists(fixture.worktree)).toBe(!removed);
       }).pipe(Effect.provide(cleanupTestLayer), Effect.scoped),
   );
 
@@ -1422,16 +1722,28 @@ it.live(
         }),
       ]);
       const activity = yield* fixture.service.getWorktreeActivity({
-        worktreePaths: [`${fixture.worktree}-0`, fixture.worktree],
+        worktreePaths: [
+          `${fixture.worktree}-0`,
+          `${fixture.worktree}-1`,
+          fixture.worktree,
+          `${fixture.worktree}-deleted`,
+        ],
       });
-      expect(activity.worktrees).toHaveLength(2);
+      expect(activity.worktrees).toHaveLength(3);
       expect(activity.worktrees).toContainEqual({
         worktreePath: `${fixture.worktree}-0`,
         latestActivityAt: NOW_MS - DAY_MS,
+        threadsSettled: false,
+      });
+      expect(activity.worktrees).toContainEqual({
+        worktreePath: `${fixture.worktree}-1`,
+        latestActivityAt: NOW_MS - 30 * DAY_MS,
+        threadsSettled: true,
       });
       expect(activity.worktrees).toContainEqual({
         worktreePath: fixture.worktree,
         latestActivityAt: NOW_MS - 2 * DAY_MS,
+        threadsSettled: false,
       });
     }).pipe(runCleanupTest),
 );
@@ -1899,6 +2211,32 @@ describe("storage cleanup reports and local file policies", () => {
           isLinkedWorktree: false,
           reclaimableBytes: null,
         });
+        const measurements = yield* Layer.build(ForkWorktreeMeasurements.layer).pipe(
+          Effect.provideService(StorageCleanup.StorageCleanup, service),
+        );
+        const measurementService = Context.get(
+          measurements,
+          ForkWorktreeMeasurements.ForkWorktreeMeasurements,
+        );
+        const snapshot = yield* measurementService
+          .subscribe({
+            worktrees: [
+              { cwd: repo, path: worktree },
+              { cwd: repo, path: outside },
+            ],
+          })
+          .pipe(
+            Stream.filter((snapshot) =>
+              snapshot.worktrees.every(
+                (entry) => entry.state === "ready" || entry.state === "unavailable",
+              ),
+            ),
+            Stream.runHead,
+          );
+        expect(Option.getOrThrow(snapshot).worktrees).toEqual([
+          { cwd: repo, path: worktree, state: "ready", reclaimableBytes: bytes },
+          { cwd: repo, path: outside, state: "unavailable", reclaimableBytes: null },
+        ]);
         const report = yield* service.runNow;
         expect(report.entries[0]).toMatchObject({ outcome: "removed", bytes, files: null });
         expect(report.bytesFreed).toBe(bytes);

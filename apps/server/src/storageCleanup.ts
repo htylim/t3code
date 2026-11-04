@@ -220,6 +220,29 @@ function worktreeOwner<T extends Pick<OrchestrationV2ThreadShell, "id" | "lineag
   return owner;
 }
 
+/** Inherit settlement only through a complete subagent or side-chat chain in this worktree. */
+function worktreeSettlementAt(
+  thread: OrchestrationV2ThreadShell,
+  threadsById: ReadonlyMap<OrchestrationV2ThreadShell["id"], OrchestrationV2ThreadShell>,
+) {
+  let current = thread;
+  const visited = new Set<OrchestrationV2ThreadShell["id"]>();
+  while (current.settledAt === null) {
+    if (
+      visited.has(current.id) ||
+      current.settledOverride === "active" ||
+      (current.lineage.relationshipToParent !== "subagent" && current.lineage.sideChat !== true)
+    )
+      return null;
+    visited.add(current.id);
+    const parent = threadsById.get(current.lineage.parentThreadId!);
+    if (parent === undefined || parent.lineage.rootThreadId !== thread.lineage.rootThreadId)
+      return null;
+    current = parent;
+  }
+  return current.settledAt;
+}
+
 /** Squash/rebase merges require the merged PR to name this exact head commit. */
 export function storageCleanupPullRequestMerged(
   pullRequest: Pick<
@@ -422,6 +445,7 @@ const make = Effect.gen(function* () {
         .getShellSnapshot({ threadIds })
         .pipe(NodeSqliteClient.readOnly);
       const activityByPath = new Map<string, number>();
+      const settledByPath = new Map<string, boolean>();
       for (const thread of [...snapshot.threads, ...snapshot.archivedThreads]) {
         if (thread.worktreePath === null) continue;
         const latestActivityAt = Math.max(
@@ -429,6 +453,10 @@ const make = Effect.gen(function* () {
           thread.latestVisibleMessage === null
             ? 0
             : DateTime.toEpochMillis(thread.latestVisibleMessage.updatedAt),
+        );
+        settledByPath.set(
+          thread.worktreePath,
+          (settledByPath.get(thread.worktreePath) ?? true) && thread.settledOverride === "settled",
         );
         activityByPath.set(
           thread.worktreePath,
@@ -439,6 +467,7 @@ const make = Effect.gen(function* () {
         worktrees: Array.from(activityByPath, ([worktreePath, latestActivityAt]) => ({
           worktreePath,
           latestActivityAt,
+          threadsSettled: settledByPath.get(worktreePath)!,
         })),
       };
     },
@@ -882,16 +911,29 @@ const make = Effect.gen(function* () {
           worktreeOwner(group) ??
           group[0]!,
       ),
-      ...deletedThreads.filter((thread) => !groups.has(path.resolve(thread.worktreePath!))),
+      ...[...deletedByPath]
+        .filter(([worktreePath]) => !groups.has(worktreePath))
+        .map(([, threads]) => worktreeOwner(threads) ?? threads[0]!),
     ];
     for (const thread of candidates) {
-      const settings = resolveWorktreeCleanup(serverSettings, thread.projectId);
-      if (!worktreeCleanupEnabled(settings)) continue;
       const worktreePath = path.resolve(thread.worktreePath!);
       const group = groups.get(worktreePath) ?? [];
       const activityAt = Math.max(...group.map(storageCleanupActivityAt));
       const deleted = "workspaceRoot" in thread;
-      const members = deleted ? [thread, ...group] : group;
+      const members = deleted ? [...(deletedByPath.get(worktreePath) ?? []), ...group] : group;
+      const policies = members.map((member) => ({
+        thread: member,
+        settings: resolveWorktreeCleanup(serverSettings, member.projectId),
+      }));
+      if (!policies.some((policy) => worktreeCleanupEnabled(policy.settings))) continue;
+      const settings = resolveWorktreeCleanup(serverSettings, thread.projectId);
+      const checkUnchanged = policies.some((policy) => policy.settings.worktreeUnchanged);
+      const checkMerged = policies.some((policy) => policy.settings.worktreeOnMerge);
+      const localChangesPolicy =
+        policies.find((policy) => policy.settings.worktreeKeepWhen === "any-local-files") ??
+        policies.find((policy) => policy.settings.worktreeKeepWhen === "uncommitted-changes") ??
+        policies[0]!;
+      const owner = worktreeOwner(members);
       const project = deleted
         ? { workspaceRoot: thread.workspaceRoot }
         : snapshot.projects.find((entry) => entry.id === thread.projectId);
@@ -917,17 +959,20 @@ const make = Effect.gen(function* () {
       };
       yield* Effect.gen(function* () {
         if (!(yield* fs.exists(worktreePath))) return;
-        if (deleted && !settings.worktreeOnDelete) return keep("no rules apply");
-        if (members.length > 1 && worktreeOwner(members) === undefined)
-          return keep(`shared by ${members.length} threads`);
+        if (deleted && !policies.every((policy) => policy.settings.worktreeOnDelete))
+          return keep("no rules apply");
+        if (deleted && group.length > 0 && owner !== thread)
+          return keep("still used by independent threads");
+        if (policies.some((policy) => !worktreeCleanupEnabled(policy.settings)))
+          return keep("automatic cleanup is off for an associated project");
         if (project === undefined) return keep("project is unavailable");
         if (
           thread.branch === null ||
           !group.every((member) => storageCleanupThreadIdle(member, now, serverSettings))
         )
           return keep(waitForStop("thread is running or has pending work"));
-        if (group.some((member) => member.branch !== thread.branch))
-          return keep("a subagent thread's branch differs from this worktree's branch");
+        if (members.some((member) => member.branch !== thread.branch))
+          return keep("a thread's branch differs from this worktree's branch");
         if (hasTerminal(worktreePath)) return keep(waitForStop("open terminal"));
         // Compare canonical roots while allowing symlinked parents, never symlinked worktree directories.
         const realPath = yield* fs.realPath(worktreePath);
@@ -942,7 +987,7 @@ const make = Effect.gen(function* () {
           return keep("not a linked worktree");
         if (yield* branchChanged(worktreePath, thread.branch))
           return keep("repository or branch changed");
-        const changes = yield* localChangesReason(worktreePath, settings);
+        const changes = yield* localChangesReason(worktreePath, localChangesPolicy.settings);
         if (changes !== null) return keep(changes);
         if (
           group.some(
@@ -954,26 +999,35 @@ const make = Effect.gen(function* () {
         )
           return keep(waitForStop("settled moments ago"));
         const head = yield* git.resolveCommit({ cwd: worktreePath, revision: "HEAD" });
-        const old =
-          !deleted &&
-          settings.worktreeAfterDays !== null &&
-          activityAt < now - settings.worktreeAfterDays * DAY_MS;
+        const threadsById = new Map(group.map((member) => [member.id, member]));
+        const settlementTimes = group.map((member) => worktreeSettlementAt(member, threadsById));
         const settledFor =
-          deleted || thread.settledAt === null
+          deleted || settlementTimes.some((settledAt) => settledAt === null)
             ? null
-            : now - Math.max(DateTime.toEpochMillis(thread.settledAt), activityAt);
+            : now -
+              Math.max(
+                activityAt,
+                ...settlementTimes.map((settledAt) => DateTime.toEpochMillis(settledAt!)),
+              );
         const settledDays = settledFor === null ? null : Math.floor(settledFor / DAY_MS);
-        const settled =
-          settledFor !== null &&
-          settings.worktreeSettledAfterDays !== null &&
-          settledFor >= settings.worktreeSettledAfterDays * DAY_MS;
-        let eligible = deleted || old || settled;
+        const eligibility = policies.map((policy) => {
+          const old =
+            !deleted &&
+            policy.settings.worktreeAfterDays !== null &&
+            activityAt < now - policy.settings.worktreeAfterDays * DAY_MS;
+          const settled =
+            settledFor !== null &&
+            policy.settings.worktreeSettledAfterDays !== null &&
+            settledFor >= policy.settings.worktreeSettledAfterDays * DAY_MS;
+          return { ...policy, old, eligible: deleted || old || settled };
+        });
+        let eligible = eligibility.every((policy) => policy.eligible);
         let removalReason = deleted
           ? "thread was deleted"
-          : old
+          : eligibility.every((policy) => policy.old)
             ? `inactive for ${Math.floor((now - activityAt) / DAY_MS)} days`
             : `settled for ${settledDays} days`;
-        if (!eligible && (settings.worktreeUnchanged || settings.worktreeOnMerge)) {
+        if (!eligible && (checkUnchanged || checkMerged)) {
           const repositoryCwd = path.resolve(project.workspaceRoot);
           const remotes = yield* git.execute({
             operation: "StorageCleanup.listRemotes",
@@ -987,8 +1041,7 @@ const make = Effect.gen(function* () {
           let branch: string | null | undefined;
           let defaultRef: string;
           if (remote === null) {
-            if (!settings.worktreeUnchanged)
-              return keep("no remote is configured for merged-worktree cleanup");
+            if (!checkUnchanged) return keep("no remote is configured for merged-worktree cleanup");
             const projectHead = yield* git.execute({
               operation: "StorageCleanup.resolveProjectBranch",
               cwd: repositoryCwd,
@@ -1047,28 +1100,37 @@ const make = Effect.gen(function* () {
             allowNonZeroExit: true,
           });
           const integrated = ancestor.exitCode === 0;
-          eligible = integrated && settings.worktreeUnchanged;
+          eligible = eligibility.every(
+            (policy) => policy.eligible || (integrated && policy.settings.worktreeUnchanged),
+          );
           if (eligible)
             removalReason =
               remote === null
                 ? "no commits beyond the project branch"
                 : "no commits beyond the default branch";
-          if (!eligible && remote !== null && settings.worktreeOnMerge && thread.branch !== null) {
+          if (!eligible && remote !== null && checkMerged && thread.branch !== null) {
             const pullRequest = yield* gitManager.branchPullRequest(
               { cwd: worktreePath, branch: thread.branch },
               { refresh: true },
             );
-            eligible = storageCleanupPullRequestMerged(pullRequest, {
+            const merged = storageCleanupPullRequestMerged(pullRequest, {
               branch: thread.branch,
               defaultBranch: branch,
               headSha: head.commitSha,
               integrated,
             });
+            eligible = eligibility.every(
+              (policy) =>
+                policy.eligible ||
+                (integrated && policy.settings.worktreeUnchanged) ||
+                (merged && policy.settings.worktreeOnMerge),
+            );
             if (eligible) removalReason = "pull request was merged";
           }
           if (!eligible && remote === null) return keep("has commits beyond the project branch");
         }
-        if (!eligible)
+        if (!eligible) {
+          const settings = eligibility.find((policy) => !policy.eligible)!.settings;
           return keep(
             !deleted && settings.worktreeAfterDays !== null
               ? `inactive for ${Math.floor((now - activityAt) / DAY_MS)} of ${settings.worktreeAfterDays} days`
@@ -1080,6 +1142,7 @@ const make = Effect.gen(function* () {
                   ? "not merged"
                   : "has commits beyond the default branch",
           );
+        }
         // Re-read this path's threads and sessions so new activity cancels removal; full per-worktree snapshots take seconds.
         const blockedSinceCheck = Effect.fnUntraced(function* () {
           const latestProjects = yield* projectStore.listShells();
@@ -1096,29 +1159,30 @@ const make = Effect.gen(function* () {
             )
               return "thread or cleanup settings changed since check";
             // Durable deletion cleanup must succeed or be explicitly cancelled before removing its checkout.
-            const pendingCleanup = yield* sql<{ status: string }>`
-              SELECT status FROM orchestration_v2_effect_outbox
-              WHERE thread_id = ${thread.id} AND status NOT IN ('succeeded', 'cancelled')
-            `.pipe(NodeSqliteClient.readOnly);
-            // Failed effects never retry, so only running work can finish and free the path.
-            if (pendingCleanup.some((row) => row.status !== "failed"))
-              return waitForStop("thread deletion is still pending");
-            if (pendingCleanup.length > 0) return "thread deletion is still pending";
+            for (const member of deletedByPath.get(worktreePath) ?? []) {
+              const pendingCleanup = yield* sql<{ status: string }>`
+                SELECT status FROM orchestration_v2_effect_outbox
+                WHERE thread_id = ${member.id} AND status NOT IN ('succeeded', 'cancelled')
+              `.pipe(NodeSqliteClient.readOnly);
+              // Failed effects never retry, so only running work can finish and free the path.
+              if (pendingCleanup.some((row) => row.status !== "failed"))
+                return waitForStop("thread deletion is still pending");
+              if (pendingCleanup.length > 0) return "thread deletion is still pending";
+            }
           }
           const latestShells = yield* Effect.forEach(latest, (entry) =>
             projections.getThreadShell(entry.threadId),
           );
           const latestGroup = latestShells.filter((shell) => shell !== null);
-          const latestOwner = worktreeOwner(deleted ? [thread, ...latestGroup] : latestGroup);
           if (
             latestGroup.length !== group.length ||
-            latestOwner?.id !== thread.id ||
-            latestOwner?.branch !== thread.branch ||
             latestGroup.some((shell) => {
               const previous = group.find((member) => member.id === shell.id);
               return (
                 previous === undefined ||
                 shell.branch !== thread.branch ||
+                shell.projectId !== previous.projectId ||
+                !Equal.equals(shell.lineage, previous.lineage) ||
                 !Equal.equals(shell.settledAt, previous.settledAt) ||
                 (shell.settledAt !== null && !Equal.equals(shell.updatedAt, previous.updatedAt)) ||
                 !storageCleanupThreadIdle(shell, now, serverSettings) ||
@@ -1159,26 +1223,28 @@ const make = Effect.gen(function* () {
           head.commitSha
         )
           return keep("commit changed since check");
-        const finalChanges = yield* localChangesReason(worktreePath, settings);
+        const finalChanges = yield* localChangesReason(worktreePath, localChangesPolicy.settings);
         if (finalChanges !== null) return keep(finalChanges);
         const currentSettings = yield* settingsService.getSettings;
-        const current = resolveWorktreeCleanup(currentSettings, thread.projectId);
         if (
           currentSettings.autoResumeLimitedThreads !== serverSettings.autoResumeLimitedThreads ||
           currentSettings.snoozeLimitedThreads !== serverSettings.snoozeLimitedThreads ||
-          Object.keys(settings).some(
-            (key) =>
-              current[key as keyof typeof settings] !== settings[key as keyof typeof settings],
+          policies.some(
+            (policy) =>
+              !Equal.equals(
+                resolveWorktreeCleanup(currentSettings, policy.thread.projectId),
+                policy.settings,
+              ),
           )
         )
           return keep("settings changed since check");
         // Clean only untracked files. Ordinary worktrees retain Git's final tracked-edit check.
-        if (settings.worktreeKeepWhen === "tracked-changes")
+        if (localChangesPolicy.settings.worktreeKeepWhen === "tracked-changes")
           yield* cleanupGit(worktreePath, ["clean", "-ffdx"], "git clean");
-        const submodules = yield* submoduleRemoval(worktreePath, settings);
+        const submodules = yield* submoduleRemoval(worktreePath, localChangesPolicy.settings);
         if (submodules.reason !== null) return keep(submodules.reason);
         if (submodules.force) {
-          const changes = yield* localChangesReason(worktreePath, settings);
+          const changes = yield* localChangesReason(worktreePath, localChangesPolicy.settings);
           if (changes !== null) return keep(changes);
         }
         yield* removeLinkedWorktree({
