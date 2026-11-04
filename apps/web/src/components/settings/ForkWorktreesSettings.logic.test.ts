@@ -4,6 +4,7 @@ import * as DateTime from "effect/DateTime";
 import {
   latestWorktreeActivity,
   managedWorktreeRows,
+  sortWorktreesByActivity,
   worktreeInactivityDays,
 } from "./ForkWorktreesSettings.logic";
 
@@ -84,4 +85,35 @@ it("excludes the project checkout even when the project is a subdirectory or det
   ]);
   expect(managedWorktreeRows([], rows, "/repo")).toEqual([rows[1]]);
   expect(managedWorktreeRows([], rows, "/other-linked-checkout", "/repo")).toEqual([rows[1]]);
+});
+
+it("sorts by newest thread activity, keeping ties stable and worktrees without threads last", () => {
+  const paths = ["no-threads-a", "old", "new", "tie", "no-threads-b"];
+  const rows = paths.map((path) => ({
+    worktreePath: `/trees/${path}`,
+    dirName: path,
+    refName: path,
+    isBusy: false,
+    isIdle: true,
+  }));
+  const threads = [
+    activityThread({ worktreePath: "/trees/old" }),
+    activityThread({ worktreePath: "/trees/new" }),
+    activityThread({
+      worktreePath: "/trees/new",
+      latestRunCompletedAt: DateTime.makeUnsafe("2026-11-04T12:00:00Z"),
+    }),
+    activityThread({
+      worktreePath: "/trees/tie",
+      latestUserMessageAt: DateTime.makeUnsafe("2026-11-04T12:00:00Z"),
+    }),
+  ];
+  expect(sortWorktreesByActivity(rows, threads, "/repo").map((row) => row.dirName)).toEqual([
+    "new",
+    "tie",
+    "old",
+    "no-threads-a",
+    "no-threads-b",
+  ]);
+  expect(rows.map((row) => row.dirName)).toEqual(paths);
 });

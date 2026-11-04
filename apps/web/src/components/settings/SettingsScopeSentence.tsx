@@ -71,7 +71,10 @@ export function SettingsScopeSentence() {
   const props: SettingsScopeMenuProps = {
     value: scope.search,
     singleEnvironment: scope.singleEnvironment,
-    groups: scope.groups,
+    groups:
+      pathname === "/settings/fork-worktrees"
+        ? scope.groups.filter((group) => !group.isScratch)
+        : scope.groups,
     environments,
     onChange: scope.selectScope,
   };

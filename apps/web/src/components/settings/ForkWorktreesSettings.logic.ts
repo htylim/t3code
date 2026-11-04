@@ -66,3 +66,23 @@ export function managedWorktreeRows(
       row.worktreePath !== mainWorktreePath,
   );
 }
+
+/** Sort newest activity first, preserving input order for ties and putting unused worktrees last. */
+export function sortWorktreesByActivity(
+  rows: readonly WorktreeRow[],
+  threads: readonly WorktreeActivityThread[],
+  projectCwd: string,
+): WorktreeRow[] {
+  return rows
+    .map((row) => ({
+      row,
+      activityAt: latestWorktreeActivity(threads, row.worktreePath, projectCwd),
+    }))
+    .sort((left, right) => {
+      if (left.activityAt === right.activityAt) return 0;
+      if (left.activityAt === null) return 1;
+      if (right.activityAt === null) return -1;
+      return right.activityAt - left.activityAt;
+    })
+    .map(({ row }) => row);
+}
