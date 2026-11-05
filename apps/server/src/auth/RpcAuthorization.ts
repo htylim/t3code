@@ -178,6 +178,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.forkWorktreeMeasurements]: AuthOrchestrationReadScope,
   [WS_METHODS.forkWorktreeActivity]: AuthOrchestrationReadScope,
   [WS_METHODS.forkWorktreeCleanupStatus]: AuthOrchestrationReadScope,
+  [WS_METHODS.forkWorktreeCleanupProgress]: AuthOrchestrationReadScope,
   [WS_METHODS.reviewGetBranchCommits]: AuthFilesystemReadScope,
   [WS_METHODS.reviewGetDiffPreview]: AuthFilesystemReadScope,
   [WS_METHODS.reviewGetDiffFileContents]: AuthFilesystemReadScope,

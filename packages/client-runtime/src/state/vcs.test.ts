@@ -317,13 +317,21 @@ describe("cached VCS refs", () => {
         const client = {
           [WS_METHODS.vcsPull]: () => Effect.fail(expectedError),
           [WS_METHODS.vcsRefreshStatus]: () => Effect.void,
+          [WS_METHODS.forkWorktreeList]: () => Effect.succeed(LIVE_REFS),
           [WS_METHODS.gitPreparePullRequestThread]: () =>
             Effect.succeed({ branch: "feature/pr", worktreePath: null }),
         } as unknown as WsRpcProtocolClient;
         const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
           target: TARGET,
           state: yield* SubscriptionRef.make(CONNECTED_CONNECTION_STATE),
-          session: yield* SubscriptionRef.make(Option.some(session(client))),
+          session: yield* SubscriptionRef.make<Option.Option<RpcSession>>(
+            Option.some({
+              ...session(client),
+              initialConfig: Effect.succeed({
+                environment: { capabilities: { fork: { worktrees: { apiVersion: 1 } } } },
+              } as never),
+            }),
+          ),
           prepared: yield* SubscriptionRef.make(Option.none<PreparedConnection>()),
           connect: Effect.void,
           disconnect: Effect.void,
@@ -385,6 +393,15 @@ describe("cached VCS refs", () => {
         expect(AsyncResult.isSuccess(prepareResult)).toBe(true);
         expect(yield* Ref.get(clears)).toBe(3);
         expect(registry.get(vcsRefsCacheStateAtom(TARGET)).revision).toBe(3);
+        const refreshedWorktrees = yield* Effect.promise(() =>
+          atoms.refreshWorktrees.run(registry, {
+            environmentId: TARGET.environmentId,
+            input: { cwd: "/repo", refresh: true },
+          }),
+        );
+        expect(AsyncResult.isSuccess(refreshedWorktrees)).toBe(true);
+        expect(yield* Ref.get(clears)).toBe(4);
+        expect(registry.get(vcsRefsCacheStateAtom(TARGET)).revision).toBe(4);
       }),
     ),
   );

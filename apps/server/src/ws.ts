@@ -3076,6 +3076,8 @@ export const layerWsRpc = (
         [WS_METHODS.forkWorktreeSize]: (input) => storageCleanup.getWorktreeSize(input),
         [WS_METHODS.forkWorktreeMeasurements]: (input) => worktreeMeasurements.subscribe(input),
         [WS_METHODS.forkWorktreeActivity]: (input) => storageCleanup.getWorktreeActivity(input),
+        [WS_METHODS.forkWorktreeCleanupProgress]: (input) =>
+          storageCleanup.subscribeWorktreeProgress(input),
         [WS_METHODS.forkWorktreeCleanupStatus]: (input) =>
           storageCleanup.getWorktreeCleanupStatus(input),
         [WS_METHODS.workspaceChooseColor]: (input) => workspaceColors.choose(input),
@@ -3083,7 +3085,9 @@ export const layerWsRpc = (
           gitWorkflow.createWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.forkWorktreeRename]: (input) => gitWorkflow.renameWorktree(input),
         [WS_METHODS.vcsRemoveWorktree]: (input) =>
-          gitWorkflow.removeWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+          storageCleanup
+            .trackWorktreeRemoval(input.path, gitWorkflow.removeWorktree(input))
+            .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.vcsCreateRef]: (input) =>
           gitWorkflow.createRef(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.vcsSwitchRef]: (input) =>

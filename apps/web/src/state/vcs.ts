@@ -6,7 +6,10 @@ import {
 
 import { connectionAtomRuntime } from "../connection/runtime";
 import { subscribeDocumentReturn } from "../lib/documentActivity";
-import { createEnvironmentRpcQueryAtomFamily } from "@t3tools/client-runtime/state/runtime";
+import {
+  createEnvironmentRpcQueryAtomFamily,
+  createEnvironmentRpcSubscriptionAtomFamily,
+} from "@t3tools/client-runtime/state/runtime";
 import { WS_METHODS, ProjectId, type EnvironmentId } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { serverEnvironment } from "./server";
@@ -28,6 +31,11 @@ const worktreeCleanupSettingsAtom = Atom.family((environmentId: EnvironmentId) =
 
 export const vcsEnvironment = {
   ...createVcsEnvironmentAtoms(connectionAtomRuntime),
+  worktreeCleanupProgress: createEnvironmentRpcSubscriptionAtomFamily(connectionAtomRuntime, {
+    label: "environment-data:fork:worktree-cleanup-progress",
+    tag: WS_METHODS.forkWorktreeCleanupProgress,
+    idleTtlMs: 0,
+  }),
   worktreeCleanupStatus: createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
     label: "environment-data:fork:worktree-cleanup-status",
     tag: WS_METHODS.forkWorktreeCleanupStatus,

@@ -1,5 +1,28 @@
 # Fork journal
 
+## 2026-11-04 - Align cleanup ages and follow isolated subagent ownership
+
+- Reason: The worktree list showed conversation inactivity while settlement-based cleanup used
+  another clock. Completed subagents in separate worktrees also failed to inherit parent settlement.
+- Upstream baseline remains `cefb544af3`. Cleanup and its age inspection share activity and
+  settlement clocks. Dependent worktrees follow genuine parent chains across checkout paths,
+  including deleted parents, while independent threads, explicit Active overrides, stricter project
+  policies, recent parent activity, and unfinished work retain their protections. Parent state is
+  checked again before removal, including settlement-script grace.
+- Fork-only cleanup details advertise an additive capability. The list shows elapsed 24-hour
+  cleanup age under enabled rules and the lower age when both time rules apply. A scoped stream
+  reports checking, deletion, and failures for automatic and explicit UI removals. Tooltips distinguish
+  failed eligibility checks from failed deletion; confirmed removals refresh the Git worktree list.
+- Upstream integration watchpoint: preserve cross-worktree parent inheritance and shared cleanup
+  clocks when merging changes to settlement, deletion, ownership, or cleanup reporting.
+- Verification uses disposable repositories for parent chains, pending deletion, independent owners,
+  parent reactivation races, file protections, both clocks, deletion progress, failures, and retries.
+  Changed-file tests and affected type checks passed, along with formatting, lint,
+  unused-code, and React compiler checks. The isolated dev server verified all age modes,
+  cross-worktree settlement and parent deletion, retained branches, and protected tracked edits.
+  The real client showed cleanup ages and a lock-failure icon with its diagnostic on hover.
+  Runtime checks used copied preview data, never the daily-use database.
+
 ## 2026-11-04 - Stop using saved branch names to block worktree cleanup
 
 - Reason: Agents and external Git commands can rename or switch a worktree's branch while T3's

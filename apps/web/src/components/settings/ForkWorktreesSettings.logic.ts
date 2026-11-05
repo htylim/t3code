@@ -107,6 +107,7 @@ export function worktreeThreadsLabel(
   if (unavailable) return "Unavailable";
   if (!ready) return "Loading...";
   if (worktree === undefined) return "No threads";
+  if (worktree.parentDeleted) return "Deleted parent";
   if (worktree.threadsSettled === undefined) return "Unavailable";
   return worktree.threadsSettled ? "Settled" : "Active";
 }

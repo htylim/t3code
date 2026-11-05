@@ -1,4 +1,5 @@
 import {
+  ForkWorktreeCleanupProgressSnapshot,
   ForkWorktreeCleanupStatusInput,
   ForkWorktreeCleanupStatusResult,
   ForkWorktreeCleanupStatusError,
@@ -474,6 +475,7 @@ export const WS_METHODS = {
   forkWorktreeMeasurements: "fork.worktrees.subscribeMeasurements",
   forkWorktreeActivity: "fork.worktrees.activity",
   forkWorktreeCleanupStatus: "fork.worktrees.cleanupStatus",
+  forkWorktreeCleanupProgress: "fork.worktrees.subscribeCleanupProgress",
   workspaceChooseColor: "workspace.chooseColor",
   vcsCreateWorktree: "vcs.createWorktree",
   forkWorktreeRename: "fork.worktrees.rename",
@@ -1544,6 +1546,13 @@ const WsForkWorktreeCleanupStatusRpc = Rpc.make(WS_METHODS.forkWorktreeCleanupSt
   error: Schema.Union([ForkWorktreeCleanupStatusError, EnvironmentAuthorizationError]),
 });
 
+const WsForkWorktreeCleanupProgressRpc = Rpc.make(WS_METHODS.forkWorktreeCleanupProgress, {
+  payload: ForkWorktreeActivityInput,
+  success: ForkWorktreeCleanupProgressSnapshot,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
 const WsForkWorktreeSizeRpc = Rpc.make(WS_METHODS.forkWorktreeSize, {
   payload: ForkWorktreeSizeInput,
   success: ForkWorktreeSizeResult,
@@ -2208,6 +2217,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsForkWorktreeMeasurementsRpc,
   WsForkWorktreeActivityRpc,
   WsForkWorktreeCleanupStatusRpc,
+  WsForkWorktreeCleanupProgressRpc,
   WsWorkspaceChooseColorRpc,
   WsVcsCreateWorktreeRpc,
   WsForkWorktreeRenameRpc,

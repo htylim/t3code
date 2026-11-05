@@ -316,11 +316,17 @@ export function createVcsEnvironmentAtoms<R, E>(
       label: "environment-data:fork:read-worktrees",
       tag: WS_METHODS.forkWorktreeList,
     }),
+    refreshWorktrees: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:fork:refresh-worktrees",
+      tag: WS_METHODS.forkWorktreeList,
+      onSettled: invalidateRefs,
+    }),
     worktreeActivity: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:vcs:worktree-activity",
       tag: WS_METHODS.forkWorktreeActivity,
       staleTimeMs: 0,
       idleTtlMs: 0,
+      refreshIntervalMs: 30_000,
     }),
     worktreeMeasurements: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:fork:worktree-measurements",

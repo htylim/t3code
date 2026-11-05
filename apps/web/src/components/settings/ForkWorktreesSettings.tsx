@@ -3,19 +3,28 @@ import {
   type OrchestrationV2ThreadShell,
   type ScopedProjectRef,
   type ForkWorktreeCleanupStatusResult,
+  type ForkWorktreeCleanupProgress,
 } from "@t3tools/contracts";
-import { GitBranchIcon, InfoIcon, Trash2Icon } from "lucide-react";
-import { useState } from "react";
+import {
+  GitBranchIcon,
+  InfoIcon,
+  Trash2Icon,
+  HourglassIcon,
+  CircleAlertIcon,
+  SearchIcon,
+} from "lucide-react";
+import { useContext, useEffect, useState } from "react";
 
 import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useWorkspaceChoices } from "../../hooks/useWorkspaceChoices";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../../namedWorktreeStore";
-import { useAtomValue } from "@effect/atom-react";
+import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { formatBytes } from "../../lib/formatBytes";
 import type { SidebarProjectGroupMember } from "../../sidebarProjectGrouping";
 import { useEnvironmentQuery } from "../../state/query";
 import { vcsEnvironment } from "../../state/vcs";
+import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { isWorktreeThreadRunning, type WorktreeRow } from "../BranchToolbar.logic";
 import { WorktreeActionsMenu } from "../WorktreeActionsMenu";
 import { Button } from "../ui/button";
@@ -35,10 +44,8 @@ import {
 } from "./worktreeBulkCleanup";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
-  latestWorktreeActivity,
   managedWorktreeRows,
   sortWorktreesByActivity,
-  worktreeInactivityDays,
   worktreeThreadsLabel,
 } from "./ForkWorktreesSettings.logic";
 import { FORK_SETTINGS_AVAILABLE } from "./forkSettingsAvailability";
@@ -251,6 +258,9 @@ function ProjectWorktrees({
   const cleanupStatusSupported =
     environments.find((environment) => environment.environmentId === project.environmentId)
       ?.serverConfig?.environment.capabilities.fork?.worktrees?.cleanupStatus === true;
+  const cleanupDetailsSupported =
+    environments.find((environment) => environment.environmentId === project.environmentId)
+      ?.serverConfig?.environment.capabilities.fork?.worktrees?.cleanupDetails === true;
   const projectRef = { environmentId: project.environmentId, projectId: project.id };
   const choices = useWorkspaceChoices({
     projectRef,
@@ -259,6 +269,36 @@ function ProjectWorktrees({
     activeBranch: null,
     includeUnnamed: true,
   });
+  const progress = useEnvironmentQuery(
+    supported && connected && cleanupDetailsSupported
+      ? vcsEnvironment.worktreeCleanupProgress({
+          environmentId: project.environmentId,
+          input: { worktreePaths: choices.rows.map((row) => row.worktreePath) },
+        })
+      : null,
+  );
+  const progressByPath = new Map(
+    progress.data?.worktrees.map((entry) => [entry.worktreePath, entry]),
+  );
+  const removedPathsKey = JSON.stringify(
+    progress.data?.worktrees
+      .filter((entry) => entry.state === "removed")
+      .map((entry) => entry.worktreePath) ?? [],
+  );
+  const registry = useContext(RegistryContext);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refresh Git's worktree list after the server confirms a removal
+  useEffect(() => {
+    if (removedPathsKey !== "[]")
+      void runAtomCommand(
+        registry,
+        vcsEnvironment.refreshWorktrees,
+        {
+          environmentId: project.environmentId,
+          input: { cwd: project.workspaceRoot, refresh: true },
+        },
+        { reportFailure: false },
+      );
+  }, [removedPathsKey, registry, project.environmentId, project.workspaceRoot]);
   const canRemove = useAtomValue(
     vcsEnvironment.removeWorktree.permissionAtom(project.environmentId),
   );
@@ -349,8 +389,8 @@ function ProjectWorktrees({
         className={cn(
           "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-4 py-3",
           cleaning
-            ? "@min-[42rem]/worktree-list:grid-cols-[1rem_0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_5rem_1.75rem]"
-            : "@min-[42rem]/worktree-list:grid-cols-[0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_5rem_1.75rem]",
+            ? "@min-[42rem]/worktree-list:grid-cols-[1rem_0.75rem_minmax(0,1fr)_6rem_5.5rem_5rem_5rem_1.75rem]"
+            : "@min-[42rem]/worktree-list:grid-cols-[0.75rem_minmax(0,1fr)_6rem_5.5rem_5rem_5rem_1.75rem]",
         )}
       >
         {cleaning ? (
@@ -374,8 +414,11 @@ function ProjectWorktrees({
             <span className="shrink-0">{project.environmentLabel}</span>
           </div>
         </div>
-        <WorktreeColumnHelp label="Inactivity">
-          Calendar days since the latest activity in any associated thread.
+        <WorktreeColumnHelp label="Cleanup age">
+          Elapsed 24-hour days under the enabled cleanup rules. Uses inactivity, time since all
+          threads settled, or the lower age when both rules apply. Either enabled time rule can
+          qualify a worktree for cleanup. Not settled means the settlement clock has not started.
+          Other cleanup protections still apply.
         </WorktreeColumnHelp>
         <WorktreeColumnHelp label="Size">
           Estimated disk space reclaimable by removal. Shared files and dependency stores are
@@ -384,9 +427,10 @@ function ProjectWorktrees({
         <WorktreeColumnHelp label="Threads" centered>
           Settled means all associated threads are settled under the cleanup rules, including
           archived threads. Subagents and side chats can inherit settlement from a parent in the
-          same worktree. Active means at least one thread is not settled. No threads means none are
-          associated. Loading or Unavailable means thread state could not yet be determined. Settled
-          does not mean eligible for automatic cleanup.
+          same thread family, including separate worktrees. Active means at least one thread is not
+          settled. No threads means none are associated. Deleted parent means dependent threads
+          inherit a deleted parent. Loading or Unavailable means thread state could not yet be
+          determined. Settled does not mean eligible for automatic cleanup.
         </WorktreeColumnHelp>
         <WorktreeColumnHelp label="Status" centered>
           Dirty means local files prevent automatic cleanup under the effective Keep worktrees with
@@ -426,7 +470,9 @@ function ProjectWorktrees({
             threads={choices.threads}
             protection={protectionByPath.get(row.worktreePath) ?? null}
             protectionUnavailable={!cleanupStatusSupported || Boolean(protection.error)}
-            worktreeActivityByPath={worktreeActivityByPath}
+            cleanupDetailsSupported={cleanupDetailsSupported}
+            progress={progressByPath.get(row.worktreePath) ?? null}
+            progressUnavailable={cleanupDetailsSupported && Boolean(progress.error)}
             threadsLabel={worktreeThreadsLabel(
               worktreeThreadsByPath.get(row.worktreePath),
               activity.isSuccess,
@@ -461,7 +507,7 @@ function ProjectWorktrees({
       )}
       {choices.archived.error || activity.error ? (
         <p role="alert" className="px-4 py-3 text-xs text-destructive">
-          Unable to load thread history. Inactivity and management actions are unavailable.
+          Unable to load thread history. Cleanup age and management actions are unavailable.
         </p>
       ) : null}
     </SettingsGroup>
@@ -476,7 +522,9 @@ function ManagedWorktreeRow({
   threads,
   protection,
   protectionUnavailable,
-  worktreeActivityByPath,
+  cleanupDetailsSupported,
+  progress,
+  progressUnavailable,
   threadsLabel,
   archivedReady,
   now,
@@ -493,7 +541,9 @@ function ManagedWorktreeRow({
   readonly threads: readonly OrchestrationV2ThreadShell[];
   readonly protection: ForkWorktreeCleanupStatusResult["worktrees"][number] | null;
   readonly protectionUnavailable: boolean;
-  readonly worktreeActivityByPath: ReadonlyMap<string, number>;
+  readonly cleanupDetailsSupported: boolean;
+  readonly progress: ForkWorktreeCleanupProgress | null;
+  readonly progressUnavailable: boolean;
   readonly threadsLabel: string;
   readonly archivedReady: boolean;
   readonly now: Date;
@@ -512,15 +562,48 @@ function ManagedWorktreeRow({
     (thread) =>
       (thread.worktreePath ?? projectCwd) === row.worktreePath && isWorktreeThreadRunning(thread),
   );
-  const activityAt = latestWorktreeActivity(
-    threads,
-    row.worktreePath,
-    projectCwd,
-    worktreeActivityByPath,
-  );
+  const age = protection?.age;
   let inactivity = "Loading...";
-  if (archivedReady)
-    inactivity = activityAt === null ? "No threads" : `${worktreeInactivityDays(activityAt, now)}d`;
+  let ageDescription = "Checking the enabled cleanup clocks.";
+  if (!cleanupDetailsSupported || protectionUnavailable) {
+    inactivity = "Unavailable";
+    ageDescription = "Cleanup age requires a compatible, connected Fork server.";
+  } else if (age) {
+    if (age.basis === "off") {
+      inactivity = "Off";
+      ageDescription = "Automatic cleanup is off for an associated project.";
+    } else if (age.basis === "deleted") {
+      inactivity = "Deleted";
+      ageDescription =
+        "The parent thread was deleted. Deletion cleanup applies without an age threshold; local protections still apply.";
+    } else if (age.basis === "none") {
+      inactivity = "Not timed";
+      ageDescription = "No age-based cleanup rule is enabled. Other cleanup rules may still apply.";
+    } else if (age.since === null) {
+      inactivity = age.basis === "settled" ? "Not settled" : "No threads";
+      ageDescription =
+        age.basis === "settled"
+          ? "The settlement clock has not started because an associated thread is not settled."
+          : "No associated thread activity starts the cleanup clock.";
+    } else {
+      inactivity = `${Math.max(0, Math.floor((now.getTime() - age.since) / 86_400_000))}d`;
+      const clock =
+        age.basis === "activity"
+          ? "Last cleanup-relevant thread activity"
+          : age.basis === "settled"
+            ? "All threads settled, or their later activity"
+            : "Lower of inactivity and settlement age";
+      ageDescription = `${clock}: ${new Date(age.since).toLocaleString()}. Elapsed 24-hour days. Either enabled time rule can qualify the worktree; other protections still apply.`;
+    }
+  }
+  let progressDescription: string | null = null;
+  if (progressUnavailable) progressDescription = "Cleanup progress is unavailable.";
+  else if (progress?.state === "checking")
+    progressDescription = "Automatic cleanup is checking this worktree. Deletion has not started.";
+  else if (progress?.state === "deleting")
+    progressDescription = "Deletion is in progress. Branches and thread history are kept.";
+  else if (progress?.state === "failed")
+    progressDescription = `${progress.phase === "delete" ? "Deletion failed" : "Cleanup check failed before deletion"}: ${progress.reason ?? "Unknown error"}`;
   let statusLabel = "Loading...";
   if (busy) statusLabel = "Busy";
   else if (protectionUnavailable || protection?.status === "unavailable")
@@ -547,8 +630,8 @@ function ManagedWorktreeRow({
       className={cn(
         "grid items-center gap-3 px-4 py-3 data-[selected=true]:bg-accent/30",
         cleaning
-          ? "grid-cols-[1rem_0.75rem_minmax(0,1fr)_auto] @min-[42rem]/worktree-list:grid-cols-[1rem_0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_5rem_1.75rem]"
-          : "grid-cols-[0.75rem_minmax(0,1fr)_auto] @min-[42rem]/worktree-list:grid-cols-[0.75rem_minmax(0,1fr)_5rem_5.5rem_5rem_5rem_1.75rem]",
+          ? "grid-cols-[1rem_0.75rem_minmax(0,1fr)_auto] @min-[42rem]/worktree-list:grid-cols-[1rem_0.75rem_minmax(0,1fr)_6rem_5.5rem_5rem_5rem_1.75rem]"
+          : "grid-cols-[0.75rem_minmax(0,1fr)_auto] @min-[42rem]/worktree-list:grid-cols-[0.75rem_minmax(0,1fr)_6rem_5.5rem_5rem_5rem_1.75rem]",
       )}
     >
       {cleaning ? (
@@ -569,14 +652,41 @@ function ManagedWorktreeRow({
             </TooltipTrigger>
             <TooltipPopup>{row.worktreePath}</TooltipPopup>
           </Tooltip>
+          {progressDescription !== null ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    tabIndex={0}
+                    role="status"
+                    aria-label={progressDescription}
+                    className={cn(
+                      "shrink-0",
+                      progress?.state === "failed" || progressUnavailable
+                        ? "text-destructive"
+                        : "text-muted-foreground",
+                    )}
+                  />
+                }
+              >
+                {progress?.state === "deleting" ? (
+                  <HourglassIcon aria-hidden className="size-3.5" />
+                ) : progress?.state === "checking" ? (
+                  <SearchIcon aria-hidden className="size-3.5" />
+                ) : (
+                  <CircleAlertIcon aria-hidden className="size-3.5" />
+                )}
+              </TooltipTrigger>
+              <TooltipPopup>{progressDescription}</TooltipPopup>
+            </Tooltip>
+          ) : null}
         </div>
         <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           <GitBranchIcon aria-hidden className="size-3 shrink-0" />
           <span className="truncate">{row.refName ?? "Detached HEAD"}</span>
         </span>
         <span className="text-xs text-muted-foreground @min-[42rem]/worktree-list:hidden">
-          {activityAt === null ? inactivity : `${inactivity} inactive`} · {sizeLabel} ·{" "}
-          {threadsLabel} · {statusLabel}
+          {inactivity} cleanup age · {sizeLabel} · {threadsLabel} · {statusLabel}
         </span>
       </div>
       <Tooltip>
@@ -590,11 +700,7 @@ function ManagedWorktreeRow({
         >
           {inactivity}
         </TooltipTrigger>
-        <TooltipPopup>
-          {activityAt === null
-            ? "No associated thread activity"
-            : new Date(activityAt).toLocaleString()}
-        </TooltipPopup>
+        <TooltipPopup>{ageDescription}</TooltipPopup>
       </Tooltip>
       <span className="hidden text-right text-xs tabular-nums text-muted-foreground @min-[42rem]/worktree-list:block">
         {sizeLabel}

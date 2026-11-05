@@ -12,6 +12,7 @@ export const ForkCapabilities = Schema.Struct({
       apiVersion: Schema.Int,
       sizeSubscription: Schema.optionalKey(Schema.Boolean),
       cleanupStatus: Schema.optionalKey(Schema.Boolean),
+      cleanupDetails: Schema.optionalKey(Schema.Boolean),
     }),
   ),
 });
@@ -81,6 +82,7 @@ export const ForkWorktreeActivityResult = Schema.Struct({
       worktreePath: Schema.String,
       latestActivityAt: NonNegativeInt,
       threadsSettled: Schema.optionalKey(Schema.Boolean),
+      parentDeleted: Schema.optionalKey(Schema.Boolean),
     }),
   ),
 });
@@ -92,6 +94,26 @@ export const ForkWorktreeCleanupStatusInput = Schema.Struct({
 });
 export type ForkWorktreeCleanupStatusInput = typeof ForkWorktreeCleanupStatusInput.Type;
 
+export const ForkWorktreeCleanupAge = Schema.Struct({
+  basis: Schema.Literals(["activity", "settled", "both", "deleted", "off", "none"]),
+  since: Schema.NullOr(NonNegativeInt),
+});
+export type ForkWorktreeCleanupAge = typeof ForkWorktreeCleanupAge.Type;
+
+export const ForkWorktreeCleanupProgress = Schema.Struct({
+  worktreePath: Schema.String,
+  source: Schema.Literals(["automatic", "manual"]),
+  state: Schema.Literals(["checking", "deleting", "failed", "removed", "kept"]),
+  phase: Schema.Literals(["check", "delete"]),
+  reason: Schema.NullOr(Schema.String),
+});
+export type ForkWorktreeCleanupProgress = typeof ForkWorktreeCleanupProgress.Type;
+
+export const ForkWorktreeCleanupProgressSnapshot = Schema.Struct({
+  worktrees: Schema.Array(ForkWorktreeCleanupProgress),
+});
+export type ForkWorktreeCleanupProgressSnapshot = typeof ForkWorktreeCleanupProgressSnapshot.Type;
+
 export const ForkWorktreeCleanupStatusResult = Schema.Struct({
   worktrees: Schema.Array(
     Schema.Struct({
@@ -99,6 +121,7 @@ export const ForkWorktreeCleanupStatusResult = Schema.Struct({
       keepWhen: WorktreeKeepWhen,
       status: Schema.Literals(["clean", "dirty", "unavailable"]),
       reason: Schema.NullOr(Schema.String),
+      age: Schema.optionalKey(ForkWorktreeCleanupAge),
     }),
   ),
 });

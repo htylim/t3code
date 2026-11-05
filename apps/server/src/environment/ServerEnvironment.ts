@@ -223,6 +223,7 @@ export const make = Effect.gen(function* () {
           apiVersion: FORK_WORKTREES_API_VERSION,
           sizeSubscription: true,
           cleanupStatus: true,
+          cleanupDetails: true,
         },
       },
       repositoryIdentity: true,

@@ -185,6 +185,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.forkWorktreeSize]: "vcs",
   [WS_METHODS.forkWorktreeActivity]: "vcs",
   [WS_METHODS.forkWorktreeCleanupStatus]: "vcs",
+  [WS_METHODS.forkWorktreeCleanupProgress]: "vcs",
   [WS_METHODS.workspaceChooseColor]: "workspace",
   [WS_METHODS.vcsCreateWorktree]: "vcs",
   [WS_METHODS.forkWorktreeRename]: "vcs",
