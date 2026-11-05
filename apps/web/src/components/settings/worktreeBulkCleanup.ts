@@ -1,4 +1,4 @@
-import type { ScopedProjectRef } from "@t3tools/contracts";
+import type { ScopedProjectRef, WorktreeKeepWhen } from "@t3tools/contracts";
 import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 
 export interface WorktreeCleanupTarget {
@@ -10,7 +10,11 @@ export interface WorktreeCleanupTarget {
 
 export interface WorktreeCleanupInspection {
   readonly target: WorktreeCleanupTarget;
+  /** Raw Git status only decides whether removal needs force; policy decides warnings. */
   readonly uncommittedFiles: number;
+  readonly protectedChanges: boolean;
+  readonly protectionReason: string | null;
+  readonly keepWhen: WorktreeKeepWhen;
   readonly reclaimableBytes: number | null;
 }
 
@@ -60,9 +64,13 @@ export async function runWorktreeBulkCleanup(
     const { target } = inspection;
     try {
       const current = await operations.inspect(target);
-      if (inspection.uncommittedFiles === 0 && current.uncommittedFiles > 0) {
+      if (inspection.keepWhen !== current.keepWhen)
         throw new Error(
-          "New uncommitted changes appeared after confirmation. Review this worktree again.",
+          "Cleanup protection policy changed after confirmation. Review this worktree again.",
+        );
+      if (!inspection.protectedChanges && current.protectedChanges) {
+        throw new Error(
+          "New protected local changes appeared after confirmation. Review this worktree again.",
         );
       }
       await operations.remove(target, current.uncommittedFiles > 0);

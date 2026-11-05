@@ -1,8 +1,16 @@
 import type { ConfirmDialogOptions, ConfirmDialogVariant } from "@t3tools/contracts";
 
+export interface WorktreeConfirmationDetail {
+  readonly key: string;
+  readonly name: string;
+  readonly path: string;
+  readonly warning: string | null;
+}
+
 interface WorktreeConfirmationOptions {
   readonly confirmLabel?: string;
   readonly details?: readonly string[];
+  readonly worktrees?: readonly WorktreeConfirmationDetail[];
 }
 
 export type ConfirmDialogState =
@@ -13,6 +21,7 @@ export type ConfirmDialogState =
       readonly variant: ConfirmDialogVariant;
       readonly confirmLabel?: string;
       readonly details?: readonly string[];
+      readonly worktrees?: readonly WorktreeConfirmationDetail[];
     }
   | {
       readonly status: "closing";
@@ -20,6 +29,7 @@ export type ConfirmDialogState =
       readonly variant: ConfirmDialogVariant;
       readonly confirmLabel?: string;
       readonly details?: readonly string[];
+      readonly worktrees?: readonly WorktreeConfirmationDetail[];
     };
 
 type PendingConfirmation = {
@@ -27,6 +37,7 @@ type PendingConfirmation = {
   readonly variant: ConfirmDialogVariant;
   readonly confirmLabel?: string;
   readonly details?: readonly string[];
+  readonly worktrees?: readonly WorktreeConfirmationDetail[];
   readonly resolve: (confirmed: boolean) => void;
 };
 
@@ -82,6 +93,7 @@ export function requestConfirmDialog(
       variant: options?.variant ?? "default",
       ...(options?.confirmLabel ? { confirmLabel: options.confirmLabel } : {}),
       ...(options?.details ? { details: options.details } : {}),
+      ...(options?.worktrees ? { worktrees: options.worktrees } : {}),
       resolve,
     } satisfies PendingConfirmation;
     if (activeConfirmation || state.status === "closing") {

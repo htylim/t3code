@@ -46,24 +46,35 @@ it("counts measured zero-byte worktrees while preserving unknown sizes", () => {
 it("warns about dirty selections before any removal and deduplicates shared worktrees", async () => {
   const clean = target("clean");
   const dirty = target("dirty");
+  const ignored = target("ignored");
   const remote = {
     ...clean,
     projectRef: { ...clean.projectRef, environmentId: EnvironmentId.make("remote") },
   };
   const events: string[] = [];
-  const outcome = await runWorktreeBulkCleanup([clean, dirty, { ...dirty }, remote], {
+  const outcome = await runWorktreeBulkCleanup([clean, dirty, { ...dirty }, remote, ignored], {
     inspect: async (worktree) => ({
       target: worktree,
-      uncommittedFiles: worktree.name === "dirty" ? 2 : 0,
+      uncommittedFiles: worktree.name === "ignored" ? 0 : worktree.name === "dirty" ? 2 : 1,
+      protectedChanges: worktree.name !== "clean",
+      protectionReason: worktree.name === "ignored" ? "Ignored .env" : "Tracked edit",
+      keepWhen: worktree.name === "ignored" ? "any-local-files" : "tracked-changes",
       reclaimableBytes: worktree.name === "clean" ? null : 4096,
     }),
     confirm: async (inspections) => {
       expect(events).toEqual([]);
-      expect(inspections.map((inspection) => inspection.uncommittedFiles)).toEqual([0, 2, 0]);
+      expect(inspections.map((inspection) => inspection.uncommittedFiles)).toEqual([1, 2, 1, 0]);
+      expect(inspections.map((inspection) => inspection.protectedChanges)).toEqual([
+        false,
+        true,
+        false,
+        true,
+      ]);
       expect(inspections.map((inspection) => inspection.reclaimableBytes)).toEqual([
         null,
         4096,
         null,
+        4096,
       ]);
       events.push("confirmed");
       return true;
@@ -75,11 +86,12 @@ it("warns about dirty selections before any removal and deduplicates shared work
   });
   expect(events).toEqual([
     "confirmed",
-    "local:clean:false",
+    "local:clean:true",
     "local:dirty:true",
-    "remote:clean:false",
+    "remote:clean:true",
+    "local:ignored:false",
   ]);
-  expect(outcome.removed).toHaveLength(3);
+  expect(outcome.removed).toHaveLength(4);
 });
 
 it("cancels the whole batch before deleting anything", async () => {
@@ -88,6 +100,9 @@ it("cancels the whole batch before deleting anything", async () => {
     inspect: async (worktree) => ({
       target: worktree,
       uncommittedFiles: 1,
+      protectedChanges: true,
+      protectionReason: "Tracked edit",
+      keepWhen: "tracked-changes",
       reclaimableBytes: null,
     }),
     confirm: async () => false,
@@ -107,7 +122,14 @@ it("deletes nothing when any selection cannot be checked", async () => {
     runWorktreeBulkCleanup([target("clean"), target("offline")], {
       inspect: async (worktree) => {
         if (worktree.name === "offline") throw new Error("Environment unavailable");
-        return { target: worktree, uncommittedFiles: 0, reclaimableBytes: 0 };
+        return {
+          target: worktree,
+          uncommittedFiles: 0,
+          protectedChanges: false,
+          protectionReason: null,
+          keepWhen: "tracked-changes",
+          reclaimableBytes: 0,
+        };
       },
       confirm: async () => {
         confirmations++;
@@ -136,6 +158,9 @@ it("keeps newly dirty or busy worktrees while removing the rest, without forcing
         return {
           target: worktree,
           uncommittedFiles: worktree.name === "changed" && count > 1 ? 1 : 0,
+          protectedChanges: worktree.name === "changed" && count > 1,
+          protectionReason: null,
+          keepWhen: "tracked-changes",
           reclaimableBytes: null,
         };
       },
@@ -154,4 +179,27 @@ it("keeps newly dirty or busy worktrees while removing the rest, without forcing
     "busy",
     "git-refused",
   ]);
+});
+
+it("allows policy-clean untracked changes but refuses a changed protection policy", async () => {
+  let checks = 0;
+  const removed: boolean[] = [];
+  const result = await runWorktreeBulkCleanup([target("untracked"), target("policy-changed")], {
+    inspect: async (worktree) => ({
+      target: worktree,
+      uncommittedFiles: ++checks > 2 ? 1 : 0,
+      protectedChanges: false,
+      protectionReason: null,
+      keepWhen:
+        worktree.name === "policy-changed" && checks > 2 ? "any-local-files" : "tracked-changes",
+      reclaimableBytes: 0,
+    }),
+    confirm: async () => true,
+    remove: async (_worktree, force) => {
+      removed.push(force);
+    },
+    onRemoved: () => {},
+  });
+  expect(removed).toEqual([true]);
+  expect(result.failures.map((failure) => failure.target.name)).toEqual(["policy-changed"]);
 });

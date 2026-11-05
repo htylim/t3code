@@ -1,4 +1,4 @@
-import { useAtomValue } from "@effect/atom-react";
+import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import {
   AuthSourceControlWriteScope,
   FORK_WORKTREE_MEASUREMENTS_BATCH_LIMIT,
@@ -7,8 +7,9 @@ import {
 } from "@t3tools/contracts";
 import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { useRef, useState } from "react";
+import { useContext, useRef, useState } from "react";
 
+import { executeAtomQuery } from "@t3tools/client-runtime/state/runtime";
 import { requestConfirmDialog } from "../../confirmDialog";
 import { formatBytes } from "../../lib/formatBytes";
 import { useNamedWorktreeStore } from "../../namedWorktreeStore";
@@ -158,6 +159,7 @@ export function useWorktreeCleanup(
   measurements: ReadonlyMap<string, WorktreeMeasurement>,
   onRemoved: (target: WorktreeCleanupTarget) => void,
 ) {
+  const registry = useContext(RegistryContext);
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
   const readRefs = useAtomCommand(vcsEnvironment.readWorktrees, { reportFailure: false });
@@ -210,6 +212,27 @@ export function useWorktreeCleanup(
         normalizeProjectPathForComparison(target.path)
     )
       throw new Error(`${target.name} is the repository's main checkout and cannot be removed.`);
+    const capabilities = readEnvironment(environmentId)?.serverConfig?.environment.capabilities;
+    if (capabilities?.fork?.worktrees?.cleanupStatus !== true)
+      throw new Error("Update this Fork server to inspect cleanup protection before deletion.");
+    const protectionResult = await executeAtomQuery(
+      registry,
+      vcsEnvironment.worktreeCleanupStatus({
+        environmentId,
+        input: { projectId: target.projectRef.projectId, worktreePaths: [target.path] },
+      }),
+      { refresh: true, reportFailure: false },
+    );
+    const protection =
+      protectionResult._tag === "Success"
+        ? protectionResult.value.worktrees.find(
+            (entry) =>
+              normalizeProjectPathForComparison(entry.worktreePath) ===
+              normalizeProjectPathForComparison(target.path),
+          )
+        : undefined;
+    if (!protection || protection.status === "unavailable")
+      throw new Error(`Unable to check cleanup protection in ${target.name}.`);
     const status = await refreshStatus({
       environmentId,
       input: { cwd: target.path, localOnly: true },
@@ -224,6 +247,9 @@ export function useWorktreeCleanup(
     return {
       target,
       uncommittedFiles,
+      protectedChanges: protection.status === "dirty",
+      protectionReason: protection.reason,
+      keepWhen: protection.keepWhen,
       reclaimableBytes: measurement?.error ? null : (measurement?.bytes ?? null),
     };
   }
@@ -236,18 +262,18 @@ export function useWorktreeCleanup(
     const operation = runWorktreeBulkCleanup(targets, {
       inspect,
       confirm: async (inspections) => {
-        const dirty = inspections.filter((inspection) => inspection.uncommittedFiles > 0);
+        const dirty = inspections.filter((inspection) => inspection.protectedChanges);
         const space = summarizeWorktreeBytes(
           inspections.map((inspection) => inspection.reclaimableBytes),
         );
         const targetLabel = `${inspections.length} ${inspections.length === 1 ? "worktree" : "worktrees"}`;
         const title =
           dirty.length > 0
-            ? "Remove worktrees with uncommitted changes?"
+            ? "Remove worktrees with protected local changes?"
             : `Remove ${targetLabel}?`;
         const warning =
           dirty.length > 0
-            ? `${dirty.length} selected ${dirty.length === 1 ? "worktree has" : "worktrees have"} uncommitted changes. These changes will be permanently deleted. Do you want to proceed?\n\n`
+            ? `${dirty.length} selected ${dirty.length === 1 ? "worktree has" : "worktrees have"} local changes protected by your cleanup policy. Continuing permanently deletes those changes.\n\n`
             : "";
         const estimate =
           space.knownCount === 0
@@ -257,21 +283,18 @@ export function useWorktreeCleanup(
               : `Estimated space to reclaim: ${formatBytes(space.bytes)}.`;
         return (
           (await requestConfirmDialog(
-            `${title}\n${warning}${estimate}\nWorktree directories, including ignored files, will be permanently deleted.\nBranches and thread history are kept.`,
+            `${title}\n${warning}${estimate}\n\nDeletion removes each entire directory, including untracked and ignored files.\nBranches and thread history are kept.`,
             {
               variant: "destructive",
               confirmLabel: `Remove ${targetLabel}`,
-              details: [
-                ...inspections
-                  .slice(0, 20)
-                  .map(
-                    ({ target, uncommittedFiles }) =>
-                      `${target.name}${uncommittedFiles > 0 ? ` · ${uncommittedFiles} uncommitted ${uncommittedFiles === 1 ? "file" : "files"}` : ""} · ${target.path}`,
-                  ),
-                ...(inspections.length > 20
-                  ? [`${inspections.length - 20} more selected worktrees.`]
-                  : []),
-              ],
+              worktrees: inspections.map(({ target, protectedChanges, protectionReason }) => ({
+                key: worktreeCleanupKey(target),
+                name: target.name,
+                path: target.path,
+                warning: protectedChanges
+                  ? (protectionReason ?? "Local changes protected by your cleanup policy")
+                  : null,
+              })),
             },
           )) ?? false
         );

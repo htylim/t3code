@@ -1,5 +1,17 @@
 # Fork journal
 
+## 2026-11-05 - Match manual deletion warnings to cleanup protection
+
+- Reason: Bulk deletion warned about untracked files even when Edited tracked files marked the
+  same worktree Clean. Git's directory-collapsed status also gave misleading file counts.
+- Upstream baseline remains `cefb544af3`. Confirmation uses the same server inspection as the
+  Clean/Dirty column, with separate worktree names, paths, and warning icons for protected changes.
+  Untracked and ignored files remain explicitly included in the directory deletion notice.
+- Deletion rechecks protection and refuses newly protected changes or a changed policy. Git's
+  force flag still follows raw working-tree status so policy-clean untracked files can be removed.
+- Verification covers untracked and ignored files, policy changes during confirmation, newly
+  protected edits, cancellation, and queued confirmation details.
+
 ## 2026-11-04 - Align cleanup ages and follow isolated subagent ownership
 
 - Reason: The worktree list showed conversation inactivity while settlement-based cleanup used

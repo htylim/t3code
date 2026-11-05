@@ -1,3 +1,4 @@
+import { TriangleAlertIcon } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
 import {
@@ -16,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "./ui/alert-dialog";
 import { Button } from "./ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 type ConfirmationCopy = {
   readonly title: string;
@@ -79,6 +81,41 @@ export function ConfirmDialogHost() {
             <AlertDialogDescription className="whitespace-pre-line">
               {copy.description}
             </AlertDialogDescription>
+          ) : null}
+          {state.status !== "idle" && state.worktrees ? (
+            <ul
+              aria-label="Selected worktrees"
+              className="max-h-72 overflow-y-auto divide-y divide-border rounded-md border border-border text-left"
+            >
+              {state.worktrees.map((worktree) => (
+                <li key={worktree.key} className="flex items-start gap-2 px-3 py-2">
+                  {worktree.warning ? (
+                    <TriangleAlertIcon
+                      aria-label="Protected local changes"
+                      className="mt-0.5 size-4 shrink-0 text-warning-foreground"
+                    />
+                  ) : (
+                    <span aria-hidden className="size-4 shrink-0" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{worktree.name}</p>
+                    {worktree.warning ? (
+                      <p className="text-xs text-warning-foreground">{worktree.warning}</p>
+                    ) : null}
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <p className="truncate text-xs text-muted-foreground" tabIndex={0} />
+                        }
+                      >
+                        {worktree.path}
+                      </TooltipTrigger>
+                      <TooltipPopup>{worktree.path}</TooltipPopup>
+                    </Tooltip>
+                  </div>
+                </li>
+              ))}
+            </ul>
           ) : null}
           {state.status !== "idle" && state.details ? (
             <ul className="list-disc pl-5 text-sm text-muted-foreground">

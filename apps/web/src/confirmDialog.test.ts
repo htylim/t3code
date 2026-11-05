@@ -52,6 +52,9 @@ describe("confirm dialog coordinator", () => {
 
   it("preserves force-removal copy while queued behind the first confirmation", async () => {
     const unregister = mountHost();
+    const worktrees = [
+      { key: "local:review", name: "review", path: "/trees/review", warning: "Tracked edit" },
+    ];
     const initial = requireConfirmation(requestConfirmDialog("Remove worktree?"));
     respondToConfirmDialog(true);
     await expect(initial).resolves.toBe(true);
@@ -60,6 +63,7 @@ describe("confirm dialog coordinator", () => {
         variant: "destructive",
         confirmLabel: "Force remove",
         details: ["1 uncommitted file"],
+        worktrees,
       }),
     );
     completeConfirmDialogClose();
@@ -69,9 +73,11 @@ describe("confirm dialog coordinator", () => {
       variant: "destructive",
       confirmLabel: "Force remove",
       details: ["1 uncommitted file"],
+      worktrees,
     });
     respondToConfirmDialog(false);
     await expect(forced).resolves.toBe(false);
+    expect(readConfirmDialogState()).toMatchObject({ status: "closing", worktrees });
     unregister();
   });
 
