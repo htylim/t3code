@@ -45,7 +45,7 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   managedWorktreeRows,
-  sortWorktreesByActivity,
+  sortWorktreesByCleanupAge,
   worktreeThreadsLabel,
 } from "./ForkWorktreesSettings.logic";
 import { FORK_SETTINGS_AVAILABLE } from "./forkSettingsAvailability";
@@ -310,22 +310,14 @@ function ProjectWorktrees({
         })
       : null,
   );
-  const worktreeActivityByPath = new Map(
-    activity.data?.worktrees.map((worktree) => [worktree.worktreePath, worktree.latestActivityAt]),
-  );
   const worktreeThreadsByPath = new Map(
     activity.data?.worktrees.map((worktree) => [worktree.worktreePath, worktree]),
   );
-  const rows = sortWorktreesByActivity(
-    managedWorktreeRows(
-      choices.refsQuery.data?.refs ?? [],
-      choices.rows,
-      project.workspaceRoot,
-      choices.refsQuery.data?.mainWorktreePath,
-    ),
-    choices.threads,
+  const rows = managedWorktreeRows(
+    choices.refsQuery.data?.refs ?? [],
+    choices.rows,
     project.workspaceRoot,
-    worktreeActivityByPath,
+    choices.refsQuery.data?.mainWorktreePath,
   );
   const query = search.trim().toLowerCase();
   const visibleRows = rows.filter((row) =>
@@ -347,6 +339,13 @@ function ProjectWorktrees({
   const protectionByPath = new Map(
     protection.data?.worktrees.map((worktree) => [worktree.worktreePath, worktree]),
   );
+
+  const cleanupAgesByPath = new Map(
+    protection.data?.worktrees.flatMap((worktree) =>
+      worktree.age === undefined ? [] : [[worktree.worktreePath, worktree.age] as const],
+    ),
+  );
+  const sortedRows = sortWorktreesByCleanupAge(visibleRows, cleanupAgesByPath);
 
   const targets = visibleRows.map((row): WorktreeCleanupTarget => ({
     projectRef,
@@ -461,7 +460,7 @@ function ProjectWorktrees({
           {rows.length === 0 ? "No worktrees found." : "No matching worktrees."}
         </p>
       ) : (
-        visibleRows.map((row) => (
+        sortedRows.map((row) => (
           <ManagedWorktreeRow
             key={row.worktreePath}
             projectRef={projectRef}
@@ -580,7 +579,7 @@ function ManagedWorktreeRow({
       inactivity = "Not timed";
       ageDescription = "No age-based cleanup rule is enabled. Other cleanup rules may still apply.";
     } else if (age.since === null) {
-      inactivity = age.basis === "settled" ? "Not settled" : "No threads";
+      inactivity = age.basis === "settled" ? "-" : "No threads";
       ageDescription =
         age.basis === "settled"
           ? "The settlement clock has not started because an associated thread is not settled."

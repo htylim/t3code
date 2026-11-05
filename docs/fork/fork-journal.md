@@ -10,7 +10,9 @@
   policies, recent parent activity, and unfinished work retain their protections. Parent state is
   checked again before removal, including settlement-script grace.
 - Fork-only cleanup details advertise an additive capability. The list shows elapsed 24-hour
-  cleanup age under enabled rules and the lower age when both time rules apply. A scoped stream
+  cleanup age under enabled rules and the lower age when both time rules apply. Rows sort by this
+  clock from youngest to oldest, with nonnumeric ages last; unstarted settlement clocks show a dash.
+  A scoped stream
   reports checking, deletion, and failures for automatic and explicit UI removals. Tooltips distinguish
   failed eligibility checks from failed deletion; confirmed removals refresh the Git worktree list.
 - Upstream integration watchpoint: preserve cross-worktree parent inheritance and shared cleanup
