@@ -293,18 +293,30 @@ it.effect("rejects in-progress and rolled-back fork sources", () =>
   }),
 );
 
-it.effect("marks only requested forks as side chats and inherits the parent runtime mode", () =>
+it.effect("marks only requested forks as side chats and inherits parent permissions", () =>
   Effect.gen(function* () {
     const sourceRun = makeSourceRun("completed");
-    for (const runtimeMode of ["full-access", "approval-required"] as const) {
+    const sideChat = yield* planFork(sourceRun, makeSourceProjection(sourceRun), {
+      sideChat: true,
+    });
+    assert.isTrue(sideChat.targetThread.lineage.sideChat);
+    assert.equal(sideChat.targetThread.runtimeMode, "full-access");
+    for (const runtimeMode of [
+      "approval-required",
+      "auto-accept-edits",
+      "auto",
+      "full-access",
+    ] as const) {
       const source = makeSourceProjection(sourceRun);
-      const sideChat = yield* planFork(
+      const inherited = yield* planFork(
         sourceRun,
-        { ...source, thread: { ...source.thread, runtimeMode } },
+        {
+          ...source,
+          thread: { ...source.thread, runtimeMode },
+        },
         { sideChat: true },
       );
-      assert.isTrue(sideChat.targetThread.lineage.sideChat);
-      assert.equal(sideChat.targetThread.runtimeMode, runtimeMode);
+      assert.equal(inherited.targetThread.runtimeMode, runtimeMode);
     }
 
     const sideChatSource = makeSourceProjection(sourceRun);

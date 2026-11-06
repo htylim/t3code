@@ -366,6 +366,7 @@ export interface ServerConfigSubscriptionOptions {
   readonly environmentThemes?: boolean;
   readonly usageLimitSources?: boolean;
   readonly usageLimitsCommand?: boolean;
+  readonly providerCatalogsOnDemand?: boolean;
 }
 
 // Configs are JSON-shaped. Missing and undefined object fields persist identically.
@@ -487,6 +488,7 @@ export const makeEnvironmentServerConfigState = Effect.fn("EnvironmentServerConf
       ...(subscription.environmentThemes === true ? { environmentThemes: true } : {}),
       ...(subscription.usageLimitSources === true ? { usageLimitSources: true } : {}),
       ...(subscription.usageLimitsCommand === true ? { usageLimitsCommand: true } : {}),
+      ...(subscription.providerCatalogsOnDemand === true ? { providerCatalogsOnDemand: true } : {}),
     }).pipe(
       Stream.runForEach((event) =>
         Effect.gen(function* () {
@@ -756,6 +758,7 @@ export function createServerEnvironmentAtoms<R, E>(
     readonly environmentThemes?: boolean;
     readonly usageLimitSources?: boolean;
     readonly usageLimitsCommand?: boolean;
+    readonly providerCatalogsOnDemand?: boolean;
   },
 ) {
   const configScheduler = createAtomCommandScheduler();
@@ -771,6 +774,7 @@ export function createServerEnvironmentAtoms<R, E>(
           ...(options.environmentThemes === true ? { environmentThemes: true } : {}),
           ...(options.usageLimitSources === true ? { usageLimitSources: true } : {}),
           ...(options.usageLimitsCommand === true ? { usageLimitsCommand: true } : {}),
+          ...(options.providerCatalogsOnDemand === true ? { providerCatalogsOnDemand: true } : {}),
         }),
       )
       .pipe(
@@ -1403,6 +1407,7 @@ export function createServerEnvironmentAtoms<R, E>(
           ...input,
           workspaceSnapshotsOnDemand: true,
           ...(options.usageLimitsCommand === true ? { usageLimitsCommand: true } : {}),
+          ...(options.providerCatalogsOnDemand === true ? { providerCatalogsOnDemand: true } : {}),
         }),
       onSuccess: ({ environmentId, input }, registry, result) =>
         Effect.sync(() => {

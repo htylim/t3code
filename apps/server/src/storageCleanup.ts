@@ -79,6 +79,15 @@ const decodePnpmModulesManifest = Schema.decodeUnknownEffect(
   }),
 );
 
+class PnpmModulesManifestParseError extends Schema.TaggedError<PnpmModulesManifestParseError>()(
+  "PnpmModulesManifestParseError",
+  { cause: Schema.Defect() },
+) {
+  override get message(): string {
+    return "Could not parse the pnpm modules manifest.";
+  }
+}
+
 const DAY_MS = 86_400_000;
 // Give settle scripts time to open terminals that protect the worktree.
 const SETTLE_SCRIPT_GRACE_MS = 60_000;
@@ -151,8 +160,15 @@ export function storageCleanupThreadIdle(
   now: number,
   settings: LimitRecoverySettings,
 ): boolean {
+  return thread.worktreePath !== null && threadIdle(thread, now, settings);
+}
+
+function threadIdle(
+  thread: OrchestrationV2ThreadShell,
+  now: number,
+  settings: LimitRecoverySettings,
+): boolean {
   return (
-    thread.worktreePath !== null &&
     thread.activeRunId === null &&
     (thread.status === "idle" ||
       thread.status === "completed" ||
@@ -249,11 +265,25 @@ function worktreeOwner<T extends Pick<OrchestrationV2ThreadShell, "id" | "lineag
   return owner;
 }
 
-type WorktreeFamilyThread = WorktreeActivityThread &
-  Pick<
-    OrchestrationV2ThreadShell,
-    "id" | "projectId" | "lineage" | "settledAt" | "settledOverride" | "deletedAt"
-  >;
+type WorktreeFamilyThread =
+  | OrchestrationV2ThreadShell
+  | (WorktreeActivityThread &
+      Pick<
+        OrchestrationV2ThreadShell,
+        | "id"
+        | "projectId"
+        | "lineage"
+        | "settledAt"
+        | "settledOverride"
+        | "deletedAt"
+        | "pinnedAt"
+        | "updatedAt"
+      >);
+
+/** Deleted projection rows do not carry live run state. */
+function isWorktreeThreadShell(thread: WorktreeFamilyThread): thread is OrchestrationV2ThreadShell {
+  return "status" in thread;
+}
 
 /** Follow only genuine subagent and side-chat ancestry, including isolated worktrees. */
 function worktreeParent(
@@ -266,27 +296,36 @@ function worktreeParent(
   return parent?.lineage.rootThreadId === thread.lineage.rootThreadId ? parent : undefined;
 }
 
-/** Inherit settlement across worktrees while preserving explicit active overrides. */
-function worktreeSettlementAt(
-  thread: WorktreeFamilyThread,
-  threadsById: ReadonlyMap<OrchestrationV2ThreadShell["id"], WorktreeFamilyThread>,
+/** Extend upstream settlement inheritance to side chats and shared project policies. */
+function worktreeSettlementChain(
+  thread: OrchestrationV2ThreadShell,
+  threadsById: ReadonlyMap<WorktreeFamilyThread["id"], WorktreeFamilyThread>,
+  now: number,
+  settings: LimitRecoverySettings,
 ) {
+  if (thread.deletedAt !== null) return [];
+  const chain = [thread];
   let current = thread;
-  const visited = new Set<OrchestrationV2ThreadShell["id"]>();
-  if (current.deletedAt !== null) return null;
   while (current.settledAt === null) {
     if (
-      visited.has(current.id) ||
+      (current.lineage.relationshipToParent !== "subagent" && current.lineage.sideChat !== true) ||
       current.settledOverride === "active" ||
-      (current.lineage.relationshipToParent !== "subagent" && current.lineage.sideChat !== true)
+      current.pinnedAt !== null
     )
-      return null;
-    visited.add(current.id);
+      return [];
     const parent = worktreeParent(current, threadsById);
-    if (parent === undefined || parent.deletedAt !== null) return null;
+    if (
+      parent === undefined ||
+      parent.deletedAt !== null ||
+      !isWorktreeThreadShell(parent) ||
+      chain.some((member) => member.id === parent.id) ||
+      !threadIdle(parent, now, settings)
+    )
+      return [];
+    chain.push(parent);
     current = parent;
   }
-  return current.settledAt;
+  return chain;
 }
 
 /** A deleted ancestor retires its dependent checkout, but never an independent thread. */
@@ -325,6 +364,8 @@ function worktreeCleanupPolicyMembers(
 function worktreeCleanupClocks(
   threads: readonly OrchestrationV2ThreadShell[],
   threadsById: ReadonlyMap<OrchestrationV2ThreadShell["id"], WorktreeFamilyThread>,
+  now: number,
+  settings: LimitRecoverySettings,
 ) {
   let activityAt: number | null = null;
   for (const thread of threads) {
@@ -336,7 +377,10 @@ function worktreeCleanupClocks(
       current = worktreeParent(current, threadsById);
     }
   }
-  const settlements = threads.map((thread) => worktreeSettlementAt(thread, threadsById));
+  const settlements = threads.map(
+    (thread) =>
+      worktreeSettlementChain(thread, threadsById, now, settings).at(-1)?.settledAt ?? null,
+  );
   const settledAt =
     activityAt === null || settlements.some((timestamp) => timestamp === null)
       ? null
@@ -533,7 +577,12 @@ const make = Effect.gen(function* () {
     function* (root: string) {
       const nodeModules = path.join(root, "node_modules");
       const text = yield* fs.readFileString(path.join(nodeModules, ".modules.yaml"));
-      const manifest = yield* decodePnpmModulesManifest(yield* Effect.try(() => parseYaml(text)));
+      const manifest = yield* decodePnpmModulesManifest(
+        yield* Effect.try({
+          try: () => parseYaml(text),
+          catch: (cause) => new PnpmModulesManifestParseError({ cause }),
+        }),
+      );
       // An agent can write this manifest, and statting a network path makes
       // Windows sign in to its host with the user's NTLM credentials.
       if (isNetworkPath(manifest.storeDir) || isNetworkPath(manifest.virtualStoreDir ?? "")) {
@@ -646,6 +695,8 @@ const make = Effect.gen(function* () {
         [...snapshot.threads, ...snapshot.archivedThreads],
         (thread) => thread.worktreePath,
       );
+      const settings = yield* settingsService.getSettings;
+      const now = DateTime.toEpochMillis(yield* DateTime.now);
       const worktrees: ForkWorktreeActivityResult["worktrees"][number][] = [];
       for (const [worktreePath, threads] of threadsByPath) {
         if (worktreePath === null) continue;
@@ -666,7 +717,7 @@ const make = Effect.gen(function* () {
             ? { parentDeleted: true }
             : {}),
           threadsSettled: threads.every(
-            (thread) => worktreeSettlementAt(thread, threadsById) !== null,
+            (thread) => worktreeSettlementChain(thread, threadsById, now, settings).length > 0,
           ),
         });
       }
@@ -991,6 +1042,7 @@ const make = Effect.gen(function* () {
         (thread) => path.resolve(thread.worktreePath!),
       );
       const settings = yield* settingsService.getSettings;
+      const now = DateTime.toEpochMillis(yield* DateTime.now);
       const fallback = resolveWorktreeCleanup(settings, input.projectId);
       const worktrees = yield* Effect.forEach(
         [...requestedPaths],
@@ -1018,7 +1070,7 @@ const make = Effect.gen(function* () {
             );
             const rules = worktreeLocalChangesRules(policies, fallback);
             const age = worktreeCleanupAge(
-              worktreeCleanupClocks(liveThreads, threadsById),
+              worktreeCleanupClocks(liveThreads, threadsById, now, settings),
               policies.length === 0 ? [fallback] : policies,
               inheritedDeletion || deletedOwner !== undefined,
             );
@@ -1249,7 +1301,10 @@ const make = Effect.gen(function* () {
     for (const thread of candidates) {
       const worktreePath = path.resolve(thread.worktreePath!);
       const group = groups.get(worktreePath) ?? [];
-      const clocks = worktreeCleanupClocks(group, allThreadsById);
+      const settlementChain = group.flatMap((member) =>
+        worktreeSettlementChain(member, allThreadsById, now, serverSettings),
+      );
+      const clocks = worktreeCleanupClocks(group, allThreadsById, now, serverSettings);
       const activityAt = clocks.activityAt ?? 0;
       const deleted = "workspaceRoot" in thread;
       const deletedAncestors = group.map((member) =>
@@ -1332,7 +1387,7 @@ const make = Effect.gen(function* () {
         const changes = yield* localChangesReason(worktreePath, localChangesRules);
         if (changes !== null) return keep(changes);
         if (
-          group.some(
+          [...group, ...settlementChain].some(
             (member) =>
               member.settledAt !== null &&
               now - Math.max(DateTime.toEpochMillis(member.updatedAt), activityAt) <
@@ -1535,6 +1590,40 @@ const make = Effect.gen(function* () {
             })
           )
             return waitForStop("thread activity or shared worktree changed since check");
+          if (settlementChain.length > 0) {
+            const ancestors = yield* Effect.forEach(
+              [...new Map(settlementChain.map((member) => [member.id, member])).values()],
+              (ancestor) => projections.getThreadShell(ancestor.id),
+            );
+            const latestFamilyById = new Map(
+              [...ancestors.filter((ancestor) => ancestor !== null), ...latestGroup].map(
+                (member) => [member.id, member],
+              ),
+            );
+            for (const member of group) {
+              const previousSettlement = worktreeSettlementChain(
+                member,
+                allThreadsById,
+                now,
+                serverSettings,
+              ).at(-1);
+              if (previousSettlement === undefined) continue;
+              const latestMember = latestFamilyById.get(member.id);
+              if (latestMember === undefined) return "parent settlement changed since check";
+              const latestSettlement = worktreeSettlementChain(
+                latestMember,
+                latestFamilyById,
+                now,
+                serverSettings,
+              ).at(-1);
+              if (
+                latestSettlement?.id !== previousSettlement.id ||
+                !Equal.equals(latestSettlement.settledAt, previousSettlement.settledAt) ||
+                !Equal.equals(latestSettlement.updatedAt, previousSettlement.updatedAt)
+              )
+                return "parent settlement changed since check";
+            }
+          }
           for (const member of group) {
             let ancestor = worktreeParent(member, allThreadsById);
             const visited = new Set<OrchestrationV2ThreadShell["id"]>();
@@ -1559,6 +1648,9 @@ const make = Effect.gen(function* () {
                   latestAncestor === null ||
                   previousAncestor === undefined ||
                   !Equal.equals(latestAncestor.settledAt, ancestor.settledAt) ||
+                  (ancestor.settledAt !== null &&
+                    !Equal.equals(latestAncestor.updatedAt, ancestor.updatedAt)) ||
+                  !Equal.equals(latestAncestor.pinnedAt, ancestor.pinnedAt) ||
                   latestAncestor.settledOverride !== ancestor.settledOverride ||
                   !Equal.equals(latestAncestor.lineage, ancestor.lineage) ||
                   storageCleanupActivityAt(latestAncestor) !==

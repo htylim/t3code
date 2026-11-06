@@ -862,7 +862,11 @@ const forkSideChat = (commandId: string, sourceThreadId: ThreadId, targetThreadI
     });
   });
 
-const askSideChat = (threadId: ThreadId, commandId: string) =>
+const askSideChat = (
+  threadId: ThreadId,
+  commandId: string,
+  modelSelection?: (typeof forkCases)[number]["modelSelection"],
+) =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     yield* orchestrator.dispatch({
@@ -872,6 +876,7 @@ const askSideChat = (threadId: ThreadId, commandId: string) =>
       messageId: MessageId.make(commandId),
       text: "What is the main thread doing?",
       attachments: [],
+      ...(modelSelection === undefined ? {} : { modelSelection }),
       dispatchMode: { type: "start_immediately" },
       createdBy: "user",
       creationSource: "web",
@@ -964,10 +969,42 @@ it.effect("a side chat of an idle parent still starts with the framing note", ()
           query.includes("FROM orchestration_v2_projection_context_transfers"),
       ),
     );
-    yield* askSideChat(sideChatId, "side-chat-idle-first-message");
+    assert.equal(
+      (yield* orchestrator.getThreadProjection(sideChatId)).thread.runtimeMode,
+      "full-access",
+    );
+    yield* orchestrator.dispatch({
+      type: "thread.runtime-mode.set",
+      commandId: CommandId.make("side-chat-parent-mode-change"),
+      threadId: parentId,
+      runtimeMode: "approval-required",
+    });
+    assert.equal(
+      (yield* orchestrator.getThreadProjection(sideChatId)).thread.runtimeMode,
+      "full-access",
+    );
+    yield* orchestrator.dispatch({
+      type: "thread.runtime-mode.set",
+      commandId: CommandId.make("side-chat-child-mode-change"),
+      threadId: sideChatId,
+      runtimeMode: "auto",
+    });
+    yield* askSideChat(sideChatId, "side-chat-idle-first-message", {
+      ...forkCases[0]!.modelSelection,
+      model: "side-chat-model",
+    });
 
     const started = yield* orchestrator.getThreadProjection(sideChatId);
+    assert.equal(started.thread.runtimeMode, "auto");
+    assert.equal(
+      (yield* orchestrator.getThreadProjection(parentId)).thread.runtimeMode,
+      "approval-required",
+    );
     assert.isNotNull(started.providerThreads[0]?.forkedFrom);
+    // The side chat does not show the parent's run, so it is no baseline.
+    assert.isFalse(
+      started.turnItems.some((item) => item.type === "user_message" && item.modelSwitch),
+    );
     assert.lengthOf(started.contextHandoffs, 1);
     const [handoff] = started.contextHandoffs;
     assert.isTrue(

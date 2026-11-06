@@ -76,25 +76,25 @@ export function useSideChat(input: {
       discard();
       return false;
     }
+    const sideChat = readThreadShell(targetThreadRef);
+    if (sideChat === null) {
+      input.onError("The side chat is no longer available.");
+      discard();
+      return false;
+    }
     if (parentComposerRuntimeMode != null) {
       useComposerDraftStore.getState().setRuntimeMode(targetThreadRef, parentComposerRuntimeMode);
     }
     const text = prompt?.trim();
     // Send before showing the tab: closing a tab whose side chat has no run deletes it.
     if (text) {
-      const sideChatThread = readThreadShell(targetThreadRef);
-      if (!sideChatThread) {
-        input.onError("The side chat is no longer available.");
-        discard();
-        return false;
-      }
       const turn = await startThreadTurn({
         environmentId: threadRef.environmentId,
         input: {
           threadId: targetThreadId,
           message: { messageId: newMessageId(), role: "user", text, attachments: [] },
           titleSeed: deriveThreadTitleSeed({ text, attachments: [] }),
-          runtimeMode: parentComposerRuntimeMode ?? sideChatThread.runtimeMode,
+          runtimeMode: parentComposerRuntimeMode ?? sideChat.runtimeMode,
           interactionMode: "default",
           createdAt: new Date().toISOString(),
         },
