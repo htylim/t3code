@@ -17,6 +17,7 @@ const server = vi.hoisted(() => ({
   delete: vi.fn(),
   send: vi.fn(),
   readThreadShell: vi.fn(),
+  readEnvironmentThreadRefs: vi.fn(),
 }));
 
 vi.mock("../../state/threads", () => ({
@@ -31,6 +32,7 @@ vi.mock("../../state/use-orchestration-command", () => ({
 vi.mock("../../state/entities", () => ({
   waitForThreadShell: async () => true,
   readThreadShell: server.readThreadShell,
+  readEnvironmentThreadRefs: server.readEnvironmentThreadRefs,
 }));
 
 const parentRef = {
@@ -98,6 +100,7 @@ function setup() {
   server.delete.mockReset().mockResolvedValue({ _tag: "Success", value: undefined });
   server.send.mockReset().mockResolvedValue({ _tag: "Success", value: undefined });
   server.readThreadShell.mockReset();
+  server.readEnvironmentThreadRefs.mockReset().mockReturnValue([]);
   useRightPanelStore.setState({ byThreadKey: {} });
   useComposerDraftStore.setState({ draftsByThreadKey: {} });
 }
@@ -144,16 +147,29 @@ it.each([
     );
     expect(server.send).not.toHaveBeenCalled();
 
+    server.readEnvironmentThreadRefs.mockReturnValue([firstRef]);
+    server.readThreadShell.mockReturnValue({
+      runtimeMode,
+      id: firstRef.threadId,
+      lineage: { sideChat: true, parentThreadId: parentRef.threadId },
+      createdAt: "2026-11-05T10:00:00Z",
+      archivedAt: null,
+    });
+    useComposerDraftStore.getState().setPrompt(firstRef, "Keep this draft. ");
+    useRightPanelStore.getState().openBrowser(parentRef, "other-tab");
+    useRightPanelStore.getState().close(parentRef);
     await userEvent.click(screen.getByRole("button", { name: "Ask in side chat" }));
     await vi.waitFor(() => {
-      expect(
-        useRightPanelStore.getState().byThreadKey[scopedThreadKey(parentRef)]?.surfaces,
-      ).toHaveLength(2);
+      expect(server.fork).toHaveBeenCalledTimes(1);
+      const panel = useRightPanelStore.getState().byThreadKey[scopedThreadKey(parentRef)]!;
+      expect(panel.isOpen).toBe(true);
+      expect(panel.activeSurfaceId).toBe(firstSideChat.id);
+      expect(useComposerDraftStore.getState().getComposerDraft(firstRef)?.prompt).toBe(
+        `Keep this draft. ${buildAskInSideChatPrompt(citation)}`,
+      );
     });
-    expect(server.fork).toHaveBeenCalledTimes(2);
     expect(server.delete).not.toHaveBeenCalled();
     expect(server.send).not.toHaveBeenCalled();
-    expect(useComposerDraftStore.getState().getComposerDraft(firstRef)?.prompt).toBe(draft.prompt);
 
     await userEvent.keyboard("{Meta>}t{/Meta}");
     await vi.waitFor(() => {
@@ -176,3 +192,41 @@ it.each([
     );
   },
 );
+
+it("reopens the newest side chat by creation time, regardless of tab order or activity", async () => {
+  setup();
+  const olderRef = { ...parentRef, threadId: ThreadId.make("older-side-chat") };
+  const newestRef = { ...parentRef, threadId: ThreadId.make("newest-side-chat") };
+  const archivedRef = { ...parentRef, threadId: ThreadId.make("archived-side-chat") };
+  const unrelatedRef = { ...parentRef, threadId: ThreadId.make("unrelated-side-chat") };
+  server.readEnvironmentThreadRefs.mockReturnValue([
+    newestRef,
+    archivedRef,
+    unrelatedRef,
+    olderRef,
+  ]);
+  server.readThreadShell.mockImplementation((ref) => ({
+    id: ref.threadId,
+    lineage: {
+      sideChat: true,
+      parentThreadId: ref.threadId === unrelatedRef.threadId ? "other-parent" : parentRef.threadId,
+    },
+    createdAt: ref.threadId === olderRef.threadId ? "2026-11-01T00:00:00Z" : "2026-11-05T00:00:00Z",
+    updatedAt: "2026-11-06T00:00:00Z",
+    archivedAt: ref.threadId === archivedRef.threadId ? "2026-11-06T00:00:00Z" : null,
+  }));
+  useRightPanelStore.getState().openSideChat(parentRef, olderRef.threadId);
+  useComposerDraftStore.getState().setPrompt(newestRef, "Existing question");
+  await using screen = await render(<SelectionSideChat />);
+  await userEvent.click(screen.getByRole("button", { name: "Ask in side chat" }));
+  await vi.waitFor(() => {
+    const panel = useRightPanelStore.getState().byThreadKey[scopedThreadKey(parentRef)]!;
+    expect(panel.activeSurfaceId).toBe(`side-chat:${newestRef.threadId}`);
+    expect(panel.surfaces).toHaveLength(2);
+  });
+  expect(server.fork).not.toHaveBeenCalled();
+  expect(server.send).not.toHaveBeenCalled();
+  expect(useComposerDraftStore.getState().getComposerDraft(newestRef)?.prompt).toBe(
+    `Existing question ${buildAskInSideChatPrompt(citation)}`,
+  );
+});
