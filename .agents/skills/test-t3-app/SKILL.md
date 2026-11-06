@@ -6,8 +6,10 @@ description: Test T3 Code's web and desktop UI through its built-in Browser pane
 # Test T3 web and desktop
 
 Use T3's built-in Browser panel for verification. Follow the recovery steps
-below before declaring it unavailable. Do not install or switch to another
-automation system. For native mobile testing, use
+below before declaring it unavailable. Do not install another automation system.
+For startup diagnostics, original-image quality checks, and the tested T3 headless
+capture fallback, follow [UI evidence](../../../docs/operations/ui-evidence.md).
+Use a fallback only when the current session browser instructions permit it. For native mobile testing, use
 [test-t3-mobile](../test-t3-mobile/SKILL.md).
 
 ## Start the app

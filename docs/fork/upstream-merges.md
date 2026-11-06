@@ -108,6 +108,8 @@ Follow [Database compatibility](fork-guidelines.md#database-compatibility).
 
 Use the `test-t3-app` skill for the integrated web/desktop UI. Use `test-t3-mobile` for native
 mobile when applicable. Retain the isolated dev server's terminal session and actual ports.
+Follow [Launch and capture isolated UI evidence](../operations/ui-evidence.md) for readiness,
+pairing, screenshot quality checks, and the verified headless screenshot/video fallback.
 Use this worktree's ignored `.t3` state. Never point a dev server at live userdata or set
 `VITE_HTTP_URL` or `VITE_WS_URL`.
 
@@ -187,11 +189,12 @@ branches. Restore the integrated source afterward. Do not make a failure disappe
 sleeps, weaker assertions, or wider timeouts. Missing prerequisites are setup work to resolve when
 practical. A skip is not a pass.
 
-A screenshot timeout is not a visual pass. If clicks work while capture times out, ask the
-maintainer to close and reopen this thread's Browser panel. Reacquire the tab, restore the viewport,
-and inspect fresh captures. Opening another tab alone did not fix this in the November 3 merge;
-reopening the panel did. Follow current browser instructions for any fallback. If approval review
-rejects one, report the reason and obtain explicit permission before retrying it.
+A screenshot timeout or blurred foreground text is not a visual pass. Distinguish missing tabs,
+backend readiness, auth failures, and capture faults using the UI evidence procedure. Reopening
+the panel recovered earlier timeouts, but the November 6 audit still reproduced blurred PNGs
+and video through desktop-backed capture. T3's headless renderer produced readable evidence.
+Follow current browser instructions for any fallback. If approval review rejects one, report
+the reason and obtain explicit permission before retrying it.
 
 ## 7. Prepare the evidence and update documentation
 
