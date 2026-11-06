@@ -1,5 +1,46 @@
 # Fork journal
 
+## 2026-11-05 - Integrate upstream through 1a0f605344
+
+- Upstream baseline: `1a0f605344bbb6464742dab7e748daa22f071f6e`, 333 commits after
+  `cefb544af3c98224874419198c0359b652ca3c94`. Local merge `6526477850` starts from
+  local fork `365509486f`, including newest-side-chat quote reuse. Shared release
+  branches remain unchanged. The migration registry and files match upstream exactly.
+- Adopt upstream's persisted side-chat permission inheritance. Keep the small client
+  extension for pending parent composer changes, selection comments, and quote reuse.
+  Retain upstream organization ceilings, fresh-session sends, dictation, branch
+  synchronization, provider failure handling, and the new crypto services.
+- Extend upstream settlement chains for shared worktrees, side chats, cross-project
+  policies, deleted parents, and the shared inspection clocks. Preserve stale and
+  detached branch cleanup, file protections, progress, and the Fork management UI.
+  Upstream's new race test exposed removal after a child became explicitly Active
+  during measurement. Revalidate the inherited chain before removal. Preserve the
+  filesystem assertions and use upstream's diagnostic in the existing fork cases.
+- Resolve dictation ownership through the versioned citation-source helper, including
+  HTML attachment identity. Preserve account exclusions, Postponed, navigation,
+  workspace names/colors/grouping, HTML compatibility, and Fork desktop packaging.
+  Refresh the measured MCP schema budget without changing model-facing fork text.
+- Verification: the required changed-file workflow against the pinned upstream passed
+  all 3,030 tests in 149 files and 128 selected React Compiler cases. Formatting,
+  lint, unused patches, both unused-code checks, GraphQL, and affected package type
+  checks passed. The HTML headless-browser tests ran without their five opt-in skips.
+  The previous scanner blocked-repository failure reproduced at baseline and passed
+  with upstream's Queue-gated test fix. The corrupt-Git-file cleanup case also passed
+  on this host in both baseline and integrated verification.
+- The isolated client used copied stopped-thread data and disposable Git worktrees.
+  Personal with Luna Low completed main and side-chat turns. Verified inherited Full
+  access, selected-text comments and unsent citation drafts, reuse and focus of the
+  existing side chat, workspace reuse and real directory rename, color changes,
+  Auto classification, saved interface preferences, account inclusion toggles, and
+  a 530px settings layout without horizontal overflow. Dirty-worktree confirmation
+  identified the tracked edit; cancellation preserved it. Clean removal deleted only
+  the disposable checkout and retained its branch.
+- Capture limits: retained representative baseline images, with omitted text regions
+  labeled invalid. Integrated screenshot capture timed out, so there is no complete
+  before/after visual sign-off. Native mobile UI and remote/tunnel connections were
+  not exercised. Background command stopping, shared cleanup guards, and HTML sandbox
+  behavior have automated coverage. Live userdata and installed apps were unchanged.
+
 ## 2026-11-05 - Match manual deletion warnings to cleanup protection
 
 - Reason: Bulk deletion warned about untracked files even when Edited tracked files marked the
@@ -226,21 +267,17 @@
 
 ## 2026-10-31 - Inherit the parent permission mode in side chats
 
-- Upstream baseline: `5fe18d79ac`.
-- Reason: Side chats should support Auto without upstream forcing Supervised for their first
-  turn. Inheriting the parent's chosen mode avoids a separate default and preserves an explicit
-  Supervised choice. Organization policy ceilings still apply.
-- Side chats inherit their parent's permission mode at creation and keep it for the
-  first provider turn. Remove the forced Supervised mode in both paths. Web and desktop
-  also copy pending parent composer mode changes, including `/side` sends. Server
-  inheritance applies to all clients and providers; modes remain independently editable.
-- Verification: reproduced the creation and first-turn overrides with failing tests.
-  All 59 focused fork and provider-turn server tests and four side-chat browser cases
-  passed. The browser cases cover both permission modes, pending composer changes,
-  unsent selection drafts, Cmd+T, and immediate sends. Web/server typechecks and targeted
-  lint passed. Provider calls were mocked; Personal was unavailable in dev.
-  Pre-commit checks also refreshed the stale MCP schema size snapshot to its measured
-  46,291 bytes; tool definitions and agent instructions are unchanged by this update.
+- Upstream baseline: `1a0f605344`.
+- Reason: Side chats should follow the parent's chosen mode, including an unsent permission
+  change. This preserves Auto and an explicit Supervised choice without a separate default.
+  Organization policy ceilings still apply.
+- Upstream supplies permission inheritance at creation and on the first provider turn.
+  The remaining fork extension copies pending parent composer mode changes on web and
+  desktop, including `/side` sends. Modes remain independently editable. Keep upstream's
+  persisted-mode handling and organization-policy checks.
+- Verification covers all inherited server modes, organization ceilings, pending composer
+  changes, unsent selection drafts, Cmd+T, and immediate sends. The integrated client also
+  completed a Personal Luna Low side-chat turn with inherited Full access.
 
 ## 2026-10-31 - Comment before asking about a selection in side chat
 

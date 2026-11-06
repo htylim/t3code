@@ -161,7 +161,8 @@ around it.
 
 Choose **Ask in new thread** to start an unsent draft with the selected passage and a source
 reference. **Ask in side chat** first lets you add an optional comment, just like Cite.
-Save opens a new side-chat tab with the quote and comment in an unsent citation. Cancel
+Save appends the quote and comment to the newest side chat's unsent draft and focuses its
+composer. If there is no side chat, it opens one. Cancel
 leaves without creating a side chat. Side chats
 inherit the main thread's context and follow the [standard side-chat lifecycle](./thread-sidebar.md#side-chats).
 
