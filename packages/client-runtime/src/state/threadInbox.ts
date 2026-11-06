@@ -35,6 +35,20 @@ type InboxThreadInput = Pick<
   "id" | "environmentId" | "createdAt" | "unsettledAt" | "latestRun"
 >;
 
+/** Resolve the inbox's return clock, including client-observed returns without a server stamp. */
+export function resolveInboxThreadTimestamp(
+  thread: InboxThreadInput,
+  observedReturnAt?: number,
+): number {
+  return Math.max(
+    toSortableTimestamp(thread.createdAt) ?? 0,
+    toSortableTimestamp(thread.unsettledAt ?? undefined) ?? 0,
+    toSortableTimestamp(thread.latestRun?.requestedAt ?? undefined) ?? 0,
+    toSortableTimestamp(thread.latestRun?.completedAt ?? undefined) ?? 0,
+    observedReturnAt ?? 0,
+  );
+}
+
 export function sortInboxThreadsByReturn<T extends InboxThreadInput>(
   threads: readonly T[],
   observedReturnAt?: (thread: T) => number | undefined,
@@ -42,13 +56,7 @@ export function sortInboxThreadsByReturn<T extends InboxThreadInput>(
   const timestamps = new Map(
     threads.map((thread) => [
       thread,
-      Math.max(
-        toSortableTimestamp(thread.createdAt) ?? 0,
-        toSortableTimestamp(thread.unsettledAt ?? undefined) ?? 0,
-        toSortableTimestamp(thread.latestRun?.requestedAt ?? undefined) ?? 0,
-        toSortableTimestamp(thread.latestRun?.completedAt ?? undefined) ?? 0,
-        observedReturnAt?.(thread) ?? 0,
-      ),
+      resolveInboxThreadTimestamp(thread, observedReturnAt?.(thread)),
     ]),
   );
   return sortNewestFirst(threads, timestamps);
@@ -59,19 +67,21 @@ type WorkingSortInput = Pick<
   "id" | "environmentId" | "createdAt" | "latestRun" | "latestUserAuthoredMessageAt"
 >;
 
+/** Resolve the last human send, falling back to the run request only on older servers. */
+export function resolveWorkingThreadTimestamp(thread: WorkingSortInput): number {
+  return Math.max(
+    toSortableTimestamp(thread.createdAt) ?? 0,
+    toSortableTimestamp(
+      (thread.latestUserAuthoredMessageAt === undefined
+        ? thread.latestRun?.requestedAt
+        : thread.latestUserAuthoredMessageAt) ?? undefined,
+    ) ?? 0,
+  );
+}
+
 export function sortWorkingThreadsBySend<T extends WorkingSortInput>(threads: readonly T[]): T[] {
   const timestamps = new Map(
-    threads.map((thread) => [
-      thread,
-      Math.max(
-        toSortableTimestamp(thread.createdAt) ?? 0,
-        toSortableTimestamp(
-          (thread.latestUserAuthoredMessageAt === undefined
-            ? thread.latestRun?.requestedAt
-            : thread.latestUserAuthoredMessageAt) ?? undefined,
-        ) ?? 0,
-      ),
-    ]),
+    threads.map((thread) => [thread, resolveWorkingThreadTimestamp(thread)]),
   );
   return sortNewestFirst(threads, timestamps);
 }

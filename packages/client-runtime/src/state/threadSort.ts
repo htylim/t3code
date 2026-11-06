@@ -113,7 +113,8 @@ export function getThreadSortTimestamp(
   return getLatestUserMessageTimestamp(thread);
 }
 
-function activeThreadAnchorTimestampMs(thread: {
+/** Resolve the active-list clock, which advances only on creation or reactivation. */
+export function activeThreadAnchorTimestampMs(thread: {
   readonly createdAt: string;
   readonly unsettledAt?: string | null | undefined;
 }): number {
@@ -311,23 +312,39 @@ export function sortActiveThreadsByOrderKey<
       timestamps.set(thread, activeThreadAnchorTimestampMs(thread));
     }
   }
-  return [...threads].sort((left, right) => {
-    const leftKey = left.activeOrderKey;
-    const rightKey = right.activeOrderKey;
-    if (leftKey == null && rightKey != null) return -1;
-    if (leftKey != null && rightKey == null) return 1;
-    let order = 0;
-    if (leftKey != null && rightKey != null) {
-      order = leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-    } else {
-      order = timestamps.get(right)! - timestamps.get(left)!;
-    }
-    return (
-      order ||
-      left.id.localeCompare(right.id) ||
-      (left.environmentId ?? "").localeCompare(right.environmentId ?? "")
-    );
-  });
+  return [...threads].sort((left, right) =>
+    compareActiveThreadOrder(left, right, timestamps.get(left) ?? 0, timestamps.get(right) ?? 0),
+  );
+}
+
+type ActiveThreadOrderInput = {
+  readonly id: string;
+  readonly environmentId?: string | undefined;
+  readonly activeOrderKey?: string | null | undefined;
+};
+
+/** Compare manual active positions, using the resolved active clock for unplaced rows. */
+export function compareActiveThreadOrder(
+  left: ActiveThreadOrderInput,
+  right: ActiveThreadOrderInput,
+  leftTimestamp: number,
+  rightTimestamp: number,
+): number {
+  const leftKey = left.activeOrderKey;
+  const rightKey = right.activeOrderKey;
+  if (leftKey == null && rightKey != null) return -1;
+  if (leftKey != null && rightKey == null) return 1;
+  let order = 0;
+  if (leftKey != null && rightKey != null) {
+    order = leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+  } else {
+    order = rightTimestamp - leftTimestamp;
+  }
+  return (
+    order ||
+    left.id.localeCompare(right.id) ||
+    (left.environmentId ?? "").localeCompare(right.environmentId ?? "")
+  );
 }
 
 /** Uses the server's explicit settlement classification, shared with workspace actions. */

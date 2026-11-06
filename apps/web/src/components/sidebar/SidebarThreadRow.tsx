@@ -3,6 +3,8 @@ import { useWorktreeDisplay } from "../../hooks/useWorktreeDisplay";
 import { WorktreePill } from "../WorktreePill";
 import { FolderGitIcon, ArrowUpIcon, ArrowDownIcon } from "lucide-react";
 import type { SidebarWorkspaceRow } from "../Sidebar.workspaceGrouping";
+import type { SidebarThreadPresentation } from "../Sidebar.presentation";
+import { SidebarThreadRecency } from "./SidebarThreadRecency";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
@@ -18,7 +20,6 @@ import {
   QUEUED_TURN_START_GRACE_MS,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
-import { resolveSettledThreadTimestamp } from "@t3tools/client-runtime/state/thread-sort";
 import { type EnvironmentThreadSearchMatch } from "@t3tools/client-runtime/state/thread-search";
 import {
   formatWorkingDurationLabel,
@@ -141,17 +142,14 @@ function compactSidebarTimeLabel(label: string): string {
 
 // Subscribes to the minute tick itself, so only the label re-renders each
 // minute. The minute is passed as the clock so it is the formatter's input.
-function RelativeTimeLabel(props: { timestamp: string | null }) {
+function SearchResultTimeLabel(props: { thread: SidebarThreadSummary }) {
   const nowMinute = useNowMinute();
-  return props.timestamp === null
-    ? null
-    : compactSidebarTimeLabel(
-        formatRelativeTimeLabel(props.timestamp, Date.parse(`${nowMinute}:00.000Z`)),
-      );
-}
-
-function threadTimeTimestamp(thread: SidebarThreadSummary): string {
-  return thread.latestUserMessageAt ?? thread.updatedAt;
+  return compactSidebarTimeLabel(
+    formatRelativeTimeLabel(
+      props.thread.latestUserMessageAt ?? props.thread.updatedAt,
+      Date.parse(`${nowMinute}:00.000Z`),
+    ),
+  );
 }
 
 function JumpHintBadge(props: { label: string }) {
@@ -246,6 +244,7 @@ function SidebarThreadTooltip({
   branchMismatch,
   terminalStatus,
   terminalProcessCount,
+  presentation,
 }: {
   thread: SidebarThreadSummary;
   project: ProjectFaviconProject | null;
@@ -263,6 +262,7 @@ function SidebarThreadTooltip({
   } | null;
   terminalStatus: TerminalStatusIndicator | null;
   terminalProcessCount: number;
+  presentation?: SidebarThreadPresentation;
 }) {
   const projectRef = thread.projectId
     ? scopeProjectRef(thread.environmentId, thread.projectId)
@@ -289,6 +289,12 @@ function SidebarThreadTooltip({
           ) : null
         }
       >
+        {presentation?.recency.timestamp != null ? (
+          <div className="text-foreground/75">
+            {presentation.recency.description}:{" "}
+            {new Date(presentation.recency.timestamp).toLocaleString()}
+          </div>
+        ) : null}
         {projectDisplayName ? (
           <div className="flex min-w-0 items-center gap-2">
             {project ? <ProjectFavicon project={project} className="size-3 shrink-0" /> : null}
@@ -481,7 +487,7 @@ const SIDEBAR_SORTABLE_DRAG_ENABLED = { draggable: false } as const;
 // sidebar body is new on every sidebar render, which rebuilt the bag and
 // re-rendered every memoized row with it.
 export function SortableThreadRow(
-  props: Omit<SidebarThreadRowProps, "sortable"> & {
+  props: Omit<SidebarThreadRowProps, "sortable" | "thread"> & {
     sortableId: string;
     sortableDisabled: boolean;
     contextDrag: boolean;
@@ -489,7 +495,7 @@ export function SortableThreadRow(
 ) {
   const { sortableId, sortableDisabled, contextDrag, ...rowProps } = props;
   const canOperateThread = useEnvironmentScope(
-    rowProps.thread.environmentId,
+    rowProps.presentation.thread.environmentId,
     AuthOrchestrationOperateScope,
   );
   const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -512,8 +518,9 @@ export function SortableThreadRow(
   // The sidebar arranges rows from quiet shells, which hold still while a
   // thread streams; reading the live shell here re-renders only this row.
   const thread =
-    useThreadShell(scopeThreadRef(rowProps.thread.environmentId, rowProps.thread.id)) ??
-    rowProps.thread;
+    useThreadShell(
+      scopeThreadRef(rowProps.presentation.thread.environmentId, rowProps.presentation.thread.id),
+    ) ?? rowProps.presentation.thread;
   // Keyed by variant so a card/slim switch remounts the row.
   return <SidebarThreadRow key={rowProps.variant} {...rowProps} thread={thread} sortable={bag} />;
 }
@@ -569,6 +576,7 @@ function TopStatusIcon(props: { icon: keyof typeof TOP_STATUS_ICONS; className: 
 
 type SidebarThreadRowProps = {
   thread: SidebarThreadSummary;
+  presentation: SidebarThreadPresentation;
   variant: "card" | "slim" | "folder" | "folder-multiline";
   navigationParent?: string | undefined;
   workspaceRowPosition?: SidebarWorkspaceRow["position"] | undefined;
@@ -876,6 +884,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const detailsTooltip = (
     <SidebarThreadTooltip
       thread={thread}
+      presentation={props.presentation}
       project={props.project}
       projectDisplayName={props.projectDisplayName}
       environmentLabel={props.environmentLabel}
@@ -1465,13 +1474,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       </span>
                     ) : (
                       <span className="text-xs">
-                        <RelativeTimeLabel
-                          timestamp={
-                            variantAction === "unsettle"
-                              ? resolveSettledThreadTimestamp(thread)
-                              : threadTimeTimestamp(thread)
-                          }
-                        />
+                        <SidebarThreadRecency recency={props.presentation.recency} />
                       </span>
                     )}
                   </span>
@@ -1860,12 +1863,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         </span>
                       )
                     ) : (
-                      <RelativeTimeLabel timestamp={threadTimeTimestamp(thread)} />
+                      <SidebarThreadRecency recency={props.presentation.recency} />
                     )}
                     {props.workspaceRowPosition ? (
                       <>
                         {topStatus || props.snoozeWakeLabelText !== null ? (
-                          <RelativeTimeLabel timestamp={threadTimeTimestamp(thread)} />
+                          <SidebarThreadRecency recency={props.presentation.recency} />
                         ) : null}
                         <SidebarProviderStack
                           thread={thread}
@@ -2158,7 +2161,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
                 />
               </span>
               <span className="w-8 shrink-0 text-right text-xs text-muted-foreground/55 tabular-nums">
-                <RelativeTimeLabel timestamp={threadTimeTimestamp(thread)} />
+                <SearchResultTimeLabel thread={thread} />
               </span>
             </span>
             {props.searchMatch ? (

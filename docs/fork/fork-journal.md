@@ -1,5 +1,22 @@
 # Fork journal
 
+## 2026-11-06 - Share sidebar ordering clocks with displayed ages
+
+- Upstream baseline: `1a0f605344`. Return-based inbox sorting could place a thread labeled
+  nine hours old above one labeled five minutes old. Workspace cards preserved that mismatch.
+- Resolve section clocks into typed presentation records before sorting. The age renderer
+  requires that record instead of independently choosing a timestamp from the live shell.
+  Preserve upstream return, send, reactivation, settlement, wake, and manual ordering rules.
+  Workspace cards retain the resolved member order and occupy their first member's position.
+  Existing row hover details explain the displayed clock. Reuse unchanged records so unrelated
+  thread updates do not invalidate every row's memoized props.
+- Verification: the integrated Chromium regression failed on the original nine-hour label.
+  Changed-file checks passed 210 tests in ten files, type checks for seven affected packages,
+  formatting, lint, both unused-code checks, and five selected React Compiler cases. Coverage
+  includes all section clocks, observed-return snapshots, manual positions, workspace placement
+  and member order, and malformed wake times. Native mobile and the installed Electron GUI
+  were not exercised for this correction.
+
 ## 2026-11-05 - Integrate upstream through 1a0f605344
 
 - Upstream baseline: `1a0f605344bbb6464742dab7e748daa22f071f6e`, 333 commits after

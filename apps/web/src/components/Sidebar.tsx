@@ -1,3 +1,4 @@
+import { presentSidebarThreadSection } from "./Sidebar.presentation";
 import { isThreadWorkspaceBusy } from "./BranchToolbar.logic";
 import {
   groupSidebarWorkspaceThreads,
@@ -199,7 +200,6 @@ import {
   buildBulkUnpinContextMenuItem,
   deleteSelectedThreadEntries,
   filterSidebarProjectScopeItems,
-  firstValidTimestampMs,
   isSidebarNestedLinkClick,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
@@ -217,9 +217,6 @@ import {
   sidebarListItemId,
   sidebarThreadKeyAtY,
   sortInboxThreadsByReturn,
-  sortPinnedThreadsForSidebar,
-  sortThreadsForSidebar,
-  sortWorkingThreadsBySend,
   useSnoozeWakeClock,
   useThreadJumpHintsVisible,
   type SidebarListItem,
@@ -743,40 +740,54 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
       ).push(thread);
     }
   }
-  // Availability gates dragging only; sorting must stay consistent across clients.
-  const sortedPinned = sortPinnedThreadsForSidebar(pinned);
-  const sortedActive = sortActiveBySend
-    ? sortWorkingThreadsBySend(active)
-    : workingShelfEnabled
-      ? sortInboxThreadsByReturn(active, inboxObservation.returnedAt)
-      : sortThreadsForSidebar(active);
+  const pinnedPresentations = presentSidebarThreadSection(pinned, { kind: "pinned" });
+  const activePresentations = presentSidebarThreadSection(
+    active,
+    sortActiveBySend
+      ? { kind: "sent" }
+      : workingShelfEnabled
+        ? { kind: "inbox", returnedAt: inboxObservation.returnedAt }
+        : { kind: "active" },
+  );
+  const orderedPinned =
+    optimisticDrop?.section !== "pinned" || optimisticDrop.order === null
+      ? pinnedPresentations
+      : orderItemsByPreferredIds({
+          items: pinnedPresentations,
+          preferredIds: optimisticDrop.order,
+          getId: (presentation) => threadShellKey(presentation.thread),
+        });
+  const orderedActive =
+    optimisticDrop?.section !== "active" || optimisticDrop.order === null
+      ? activePresentations
+      : orderItemsByPreferredIds({
+          items: activePresentations,
+          preferredIds: optimisticDrop.order,
+          getId: (presentation) => threadShellKey(presentation.thread),
+        });
+  const workingPresentations = presentSidebarThreadSection(working, { kind: "sent" });
+  const postponedPresentations = presentSidebarThreadSection(postponed, { kind: "active" });
+  const snoozedPresentations = presentSidebarThreadSection(snoozed, { kind: "snoozed" });
+  const settledPresentations = presentSidebarThreadSection(settled, { kind: "settled" });
   return {
-    pinnedThreads:
-      optimisticDrop?.section !== "pinned" || optimisticDrop.order === null
-        ? sortedPinned
-        : orderItemsByPreferredIds({
-            items: sortedPinned,
-            preferredIds: optimisticDrop.order,
-            getId: (thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-          }),
+    pinnedThreads: orderedPinned.map((presentation) => presentation.thread),
+    activeThreads: orderedActive.map((presentation) => presentation.thread),
+    workingThreads: workingPresentations.map((presentation) => presentation.thread),
+    postponedThreads: postponedPresentations.map((presentation) => presentation.thread),
+    snoozedThreads: snoozedPresentations.map((presentation) => presentation.thread),
+    settledThreads: settledPresentations.map((presentation) => presentation.thread),
+    presentationByThreadKey: new Map(
+      [
+        ...orderedPinned,
+        ...orderedActive,
+        ...workingPresentations,
+        ...postponedPresentations,
+        ...snoozedPresentations,
+        ...settledPresentations,
+      ].map((presentation) => [threadShellKey(presentation.thread), presentation] as const),
+    ),
     draggableThreadKeys,
     activeReorderableThreadKeys,
-    activeThreads:
-      optimisticDrop?.section !== "active" || optimisticDrop.order === null
-        ? sortedActive
-        : orderItemsByPreferredIds({
-            items: sortedActive,
-            preferredIds: optimisticDrop.order,
-            getId: (thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-          }),
-    workingThreads: sortWorkingThreadsBySend(working),
-    postponedThreads: sortThreadsForSidebar(postponed),
-    snoozedThreads: snoozed.toSorted(
-      (left, right) =>
-        firstValidTimestampMs(left.snoozedUntil ?? null) -
-        firstValidTimestampMs(right.snoozedUntil ?? null),
-    ),
-    settledThreads: sortSettledThreads(settled),
     visibleThreads: visible,
     snoozeNow: preciseNow,
   };
@@ -1399,6 +1410,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     orderedThreadKeys,
     groupWorkspaces,
     workspaceRowByThreadKey,
+    presentationByThreadKey,
     threadByKey,
     settledThreadKeys,
     snoozedThreadKeys,
@@ -3687,6 +3699,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               member !== undefined && canSnooze(member, { now: workspaceActionNow })
                             );
                           });
+                        const presentation = presentationByThreadKey.get(threadKey);
+                        if (presentation === undefined) {
+                          throw new Error(`Missing sidebar presentation for ${threadKey}`);
+                        }
                         return (
                           <SortableThreadRow
                             key={threadKey}
@@ -3698,7 +3714,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               !draggableThreadKeys.has(threadKey) ||
                               optimisticDrop !== null
                             }
-                            thread={thread}
+                            presentation={presentation}
                             variant={rowVariant}
                             separateCards={groupWorkspaces}
                             workspaceRowPosition={workspaceRow?.position}
