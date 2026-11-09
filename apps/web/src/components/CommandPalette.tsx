@@ -5,6 +5,7 @@ import {
 } from "../sidebarProjectFilterBus";
 import { requestThreadRename } from "../threadRenameBus";
 import { useSideChat } from "./chat/useSideChat";
+import { useComposerDraftStore } from "../composerDraftStore";
 import { shouldMountDefaultSidebar } from "./AppSidebarLayout.logic";
 import type { Project } from "../types";
 import { buildProjectActionItems } from "./CommandPalette.logic";
@@ -85,6 +86,7 @@ import {
   MonitorIcon,
   PinIcon,
   PinOffIcon,
+  PlugIcon,
   SquarePenIcon,
   TextSearchIcon,
   UserPlusIcon,
@@ -259,6 +261,7 @@ import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
+import { openUseInAnotherApp } from "./mcp/UseInAnotherAppDialog";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { settingsForThisPlatform, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
 import { primaryServerKeybindingsAtom } from "../state/server";
@@ -512,6 +515,19 @@ function OpenCommandPaletteDialog(props: {
       activeThread.lineage.relationshipToParent !== "subagent"
         ? scopeThreadRef(activeThread.environmentId, activeThread.id)
         : null,
+    readSettings: () => {
+      if (!activeThread) throw new Error("No active thread is available for a side chat.");
+      const draft = useComposerDraftStore
+        .getState()
+        .getComposerDraft(scopeThreadRef(activeThread.environmentId, activeThread.id));
+      const modelSelection = draft?.activeProvider
+        ? draft.modelSelectionByProvider[draft.activeProvider]
+        : undefined;
+      return {
+        runtimeMode: draft?.runtimeMode ?? activeThread.runtimeMode,
+        modelSelection: modelSelection ?? activeThread.modelSelection ?? undefined,
+      };
+    },
     onError: (description) => {
       toastManager.add({ type: "error", title: "Could not start side chat", description });
     },
@@ -919,8 +935,15 @@ function OpenCommandPaletteDialog(props: {
     (() => {
       const isScratch = (project: CommandPaletteProject) =>
         isScratchProject(project, scratchWorkspaceRootFor(project.environmentId));
+      const currentEntry =
+        currentProjectId === null
+          ? undefined
+          : projectPickerEntries.find((entry) => entry.isPreferred);
       const projectItems = buildNewThreadInProjectItems({
         projects: pickerProjects.filter((project) => !isScratch(project)),
+        currentProjectKey: currentEntry
+          ? `${currentEntry.targetProject.environmentId}:${currentEntry.targetProject.id}`
+          : null,
         projectGroupByTargetKey,
         locationByEnvironmentId: projectEnvironmentLocationById,
         pin: projectPin,
@@ -1739,6 +1762,34 @@ function OpenCommandPaletteDialog(props: {
       },
     });
   }
+
+  actionItems.push({
+    kind: "action",
+    value: "action:use-in-another-app",
+    searchTerms: [
+      "mcp",
+      "connector",
+      "another app",
+      "poke",
+      "claude",
+      "chatgpt",
+      "grok",
+      "muse",
+      "instinct",
+      "openclaw",
+      "hermes",
+    ],
+    title: "Use T3 Code in another app (MCP)",
+    icon: <PlugIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      openUseInAnotherApp(
+        currentProjectEnvironmentId ??
+          (paletteRouteTarget?.kind === "server"
+            ? paletteRouteTarget.threadRef.environmentId
+            : null),
+      );
+    },
+  });
 
   actionItems.push({
     kind: "action",

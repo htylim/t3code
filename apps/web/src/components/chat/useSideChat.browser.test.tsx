@@ -1,4 +1,4 @@
-import { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, MessageId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { collectAssistantCitations } from "@t3tools/shared/assistantCitations";
 import { expect, it, vi } from "vite-plus/test";
@@ -16,18 +16,24 @@ const server = vi.hoisted(() => ({
   fork: vi.fn(),
   delete: vi.fn(),
   send: vi.fn(),
+  setMode: vi.fn(),
   readThreadShell: vi.fn(),
   readEnvironmentThreadRefs: vi.fn(),
 }));
 
 vi.mock("../../state/threads", () => ({
-  threadEnvironment: { forkSideChat: "fork", delete: "delete", startTurn: "send" },
+  threadEnvironment: {
+    forkSideChat: "fork",
+    delete: "delete",
+    startTurn: "send",
+    setRuntimeMode: "setMode",
+  },
 }));
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (command: "fork" | "delete") => server[command],
 }));
 vi.mock("../../state/use-orchestration-command", () => ({
-  useOrchestrationCommand: () => server.send,
+  useOrchestrationCommand: (command: "send" | "setMode") => server[command],
 }));
 vi.mock("../../state/entities", () => ({
   waitForThreadShell: async () => true,
@@ -52,7 +58,16 @@ const citation = {
 
 /** Drives the same native side-chat entry used by the selection toolbar. */
 function SelectionSideChat() {
-  const sideChat = useSideChat({ threadRef: parentRef, onError: () => undefined });
+  const sideChat = useSideChat({
+    threadRef: parentRef,
+    readSettings: () => ({
+      runtimeMode:
+        useComposerDraftStore.getState().getComposerDraft(parentRef)?.runtimeMode ??
+        server.readThreadShell(parentRef).runtimeMode,
+      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-6-luna" },
+    }),
+    onError: () => undefined,
+  });
   useChatShortcuts({
     enabled: true,
     keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
@@ -99,6 +114,7 @@ function setup() {
   server.fork.mockReset().mockResolvedValue({ _tag: "Success", value: undefined });
   server.delete.mockReset().mockResolvedValue({ _tag: "Success", value: undefined });
   server.send.mockReset().mockResolvedValue({ _tag: "Success", value: undefined });
+  server.setMode.mockReset().mockResolvedValue({ _tag: "Success", value: undefined });
   server.readThreadShell.mockReset();
   server.readEnvironmentThreadRefs.mockReset().mockReturnValue([]);
   useRightPanelStore.setState({ byThreadKey: {} });
@@ -138,7 +154,20 @@ it.each([
     if (firstSideChat.kind !== "side-chat") throw new Error("Expected a native side-chat tab.");
     const firstRef = { ...parentRef, threadId: firstSideChat.threadId };
     const draft = useComposerDraftStore.getState().getComposerDraft(firstRef)!;
-    if (composerMode !== null) expect(draft.runtimeMode).toBe(composerMode);
+    expect(draft.modelSelectionByProvider[ProviderInstanceId.make("codex")]).toEqual({
+      instanceId: "codex",
+      model: "gpt-6-luna",
+    });
+    if (expectedMode !== runtimeMode) {
+      expect(server.setMode).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: expect.objectContaining({
+            threadId: firstRef.threadId,
+            runtimeMode: expectedMode,
+          }),
+        }),
+      );
+    }
     expect(collectAssistantCitations(draft.prompt).map((match) => match.citation)).toEqual([
       citation,
     ]);
