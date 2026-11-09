@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { chatGitStatusAtom } from "./vcs";
 
 vi.mock("../connection/runtime", () => ({ connectionAtomRuntime: {} }));
+vi.mock("./server", () => ({ serverEnvironment: {} }));
 vi.mock("@t3tools/client-runtime/state/vcs", () => ({
   createVcsActionManager: () => ({}),
   createVcsEnvironmentAtoms: () => ({}),
