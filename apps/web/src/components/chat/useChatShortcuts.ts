@@ -41,6 +41,8 @@ interface ChatShortcutsInput {
   readonly branchToolbarRef: { readonly current: BranchToolbarHandle | null };
   readonly closeThreadFind: () => void;
   readonly commands: ChatShortcutCommands;
+  /** Parent panel actions available while focus is inside an embedded side chat. */
+  readonly sideChatCommands?: ChatShortcutCommands;
   /** Handles commands not in `commands`, such as project scripts. */
   readonly fallback: (command: KeybindingCommand) => ChatShortcutHandler | undefined;
 }
@@ -64,12 +66,14 @@ export function useChatShortcuts(input: ChatShortcutsInput) {
       event.stopPropagation();
       return;
     }
-    if (!input.enabled || isCommandPaletteOpen() || isInSideChatPane(event.target)) return;
+    if (!input.enabled || isCommandPaletteOpen()) return;
+    const sideChatFocused = isInSideChatPane(event.target);
     const terminalFocusOwner = getTerminalFocusOwner();
     if (event.defaultPrevented && terminalFocusOwner === null) return;
     const shortcutContext = input.getShortcutContext(event.target);
 
     if (
+      !sideChatFocused &&
       !shortcutContext.terminalFocus &&
       !shortcutContext.modelPickerOpen &&
       shouldTypeToFocusComposer(event) &&
@@ -84,10 +88,13 @@ export function useChatShortcuts(input: ChatShortcutsInput) {
       context: shortcutContext,
     });
     if (!command) return;
-    const run =
-      input.commands[command] ??
-      composerShortcutCommands(input.composerRef, input.branchToolbarRef)[command] ??
-      input.fallback(command);
+    let run = input.sideChatCommands?.[command];
+    if (!sideChatFocused) {
+      run =
+        input.commands[command] ??
+        composerShortcutCommands(input.composerRef, input.branchToolbarRef)[command] ??
+        input.fallback(command);
+    }
     if (!run || run({ event, terminalFocusOwner }) === false) return;
     event.preventDefault();
     event.stopPropagation();

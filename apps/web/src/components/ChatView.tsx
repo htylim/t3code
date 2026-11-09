@@ -2733,6 +2733,10 @@ export default function ChatView(props: ChatViewProps) {
       closeThreadFind();
       focusComposerStable();
     },
+    sideChatCommands: {
+      ...terminalShortcuts,
+      ...rightPanelShortcuts,
+    },
     commands: {
       ...terminalShortcuts,
       ...rightPanelShortcuts,

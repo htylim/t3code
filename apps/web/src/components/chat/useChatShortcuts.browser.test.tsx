@@ -6,7 +6,7 @@ import { userEvent } from "vite-plus/test/browser";
 import { surfaceShortcutKey } from "~/lib/surfaceShortcutKey";
 import { render } from "../../../test/render";
 import type { ChatComposerHandle } from "./ChatComposer";
-import { useChatShortcuts } from "./useChatShortcuts";
+import { useChatShortcuts, type ChatShortcutCommands } from "./useChatShortcuts";
 
 const shortcutContext = {
   terminalFocus: false,
@@ -48,10 +48,16 @@ function Launcher(props: { keys: string; received: string[] }) {
 
 // The chat's shortcut listener registers when the chat mounts, so a launcher that opens
 // later registers after it. Tests mount the chat first and add the launcher by rerendering.
-function Chat(props: { composerKeys: string[]; launcher?: { keys: string; received: string[] } }) {
+function Chat(props: {
+  composerKeys: string[];
+  launcher?: { keys: string; received: string[] };
+  keybindings?: ResolvedKeybindingsConfig;
+  commands?: ChatShortcutCommands;
+  sideChatCommands?: ChatShortcutCommands;
+}) {
   useChatShortcuts({
     enabled: true,
-    keybindings: [],
+    keybindings: props.keybindings ?? [],
     scriptKeybindings: [],
     getShortcutContext: () => shortcutContext,
     threadFindActive: false,
@@ -66,7 +72,8 @@ function Chat(props: { composerKeys: string[]; launcher?: { keys: string; receiv
     },
     branchToolbarRef: { current: null },
     closeThreadFind: () => {},
-    commands: {},
+    commands: props.commands ?? {},
+    ...(props.sideChatCommands ? { sideChatCommands: props.sideChatCommands } : {}),
     fallback: () => undefined,
   });
   return props.launcher ? <Launcher {...props.launcher} /> : null;
@@ -142,6 +149,8 @@ const ctrlShift = (key: string, command: KeybindingCommand) => ({
 const sideChatKeybindings: ResolvedKeybindingsConfig = [
   ctrlShift("m", "modelPicker.toggle"),
   ctrlShift("x", "thread.stop"),
+  ctrlShift("w", "rightPanel.close"),
+  ctrlShift("b", "rightPanel.toggle"),
 ];
 
 // A side chat in the main chat's panel: no window listeners, only its composer's own chords.
@@ -167,8 +176,11 @@ function SideChat(props: { toggles: string[]; stops: string[] }) {
   });
   return (
     <>
-      <div ref={setComposerElement}>
-        <textarea aria-label="Side chat composer" />
+      <div data-side-chat-pane>
+        <button type="button">Side chat header</button>
+        <div ref={setComposerElement}>
+          <textarea aria-label="Side chat composer" />
+        </div>
       </div>
       <textarea aria-label="Main composer" />
     </>
@@ -187,4 +199,46 @@ it("runs a side chat's composer chords only from its composer, and never thread 
 
   expect(toggles).toEqual(["model"]);
   expect(stops).toEqual([]);
+});
+
+it("routes panel shortcuts from a side chat without taking its composer or main-thread commands", async () => {
+  const composerKeys: string[] = [];
+  const toggles: string[] = [];
+  const stops: string[] = [];
+  const panelCommands: string[] = [];
+  const sideChatCommands: ChatShortcutCommands = {
+    "rightPanel.close": () => void panelCommands.push("close"),
+    "rightPanel.toggle": () => void panelCommands.push("toggle"),
+  };
+  const commands: ChatShortcutCommands = {
+    ...sideChatCommands,
+    "thread.stop": () => void stops.push("main"),
+    "modelPicker.toggle": () => void toggles.push("main"),
+  };
+  await using screen = await render(
+    <>
+      <Chat
+        composerKeys={composerKeys}
+        keybindings={sideChatKeybindings}
+        commands={commands}
+        sideChatCommands={sideChatCommands}
+      />
+      <SideChat toggles={toggles} stops={stops} />
+    </>,
+    options,
+  );
+
+  await userEvent.click(screen.getByLabelText("Side chat composer"));
+  await userEvent.keyboard("a{Control>}{Shift>}MWBX{/Shift}{/Control}");
+  await userEvent.click(screen.getByRole("button", { name: "Side chat header" }));
+  await userEvent.keyboard("{Control>}{Shift>}W{/Shift}{/Control}");
+
+  expect(panelCommands).toEqual(["close", "toggle", "close"]);
+  expect(toggles).toEqual(["model"]);
+  expect(stops).toEqual([]);
+  expect(composerKeys).toEqual([]);
+
+  await userEvent.click(screen.getByLabelText("Main composer"));
+  await userEvent.keyboard("{Control>}{Shift>}X{/Shift}{/Control}");
+  expect(stops).toEqual(["main"]);
 });
