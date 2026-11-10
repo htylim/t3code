@@ -12,10 +12,12 @@ import {
   HourglassIcon,
   CircleAlertIcon,
   SearchIcon,
+  LockKeyholeIcon,
 } from "lucide-react";
 import { useContext, useEffect, useState } from "react";
 
 import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
+import { useStableCallback } from "../../hooks/useStableCallback";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useWorkspaceChoices } from "../../hooks/useWorkspaceChoices";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../../namedWorktreeStore";
@@ -28,6 +30,7 @@ import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { isWorktreeThreadRunning, type WorktreeRow } from "../BranchToolbar.logic";
 import { WorktreeActionsMenu } from "../WorktreeActionsMenu";
 import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { cn } from "../../lib/utils";
@@ -45,6 +48,10 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   managedWorktreeRows,
+  worktreeTotalSpaceLabel,
+  worktreeSelectionBlockers,
+  type WorktreeSelectionBlocker,
+  type ProjectWorktreeMeasurements,
   sortWorktreesByCleanupAge,
   worktreeThreadsLabel,
 } from "./ForkWorktreesSettings.logic";
@@ -60,6 +67,20 @@ export function ForkWorktreesSettings() {
   const [cleaning, setCleaning] = useState(false);
   const [selected, setSelected] = useState<ReadonlyMap<string, WorktreeCleanupTarget>>(
     () => new Map(),
+  );
+  const [projectMeasurements, setProjectMeasurements] = useState<
+    ReadonlyMap<string, ProjectWorktreeMeasurements>
+  >(() => new Map());
+  /** Collect existing row subscriptions without starting another set of disk measurements. */
+  const reportMeasurements = useStableCallback(
+    (projectKey: string, measurements: ProjectWorktreeMeasurements | null) => {
+      setProjectMeasurements((previous) => {
+        const next = new Map(previous);
+        if (measurements === null) next.delete(projectKey);
+        else next.set(projectKey, measurements);
+        return next;
+      });
+    },
   );
   const selectedTargets = [...selected.values()];
   const selectedSizes = useWorktreeMeasurements(selectedTargets);
@@ -96,15 +117,26 @@ export function ForkWorktreesSettings() {
     }
   }
 
+  const totalSpace = worktreeTotalSpaceLabel(
+    projects.map(({ project }) => {
+      const snapshot = projectMeasurements.get(project.physicalProjectKey);
+      return snapshot?.search === search ? snapshot : undefined;
+    }),
+  );
+  const spaceLabel =
+    totalSpace !== null && cleaning && selected.size > 0
+      ? `${worktreeSpaceEstimate(selectedSizes)} (of ${totalSpace}) · ${selected.size} selected`
+      : totalSpace;
+
   return (
-    <SettingsPageContainer width="expanded">
+    <SettingsPageContainer>
       <section
         className="@container/worktree-list space-y-4"
         aria-labelledby="fork-worktrees-heading"
       >
         <div className="space-y-1 px-3 sm:px-4">
           <h2 id="fork-worktrees-heading" className="text-base font-semibold">
-            Worktrees
+            Worktree Manager
           </h2>
           <p className="text-sm text-muted-foreground">
             Manage existing worktrees across projects and environments.
@@ -124,7 +156,7 @@ export function ForkWorktreesSettings() {
               }}
             />
           </div>
-          {cleaning && selected.size > 0 ? (
+          {spaceLabel !== null ? (
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -132,19 +164,15 @@ export function ForkWorktreesSettings() {
                     role="status"
                     aria-live="polite"
                     tabIndex={0}
-                    className="min-w-0 truncate text-xs text-muted-foreground"
+                    className="min-w-0 text-right text-xs text-muted-foreground"
                   />
                 }
               >
-                <span className="@min-[48rem]/worktree-list:hidden">
-                  {worktreeSpaceEstimate(selectedSizes, true)}
-                </span>
-                <span className="hidden @min-[48rem]/worktree-list:inline">
-                  {selected.size} selected · {worktreeSpaceEstimate(selectedSizes)}
-                </span>
+                {spaceLabel}
               </TooltipTrigger>
               <TooltipPopup>
-                {selected.size} selected · {worktreeSpaceEstimate(selectedSizes)}
+                {spaceLabel}. Estimated space for the worktrees matching the current filters. Shared
+                files and dependency stores are excluded. Actual freed space may differ.
               </TooltipPopup>
             </Tooltip>
           ) : (
@@ -199,6 +227,7 @@ export function ForkWorktreesSettings() {
             project={project}
             title={title}
             search={search}
+            onMeasurementsChange={reportMeasurements}
             hideEmpty={selectedMembers === null}
             now={new Date(`${nowMinute}:00.000Z`)}
             cleaning={cleaning}
@@ -240,6 +269,7 @@ function ProjectWorktrees({
   pending,
   onSelectionChange,
   projectRoots,
+  onMeasurementsChange,
 }: {
   readonly project: SidebarProjectGroupMember;
   readonly title: string;
@@ -253,6 +283,10 @@ function ProjectWorktrees({
   readonly pending: boolean;
   readonly onSelectionChange: (targets: readonly WorktreeCleanupTarget[], checked: boolean) => void;
   readonly projectRoots: readonly string[];
+  readonly onMeasurementsChange: (
+    projectKey: string,
+    measurements: ProjectWorktreeMeasurements | null,
+  ) => void;
 }) {
   const { environments } = useSettingsScope();
   const cleanupStatusSupported =
@@ -354,20 +388,45 @@ function ProjectWorktrees({
     name: row.dirName,
   }));
   const measurements = useWorktreeMeasurements(connected ? targets : []);
-  const reasons = new Map<string, string | null>();
+  const listPending =
+    connected && supported && choices.refsQuery.data === null && choices.refsQuery.isPending;
+  const listUnavailable = !connected || !supported || Boolean(choices.refsQuery.error);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- aggregate external measurement subscriptions and unregister them when a project leaves the scope
+  useEffect(() => {
+    onMeasurementsChange(project.physicalProjectKey, {
+      search,
+      measurements,
+      pending: listPending,
+      unavailable: listUnavailable,
+    });
+    return () => onMeasurementsChange(project.physicalProjectKey, null);
+  }, [
+    onMeasurementsChange,
+    project.physicalProjectKey,
+    search,
+    measurements,
+    listPending,
+    listUnavailable,
+  ]);
+  const blockersByPath = new Map<string, readonly WorktreeSelectionBlocker[]>();
   const archivedReady =
     !choices.archived.isLoading && !choices.archived.error && activity.isSuccess;
   for (const row of visibleRows) {
-    let reason: string | null = null;
-    if (!supported) reason = "Worktree management requires a compatible Fork server.";
-    else if (worktreeContainsProject(row.worktreePath, projectRoots))
-      reason = "Contains a project checkout and cannot be removed.";
-    else if (!row.isIdle) reason = "An agent is running here. Stop it before cleanup.";
-    else if (!archivedReady) reason = "Thread history must be available before cleanup.";
-    else if (!canRemove) reason = "This connection cannot remove worktrees.";
-    reasons.set(row.worktreePath, reason);
+    blockersByPath.set(
+      row.worktreePath,
+      worktreeSelectionBlockers({
+        supported,
+        containsProject: worktreeContainsProject(row.worktreePath, projectRoots),
+        isIdle: row.isIdle,
+        historyReady: archivedReady,
+        historyError: choices.archived.error ?? activity.error,
+        canRemove,
+      }),
+    );
   }
-  const selectableTargets = targets.filter((target) => reasons.get(target.path) === null);
+  const selectableTargets = targets.filter(
+    (target) => blockersByPath.get(target.path)?.length === 0,
+  );
   const selectedCount = selectableTargets.filter((target) =>
     selected.has(worktreeCleanupKey(target)),
   ).length;
@@ -393,11 +452,14 @@ function ProjectWorktrees({
         )}
       >
         {cleaning ? (
-          <Checkbox
-            aria-label={`Select removable worktrees in ${title}, ${project.workspaceRoot}`}
+          <WorktreeSelectionCheckbox
+            name={`removable worktrees in ${title}, ${project.workspaceRoot}`}
             checked={selectableTargets.length > 0 && selectedCount === selectableTargets.length}
             indeterminate={selectedCount > 0 && selectedCount < selectableTargets.length}
-            disabled={pending || selectableTargets.length === 0}
+            pending={pending}
+            reason={
+              selectableTargets.length === 0 ? "No selectable worktrees in this project." : null
+            }
             onCheckedChange={(checked) => onSelectionChange(selectableTargets, checked)}
           />
         ) : null}
@@ -489,7 +551,7 @@ function ProjectWorktrees({
               }),
             )}
             pending={pending}
-            selectionReason={reasons.get(row.worktreePath) ?? null}
+            selectionBlockers={blockersByPath.get(row.worktreePath) ?? []}
             measurement={
               measurements.get(
                 worktreeCleanupKey({
@@ -530,7 +592,7 @@ function ManagedWorktreeRow({
   cleaning,
   selected,
   pending,
-  selectionReason,
+  selectionBlockers,
   measurement,
   onSelectionChange,
 }: {
@@ -549,7 +611,7 @@ function ManagedWorktreeRow({
   readonly cleaning: boolean;
   readonly selected: boolean;
   readonly pending: boolean;
-  readonly selectionReason: string | null;
+  readonly selectionBlockers: readonly WorktreeSelectionBlocker[];
   readonly measurement: WorktreeMeasurement | null;
   readonly onSelectionChange: (targets: readonly WorktreeCleanupTarget[], checked: boolean) => void;
 }) {
@@ -637,7 +699,11 @@ function ManagedWorktreeRow({
         <WorktreeSelectionCheckbox
           name={row.dirName}
           checked={selected}
-          reason={selectionReason}
+          reason={
+            selectionBlockers.length > 0
+              ? selectionBlockers.map((blocker) => blocker.reason).join("\n")
+              : null
+          }
           pending={pending}
           onCheckedChange={(checked) => onSelectionChange([target], checked)}
         />
@@ -651,6 +717,22 @@ function ManagedWorktreeRow({
             </TooltipTrigger>
             <TooltipPopup>{row.worktreePath}</TooltipPopup>
           </Tooltip>
+          {selectionBlockers.map((blocker) => (
+            <Tooltip key={blocker.label}>
+              <TooltipTrigger
+                render={
+                  <Badge
+                    variant={blocker.label === "Error" ? "error" : "subtle"}
+                    size="sm"
+                    tabIndex={0}
+                  />
+                }
+              >
+                {blocker.label}
+              </TooltipTrigger>
+              <TooltipPopup>{blocker.reason}</TooltipPopup>
+            </Tooltip>
+          ))}
           {progressDescription !== null ? (
             <Tooltip>
               <TooltipTrigger
@@ -778,27 +860,41 @@ function WorktreeSelectionCheckbox({
   checked,
   reason,
   pending,
+  indeterminate = false,
   onCheckedChange,
 }: {
   readonly name: string;
   readonly checked: boolean;
   readonly reason: string | null;
   readonly pending: boolean;
+  readonly indeterminate?: boolean;
   readonly onCheckedChange: (checked: boolean) => void;
 }) {
+  const disabled = pending || reason !== null;
   const checkbox = (
     <Checkbox
       aria-label={`Select ${name}`}
       checked={checked}
-      disabled={pending || reason !== null}
+      indeterminate={indeterminate}
+      disabled={disabled}
       onCheckedChange={onCheckedChange}
     />
   );
-  if (!reason) return checkbox;
+  if (!disabled) return checkbox;
   return (
     <Tooltip>
-      <TooltipTrigger render={<span tabIndex={0} />}>{checkbox}</TooltipTrigger>
-      <TooltipPopup>{reason}</TooltipPopup>
+      <TooltipTrigger
+        render={<span tabIndex={0} className="relative inline-flex cursor-not-allowed" />}
+      >
+        {checkbox}
+        {!checked && !indeterminate ? (
+          <LockKeyholeIcon
+            aria-hidden
+            className="pointer-events-none absolute inset-0 m-auto size-3 text-muted-foreground"
+          />
+        ) : null}
+      </TooltipTrigger>
+      <TooltipPopup>{reason ?? "Deletion is in progress."}</TooltipPopup>
     </Tooltip>
   );
 }

@@ -1,8 +1,12 @@
+import type { WorktreeMeasurement } from "./useWorktreeCleanup";
 import { expect, it } from "vite-plus/test";
 import type { ForkWorktreeCleanupAge } from "@t3tools/contracts";
 
 import {
   managedWorktreeRows,
+  worktreeTotalSpaceLabel,
+  worktreeSelectionBlockers,
+  type ProjectWorktreeMeasurements,
   sortWorktreesByCleanupAge,
   worktreeThreadsLabel,
 } from "./ForkWorktreesSettings.logic";
@@ -82,4 +86,101 @@ it("distinguishes thread settlement, no associations, and unavailable summaries"
   expect(worktreeThreadsLabel({ ...summary, threadsSettled: true }, true, true)).toBe(
     "Unavailable",
   );
+});
+
+it("totals unique visible worktrees without hiding pending or failed measurements", () => {
+  const ready = { bytes: 1024, pending: false, error: null };
+  const project: ProjectWorktreeMeasurements = {
+    search: "",
+    pending: false,
+    unavailable: false,
+    measurements: new Map<string, WorktreeMeasurement>([
+      ['["local","/trees/review"]', ready],
+      ['["local","/trees/queued"]', { bytes: null, pending: true, error: null }],
+      ['["local","/trees/failed"]', { bytes: null, pending: false, error: "Offline" }],
+    ]),
+  };
+  const duplicate: ProjectWorktreeMeasurements = {
+    ...project,
+    measurements: new Map([['["local","/trees/review"]', ready]]),
+  };
+  expect(worktreeTotalSpaceLabel([project, duplicate])).toBe(
+    "~1.00 KB total used · 1 pending · 1 unknown",
+  );
+  expect(worktreeTotalSpaceLabel([duplicate, duplicate])).toBe("~1.00 KB total used");
+  const remote = {
+    ...duplicate,
+    measurements: new Map([['["remote","/trees/review"]', ready]]),
+  };
+  expect(worktreeTotalSpaceLabel([duplicate, remote])).toBe("~2.00 KB total used");
+  expect(worktreeTotalSpaceLabel([duplicate, undefined])).toBe(
+    "~1.00 KB total used · Loading worktrees...",
+  );
+  const unavailable = { ...duplicate, unavailable: true };
+  expect(worktreeTotalSpaceLabel([unavailable])).toBeNull();
+  expect(worktreeTotalSpaceLabel([unavailable, { ...remote, unavailable: true }])).toBeNull();
+  expect(worktreeTotalSpaceLabel([unavailable, remote])).toBe("~1.00 KB total used");
+  expect(worktreeTotalSpaceLabel([unavailable, undefined])).toBe(
+    "~0 B total used · Loading worktrees...",
+  );
+  expect(worktreeTotalSpaceLabel([{ ...duplicate, measurements: new Map() }])).toBe(
+    "~0 B total used",
+  );
+  expect(worktreeTotalSpaceLabel([undefined])).toBe("~0 B total used · Loading worktrees...");
+  expect(
+    worktreeTotalSpaceLabel([
+      {
+        ...duplicate,
+        measurements: new Map([['["local","/trees/review"]', { ...ready, pending: true }]]),
+      },
+    ]),
+  ).toBe("~0 B total used · 1 pending");
+});
+
+it("classifies deletion restrictions without treating loading as an error", () => {
+  const available = {
+    supported: true,
+    containsProject: false,
+    isIdle: true,
+    historyReady: true,
+    historyError: null,
+    canRemove: true,
+  };
+  expect(worktreeSelectionBlockers(available)).toEqual([]);
+  expect(
+    worktreeSelectionBlockers({ ...available, containsProject: true }).map(
+      (blocker) => blocker.label,
+    ),
+  ).toEqual(["Project"]);
+  expect(
+    worktreeSelectionBlockers({ ...available, isIdle: false }).map((blocker) => blocker.label),
+  ).toEqual(["Busy"]);
+  expect(
+    worktreeSelectionBlockers({ ...available, historyReady: false }).map(
+      (blocker) => blocker.label,
+    ),
+  ).toEqual(["Loading"]);
+  expect(
+    worktreeSelectionBlockers({
+      ...available,
+      historyError: "Connection failed",
+      historyReady: false,
+    }),
+  ).toEqual([{ label: "Error", reason: "Unable to load thread history: Connection failed" }]);
+  expect(
+    worktreeSelectionBlockers({ ...available, canRemove: false }).map((blocker) => blocker.label),
+  ).toEqual(["Read-only"]);
+  expect(
+    worktreeSelectionBlockers({ ...available, supported: false, historyReady: false }).map(
+      (blocker) => blocker.label,
+    ),
+  ).toEqual(["Unsupported"]);
+  expect(
+    worktreeSelectionBlockers({
+      ...available,
+      containsProject: true,
+      isIdle: false,
+      canRemove: false,
+    }).map((blocker) => blocker.label),
+  ).toEqual(["Project", "Busy", "Read-only"]);
 });

@@ -1,13 +1,20 @@
+import "../../index.css";
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { Atom } from "effect/reactivity";
+import { vcsEnvironment } from "../../state/vcs";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 import { render } from "../../../test/render";
 import type { SidebarProjectGroupMember } from "../../sidebarProjectGrouping";
+import type { WorktreeMeasurement } from "./useWorktreeCleanup";
+import { worktreeCleanupKey } from "./worktreeBulkCleanup";
 import type { useWorkspaceChoices } from "../../hooks/useWorkspaceChoices";
 
 const state = vi.hoisted(() => ({
   projects: [] as SidebarProjectGroupMember[],
+  connected: true,
   scopeKind: "all" as "all" | "project",
+  measurements: new Map<string, Map<string, WorktreeMeasurement>>(),
   choices: new Map<string, ReturnType<typeof useWorkspaceChoices>>(),
 }));
 
@@ -22,7 +29,7 @@ vi.mock(import("./SettingsScopeContext"), async (original) => ({
     environments: [
       {
         environmentId: "local",
-        connection: { phase: "connected" },
+        connection: { phase: state.connected ? "connected" : "disconnected" },
         serverConfig: { environment: { capabilities: { fork: { worktrees: { apiVersion: 1 } } } } },
       },
     ],
@@ -33,12 +40,25 @@ vi.mock(import("../../hooks/useWorkspaceChoices"), () => ({
 }));
 vi.mock(import("./useWorktreeCleanup"), () => ({
   useWorktreeCleanup: (() => ({ pending: false, clean: vi.fn() })) as never,
-  useWorktreeMeasurements: () => new Map(),
-  worktreeSpaceEstimate: () => "Size unknown",
+  useWorktreeMeasurements: (targets) => {
+    const key = JSON.stringify(targets);
+    let measurements = state.measurements.get(key);
+    if (measurements === undefined) {
+      measurements = new Map(
+        targets.map((target) => [
+          worktreeCleanupKey(target),
+          { bytes: 1024, pending: false, error: null },
+        ]),
+      );
+      state.measurements.set(key, measurements);
+    }
+    return measurements;
+  },
+  worktreeSpaceEstimate: () => "~1.00 KB to reclaim",
 }));
 vi.mock(import("../../state/query"), async (original) => ({
   ...(await original()),
-  useEnvironmentQuery: (() => ({ data: null, error: null })) as never,
+  useEnvironmentQuery: (() => ({ data: null, error: null, isSuccess: true })) as never,
 }));
 vi.mock(import("../WorktreeActionsMenu"), () => ({ WorktreeActionsMenu: () => <></> }));
 vi.mock(import("./forkSettingsAvailability"), () => ({ FORK_SETTINGS_AVAILABLE: true }));
@@ -49,7 +69,9 @@ import { ForkWorktreesSettings } from "./ForkWorktreesSettings";
 function setup() {
   state.projects = [];
   state.scopeKind = "all";
+  state.connected = true;
   state.choices.clear();
+  state.measurements.clear();
   for (const title of ["Empty", "Repository", "No project"]) {
     const workspaceRoot = `/repos/${title}`;
     state.projects.push({
@@ -91,7 +113,7 @@ function setup() {
         error: null,
         dataUpdatedAt: 0,
         failure: null,
-        isPending: false,
+        isPending: true,
         isSuccess: true,
         refresh: vi.fn(),
       },
@@ -105,6 +127,9 @@ function setup() {
 
 it("hides empty and scratch projects while keeping searchable worktrees", async () => {
   setup();
+  using _permissions = vi
+    .spyOn(vcsEnvironment.removeWorktree, "permissionAtom")
+    .mockReturnValue(Atom.make(true));
   await using screen = await render(<ForkWorktreesSettings />);
   await expect
     .element(screen.getByRole("heading", { name: "Repository", exact: true }))
@@ -115,7 +140,16 @@ it("hides empty and scratch projects while keeping searchable worktrees", async 
   await expect
     .element(screen.getByRole("heading", { name: "No project", exact: true }))
     .not.toBeInTheDocument();
+  await expect.element(screen.getByRole("status")).toHaveTextContent("~1.00 KB total used");
+  await userEvent.click(screen.getByRole("button", { name: "Delete Worktrees..." }));
+  await expect.element(screen.getByRole("status")).toHaveTextContent("~1.00 KB total used");
+  await userEvent.click(screen.getByRole("checkbox", { name: "Select review", exact: true }));
+  await expect
+    .element(screen.getByRole("status"))
+    .toHaveTextContent("~1.00 KB to reclaim (of ~1.00 KB total used) · 1 selected");
+  await userEvent.click(screen.getByRole("button", { name: "Cancel", exact: true }));
   await userEvent.fill(screen.getByRole("searchbox"), "missing");
+  await expect.element(screen.getByRole("status")).toHaveTextContent("~0 B total used");
   await expect
     .element(screen.getByRole("heading", { name: "Repository", exact: true }))
     .not.toBeInTheDocument();
@@ -127,6 +161,12 @@ it("hides empty and scratch projects while keeping searchable worktrees", async 
   await screen.rerender(<ForkWorktreesSettings />);
   await expect.element(screen.getByRole("heading", { name: "Empty", exact: true })).toBeVisible();
   await expect.element(screen.getByText("No worktrees found.", { exact: true })).toBeVisible();
+  state.connected = false;
+  await screen.rerender(<ForkWorktreesSettings />);
+  await expect.element(screen.getByText(/total used/)).not.toBeInTheDocument();
+  state.connected = true;
+  await screen.rerender(<ForkWorktreesSettings />);
+  await expect.element(screen.getByRole("status")).toHaveTextContent("~1.00 KB total used");
   await expect
     .element(screen.getByRole("heading", { name: "No project", exact: true }))
     .not.toBeInTheDocument();
