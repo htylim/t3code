@@ -58,7 +58,7 @@ describe("named worktree metadata", () => {
     store.record(projectRef, [{ id: threadId, worktreePath }]);
     expect(useNamedWorktreeStore.getState().selections).toEqual({});
     expect(useNamedWorktreeStore.getState().worktrees).toEqual({
-      [namedWorktreeKey(projectRef, worktreePath)]: { color: selection.color },
+      [namedWorktreeKey(projectRef, worktreePath)]: { color: selection.color, manuallyNamed: true },
     });
     // Another thread can reuse the same directory without owning its color.
     store.record(projectRef, [{ id: ThreadId.make("followup"), worktreePath }]);
@@ -85,6 +85,10 @@ describe("named worktree metadata", () => {
     ).toBe("auto");
     store.setColor(projectRef, newPath, "#3b82f6");
     expect(
+      useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, newPath)]
+        ?.manuallyNamed,
+    ).toBe(true);
+    expect(
       useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, newPath)]?.colorMode,
     ).toBeUndefined();
     store.forget(projectRef, newPath);
@@ -94,30 +98,32 @@ describe("named worktree metadata", () => {
   it("keeps a color-only choice through temporary provisioning and automatic naming", () => {
     const store = useNamedWorktreeStore.getState();
     const automaticSelection = { name: "", color: "#14b8a6" };
-    const temporaryPath = "/worktrees/t3-abcd1234";
+    const temporaryPath = "/worktrees/t3-abcd1234-0b5a4ef1d3c92208";
     const finalPath = "/worktrees/fix-sidebar-colors";
     store.select(projectRef, threadId, automaticSelection);
     store.record(projectRef, [{ id: threadId, worktreePath: null }]);
     expect(useNamedWorktreeStore.getState().worktrees).toEqual({});
-    store.record(projectRef, [{ id: threadId, worktreePath: temporaryPath }]);
+    store.record(projectRef, [{ id: threadId, worktreePath: temporaryPath, status: "preparing" }]);
     expect(
       useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, temporaryPath)],
-    ).toEqual({ color: automaticSelection.color });
+    ).toEqual({ color: automaticSelection.color, manuallyNamed: false });
     expect(
       useNamedWorktreeStore.getState().selections[namedWorktreeKey(projectRef, threadId)],
     ).toEqual(automaticSelection);
     const storage = useNamedWorktreeStore.persist.getOptions().storage!;
     const write = vi.spyOn(storage, "setItem");
     try {
-      store.record(projectRef, [{ id: threadId, worktreePath: temporaryPath }]);
+      store.record(projectRef, [
+        { id: threadId, worktreePath: temporaryPath, status: "preparing" },
+      ]);
       expect(write).not.toHaveBeenCalled();
     } finally {
       write.mockRestore();
     }
-    store.record(projectRef, [{ id: threadId, worktreePath: finalPath }]);
+    store.record(projectRef, [{ id: threadId, worktreePath: finalPath, status: "starting" }]);
     expect(
       useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, finalPath)],
-    ).toEqual({ color: automaticSelection.color });
+    ).toEqual({ color: automaticSelection.color, manuallyNamed: false });
     expect(useNamedWorktreeStore.getState().selections).toEqual({});
   });
 
@@ -145,7 +151,7 @@ describe("named worktree metadata", () => {
     await storage.setItem("t3code:fork:named-worktrees:v1", persisted!);
     await useNamedWorktreeStore.persist.rehydrate();
     expect(Object.values(useNamedWorktreeStore.getState().worktrees)).toEqual([
-      { color: selection.color },
+      { color: selection.color, manuallyNamed: true },
     ]);
     expect(Object.values(useNamedWorktreeStore.getState().selections)).toEqual([
       { name: "next", color: "#3b82f6" },

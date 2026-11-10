@@ -217,7 +217,7 @@ export function ThreadWorkspaceMenu({
           : { color: selection.color };
       useNamedWorktreeStore
         .getState()
-        .setColor(projectRef, worktree.path, color.color, selection.colorMode, color.pending);
+        .setColor(projectRef, worktree.path, color.color, selection.colorMode, color.pending, true);
       try {
         await assignWorkspace({ worktreePath: worktree.path, branch: worktree.refName });
       } catch (cause) {

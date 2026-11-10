@@ -11,20 +11,21 @@ const WorktreeColor = Schema.Struct({
   colorMode: Schema.optionalKey(WorkspaceColorMode),
   autoPending: Schema.optionalKey(Schema.Boolean),
 });
+const WorktreeMetadata = Schema.Struct({
+  ...WorktreeColor.fields,
+  manuallyNamed: Schema.optionalKey(Schema.Boolean),
+});
 const NamedWorktreeSelection = Schema.Struct({ name: Schema.String, ...WorktreeColor.fields });
 export type NamedWorktreeSelection = typeof NamedWorktreeSelection.Type;
 const PersistedNamedWorktrees = Schema.Struct({
   selections: Schema.Record(Schema.String, NamedWorktreeSelection),
-  worktrees: Schema.Record(Schema.String, WorktreeColor),
+  worktrees: Schema.Record(Schema.String, WorktreeMetadata),
 });
 const decodePersistedNamedWorktrees = Schema.decodeUnknownSync(PersistedNamedWorktrees);
 
 interface NamedWorktreeState {
   selections: Record<string, NamedWorktreeSelection>;
-  worktrees: Record<
-    string,
-    { color: string; colorMode?: WorkspaceColorMode; autoPending?: boolean }
-  >;
+  worktrees: Record<string, typeof WorktreeMetadata.Type>;
   /** Save a draft name and color. An empty name keeps automatic directory naming. */
   select: (
     projectRef: ScopedProjectRef,
@@ -34,7 +35,7 @@ interface NamedWorktreeState {
   /** Bind a pending choice to the actual path once normal provisioning records it. */
   record: (
     projectRef: ScopedProjectRef,
-    threads: readonly { id: ThreadId; worktreePath: string | null }[],
+    threads: readonly { id: ThreadId; worktreePath: string | null; status?: string | undefined }[],
   ) => void;
   /** Save the color of an existing named worktree. */
   setColor: (
@@ -43,6 +44,7 @@ interface NamedWorktreeState {
     color: string,
     colorMode?: WorkspaceColorMode,
     autoPending?: boolean,
+    manuallyNamed?: boolean,
   ) => void;
   /** Keep the saved color when the workspace menu moves a directory. */
   move: (projectRef: ScopedProjectRef, oldPath: string, newPath: string) => void;
@@ -99,28 +101,32 @@ export const useNamedWorktreeStore = create<NamedWorktreeState>()(
           const worktreeKey = namedWorktreeKey(projectRef, thread.worktreePath);
           if (
             worktrees[worktreeKey]?.color !== selection.color ||
-            worktrees[worktreeKey]?.colorMode !== selection.colorMode
+            worktrees[worktreeKey]?.colorMode !== selection.colorMode ||
+            worktrees[worktreeKey]?.manuallyNamed !== Boolean(selection.name)
           ) {
             worktrees[worktreeKey] = {
               color: selection.color,
+              manuallyNamed: Boolean(selection.name),
               ...(selection.colorMode ? { colorMode: selection.colorMode } : {}),
             };
             changed = true;
           }
           // Automatic naming moves the temporary directory after provisioning records it.
-          if (selection.name || !isTemporaryWorktreeBranch(directoryName)) {
+          if (selection.name || (thread.status !== undefined && thread.status !== "preparing")) {
             delete selections[selectionKey];
             changed = true;
           }
         }
         if (changed) set({ selections, worktrees });
       },
-      setColor: (projectRef, worktreePath, color, colorMode, autoPending) => {
+      setColor: (projectRef, worktreePath, color, colorMode, autoPending, manuallyNamed) => {
         const key = namedWorktreeKey(projectRef, worktreePath);
+        const namingChoice = manuallyNamed ?? get().worktrees[key]?.manuallyNamed;
         if (
           get().worktrees[key]?.color === color &&
           get().worktrees[key]?.colorMode === colorMode &&
-          get().worktrees[key]?.autoPending === autoPending
+          get().worktrees[key]?.autoPending === autoPending &&
+          get().worktrees[key]?.manuallyNamed === namingChoice
         )
           return;
         set({
@@ -128,6 +134,7 @@ export const useNamedWorktreeStore = create<NamedWorktreeState>()(
             ...get().worktrees,
             [key]: {
               color,
+              ...(namingChoice === undefined ? {} : { manuallyNamed: namingChoice }),
               ...(colorMode ? { colorMode } : {}),
               ...(autoPending ? { autoPending } : {}),
             },

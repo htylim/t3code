@@ -493,10 +493,9 @@ const make = Effect.gen(function* () {
       ) {
         const oldBranch = branch;
         const worktreeCwd = worktreePath;
-        const directoryName = worktreeCwd.split(/[\\/]/).at(-1) ?? worktreeCwd;
         const renameDirectory =
-          isTemporaryWorktreeBranch(directoryName) &&
-          !(input.workspaceStrategy.type === "worktree" && input.workspaceStrategy.directoryName);
+          input.workspaceStrategy.type === "worktree" &&
+          input.workspaceStrategy.directoryName === undefined;
         const renameWorkspace = generateBranchNameFor(worktreeCwd, initialMessage).pipe(
           Effect.flatMap(({ branch: newBranch, exactName }) =>
             git

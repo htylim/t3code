@@ -244,7 +244,14 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
         : { color };
     useNamedWorktreeStore
       .getState()
-      .setColor(projectRef, savedPath, resolvedColor.color, colorMode, resolvedColor.pending);
+      .setColor(
+        projectRef,
+        savedPath,
+        resolvedColor.color,
+        colorMode,
+        resolvedColor.pending,
+        renaming ? true : undefined,
+      );
     setSaving(false);
     closeWorktreeEditor(request);
   }

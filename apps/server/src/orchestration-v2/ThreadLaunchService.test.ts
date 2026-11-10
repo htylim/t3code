@@ -1027,7 +1027,7 @@ it.effect("launches a worktree request for Scratch at the root, in its own folde
     const git = yield* preparationSettled(other.threadId);
     assert.equal(git.runs[0]?.status, "starting");
     assert.equal(git.runs[0]?.workspacePreparation?.type, "worktree");
-    assert.equal(git.thread.worktreePath, "/other-repo-worktrees/feature");
+    assert.equal(git.thread.worktreePath, "/other-repo-worktrees/generated-branch");
     assert.equal(harness.createWorktree.mock.calls[0]?.[0]?.cwd, "/other-repo");
     assert.deepEqual(harness.claimed, [launched.threadId]);
   }).pipe(Effect.provide(harness.layer));
@@ -1176,7 +1176,7 @@ it.effect.each([false, true])(
       const git = yield* GitVcsDriver.GitVcsDriver;
       const directory = yield* fs.makeTempDirectoryScoped({ prefix: "launch-directory-name-" });
       const repo = `${directory}/repo`;
-      const oldPath = `${directory}/t3-abcd1234`;
+      const oldPath = `${directory}/t3-abcd1234-0b5a4ef1d3c92208`;
       const namedPath = `${directory}/feature-sidebar-pills`;
       yield* fs.makeDirectory(repo);
       yield* git.execute({ operation: "launch-test", cwd: repo, args: ["init", "-b", "main"] });
@@ -1213,6 +1213,10 @@ it.effect.each([false, true])(
             Effect.as({ branch: "feature/sidebar-pills" }),
           ),
         renameBranch: git.renameBranch,
+        createWorktree: (input) =>
+          Effect.succeed({
+            worktree: { path: oldPath, refName: input.newRefName, headSha: "abc" },
+          } as never),
         renameWorktree: (input) => git.renameWorktree({ ...input, cwd: repo }),
         runSetup: () =>
           Deferred.succeed(setupEntered, undefined).pipe(Effect.andThen(Effect.never)),
@@ -1225,7 +1229,7 @@ it.effect.each([false, true])(
           command: "launch:directory-name",
           thread: "thread:directory-name",
           message: "Fix sidebar pills",
-          workspace: { type: "existing_worktree", worktreePath: oldPath, branch: "t3/abcd1234" },
+          workspace: { type: "worktree", baseRef: "main", branch: "t3/abcd1234" },
         });
         const launched = yield* launches.launch(input);
         yield* Deferred.await(namingStarted);
@@ -1290,6 +1294,30 @@ it.effect.each([false, true])(
       ),
     ),
 );
+
+it.effect.each([
+  { type: "worktree", baseRef: "main", directoryName: "t3-abcd1234" },
+  { type: "existing_worktree", worktreePath: "/trees/t3-abcd1234", branch: "t3/abcd1234" },
+] as const)("preserves an explicitly named or existing directory: %s", (workspace) => {
+  const harness = makeHarness();
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const launched = yield* launches.launch(
+      launchInput({
+        command: "launch:preserve-directory",
+        thread: "thread:preserve-directory",
+        message: "Start",
+        workspace,
+      }),
+    );
+    const prepared = yield* preparationSettled(launched.threadId);
+    assert.equal(harness.renameWorktree.mock.calls.length, 0);
+    assert.equal(
+      prepared.thread.worktreePath,
+      workspace.type === "existing_worktree" ? workspace.worktreePath : "/repo-worktrees/feature",
+    );
+  }).pipe(Effect.provide(harness.layer));
+});
 
 it.effect("does not move an automatic directory while a shared thread owns a run", () =>
   Effect.gen(function* () {
@@ -1797,8 +1825,7 @@ it.effect.each(["feature", "t3-abcd1234"])(
   "a retry reuses the recorded directory after naming %s",
   (directoryName) => {
     let setupFailures = 1;
-    const expectedPath =
-      directoryName === "feature" ? "/repo-worktrees/feature" : "/repo-worktrees/generated-branch";
+    const expectedPath = "/repo-worktrees/generated-branch";
     const harness = makeHarness({
       createWorktree: (input) =>
         Effect.succeed({
@@ -1860,7 +1887,7 @@ it.effect.each(["feature", "t3-abcd1234"])(
       assert.equal(retried.runs[0]?.status, "starting");
       assert.equal(harness.createWorktree.mock.calls.length, 1);
       assert.equal(harness.renameBranch.mock.calls.length, 1);
-      assert.equal(harness.renameWorktree.mock.calls.length, directoryName === "feature" ? 0 : 1);
+      assert.equal(harness.renameWorktree.mock.calls.length, 1);
       assert.equal(retried.thread.branch, "generated-branch");
       assert.equal(retried.thread.worktreePath, expectedPath);
       const snapshot = yield* tracker.get(launched.threadId);
@@ -2681,7 +2708,7 @@ it.effect("stops an in-flight branch rename when tracked setup is cancelled", ()
           command: "launch:cancel-renaming",
           thread: "thread:cancel-renaming",
           message: "Start",
-          workspace: { type: "worktree", baseRef: "main" },
+          workspace: { type: "worktree", baseRef: "main", directoryName: "feature" },
         }),
       );
       yield* Deferred.await(setupEntered);

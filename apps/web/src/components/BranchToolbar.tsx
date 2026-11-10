@@ -667,14 +667,17 @@ export const BranchToolbar = memo(function BranchToolbar({
     activeWorktreePath,
     activeProject?.workspaceRoot,
   );
+  const workspaceStatus = serverThread?.runtime?.status;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records a draft workspace assignment in the named-worktree store when server bootstrap completes
   useEffect(() => {
     if (activeProjectRef && activeWorktreePath && namedWorktreeSelection) {
       useNamedWorktreeStore
         .getState()
-        .record(activeProjectRef, [{ id: threadId, worktreePath: activeWorktreePath }]);
+        .record(activeProjectRef, [
+          { id: threadId, worktreePath: activeWorktreePath, status: workspaceStatus },
+        ]);
     }
-  }, [activeProjectRef, activeWorktreePath, namedWorktreeSelection, threadId]);
+  }, [activeProjectRef, activeWorktreePath, namedWorktreeSelection, threadId, workspaceStatus]);
   const effectiveEnvMode = forceNewWorktree ? "worktree" : envMode;
   const isLocalCheckout =
     !activeWorktreePath &&
