@@ -1,5 +1,44 @@
 # Fork journal
 
+## 2026-11-09 - Integrate upstream through ad9e87111f
+
+- Upstream baseline: `1a0f605344bbb6464742dab7e748daa22f071f6e`; target
+  `ad9e87111fd9b2f10ec320b4de0a6ad3a092278a` adds 351 commits. Start from fork
+  `0b7e5e8e6e94aafde819d551c9cfd281b9ff791c` and merge locally as `aa8addd9c2`.
+  Shared `fork`, `main`, and remote branches remain unchanged for candidate review.
+- Adopt upstream's complete parent-composer permission, model, and reasoning inheritance
+  for side chats. Remove the obsolete fork inheritance entry below. Retain selection
+  comments, newest-side-chat reuse, parent draft preservation, and focused-side-chat close.
+  Supply current composer settings through the command palette's new callback contract.
+- Keep sidebar presentation clocks and grouped member order while using upstream's
+  lightweight branch reads and stable callbacks. Combine upstream's early cleanup
+  eligibility exit and shorter deletion lease with shared ownership, parent-chain,
+  protected-file, progress, and revalidation guards. Keep physical worktree names/colors,
+  account usage exclusions, Postponed, navigation, and HTML source/storage compatibility.
+- Preserve Fork update-feed priority, Connect defaults, runtime cache isolation, and
+  custom worktree names. Adopt upstream's collision-resistant default names and native
+  DevTools close action. Update service layers, citation-source narrowing, replay fixtures,
+  and measured agent-context budgets for upstream API changes. Fix the changed browser
+  fixtures for theme exports, the additional Fork palette action, and the VCS server mock.
+- Verification: all 3,159 selected tests in 155 files pass, including 325 Chromium cases
+  and all opt-in HTML browser cases. The standalone cleanup suite passes 252 cases.
+  Formatting, lint, GraphQL, unused patches/code, 41 affected package type checks,
+  131 selected React Compiler cases, and web/server builds pass. All 115 migration
+  registry, migration, and associated test files match the pinned upstream byte-for-byte.
+- Isolated live checks use copied stopped-thread state and a disposable Git project.
+  Personal with Luna Low completes main and side-chat turns. Verify composer inheritance,
+  quote/comment cancellation and reuse, parent drafts, side-chat close, Postpone/restore,
+  Settle/Undo, F2, scoped/global references, grouping, actual directory rename, workspace
+  creation/reuse, manual and Auto colors, rule matching and fallback, protected-file
+  cancellation, and clean checkout removal.
+  Provider usage inclusion and Fork preferences persist through reload. Light/dark and
+  530px settings captures remain readable without document overflow.
+- Limits: two Browser-panel snapshots time out; evidence uses the documented T3 headless
+  fallback. Baseline Undo and some intermediate captures are missing or invalid and are
+  labeled in the external report. Background stopping, cleanup races, and HTML sandbox
+  behavior have automated coverage. Native mobile, installed Electron UI, and remote/tunnel
+  connections are not exercised. Live userdata and installed apps remain unchanged.
+
 ## 2026-11-06 - Share sidebar ordering clocks with displayed ages
 
 - Upstream baseline: `1a0f605344`. Return-based inbox sorting could place a thread labeled
@@ -281,20 +320,6 @@
   installed app, or shared release branch changed. Nothing was published.
 - Updated channel guidance: `fork` is continuous and `main` is stable, at or behind `fork`.
   Added missing maintained-feature intent and the reusable [upstream merge procedure](upstream-merges.md).
-
-## 2026-10-31 - Inherit the parent permission mode in side chats
-
-- Upstream baseline: `1a0f605344`.
-- Reason: Side chats should follow the parent's chosen mode, including an unsent permission
-  change. This preserves Auto and an explicit Supervised choice without a separate default.
-  Organization policy ceilings still apply.
-- Upstream supplies permission inheritance at creation and on the first provider turn.
-  The remaining fork extension copies pending parent composer mode changes on web and
-  desktop, including `/side` sends. Modes remain independently editable. Keep upstream's
-  persisted-mode handling and organization-policy checks.
-- Verification covers all inherited server modes, organization ceilings, pending composer
-  changes, unsent selection drafts, Cmd+T, and immediate sends. The integrated client also
-  completed a Personal Luna Low side-chat turn with inherited Full access.
 
 ## 2026-10-31 - Comment before asking about a selection in side chat
 

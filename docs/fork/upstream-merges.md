@@ -85,9 +85,9 @@ stored data must remain readable; authorized cleanup is a separate operation, ne
 
 Use these established intents when assessing overlaps:
 
-- Side chats should support Auto rather than upstream forcing Supervised on the first turn.
-  Parent-mode inheritance is the existing small extension and preserves an explicit Supervised
-  choice. Keep upstream's organization ceilings and policy failures.
+- Adopt upstream's parent-composer permission and reasoning inheritance for side chats. Keep
+  selection comments and newest-side-chat quote reuse as narrow extensions. Preserve upstream's
+  organization ceilings and policy failures.
 - Usage exclusions omit a provider account from Cost and Tokens. Provider/model filters do not
   replace this. Compose account selection with upstream aggregation and cache invalidation.
 - Worktree controls identify the physical checkout, group its threads, and allow manual management,

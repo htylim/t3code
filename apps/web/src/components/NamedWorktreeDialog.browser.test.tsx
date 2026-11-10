@@ -101,7 +101,7 @@ vi.mock("../state/server", async () => {
   const { Atom } = await import("effect/reactivity");
   return {
     primaryServerKeybindingsAtom: Atom.make([]),
-    primaryServerEnvironmentThemesAtom: Atom.make([]),
+    themeServerEnvironmentThemesAtom: Atom.make([]),
   };
 });
 vi.mock("../state/query", () => ({

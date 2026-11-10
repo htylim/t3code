@@ -1,4 +1,4 @@
-import type { ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import type { ModelSelection, RuntimeMode, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { deriveThreadTitleSeed } from "@t3tools/client-runtime/operations";
 import {
@@ -30,11 +30,18 @@ import { useOrchestrationCommand } from "../../state/use-orchestration-command";
  */
 export function useSideChat(input: {
   readonly threadRef: ScopedThreadRef | null;
+  readonly readSettings: () => {
+    readonly runtimeMode: RuntimeMode;
+    readonly modelSelection: ModelSelection | undefined;
+  };
   readonly onError: (message: string) => void;
 }) {
   const pendingRef = useRef(false);
   const forkSideChat = useAtomCommand(threadEnvironment.forkSideChat, { reportFailure: false });
   const deleteThread = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
+  const setThreadRuntimeMode = useOrchestrationCommand(threadEnvironment.setRuntimeMode, {
+    reportFailure: false,
+  });
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
@@ -51,10 +58,7 @@ export function useSideChat(input: {
     prompt: string | undefined,
     draftPrompt?: string,
   ) => {
-    // Parent mode changes stay in composer state until its next turn.
-    const parentComposerRuntimeMode = useComposerDraftStore
-      .getState()
-      .getComposerDraft(threadRef)?.runtimeMode;
+    const { runtimeMode, modelSelection } = input.readSettings();
     const targetThreadId = newThreadId();
     const fork = await forkSideChat({
       environmentId: threadRef.environmentId,
@@ -82,8 +86,16 @@ export function useSideChat(input: {
       discard();
       return false;
     }
-    if (parentComposerRuntimeMode != null) {
-      useComposerDraftStore.getState().setRuntimeMode(targetThreadRef, parentComposerRuntimeMode);
+    if (runtimeMode !== sideChat.runtimeMode) {
+      const mode = await setThreadRuntimeMode({
+        environmentId: threadRef.environmentId,
+        input: { threadId: targetThreadId, runtimeMode, createdAt: new Date().toISOString() },
+      });
+      if (mode._tag === "Failure") {
+        reportFailure(mode, "Could not set the side chat's permission mode.");
+        discard();
+        return false;
+      }
     }
     const text = prompt?.trim();
     // Send before showing the tab: closing a tab whose side chat has no run deletes it.
@@ -93,8 +105,9 @@ export function useSideChat(input: {
         input: {
           threadId: targetThreadId,
           message: { messageId: newMessageId(), role: "user", text, attachments: [] },
+          ...(modelSelection === undefined ? {} : { modelSelection }),
           titleSeed: deriveThreadTitleSeed({ text, attachments: [] }),
-          runtimeMode: parentComposerRuntimeMode ?? sideChat.runtimeMode,
+          runtimeMode,
           interactionMode: "default",
           createdAt: new Date().toISOString(),
         },
@@ -104,6 +117,8 @@ export function useSideChat(input: {
         discard();
         return false;
       }
+    } else if (modelSelection !== undefined) {
+      useComposerDraftStore.getState().setModelSelection(targetThreadRef, modelSelection);
     }
     if (draftPrompt !== undefined) {
       useComposerDraftStore
