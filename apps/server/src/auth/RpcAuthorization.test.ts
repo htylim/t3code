@@ -43,6 +43,7 @@ describe("RPC authorization scopes", () => {
       WS_METHODS.forkWorktreeActivity,
       WS_METHODS.forkWorktreeCleanupStatus,
       WS_METHODS.forkWorktreeCleanupProgress,
+      WS_METHODS.workspaceColorsSubscribe,
     ]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
     }

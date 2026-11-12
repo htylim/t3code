@@ -3,7 +3,7 @@ import { WorktreeDirectoryName } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { useId, useState } from "react";
 
-import { getClientSettings } from "../hooks/useSettings";
+import { getWorkspaceColorPreferences } from "../workspaceColors";
 import { createWorkspaceColorSelection } from "../workspaceColorSelection";
 import { useWorkspaceChoices } from "../hooks/useWorkspaceChoices";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
@@ -48,7 +48,7 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
   const [destination, setDestination] = useState(currentPath);
   const [name, setName] = useState("");
   const [initialColor] = useState(() =>
-    createWorkspaceColorSelection(getClientSettings().forkDefaultWorkspaceColor),
+    createWorkspaceColorSelection(getWorkspaceColorPreferences(props.projectRef).choice),
   );
   const [color, setColor] = useState(initialColor.color);
   const [colorMode, setColorMode] = useState(initialColor.colorMode);

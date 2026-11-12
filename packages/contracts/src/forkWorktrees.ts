@@ -11,6 +11,7 @@ export const ForkCapabilities = Schema.Struct({
     Schema.Struct({
       apiVersion: Schema.Int,
       sizeSubscription: Schema.optionalKey(Schema.Boolean),
+      workspaceColors: Schema.optionalKey(Schema.Boolean),
       cleanupStatus: Schema.optionalKey(Schema.Boolean),
       cleanupDetails: Schema.optionalKey(Schema.Boolean),
     }),

@@ -1,3 +1,4 @@
+import { getWorkspaceColorPreferences } from "../workspaceColors";
 import { WorktreeActionsMenu } from "./WorktreeActionsMenu";
 import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 import { useAtomValue } from "@effect/atom-react";
@@ -289,6 +290,7 @@ function WorkspaceMenuContents(
             </span>
           </MenuRadioItem>
           <NewWorktreeRow
+            defaultColorChoice={getWorkspaceColorPreferences(props.projectRef).choice}
             active={!props.activeWorktreePath && props.effectiveEnvMode === "worktree"}
             selection={props.namedWorktreeSelection ?? null}
             disabled={props.envLocked || props.canCreateWorktree === false}

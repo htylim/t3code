@@ -1,7 +1,11 @@
 import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 import { getClientSettings } from "../../hooks/useSettings";
 import { createWorkspaceColorSelection } from "../../workspaceColorSelection";
-import { chooseAutomaticWorkspaceColor } from "../../workspaceColors";
+import {
+  chooseAutomaticWorkspaceColor,
+  getWorkspaceColorPreferences,
+  supportsServerWorkspaceColors,
+} from "../../workspaceColors";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../../namedWorktreeStore";
 import { isClearComposerCommand, parseSideChatCommand } from "@t3tools/shared/composerTrigger";
 import { armFreshSession, disarmFreshSession, readFreshSessionArm } from "./freshSessionArms";
@@ -1247,10 +1251,15 @@ export function useComposerSend(input: ComposerSendInput) {
         const projectRef = scopeProjectRef(environmentId, activeProject.id);
         const colorSelection = namedWorktreeSelection ?? {
           name: "",
-          ...createWorkspaceColorSelection(getClientSettings().forkDefaultWorkspaceColor),
+          ...createWorkspaceColorSelection(getWorkspaceColorPreferences(projectRef).choice),
         };
-        const color =
-          colorSelection.colorMode === "auto"
+        const serverChoosesColor =
+          colorSelection.colorMode === "auto" &&
+          getWorkspaceColorPreferences(projectRef).choice === "auto" &&
+          supportsServerWorkspaceColors(projectRef);
+        const color = serverChoosesColor
+          ? getWorkspaceColorPreferences(projectRef).fallbackColor
+          : colorSelection.colorMode === "auto"
             ? (await chooseAutomaticWorkspaceColor(projectRef, { message: promptForSend })).color
             : colorSelection.color;
         if (
@@ -1258,9 +1267,11 @@ export function useComposerSend(input: ComposerSendInput) {
           colorSelection.colorMode ||
           color !== DEFAULT_SOFT_PILL_COLOR
         ) {
-          useNamedWorktreeStore
-            .getState()
-            .select(projectRef, threadIdForSend, { ...colorSelection, color });
+          useNamedWorktreeStore.getState().select(projectRef, threadIdForSend, {
+            ...colorSelection,
+            color,
+            ...(serverChoosesColor ? { autoPending: true } : {}),
+          });
         }
       } else if (activeMessageCount === 0 && activeThread.worktreePath) {
         const projectRef = scopeProjectRef(environmentId, activeProject.id);

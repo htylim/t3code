@@ -3220,6 +3220,7 @@ export const layerWsRpc = (
         [WS_METHODS.forkWorktreeCleanupStatus]: (input) =>
           storageCleanup.getWorktreeCleanupStatus(input),
         [WS_METHODS.workspaceChooseColor]: (input) => workspaceColors.choose(input),
+        [WS_METHODS.workspaceColorsSubscribe]: (input) => workspaceColors.stream(input.projectId),
         [WS_METHODS.vcsCreateWorktree]: (input) =>
           gitWorkflow.createWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.forkWorktreeRename]: (input) => gitWorkflow.renameWorktree(input),

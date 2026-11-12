@@ -273,6 +273,7 @@ function SidebarThreadTooltip({
     projectRef,
     thread.worktreePath,
     project?.workspaceRoot,
+    thread.id,
   );
   const driverKind = providerEntry?.driverKind ?? null;
   const previousProviderNames = thread.providerInstanceHistory
@@ -726,6 +727,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     thread.projectId ? scopeProjectRef(thread.environmentId, thread.projectId) : null,
     thread.worktreePath,
     props.project?.workspaceRoot,
+    thread.id,
   );
   const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   const { leaseLiveStatus, rowRef: leaseRowRef } = useSidebarRowSubscriptionLease(props.isActive);

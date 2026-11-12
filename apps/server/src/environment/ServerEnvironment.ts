@@ -224,6 +224,7 @@ export const make = Effect.gen(function* () {
         worktrees: {
           apiVersion: FORK_WORKTREES_API_VERSION,
           sizeSubscription: true,
+          workspaceColors: true,
           cleanupStatus: true,
           cleanupDetails: true,
         },

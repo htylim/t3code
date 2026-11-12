@@ -1,3 +1,5 @@
+import * as WorkspaceColors from "../workspace/WorkspaceColors.ts";
+import * as ProjectionStore from "./ProjectionStore.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
@@ -128,6 +130,7 @@ interface HarnessOptions {
   readonly renameBranch?: GitWorkflow.GitWorkflowService["Service"]["renameBranch"];
   readonly renameWorktree?: GitWorkflow.GitWorkflowService["Service"]["renameWorktree"];
   readonly runSetup?: ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]["runForThread"];
+  readonly generateWorkspaceColor?: TextGeneration.TextGeneration["Service"]["generateWorkspaceColor"];
   readonly generateTitle?: TextGeneration.TextGeneration["Service"]["generateThreadTitle"];
   readonly generateBranchName?: TextGeneration.TextGeneration["Service"]["generateBranchName"];
   readonly serverSettings?: Parameters<typeof ServerSettings.layerTest>[0];
@@ -232,6 +235,9 @@ function makeHarness(options: HarnessOptions = {}) {
     }),
     Layer.mock(TextGeneration.TextGeneration)({
       generateThreadTitle,
+      ...(options.generateWorkspaceColor
+        ? { generateWorkspaceColor: options.generateWorkspaceColor }
+        : {}),
       generateBranchName,
     }),
     layerServerSettings,
@@ -242,16 +248,6 @@ function makeHarness(options: HarnessOptions = {}) {
         isScratchProject: () => Effect.succeed(false),
         folderForThread: () => Effect.succeedNone,
       }),
-  );
-  const layerLaunch = ThreadLaunch.layer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        layerExternalServices,
-        layerThreadManagement,
-        layerReceipts,
-        IdAllocator.layer,
-      ),
-    ),
   );
   const layerProjectedProjects = Layer.mock(ProjectStore.ProjectStoreV2)({
     get: (requestedProjectId) =>
@@ -276,6 +272,28 @@ function makeHarness(options: HarnessOptions = {}) {
           : Option.none(),
       ),
   });
+  const layerColors = WorkspaceColors.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        layerProjectedProjects,
+        layerExternalServices,
+        Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
+      ),
+    ),
+    Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "launch-colors-" })),
+    Layer.provide(NodeServices.layer),
+  );
+  const layerLaunch = ThreadLaunch.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        layerExternalServices,
+        layerColors,
+        layerThreadManagement,
+        layerReceipts,
+        IdAllocator.layer,
+      ),
+    ),
+  );
   const layerTitleRegeneration = ThreadTitleRegeneration.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -289,6 +307,7 @@ function makeHarness(options: HarnessOptions = {}) {
   return {
     layer: Layer.mergeAll(
       layerLaunch,
+      layerColors,
       layerOrchestrator,
       layerRegistry,
       layerThreadManagement,
@@ -2885,4 +2904,48 @@ it.effect("replays an accepted send after the project disables the instance", ()
       assert.fail(`expected ThreadManagementProviderInstanceDisabledError, got ${fresh._tag}`);
     }
   }).pipe(Effect.provide(Layer.mergeAll(harness.layer, layerFiles)));
+});
+
+it.effect("classifies MCP-launched workspaces once and publishes the final renamed path", () => {
+  const generateWorkspaceColor = vi.fn(() => Effect.succeed({ color: "#8b5cf6" }));
+  const harness = makeHarness({
+    generateWorkspaceColor,
+    serverSettings: {
+      forkWorkspaceColors: {
+        choice: "auto",
+        fallbackColor: "#808080",
+        rules: [{ id: "reviews", color: "#8b5cf6", prompt: "for reviews" }],
+      },
+    },
+  });
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const colors = yield* WorkspaceColors.WorkspaceColors;
+    const input = {
+      ...launchInput({
+        command: "command:auto-color",
+        thread: "thread:auto-color",
+        message: "Explain and review PR 42",
+        workspace: { type: "worktree", baseRef: "main" },
+      }),
+      createdBy: "agent" as const,
+      creationSource: "mcp" as const,
+    };
+    yield* launches.launch(input);
+    const snapshot = yield* colors.stream(projectId).pipe(
+      Stream.filter((snapshot) => snapshot.colors.length > 0),
+      Stream.runHead,
+    );
+    assert.deepEqual(Option.getOrThrow(snapshot).colors, [
+      {
+        threadId: input.threadId,
+        projectId,
+        worktreePath: "/repo-worktrees/generated-branch",
+        color: "#8b5cf6",
+      },
+    ]);
+    assert.equal(generateWorkspaceColor.mock.calls.length, 1);
+    yield* launches.launch(input);
+    assert.equal(generateWorkspaceColor.mock.calls.length, 1);
+  }).pipe(Effect.provide(harness.layer));
 });

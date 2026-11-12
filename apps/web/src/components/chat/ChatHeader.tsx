@@ -108,6 +108,7 @@ export const ChatHeader = memo(function ChatHeader({
     activeProject ? scopeProjectRef(activeThreadEnvironmentId, activeProject.id) : null,
     activeWorktreePath,
     activeProjectCwd,
+    activeThreadId,
   );
   const canOperateThread = useEnvironmentScope(
     activeThreadEnvironmentId,

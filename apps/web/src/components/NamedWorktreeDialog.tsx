@@ -96,7 +96,7 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
     (state) => state.worktrees[namedWorktreeKey(projectRef, request.worktreePath)]?.colorMode,
   );
   const [color, setColor] = useState<string>(initialColor);
-  const [colorMode, setColorMode] = useState(initialColorMode);
+  const [colorMode, setColorMode] = useState(initialColorMode ?? worktreeDisplay?.colorMode);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [rejectedName, setRejectedName] = useState<string | null>(null);
@@ -172,7 +172,7 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
   const unchanged =
     !renaming &&
     color === initialColor &&
-    colorMode === initialColorMode &&
+    colorMode === (initialColorMode ?? worktreeDisplay?.colorMode) &&
     worktreePath === request.worktreePath;
   const disabled = saving || !!validationMessage || unchanged;
 

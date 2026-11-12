@@ -77,7 +77,8 @@ export const useNamedWorktreeStore = create<NamedWorktreeState>()(
         if (
           current?.name === selection?.name &&
           current?.color === selection?.color &&
-          current?.colorMode === selection?.colorMode
+          current?.colorMode === selection?.colorMode &&
+          current?.autoPending === selection?.autoPending
         )
           return;
         const selections = { ...get().selections };
@@ -102,10 +103,12 @@ export const useNamedWorktreeStore = create<NamedWorktreeState>()(
           if (
             worktrees[worktreeKey]?.color !== selection.color ||
             worktrees[worktreeKey]?.colorMode !== selection.colorMode ||
+            worktrees[worktreeKey]?.autoPending !== selection.autoPending ||
             worktrees[worktreeKey]?.manuallyNamed !== Boolean(selection.name)
           ) {
             worktrees[worktreeKey] = {
               color: selection.color,
+              ...(selection.autoPending ? { autoPending: true } : {}),
               manuallyNamed: Boolean(selection.name),
               ...(selection.colorMode ? { colorMode: selection.colorMode } : {}),
             };

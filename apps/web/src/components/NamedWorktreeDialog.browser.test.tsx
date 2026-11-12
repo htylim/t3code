@@ -3,6 +3,7 @@ vi.mock("../hooks/useSettings", () => ({
 }));
 vi.mock("../workspaceColors", () => ({
   chooseAutomaticWorkspaceColor: async () => ({ color: "#808080" }),
+  getWorkspaceColorPreferences: () => ({ choice: "#808080", fallbackColor: "#808080", rules: [] }),
 }));
 import { act, render as renderScreen } from "../../test/render";
 import "../index.css";

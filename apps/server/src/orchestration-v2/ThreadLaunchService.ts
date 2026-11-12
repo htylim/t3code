@@ -1,3 +1,4 @@
+import * as WorkspaceColors from "../workspace/WorkspaceColors.ts";
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
 import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
@@ -203,6 +204,7 @@ function failureDetail(error: unknown): string {
 }
 
 const make = Effect.gen(function* () {
+  const workspaceColors = yield* WorkspaceColors.WorkspaceColors;
   const projects = yield* ProjectService.ProjectService;
   const setupTracker = yield* WorktreeSetupTracker.WorktreeSetupTracker;
   const cloneTracker = yield* ProjectCloneTracker.ProjectCloneTracker;
@@ -628,6 +630,17 @@ const make = Effect.gen(function* () {
         // Setup scripts and providers must never start in a directory that will move.
         if (renameDirectory) yield* renameWorkspace;
         else branchRename = yield* renameWorkspace.pipe(Effect.forkIn(preparationScope));
+      }
+
+      if (worktreePath !== null && initialMessage !== undefined) {
+        yield* workspaceColors
+          .initialize({
+            projectId: input.projectId,
+            threadId,
+            worktreePath,
+            message: initialMessage.text,
+          })
+          .pipe(Effect.forkIn(preparationScope));
       }
 
       if (runId !== null && worktreePath !== null) {

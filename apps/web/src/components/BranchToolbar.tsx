@@ -666,6 +666,7 @@ export const BranchToolbar = memo(function BranchToolbar({
     activeProjectRef,
     activeWorktreePath,
     activeProject?.workspaceRoot,
+    threadId,
   );
   const workspaceStatus = serverThread?.runtime?.status;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records a draft workspace assignment in the named-worktree store when server bootstrap completes

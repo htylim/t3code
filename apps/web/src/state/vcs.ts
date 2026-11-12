@@ -32,6 +32,11 @@ const worktreeCleanupSettingsAtom = Atom.family((environmentId: EnvironmentId) =
 
 export const vcsEnvironment = {
   ...createVcsEnvironmentAtoms(connectionAtomRuntime),
+  workspaceColors: createEnvironmentRpcSubscriptionAtomFamily(connectionAtomRuntime, {
+    label: "environment-data:workspace:colors",
+    tag: WS_METHODS.workspaceColorsSubscribe,
+    idleTtlMs: 0,
+  }),
   worktreeCleanupProgress: createEnvironmentRpcSubscriptionAtomFamily(connectionAtomRuntime, {
     label: "environment-data:fork:worktree-cleanup-progress",
     tag: WS_METHODS.forkWorktreeCleanupProgress,

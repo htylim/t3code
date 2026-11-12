@@ -54,7 +54,7 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
-import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { NonNegativeInt, TrimmedNonEmptyString, ProjectId } from "./baseSchemas.ts";
 import {
   ProviderAuthCancelInput,
   ProviderAuthCompleteInput,
@@ -93,7 +93,11 @@ import {
   AcpRegistrySetProviderInput,
   AcpRegistrySetProviderResult,
 } from "./acpRegistry.ts";
-import { ChooseWorkspaceColorInput, ChooseWorkspaceColorResult } from "./workspaceColor.ts";
+import {
+  ChooseWorkspaceColorInput,
+  ChooseWorkspaceColorResult,
+  WorkspaceColorSnapshot,
+} from "./workspaceColor.ts";
 import { ExternalLauncherError, LaunchEditorInput } from "./editor.ts";
 import {
   AuthAccessStreamError,
@@ -485,6 +489,7 @@ export const WS_METHODS = {
   forkWorktreeCleanupStatus: "fork.worktrees.cleanupStatus",
   forkWorktreeCleanupProgress: "fork.worktrees.subscribeCleanupProgress",
   workspaceChooseColor: "workspace.chooseColor",
+  workspaceColorsSubscribe: "fork.workspaces.subscribeColors",
   vcsCreateWorktree: "vcs.createWorktree",
   forkWorktreeRename: "fork.worktrees.rename",
   vcsRemoveWorktree: "vcs.removeWorktree",
@@ -1616,6 +1621,13 @@ const WsForkWorktreeMeasurementsRpc = Rpc.make(WS_METHODS.forkWorktreeMeasuremen
   stream: true,
 });
 
+const WsWorkspaceColorsSubscribeRpc = Rpc.make(WS_METHODS.workspaceColorsSubscribe, {
+  payload: Schema.Struct({ projectId: ProjectId }),
+  success: WorkspaceColorSnapshot,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
 const WsWorkspaceChooseColorRpc = Rpc.make(WS_METHODS.workspaceChooseColor, {
   payload: ChooseWorkspaceColorInput,
   success: ChooseWorkspaceColorResult,
@@ -2301,6 +2313,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsForkWorktreeCleanupStatusRpc,
   WsForkWorktreeCleanupProgressRpc,
   WsWorkspaceChooseColorRpc,
+  WsWorkspaceColorsSubscribeRpc,
   WsVcsCreateWorktreeRpc,
   WsForkWorktreeRenameRpc,
   WsVcsRemoveWorktreeRpc,

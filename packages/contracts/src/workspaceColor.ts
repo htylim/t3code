@@ -19,6 +19,7 @@ export const WorkspaceColorChoice = Schema.Union([
   WorkspaceColorHex,
   Schema.Literals(["random", "auto"]),
 ]);
+export type WorkspaceColorChoice = typeof WorkspaceColorChoice.Type;
 export const WorkspaceColorMode = Schema.Literals(["random", "auto"]);
 export type WorkspaceColorMode = typeof WorkspaceColorMode.Type;
 export const WorkspaceColorRule = Schema.Struct({
@@ -27,6 +28,25 @@ export const WorkspaceColorRule = Schema.Struct({
   prompt: Schema.String.check(Schema.isMaxLength(4000)),
 });
 export type WorkspaceColorRule = typeof WorkspaceColorRule.Type;
+/** Environment defaults for unattended launches and connected clients. */
+export const WorkspaceColorSettings = Schema.Struct({
+  choice: WorkspaceColorChoice,
+  fallbackColor: WorkspaceColorHex,
+  rules: Schema.Array(WorkspaceColorRule).check(Schema.isMaxLength(100)),
+});
+export type WorkspaceColorSettings = typeof WorkspaceColorSettings.Type;
+
+export const WorkspaceColorRecord = Schema.Struct({
+  threadId: ThreadId,
+  projectId: ProjectId,
+  worktreePath: Schema.String,
+  color: WorkspaceColorHex,
+});
+export type WorkspaceColorRecord = typeof WorkspaceColorRecord.Type;
+export const WorkspaceColorSnapshot = Schema.Struct({
+  colors: Schema.Array(WorkspaceColorRecord),
+});
+
 export const ChooseWorkspaceColorInput = Schema.Struct({
   projectId: ProjectId,
   message: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(16000))),

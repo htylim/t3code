@@ -24,10 +24,10 @@ In Fork settings, choose **Default Workspace Color** to preselect a preset, **Ra
 for new workspaces. Random chooses once from the nine presets. For Auto, add colors and matching
 instructions under **Color Picker Prompts**. Auto uses the first prompt and project context, then
 keeps that color when other threads reuse the workspace. Choose **Fallback color** for when no rule matches or color selection is unavailable.
-You can override either mode with a preset or custom color. These settings are saved on this device.
+You can override either mode with a preset or custom color. Color defaults and Auto rules are saved on the server. Auto also runs for scheduled and agent-created workspaces.
 
 The Workspace picker lists named worktrees by directory and branch, with busy or dirty status.
-Colors are saved in this browser or desktop profile and do not sync between devices.
+Automatic colors are shared by clients connected to the same server. Manual color overrides stay in this browser or desktop profile.
 Use a row's menu to rename an available worktree, copy its path, or remove it while keeping the branch.
 The composer picker locks once the thread has messages or an active session, or a saved thread has
 an assigned worktree. To change an existing idle thread's checkout, right-click its worktree pill

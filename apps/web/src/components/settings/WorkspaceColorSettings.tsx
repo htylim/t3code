@@ -1,23 +1,57 @@
-import { WORKSPACE_COLOR_PRESETS, type WorkspaceColorRule } from "@t3tools/contracts";
+import {
+  WORKSPACE_COLOR_PRESETS,
+  type ClientSettingsPatch,
+  type WorkspaceColorRule,
+} from "@t3tools/contracts";
+import { usePrimaryEnvironment } from "../../state/environments";
 import { randomUUID } from "../../lib/utils";
 import { PlusIcon, Trash2Icon } from "lucide-react";
-import { useClientSettings, persistClientSettingsPatch } from "../../hooks/useSettings";
+import {
+  useClientSettings,
+  persistClientSettingsPatch,
+  usePrimarySettings,
+  useUpdatePrimarySettings,
+  usePrimarySettingsAvailable,
+} from "../../hooks/useSettings";
 import { WorktreeColorPicker } from "../WorktreeColorPicker";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 
-/** Configure the initial workspace color and the rules used by Auto on this device. */
+/** Configure workspace colors for this server, including unattended launches. */
 export function WorkspaceColorSettings() {
-  const choice = useClientSettings((settings) => settings.forkDefaultWorkspaceColor);
-  const fallbackColor = useClientSettings((settings) => settings.forkWorkspaceFallbackColor);
-  const rules = useClientSettings((settings) => settings.forkColorPickerPrompts);
+  const legacy = useClientSettings((settings) => settings);
+  const preferences = usePrimarySettings((settings) => settings.forkWorkspaceColors);
+  const updateSettings = useUpdatePrimarySettings();
+  const available = usePrimarySettingsAvailable();
+  const supportsServerColors =
+    usePrimaryEnvironment()?.serverConfig?.environment.capabilities.fork?.worktrees
+      ?.workspaceColors === true;
+  const { choice, fallbackColor, rules } = preferences ?? {
+    choice: legacy.forkDefaultWorkspaceColor,
+    fallbackColor: legacy.forkWorkspaceFallbackColor,
+    rules: legacy.forkColorPickerPrompts,
+  };
+  /** Save environment rules, retaining device settings only for older servers. */
+  function persistColorSettings(patch: ClientSettingsPatch) {
+    if (!supportsServerColors) {
+      void persistClientSettingsPatch(patch);
+      return;
+    }
+    updateSettings({
+      forkWorkspaceColors: {
+        choice: patch.forkDefaultWorkspaceColor ?? choice,
+        fallbackColor: patch.forkWorkspaceFallbackColor ?? fallbackColor,
+        rules: patch.forkColorPickerPrompts ?? rules,
+      },
+    });
+  }
   const mode = choice === "auto" || choice === "random" ? choice : undefined;
 
   /** Persist one rule while preserving the other color prompts. */
   function updateRule(id: string, patch: Partial<WorkspaceColorRule>) {
-    persistClientSettingsPatch({
+    persistColorSettings({
       forkColorPickerPrompts: rules.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule)),
     });
   }
@@ -26,32 +60,32 @@ export function WorkspaceColorSettings() {
     <SettingsSection id="fork-workspace-colors" title="Workspace colors">
       <SettingsRow
         {...searchableSetting("fork-default-workspace-color")}
-        description="Preselected for new workspaces. You can change it in the workspace picker. Saved on this device."
+        description="Preselected for new workspaces. You can change it in the workspace picker. Saved on this server. Auto also applies to scheduled launches."
         control={
           <WorktreeColorPicker
             ariaLabel="Default Workspace Color"
             color={mode ? WORKSPACE_COLOR_PRESETS[0].color : choice}
             colorMode={mode}
-            disabled={false}
+            disabled={!available}
             showLabel
             onChange={(color, colorMode) => {
-              persistClientSettingsPatch({ forkDefaultWorkspaceColor: colorMode ?? color });
+              persistColorSettings({ forkDefaultWorkspaceColor: colorMode ?? color });
             }}
           />
         }
       />
       <SettingsRow
         {...searchableSetting("fork-workspace-fallback-color")}
-        description="Used by Auto when no color prompt matches or color selection is unavailable. Saved on this device."
+        description="Used by Auto when no color prompt matches or color selection is unavailable. Saved on this server. Auto also applies to scheduled launches."
         control={
           <WorktreeColorPicker
             ariaLabel="Fallback color"
             color={fallbackColor}
-            disabled={false}
+            disabled={!available}
             allowModes={false}
             showLabel
             onChange={(color) => {
-              persistClientSettingsPatch({ forkWorkspaceFallbackColor: color });
+              persistColorSettings({ forkWorkspaceFallbackColor: color });
             }}
           />
         }
@@ -67,7 +101,7 @@ export function WorkspaceColorSettings() {
                 <WorktreeColorPicker
                   ariaLabel={`Color for prompt ${index + 1}`}
                   color={rule.color}
-                  disabled={false}
+                  disabled={!available}
                   allowModes={false}
                   showLabel
                   onChange={(color) => updateRule(rule.id, { color })}
@@ -77,7 +111,7 @@ export function WorkspaceColorSettings() {
                   size="icon-sm"
                   aria-label={`Delete color prompt ${index + 1}`}
                   onClick={() =>
-                    persistClientSettingsPatch({
+                    persistColorSettings({
                       forkColorPickerPrompts: rules.filter((candidate) => candidate.id !== rule.id),
                     })
                   }
@@ -107,9 +141,9 @@ export function WorkspaceColorSettings() {
             <Button
               variant="outline"
               size="compact"
-              disabled={rules.length >= 100}
+              disabled={!available || rules.length >= 100}
               onClick={() =>
-                persistClientSettingsPatch({
+                persistColorSettings({
                   forkColorPickerPrompts: [
                     ...rules,
                     { id: randomUUID(), color: "#f43f5e", prompt: "" },

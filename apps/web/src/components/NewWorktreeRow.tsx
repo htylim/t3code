@@ -4,7 +4,7 @@ import * as Schema from "effect/Schema";
 import { PlusIcon } from "lucide-react";
 import { useState } from "react";
 
-import type { WorkspaceColorMode } from "@t3tools/contracts";
+import type { WorkspaceColorMode, WorkspaceColorChoice } from "@t3tools/contracts";
 import { getClientSettings } from "../hooks/useSettings";
 import { createWorkspaceColorSelection } from "../workspaceColorSelection";
 import type { NamedWorktreeSelection } from "../namedWorktreeStore";
@@ -17,6 +17,7 @@ const isWorktreeDirectoryName = Schema.is(WorktreeDirectoryName);
 /** Keep automatic and named creation in one selectable row, with no submit action. */
 export function NewWorktreeRow({
   selection,
+  defaultColorChoice,
   active = false,
   disabled,
   nameRequired = false,
@@ -24,6 +25,7 @@ export function NewWorktreeRow({
   onSelectionChange,
 }: {
   selection: NamedWorktreeSelection | null;
+  defaultColorChoice?: WorkspaceColorChoice;
   active?: boolean;
   disabled: boolean;
   nameRequired?: boolean;
@@ -32,7 +34,11 @@ export function NewWorktreeRow({
 }) {
   const [name, setName] = useState(selection?.name ?? "");
   const [initialColor] = useState(
-    () => selection ?? createWorkspaceColorSelection(getClientSettings().forkDefaultWorkspaceColor),
+    () =>
+      selection ??
+      createWorkspaceColorSelection(
+        defaultColorChoice ?? getClientSettings().forkDefaultWorkspaceColor,
+      ),
   );
   const [color, setColor] = useState(initialColor.color);
   const [colorMode, setColorMode] = useState(initialColor.colorMode);

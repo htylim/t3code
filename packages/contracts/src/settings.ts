@@ -1,4 +1,9 @@
-import { WorkspaceColorChoice, WorkspaceColorHex, WorkspaceColorRule } from "./workspaceColor.ts";
+import {
+  WorkspaceColorChoice,
+  WorkspaceColorHex,
+  WorkspaceColorRule,
+  WorkspaceColorSettings,
+} from "./workspaceColor.ts";
 import { WorktreeKeepWhen } from "./worktreeCleanup.ts";
 export { WorktreeKeepWhen } from "./worktreeCleanup.ts";
 import { EasDeviceHostConfigs, SimlockDeviceHostConfigs, SshDeviceHostConfigs } from "./device.ts";
@@ -1341,6 +1346,7 @@ export const CloudSpeechCredentials = Schema.Struct({
 });
 
 export const ServerSettings = Schema.Struct({
+  forkWorkspaceColors: Schema.optionalKey(WorkspaceColorSettings),
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   providerModelPreferences: Schema.NullOr(ProviderModelPreferences).pipe(
@@ -1759,6 +1765,7 @@ const ModelSelectionPatch = Schema.Struct({
 });
 
 export const ServerSettingsPatch = Schema.Struct({
+  forkWorkspaceColors: Schema.optionalKey(WorkspaceColorSettings),
   setModelFavorites: Schema.optionalKey(
     Schema.Array(Schema.Struct({ ...ModelFavorite.fields, favorite: Schema.Boolean })),
   ),
