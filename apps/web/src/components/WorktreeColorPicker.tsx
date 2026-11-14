@@ -3,7 +3,7 @@ import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-color
 import type { WorkspaceColorMode } from "@t3tools/contracts";
 import { createWorkspaceColorSelection } from "../workspaceColorSelection";
 import { WorkspaceColorOptions } from "./WorkspaceColorOptions";
-import { SparklesIcon, ShuffleIcon, ChevronDownIcon } from "lucide-react";
+import { BotIcon, ShuffleIcon, ChevronDownIcon } from "lucide-react";
 
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { createFrameCommitter, ThemeColorPickerPanel } from "./settings/ThemeColorPicker";
@@ -38,7 +38,7 @@ export function WorktreeColorPicker({
   const floatingLayerProps = useComposerMenuProps();
   const [custom, setCustom] = useState(false);
   const [open, setOpen] = useState(false);
-  const ModeIcon = colorMode === "auto" ? SparklesIcon : ShuffleIcon;
+  const ModeIcon = colorMode === "auto" ? BotIcon : ShuffleIcon;
   const presetLabel =
     SOFT_PILL_COLOR_PRESETS.find((preset) => preset.color === color)?.label ?? "Custom";
   const modeLabel = colorMode === "auto" ? "Auto" : "Random";

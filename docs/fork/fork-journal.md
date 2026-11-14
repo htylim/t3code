@@ -1,5 +1,40 @@
 # Fork journal
 
+## 2026-11-14 - Integrate upstream through 0200dcf242
+
+- Upstream baseline: `ad9e87111fd9b2f10ec320b4de0a6ad3a092278a`; target
+  `0200dcf2423c1b954c9ebca092d112426009c04d` adds 1,437 commits. Start from fork
+  `bc9ed9c9b626b29b1ca7cf94ec3337477fb437ae`. Keep shared `fork`, `main`, and remote
+  branches unchanged while preparing local candidate `0.1.0-fork.48` for review.
+- Adopt upstream's response cards, native side-chat lifecycle, composer inheritance,
+  accessible settings navigation, and cheaper sidebar reads. Keep selection comments,
+  newest saved side-chat reuse, parent drafts, workspace grouping and physical names/colors,
+  Postpone, account usage exclusions, and Fork options as narrow extensions.
+- Combine upstream cleanup path and file protections with shared ownership, inherited policy,
+  deleted-project ancestry, inspection, progress, and final revalidation. Keep upstream's
+  default worktree naming and errors alongside explicit fork names. Pass project policy to
+  workspace color generation. Preserve HTML storage and citation source compatibility.
+- Derive citation URL bounds from the supported title and attachment limits. Preserve the
+  upstream Codex pre-notification callback and use a separate completion callback for late
+  handles. Adapt keyboard tests to asynchronous menu focus. Use durable fsync on macOS:
+  Git 2.56 batch mode redirects large-file packs and breaks private checkpoint publication.
+  The four checkpoint failures also reproduce with the pinned upstream implementation.
+- Verification uses the 166 changed-file test selection, focused fork regressions, affected
+  type checks, lint, formatting, unused-code checks, GraphQL checks, React Compiler coverage,
+  and web/server builds. The combined test step exceeded its 900-second limit; package-level
+  runs retain the exact results. The invalid UTF-8 filename cleanup case is Linux-only.
+  Upstream migration files and their registry remain byte-identical to the pinned target.
+- Isolated live checks use copied stopped-thread state and a disposable Git project. Personal
+  with Luna Low completes main and native side-chat turns. Verify quote comments, saved
+  side-chat reuse, parent drafts, close, Postpone/restore, scoped/global references, actual
+  directory rename, removal cancellation and confirmation, and settings persistence.
+  Light/dark and 530px settings captures show no document overflow.
+- Limits: no native mobile, installed Electron GUI, remote/relay/tunnel pass, new live Auto
+  color evaluation, full HTML preview storage flow, or real background-command stop. Those
+  service protections have focused automated coverage. Automatic cleanup stays disabled in
+  the isolated environment. Local packaging and its fresh-state smoke record accompany the
+  candidate. Nothing is installed, pushed, tagged, or published.
+
 ## 2026-11-09 - Integrate upstream through ad9e87111f
 
 - Upstream baseline: `1a0f605344bbb6464742dab7e748daa22f071f6e`; target

@@ -1,6 +1,6 @@
 import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
 import type { WorkspaceColorMode } from "@t3tools/contracts";
-import { PipetteIcon, ShuffleIcon, SparklesIcon, type LucideIcon } from "lucide-react";
+import { PipetteIcon, ShuffleIcon, BotIcon, type LucideIcon } from "lucide-react";
 
 import { cn } from "../lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
@@ -56,7 +56,7 @@ export function WorkspaceColorOptions({
     {
       label: "Auto",
       tooltip: "Auto",
-      Icon: SparklesIcon,
+      Icon: BotIcon,
       selected: !customOpen && colorMode === "auto",
       onClick: onModeChange ? () => onModeChange("auto") : undefined,
     },

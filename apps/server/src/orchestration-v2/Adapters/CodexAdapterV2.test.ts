@@ -1457,6 +1457,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     promptSuggestions: Effect.Effect<boolean> = Effect.succeed(false),
     onNotification: (method: string) => Effect.Effect<void> = () => Effect.void,
     models?: CodexAdapterV2.CodexAdapterV2Options["models"],
+    onNotificationHandled: (method: string) => Effect.Effect<void> = () => Effect.void,
   ) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -1494,7 +1495,10 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                       ...client,
                       handleServerNotification: (method, handler) =>
                         client.handleServerNotification(method, (payload) =>
-                          handler(payload).pipe(Effect.tap(() => onNotification(method))),
+                          onNotification(method).pipe(
+                            Effect.andThen(handler(payload)),
+                            Effect.tap(() => onNotificationHandled(method)),
+                          ),
                         ),
                       request: (method, params) =>
                         onRequest(method, params).pipe(
@@ -6009,6 +6013,8 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                   terminationRequests.push(params);
                 }
               }),
+            undefined,
+            undefined,
             undefined,
             undefined,
             undefined,

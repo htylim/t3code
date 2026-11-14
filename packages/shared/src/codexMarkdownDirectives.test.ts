@@ -177,7 +177,7 @@ describe("native Markdown adapters", () => {
   it.each([
     [
       "/workspace/reports/*draft*_[copy]`<& 100% #1?.html",
-      "[\\*draft\\*\\_\\[copy\\]\\`\\<\\& 100% #1?.html](</workspace/reports/*draft*_[copy]`%3C& 100%25 %231%3F.html>)",
+      "[\\*draft\\*\\_\\[copy\\]\\`\\<\\& 100% #1?.html](</workspace/reports/*draft*_[copy]`%3C%26 100%25 %231%3F.html>)",
     ],
     ["C:\\Users\\test\\diagram.html", "[diagram.html](<C:%5CUsers%5Ctest%5Cdiagram.html>)"],
     ['/workspace/quoted"file.html', '[quoted"file.html](</workspace/quoted"file.html>)'],
