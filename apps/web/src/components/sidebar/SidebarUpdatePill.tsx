@@ -149,7 +149,7 @@ export async function downloadLocalUpdate(
 ): Promise<boolean> {
   try {
     const result = await bridge.downloadUpdate();
-    if (result.completed && notifyDownloaded) {
+    if (result.completed && (notifyDownloaded || result.state.manualDownload)) {
       showDesktopUpdateDownloadedToast(bridge, result.state);
     }
     const actionError = shouldToastDesktopUpdateActionResult(result)
@@ -311,6 +311,7 @@ function SidebarUpdateControl() {
       try {
         confirmed = await ensureLocalApi().dialogs.confirm(
           getDesktopUpdateInstallConfirmationMessage(state),
+          { initialFocus: "confirm" },
         );
       } catch (error) {
         setIsActionPending(false);

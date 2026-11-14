@@ -80,6 +80,7 @@ const make = Effect.gen(function* () {
         input.projectId,
       ).settings;
       const generated = yield* generation.generateWorkspaceColor({
+        projectId: input.projectId,
         cwd: project.workspaceRoot,
         projectName: project.title,
         message,

@@ -35,6 +35,7 @@ function setup(
             Effect.succeedSome({
               projectId,
               title: "acme-api",
+              hasCustomTitle: false,
               workspaceRoot: "/home/user/acme-api",
               defaultModelSelection: null,
               defaultThreadEnvMode: "local",
@@ -77,6 +78,7 @@ it.effect("classifies the first prompt with project context and ignores blank ru
       }),
     ).toEqual({ color: "#f43f5e" });
     expect(harness.generateWorkspaceColor.mock.calls[0]?.[0]).toMatchObject({
+      projectId,
       cwd: "/home/user/acme-api",
       projectName: "acme-api",
       message: "Review pull request 42",

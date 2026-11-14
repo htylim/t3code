@@ -22,6 +22,7 @@ export type ConfirmDialogState =
       readonly confirmLabel?: string;
       readonly details?: readonly string[];
       readonly worktrees?: readonly WorktreeConfirmationDetail[];
+      readonly initialFocus: ConfirmDialogOptions["initialFocus"];
     }
   | {
       readonly status: "closing";
@@ -30,6 +31,7 @@ export type ConfirmDialogState =
       readonly confirmLabel?: string;
       readonly details?: readonly string[];
       readonly worktrees?: readonly WorktreeConfirmationDetail[];
+      readonly initialFocus: ConfirmDialogOptions["initialFocus"];
     };
 
 type PendingConfirmation = {
@@ -38,6 +40,8 @@ type PendingConfirmation = {
   readonly confirmLabel?: string;
   readonly details?: readonly string[];
   readonly worktrees?: readonly WorktreeConfirmationDetail[];
+  readonly initialFocus: ConfirmDialogOptions["initialFocus"];
+
   readonly resolve: (confirmed: boolean) => void;
 };
 
@@ -94,6 +98,8 @@ export function requestConfirmDialog(
       ...(options?.confirmLabel ? { confirmLabel: options.confirmLabel } : {}),
       ...(options?.details ? { details: options.details } : {}),
       ...(options?.worktrees ? { worktrees: options.worktrees } : {}),
+      initialFocus: options?.initialFocus,
+
       resolve,
     } satisfies PendingConfirmation;
     if (activeConfirmation || state.status === "closing") {

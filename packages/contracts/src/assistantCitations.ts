@@ -4,24 +4,30 @@ import { EnvironmentId, MessageId, NonNegativeInt, ThreadId } from "./baseSchema
 export const ASSISTANT_CITATION_MAX_TEXT_LENGTH = 8_000;
 export const ASSISTANT_CITATION_MAX_COMMENT_LENGTH = 8_000;
 export const ASSISTANT_CITATION_CONTEXT_LENGTH = 32;
+// Provider message IDs nest and re-encode their thread and turn IDs, so they outgrow a few hundred characters.
+export const ASSISTANT_CITATION_MAX_ID_LENGTH = 4_096;
+export const ASSISTANT_CITATION_MAX_ATTACHMENT_ID_LENGTH = 256;
+export const ASSISTANT_CITATION_MAX_TITLE_LENGTH = 200;
 
 const CitationThread = {
-  environmentId: EnvironmentId.check(Schema.isMaxLength(512)),
-  threadId: ThreadId.check(Schema.isMaxLength(512)),
+  environmentId: EnvironmentId.check(Schema.isMaxLength(ASSISTANT_CITATION_MAX_ID_LENGTH)),
+  threadId: ThreadId.check(Schema.isMaxLength(ASSISTANT_CITATION_MAX_ID_LENGTH)),
 };
 
 export const AssistantCitationSource = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("assistant-message"),
     ...CitationThread,
-    messageId: MessageId.check(Schema.isMaxLength(512)),
+    messageId: MessageId.check(Schema.isMaxLength(ASSISTANT_CITATION_MAX_ID_LENGTH)),
   }),
   Schema.Struct({
     kind: Schema.Literal("html-attachment"),
     ...CitationThread,
-    itemId: Schema.NonEmptyString.check(Schema.isMaxLength(512)),
-    attachmentId: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
-    title: Schema.String.check(Schema.isMaxLength(200)),
+    itemId: Schema.NonEmptyString.check(Schema.isMaxLength(ASSISTANT_CITATION_MAX_ID_LENGTH)),
+    attachmentId: Schema.NonEmptyString.check(
+      Schema.isMaxLength(ASSISTANT_CITATION_MAX_ATTACHMENT_ID_LENGTH),
+    ),
+    title: Schema.String.check(Schema.isMaxLength(ASSISTANT_CITATION_MAX_TITLE_LENGTH)),
   }),
 ]);
 export type AssistantCitationSource = typeof AssistantCitationSource.Type;
@@ -46,7 +52,7 @@ export const AssistantCitation = Schema.Union([
   Schema.Struct({
     version: Schema.Literal(1),
     ...CitationThread,
-    messageId: MessageId.check(Schema.isMaxLength(512)),
+    messageId: MessageId.check(Schema.isMaxLength(ASSISTANT_CITATION_MAX_ID_LENGTH)),
     ...CitationQuote,
   }),
   Schema.Struct({

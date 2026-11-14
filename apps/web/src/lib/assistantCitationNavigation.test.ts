@@ -1,15 +1,24 @@
-import { EnvironmentId, MessageId, ThreadId, type AssistantCitation } from "@t3tools/contracts";
+import {
+  ASSISTANT_CITATION_MAX_ID_LENGTH,
+  EnvironmentId,
+  MessageId,
+  ThreadId,
+  type AssistantCitation,
+} from "@t3tools/contracts";
 import {
   createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { describe, expect, it } from "vite-plus/test";
 
+import { selectActiveRightPanelSurface, useRightPanelStore } from "../rightPanelStore";
 import {
   assistantCitationFromLocation,
   assistantCitationNavigation,
+  revealSideChatCitation,
 } from "./assistantCitationNavigation";
 
 const citation: AssistantCitation = {
@@ -56,31 +65,48 @@ describe("assistant citation navigation", () => {
     expect(router.state.location.pathname).toBe("/source-environment/source-thread");
     expect(assistantCitationFromLocation(router.state.location.href)).toEqual(htmlCitation);
   });
-  it("preserves encoded quote whitespace through router navigation and reload", async () => {
-    const router = createCitationRouter();
-    await router.navigate(assistantCitationNavigation(citation));
+  it.each([
+    citation,
+    {
+      ...citation,
+      environmentId: EnvironmentId.make("環".repeat(ASSISTANT_CITATION_MAX_ID_LENGTH)),
+      threadId: ThreadId.make("線".repeat(ASSISTANT_CITATION_MAX_ID_LENGTH)),
+      messageId: MessageId.make("文".repeat(ASSISTANT_CITATION_MAX_ID_LENGTH)),
+      text: "引".repeat(8_000),
+      comment: "注".repeat(8_000),
+      start: 0,
+      end: 8_000,
+      prefix: "前".repeat(32),
+      suffix: "後".repeat(32),
+    },
+  ])(
+    "preserves encoded quote whitespace through router navigation and reload",
+    async (citation) => {
+      const router = createCitationRouter();
+      await router.navigate(assistantCitationNavigation(citation, null));
 
-    expect(assistantCitationFromLocation(router.state.location.href)).toEqual(citation);
-    let href = router.history.location.href;
-    for (let reload = 0; reload < 3; reload++) {
-      const reloaded = createCitationRouter(href);
-      await reloaded.load();
-      await reloaded.navigate({
-        to: "/$environmentId/$threadId",
-        params: { environmentId: citation.environmentId, threadId: citation.threadId },
-        hash: true,
-        replace: true,
-      });
-      href = reloaded.history.location.href;
-      expect(assistantCitationFromLocation(href)).toEqual(citation);
-    }
-  });
+      expect(assistantCitationFromLocation(router.state.location.href)).toEqual(citation);
+      let href = router.history.location.href;
+      for (let reload = 0; reload < 3; reload++) {
+        const reloaded = createCitationRouter(href);
+        await reloaded.load();
+        await reloaded.navigate({
+          to: "/$environmentId/$threadId",
+          params: { environmentId: citation.environmentId, threadId: citation.threadId },
+          hash: true,
+          replace: true,
+        });
+        href = reloaded.history.location.href;
+        expect(assistantCitationFromLocation(href)).toEqual(citation);
+      }
+    },
+  );
 
   it("reactivates an identical citation instead of deduplicating its navigation", async () => {
     const router = createCitationRouter();
-    await router.navigate(assistantCitationNavigation(citation));
+    await router.navigate(assistantCitationNavigation(citation, null));
     const previous = router.state.location;
-    await router.navigate(assistantCitationNavigation(citation));
+    await router.navigate(assistantCitationNavigation(citation, null));
 
     expect(router.state.location.href).toBe(previous.href);
     expect(router.state.location.state.assistantCitationActivation).not.toBe(
@@ -89,4 +115,113 @@ describe("assistant citation navigation", () => {
     expect(router.history.length).toBe(3);
     expect(assistantCitationFromLocation(router.state.location.href)).toEqual(citation);
   });
+
+  it("opens a side chat citation as a tab of its parent thread", async () => {
+    resetRightPanels();
+    const router = createCitationRouter("/environment-one/thread-parent");
+    await router.navigate(assistantCitationNavigation(sideChatCitation, sideChatShell));
+    expect(router.state.location.pathname).toBe("/environment-one/thread-parent");
+    await revealAtRoute(router);
+
+    expectSideChatRevealedOnParent(router);
+  });
+
+  it("opens the side chat tab when arriving on the parent with its citation", async () => {
+    resetRightPanels();
+    const linked = createCitationRouter("/environment-one/thread-parent");
+    await linked.navigate(assistantCitationNavigation(sideChatCitation, sideChatShell));
+    const router = createCitationRouter(linked.history.location.href);
+    await router.load();
+    await revealAtRoute(router);
+
+    expectSideChatRevealedOnParent(router);
+  });
+
+  it("moves a citation activated before its side chat shell loaded onto the parent", async () => {
+    resetRightPanels();
+    const router = createCitationRouter("/environment-one/thread-parent");
+    await router.navigate(assistantCitationNavigation(sideChatCitation, null));
+    const activation = router.state.location.state.assistantCitationActivation;
+    expect(router.state.location.pathname).toBe("/environment-one/side-chat-one");
+
+    await revealAtRoute(router);
+
+    expectSideChatRevealedOnParent(router);
+    expect(router.state.location.state.assistantCitationActivation).toBe(activation);
+    expect(router.history.length).toBe(2);
+  });
+
+  it("keeps quotes from forks on their own thread", () => {
+    const forkShell = { lineage: { ...sideChatShell.lineage, sideChat: false } };
+
+    expect(assistantCitationNavigation(sideChatCitation, forkShell).params.threadId).toBe(
+      sideChatCitation.threadId,
+    );
+  });
+
+  it("leaves an unrelated route alone", async () => {
+    resetRightPanels();
+    const router = createCitationRouter("/environment-one/thread-other");
+    await router.navigate({
+      ...assistantCitationNavigation(sideChatCitation, null),
+      params: { environmentId: citation.environmentId, threadId: ThreadId.make("thread-other") },
+    });
+    await revealAtRoute(router);
+
+    expect(router.state.location.pathname).toBe("/environment-one/thread-other");
+    expect(useRightPanelStore.getState().byThreadKey).toEqual({});
+  });
+
+  it("ignores a reveal for a side chat the location no longer quotes", async () => {
+    resetRightPanels();
+    const router = createCitationRouter("/environment-one/thread-parent");
+    await router.navigate(assistantCitationNavigation(sideChatCitation, sideChatShell));
+    await revealAtRoute(router, ThreadId.make("side-chat-two"));
+
+    expect(useRightPanelStore.getState().byThreadKey).toEqual({});
+  });
 });
+
+const parentThreadId = ThreadId.make("thread-parent");
+const sideChatCitation = { ...citation, threadId: ThreadId.make("side-chat-one") };
+const sideChatShell = {
+  lineage: {
+    parentThreadId,
+    relationshipToParent: "fork" as const,
+    rootThreadId: parentThreadId,
+    sideChat: true,
+  },
+};
+
+function resetRightPanels() {
+  useRightPanelStore.setState({ byThreadKey: {}, threadPanelVisibilityByThreadKey: {} });
+}
+
+/** What the route-level ChatView does once the side chat shell is known. */
+function revealAtRoute(
+  router: ReturnType<typeof createCitationRouter>,
+  sideChatThreadId = sideChatCitation.threadId,
+) {
+  const { pathname, state } = router.state.location;
+  return revealSideChatCitation(
+    router,
+    scopeThreadRef(
+      EnvironmentId.make("environment-one"),
+      ThreadId.make(pathname.split("/").at(-1) ?? ""),
+    ),
+    sideChatThreadId,
+    parentThreadId,
+    state.assistantCitationActivation ?? state.__TSR_key ?? "",
+  );
+}
+
+function expectSideChatRevealedOnParent(router: ReturnType<typeof createCitationRouter>) {
+  expect(router.state.location.pathname).toBe("/environment-one/thread-parent");
+  expect(assistantCitationFromLocation(router.state.location.href)).toEqual(sideChatCitation);
+  expect(
+    selectActiveRightPanelSurface(
+      useRightPanelStore.getState().byThreadKey,
+      scopeThreadRef(EnvironmentId.make("environment-one"), parentThreadId),
+    ),
+  ).toMatchObject({ kind: "side-chat", threadId: sideChatCitation.threadId });
+}

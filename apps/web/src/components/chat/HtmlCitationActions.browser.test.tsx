@@ -180,7 +180,6 @@ it("keeps the HTML quote and user comment together in the ordinary Cite chip", a
             <output>{formatAssistantCitationHref(selected.citation)}</output>
             <AssistantCitationChip
               citation={selected.citation}
-              composer
               commentEditor={{
                 open,
                 onOpenChange: setOpen,
