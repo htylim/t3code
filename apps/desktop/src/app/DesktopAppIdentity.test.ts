@@ -178,6 +178,7 @@ describe("DesktopAppIdentity", () => {
 
   it.effect.each([
     { stage: "Beta", environment: {} },
+    { stage: "Fork", environment: { appVersion: "0.1.9-fork.1" } },
     {
       stage: "Nightly",
       environment: { appVersion: "0.0.43-nightly.20260929.2428" },
@@ -200,9 +201,12 @@ describe("DesktopAppIdentity", () => {
 
         const runtimeName = calls.setName[0];
         assert.isDefined(runtimeName);
-        assert.equal(runtimeName, `T3 Code ${stage}`);
+        assert.equal(runtimeName, stage === "Fork" ? "H3 Code" : `T3 Code ${stage}`);
         assert.match(runtimeName.replaceAll(" ", ""), /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, `T3 Code (${stage})`);
+        assert.equal(
+          calls.setAboutPanelOptions[0]?.applicationName,
+          stage === "Fork" ? "H3 Code" : `T3 Code (${stage})`,
+        );
       }),
       { calls, environment },
     );

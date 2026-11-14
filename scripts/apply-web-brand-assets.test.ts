@@ -16,20 +16,22 @@ const WEB_ICON_FILENAMES = [
 ];
 
 it.layer(NodeServices.layer)("apply-web-brand-assets", (it) => {
-  it.effect("copies the icons into an absolute target directory as given", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const targetDirectory = yield* fs.makeTempDirectoryScoped({
-        prefix: "apply-web-brand-assets-",
-      });
+  it.effect.each(["production", "fork"] as const)(
+    "copies %s icons into an absolute target directory as given",
+    (brand) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const targetDirectory = yield* fs.makeTempDirectoryScoped({
+          prefix: "apply-web-brand-assets-",
+        });
 
-      yield* applyWebBrandAssets("production", targetDirectory);
+        yield* applyWebBrandAssets(brand, targetDirectory);
 
-      assert.deepStrictEqual(
-        (yield* fs.readDirectory(targetDirectory)).toSorted(),
-        WEB_ICON_FILENAMES,
-      );
-    }),
+        assert.deepStrictEqual(
+          (yield* fs.readDirectory(targetDirectory)).toSorted(),
+          WEB_ICON_FILENAMES,
+        );
+      }),
   );
 
   it.effect("resolves an empty target directory to the repo root", () =>

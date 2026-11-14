@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="rim" x1="0" y1="100" x2="0" y2="924" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#555"/>
+      <stop offset=".08" stop-color="#151515"/>
+      <stop offset=".5" stop-color="#080808"/>
+      <stop offset=".9" stop-color="#181818"/>
+      <stop offset="1" stop-color="#555"/>
+    </linearGradient>
+    <linearGradient id="metal" x1="0" y1="37" x2="0" y2="93.96" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff"/>
+      <stop offset=".23" stop-color="#f6f6f6"/>
+      <stop offset=".56" stop-color="#d3d3d3"/>
+      <stop offset="1" stop-color="#898989"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="145%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-opacity=".3"/>
+    </filter>
+    <filter id="bevel" x="-5%" y="-5%" width="110%" height="110%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+  </defs>
+  <path d="M360 104H664C858 104 920 166 920 360V664C920 858 858 920 664 920H360C166 920 104 858 104 664V360C104 166 166 104 360 104Z" fill="black" filter="url(#shadow)"/>
+  <path d="M360 104H664C858 104 920 166 920 360V664C920 858 858 920 664 920H360C166 920 104 858 104 664V360C104 166 166 104 360 104Z" fill="none" stroke="url(#rim)" stroke-width="6" filter="url(#bevel)"/>
+</svg>

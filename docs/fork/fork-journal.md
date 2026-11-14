@@ -1,5 +1,20 @@
 # Fork journal
 
+## 2026-11-14 - Brand the fork desktop app as H3 Code
+
+- Upstream baseline: `0200dcf2423c1b954c9ebca092d112426009c04d`.
+- Fork desktop versions display `H3 Code` in the installed product, native application name,
+  About panel, windows, and injected client branding. Keep the `Fork` stage for existing
+  settings and update behaviour. Bundle identifiers, T3 home, protocols, CLI, MCP, and
+  T3 Connect remain unchanged.
+- Add the approved, horizontally centred H3 mark under `assets/fork`. SVG sources and
+  `icons:export:fork` generate the desktop, bundled favicon, and splash assets without
+  Icon Composer. Both letters share the same metallic gradient on macOS. Upstream
+  icons, sidebar preferences, and native mobile builds remain unchanged.
+- Verification: 85 focused desktop identity, web branding, packaging, and asset-copy tests
+  passed. Desktop and scripts type checks and targeted lint passed. Generated icons were
+  inspected visually. No packaged app was built or installed, and nothing was published.
+
 ## 2026-11-14 - Integrate upstream through 0200dcf242
 
 - Upstream baseline: `ad9e87111fd9b2f10ec320b4de0a6ad3a092278a`; target

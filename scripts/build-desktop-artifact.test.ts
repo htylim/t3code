@@ -252,7 +252,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it("switches desktop packaging product names for downstream channels", () => {
     assert.equal(resolveDesktopProductName("0.1.0"), "T3 Code (Beta)");
     assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Code (Nightly)");
-    assert.equal(resolveDesktopProductName("0.0.17-fork.1"), "T3 Code (Fork)");
+    assert.equal(resolveDesktopProductName("0.0.17-fork.1"), "H3 Code");
   });
 
   it("selects desktop packaging icons for each downstream channel", () => {
@@ -269,16 +269,16 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17-fork.1"), {
-      macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+      macIconPng: BRAND_ASSET_PATHS.forkMacIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.forkLinuxIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.forkWindowsIconIco,
     });
   });
 
   it("selects bundled splash and favicon branding for each downstream channel", () => {
     assert.equal(resolveDesktopWebAssetBrand("0.0.17"), "production");
     assert.equal(resolveDesktopWebAssetBrand("0.0.17-nightly.20260413.42"), "nightly");
-    assert.equal(resolveDesktopWebAssetBrand("0.0.17-fork.1"), "production");
+    assert.equal(resolveDesktopWebAssetBrand("0.0.17-fork.1"), "fork");
   });
 
   it.effect("packages fork builds as a separate app without an upstream update feed", () =>
@@ -294,7 +294,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       );
 
       assert.equal(config.appId, "com.htylim.t3code.fork");
-      assert.equal(config.productName, "T3 Code (Fork)");
+      assert.equal(config.productName, "H3 Code");
       assert.equal(config.publish, null);
     }).pipe(
       Effect.provide(

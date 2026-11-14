@@ -84,9 +84,9 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.isDevelopment, false);
       assert.equal(environment.stateDir, "/Users/alice/.t3/userdata");
       assert.deepEqual(environment.branding, {
-        baseName: "T3 Code",
+        baseName: "H3 Code",
         stageLabel: "Fork",
-        displayName: "T3 Code (Fork)",
+        displayName: "H3 Code",
       });
       assert.equal(environment.appUserModelId, "com.htylim.t3code.fork");
       assert.equal(environment.linuxDesktopEntryName, "t3code-fork.desktop");

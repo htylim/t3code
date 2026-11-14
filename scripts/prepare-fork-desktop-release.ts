@@ -116,7 +116,7 @@ async function main(): Promise<void> {
   );
   await NodeFSP.writeFile(
     NodePath.join(outputDirectory, "release-notes.md"),
-    `${releaseNotes.trim()}\n\nSource main: ${commit}\nArchitectures: ${architectures.join(", ")}\n\nInstallation: Quit T3 Code (Fork), open the DMG, and drag the app into Applications. This build is ad-hoc signed, without Developer ID or notarization. If macOS blocks it, attempt to open the installed app, click Done, then open System Settings > Privacy & Security > Security > Open Anyway. Authenticate and confirm. If the button is missing, retry opening the app and reopen Privacy & Security. Do not disable Gatekeeper.\n`,
+    `${releaseNotes.trim()}\n\nSource main: ${commit}\nArchitectures: ${architectures.join(", ")}\n\nInstallation: Quit H3 Code, open the DMG, and drag the app into Applications. This build is ad-hoc signed, without Developer ID or notarization. If macOS blocks it, attempt to open the installed app, click Done, then open System Settings > Privacy & Security > Security > Open Anyway. Authenticate and confirm. If the button is missing, retry opening the app and reopen Privacy & Security. Do not disable Gatekeeper.\n`,
   );
   await NodeFSP.writeFile(
     NodePath.join(outputDirectory, FORK_UPDATE_MANIFEST),

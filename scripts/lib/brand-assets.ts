@@ -3,6 +3,18 @@ export const BRAND_ASSET_PATHS = {
   developmentIosIconPng: "assets/dev/blueprint-ios-1024.png",
   developmentUniversalIconPng: "assets/dev/blueprint-universal-1024.png",
 
+  forkMarkSvg: "assets/fork/h3-mark.svg",
+  forkMacBackgroundSvg: "assets/fork/h3-macos-background.svg",
+  forkMacIconPng: "assets/fork/h3-macos-1024.png",
+  forkLinuxIconPng: "assets/fork/h3-universal-1024.png",
+  forkWindowsIconIco: "assets/fork/h3-windows.ico",
+  forkWebFaviconIco: "assets/fork/h3-web-favicon.ico",
+  forkWebFavicon16Png: "assets/fork/h3-web-favicon-16x16.png",
+  forkWebFavicon32Png: "assets/fork/h3-web-favicon-32x32.png",
+  forkWebAppleTouchIconPng: "assets/fork/h3-web-apple-touch-180.png",
+  forkWebIcon192Png: "assets/fork/h3-web-icon-192x192.png",
+  forkWebIcon512Png: "assets/fork/h3-web-icon-512x512.png",
+
   productionIconComposerProject: "assets/prod/app-icon.icon",
   productionIosIconPng: "assets/prod/black-ios-1024.png",
   productionMacIconPng: "assets/prod/black-macos-1024.png",
@@ -37,7 +49,7 @@ export const BRAND_ASSET_PATHS = {
   developmentWebIcon512Png: "assets/dev/blueprint-web-icon-512x512.png",
 } as const;
 
-export type WebAssetBrand = "development" | "nightly" | "production";
+export type WebAssetBrand = "development" | "nightly" | "production" | "fork";
 
 export const WEB_ASSET_CHANNELS = ["latest", "nightly"] as const;
 
@@ -77,6 +89,14 @@ const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
     appleTouchIconPng: BRAND_ASSET_PATHS.nightlyWebAppleTouchIconPng,
     icon192Png: BRAND_ASSET_PATHS.nightlyWebIcon192Png,
     icon512Png: BRAND_ASSET_PATHS.nightlyWebIcon512Png,
+  },
+  fork: {
+    faviconIco: BRAND_ASSET_PATHS.forkWebFaviconIco,
+    favicon16Png: BRAND_ASSET_PATHS.forkWebFavicon16Png,
+    favicon32Png: BRAND_ASSET_PATHS.forkWebFavicon32Png,
+    appleTouchIconPng: BRAND_ASSET_PATHS.forkWebAppleTouchIconPng,
+    icon192Png: BRAND_ASSET_PATHS.forkWebIcon192Png,
+    icon512Png: BRAND_ASSET_PATHS.forkWebIcon512Png,
   },
   production: {
     faviconIco: BRAND_ASSET_PATHS.productionWebFaviconIco,

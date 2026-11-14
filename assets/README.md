@@ -65,3 +65,12 @@ is instead rendered from the same Icon Composer SVG sources by `vp run icons:exp
 
 Rerun the export after changing a layer SVG. `android-icon-mark.png` remains a flat silhouette for
 Android's monochrome themed icon.
+
+## Fork icons
+
+H3 Code uses `fork/h3-mark.svg` as its shared letter artwork and
+`fork/h3-macos-background.svg` for the desktop enclosure and metallic gradient.
+Run `vp run icons:export:fork` to regenerate the fork SVG, PNG, and ICO exports.
+This path uses SVG rendering and does not require Icon Composer. Fork desktop
+builds select these assets, including the bundled browser favicon and splash
+icons. Upstream development, nightly, production, and mobile assets stay unchanged.

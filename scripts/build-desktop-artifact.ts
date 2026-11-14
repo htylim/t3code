@@ -2738,11 +2738,22 @@ export function isDesktopPreviewVersion(version: string): boolean {
   return /-pr\./.test(version) || /-preview\.\d{8}\.\d+$/.test(version);
 }
 
+/** Select the bundled client icons without changing upstream release channels. */
 export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
+  if (isForkDesktopVersion(version)) return "fork";
   return resolveWebAssetBrandForChannel(resolveDesktopUpdateChannel(version));
 }
 
+/** Select platform icons for the packaged app identity. */
 export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
+  if (isForkDesktopVersion(version)) {
+    return {
+      macIconPng: BRAND_ASSET_PATHS.forkMacIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.forkLinuxIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.forkWindowsIconIco,
+    };
+  }
+
   if (resolveDesktopUpdateChannel(version) === "nightly") {
     return {
       macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
@@ -2773,9 +2784,10 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
   return `${trimmed.slice(0, versionSeparator)}/${trimmed.slice(versionSeparator + 1)}`;
 }
 
+/** Name the installed app while keeping its existing identifiers. */
 export function resolveDesktopProductName(version: string): string {
   if (isForkDesktopVersion(version)) {
-    return "T3 Code (Fork)";
+    return "H3 Code";
   }
 
   return resolveDesktopUpdateChannel(version) === "nightly"

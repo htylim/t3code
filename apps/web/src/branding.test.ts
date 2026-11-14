@@ -45,9 +45,9 @@ describe("branding", () => {
       value: {
         desktopBridge: {
           getAppBranding: () => ({
-            baseName: "T3 Code",
+            baseName: "H3 Code",
             stageLabel: "Fork",
-            displayName: "T3 Code (Fork)",
+            displayName: "H3 Code",
           }),
         },
       },
@@ -56,7 +56,8 @@ describe("branding", () => {
     const branding = await import("./branding");
 
     expect(branding.APP_STAGE_LABEL).toBe("Fork");
-    expect(branding.APP_DISPLAY_NAME).toBe("T3 Code (Fork)");
+    expect(branding.APP_BASE_NAME).toBe("H3 Code");
+    expect(branding.APP_DISPLAY_NAME).toBe("H3 Code");
   });
 
   it("normalizes hosted app channel metadata", async () => {

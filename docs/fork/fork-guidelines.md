@@ -209,7 +209,7 @@ writes. Do not manually stamp source manifests for a normal artifact build. With
 the existing compiled server and client must already contain the exact artifact version.
 Use the disposable release worktree below so generated outputs stay separate from development.
 
-The artifact is written to `release/` and installs as `T3 Code (Fork)` with the bundle identifier
+The artifact is written to `release/` and installs as `H3 Code` with the bundle identifier
 `com.htylim.t3code.fork`. Fork builds deliberately keep using `~/.t3/userdata`, so they see the same
 projects, threads, and settings as the upstream packaged app. The shared user-data lock means Fork
 and upstream desktop apps must not run at the same time.
@@ -227,11 +227,11 @@ copying an ignored file into it. Direct source development remains opt-in; copy 
 `.env` when `vp run dev:desktop` should expose the cloud UI.
 
 Before the first install, back up `~/.t3/userdata` and fully quit every running T3 Code app. Open the
-DMG and drag `T3 Code (Fork)` into `/Applications`. Local builds have an ad-hoc bundle signature,
+DMG and drag `H3 Code` into `/Applications`. Local builds have an ad-hoc bundle signature,
 but no Apple Developer ID or notarization. Follow the [Gatekeeper approval steps](#gatekeeper-approval-for-local-builds)
 if macOS blocks the app.
 
-T3 Code Nightly and T3 Code Fork can remain installed together. They cannot run together: both use
+T3 Code Nightly and H3 Code can remain installed together. They cannot run together: both use
 the same production database, settings, logs, and Electron user-data lock. Quit one before starting
 the other. Giving the apps separate bundle identifiers does not isolate their shared runtime state.
 
@@ -243,10 +243,10 @@ development server at `~/.t3/userdata`, and do not set `VITE_HTTP_URL` or `VITE_
 Include these steps in every macOS fork release's installation notes while Developer ID signing
 and notarization remain unconfigured:
 
-1. Open the installed `T3 Code (Fork)` from Finder's Applications folder. If macOS says Apple
+1. Open the installed `H3 Code` from Finder's Applications folder. If macOS says Apple
    could not verify the app, click **Done**.
 2. Open **System Settings > Privacy & Security** and scroll down to **Security**.
-3. Click **Open Anyway** for `T3 Code (Fork)`. On versions showing **Open** first, click that,
+3. Click **Open Anyway** for `H3 Code`. On versions showing **Open** first, click that,
    then **Open Anyway**. Authenticate and confirm opening the app.
 4. If no approval button appears, try opening the installed app again, dismiss the warning,
    and close and reopen Privacy & Security. Apple says the button is available for about an hour
