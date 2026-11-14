@@ -766,6 +766,30 @@ const make = Effect.gen(function* () {
                   expectedWorktreePath: worktreeCwd,
                 })
                 .pipe(
+                  Effect.catchTags({
+                    OrchestratorDispatchError: Effect.fn(
+                      "ThreadLaunchService.recordSyncedWorktreeMove",
+                    )(function* (error) {
+                      if (!directoryMoved) return yield* error;
+                      const current = yield* threads.getThreadRecords(threadId, []);
+                      if (
+                        current.thread.branch !== renamed.branch ||
+                        current.thread.worktreePath !== worktreeCwd
+                      ) {
+                        return yield* error;
+                      }
+                      // Branch sync can publish the new name before the directory move is recorded.
+                      return yield* threads.dispatch({
+                        type: "thread.metadata.update",
+                        commandId: CommandId.make(`${input.commandId}:branch-rename-synced`),
+                        threadId,
+                        branch: renamed.branch,
+                        worktreePath: renamedWorktreePath,
+                        expectedBranch: renamed.branch,
+                        expectedWorktreePath: worktreeCwd,
+                      });
+                    }),
+                  }),
                   Effect.catchCause((cause) => {
                     if (directoryMoved) return Effect.failCause(cause);
                     return Effect.logWarning("Parent thread worktree branch update failed", {

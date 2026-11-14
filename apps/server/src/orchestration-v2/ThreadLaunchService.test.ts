@@ -1322,9 +1322,15 @@ it.effect.each(["stable", "upstream/release"])(
     ),
 );
 
-it.effect.each([false, true])(
-  "names an automatic directory before setup, collision %s",
-  (collision) =>
+it.effect.each([
+  { collision: false, concurrentChange: "none" },
+  { collision: true, concurrentChange: "none" },
+  { collision: false, concurrentChange: "branch-sync" },
+  { collision: false, concurrentChange: "other-branch" },
+  { collision: false, concurrentChange: "other-worktree" },
+] as const)(
+  "names an automatic directory before setup, collision $collision, concurrent $concurrentChange",
+  ({ collision, concurrentChange }) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const git = yield* GitVcsDriver.GitVcsDriver;
@@ -1359,7 +1365,8 @@ it.effect.each([false, true])(
       }
       const namingStarted = yield* Deferred.make<void>();
       const allowNaming = yield* Deferred.make<void>();
-      const setupEntered = yield* Deferred.make<void>();
+      const moveStarted = yield* Deferred.make<void>();
+      const allowMove = yield* Deferred.make<void>();
       const harness = makeHarness({
         generateBranchName: () =>
           Deferred.succeed(namingStarted, undefined).pipe(
@@ -1371,9 +1378,11 @@ it.effect.each([false, true])(
           Effect.succeed({
             worktree: { path: oldPath, refName: input.newRefName, headSha: "abc" },
           } as never),
-        renameWorktree: (input) => git.renameWorktree({ ...input, cwd: repo }),
-        runSetup: () =>
-          Deferred.succeed(setupEntered, undefined).pipe(Effect.andThen(Effect.never)),
+        renameWorktree: (input) =>
+          Deferred.succeed(moveStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(allowMove)),
+            Effect.andThen(git.renameWorktree({ ...input, cwd: repo })),
+          ),
       });
       yield* Effect.gen(function* () {
         const launches = yield* ThreadLaunch.ThreadLaunchService;
@@ -1415,7 +1424,35 @@ it.effect.each([false, true])(
             });
         }
         yield* Deferred.succeed(allowNaming, undefined);
-        yield* Deferred.await(setupEntered);
+        yield* Deferred.await(moveStarted);
+        if (concurrentChange !== "none") {
+          yield* threads.dispatch({
+            type: "thread.metadata.update",
+            commandId: CommandId.make("directory-name:concurrent-update"),
+            threadId: launched.threadId,
+            branch:
+              concurrentChange === "other-branch" ? "unrelated-branch" : "feature/sidebar-pills",
+            ...(concurrentChange === "other-worktree" ? { worktreePath: "/another-worktree" } : {}),
+            expectedBranch: "t3/abcd1234",
+            expectedWorktreePath: oldPath,
+          });
+        }
+        yield* Deferred.succeed(allowMove, undefined);
+        const prepared = yield* preparationSettled(launched.threadId);
+        if (concurrentChange === "other-branch" || concurrentChange === "other-worktree") {
+          assert.equal(prepared.runs[0]?.status, "failed");
+          assert.equal(harness.runSetup.mock.calls.length, 0);
+          assert.equal(
+            prepared.thread.branch,
+            concurrentChange === "other-branch" ? "unrelated-branch" : "feature/sidebar-pills",
+          );
+          assert.equal(
+            prepared.thread.worktreePath,
+            concurrentChange === "other-worktree" ? "/another-worktree" : oldPath,
+          );
+          return;
+        }
+        assert.equal(prepared.runs[0]?.status, "starting");
         const expectedPath = collision ? oldPath : namedPath;
         const projection = yield* threads.getThreadProjection(launched.threadId);
         assert.equal(projection.thread.worktreePath, expectedPath);
