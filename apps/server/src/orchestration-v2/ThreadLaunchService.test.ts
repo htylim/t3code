@@ -643,6 +643,15 @@ it.effect("provisions independent launches concurrently instead of behind a glob
     const bothEntered = yield* Deferred.make<void>();
     const allowSetup = yield* Deferred.make<void>();
     const harness = makeHarness({
+      createWorktree: (input) =>
+        Effect.succeed({
+          worktree: {
+            path: `/repo-worktrees/${input.newRefName}`,
+            refName: input.newRefName,
+            headSha: "abc",
+          },
+        }),
+      generateBranchName: (input) => Effect.succeed({ branch: input.message.toLowerCase() }),
       runSetup: () =>
         Ref.updateAndGet(setupCount, (count) => count + 1).pipe(
           Effect.tap((count) =>

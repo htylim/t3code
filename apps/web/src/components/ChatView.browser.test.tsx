@@ -592,6 +592,11 @@ it("a shortcut conditioned on rightPanelOpen sees the thread's open right panel"
       ]),
     ),
   });
+  const { serverEnvironment } = await import("~/state/server");
+  // Config subscriptions outlive AppRoot; load this case's custom keybindings.
+  appAtomRegistry.refresh(
+    serverEnvironment.configProjection({ environmentId: ENVIRONMENT_ID, input: {} }),
+  );
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",

@@ -28,6 +28,11 @@
   Live checks cover Fork switches/reload, light/dark/narrow layouts, Replay, Postpone/restore,
   references, rename cancellation, physical directory rename, and Personal Luna Low main/side turns.
   Selection comments keep the parent draft and reuse the newest saved side chat.
+- The changed-file batch selects 172 test files. Its two fixture failures are resolved: independent
+  launch mocks use separate directories and branch names; the custom-keybinding case refreshes
+  its surviving config subscription with setup local to that case. Follow-up runs pass all 80
+  launch cases and all 13 ChatView browser cases. The shortcut failure also reproduces on pinned
+  upstream. All 134 selected React Compiler checks and six real Auto-color evaluations pass.
 - Limits: no native mobile, remote/tunnel, installed Electron GUI, live background stop, or full
   live HTML storage pass. Automation covers the corresponding service paths. Leaving a worktree
   rename page before Save finishes can interrupt metadata updates after the directory moves;
