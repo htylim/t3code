@@ -1,5 +1,39 @@
 # Fork journal
 
+## 2026-11-15 - Integrate upstream through f5d86e31e8
+
+- Upstream baseline: `0200dcf2423c1b954c9ebca092d112426009c04d`; target
+  `f5d86e31e82ff5db595426c06598493a6d587f2b` adds 593 commits. Start from fork
+  `8104011e8013166eb58f895edaffedb7ab75b07b`, including the unpushed shelf styling.
+  Prepare the integration separately; shared release branches remain unchanged for review.
+- Adopt Node 26.13.1, upstream migrations, atomic initial-message launches, base-ref fallback,
+  worktree cancellation cleanup, submodule protections, repository ownership, checkpoint-ref
+  pruning, native side-chat routing, sent-message citations, and sidebar rendering fixes.
+- Keep physical worktree names/colors and shared cleanup policy. A saved branch name remains
+  insufficient to block physical checkout cleanup. Keep the branchless running-thread guard,
+  and test cleanup after an idle checkout changes its branch.
+- Keep selected-text comments, newest saved side-chat reuse, parent drafts, Postpone, workspace
+  grouping and presentation clocks, shelf trays, H3 identity, account usage exclusions, HTML
+  compatibility, Fork update-feed precedence, Connect defaults, and independent runtime caches.
+- The new implicit default-home usage scan must not reintroduce an excluded account's history.
+  Resolve explicit account directories first; permit a shared directory when an included account
+  still owns it. Keep historical default-home usage when every account moves elsewhere.
+  The default-home Codex and Claude cases failed before this adaptation.
+- Baseline: 2,575 focused assertions passed in 101 files. A browser-enabled HTML rerun
+  passed 17 assertions; the Linux-only invalid-UTF-8 filename case remained skipped on macOS.
+  The current live-state copy was too new for the baseline decoder. Use the preserved prior
+  stopped-thread snapshot, then apply normal migrations; do not edit migration history.
+- Verification: formatting, lint, unused-code checks, affected package type checks, and web/server
+  builds passed. The evidence bundle records exact final test output and packaging results.
+  Live checks cover Fork switches/reload, light/dark/narrow layouts, Replay, Postpone/restore,
+  references, rename cancellation, physical directory rename, and Personal Luna Low main/side turns.
+  Selection comments keep the parent draft and reuse the newest saved side chat.
+- Limits: no native mobile, remote/tunnel, installed Electron GUI, live background stop, or full
+  live HTML storage pass. Automation covers the corresponding service paths. Leaving a worktree
+  rename page before Save finishes can interrupt metadata updates after the directory moves;
+  this client workflow is unchanged from the fork baseline. Wait for Save to finish.
+  Keep release branches unchanged until the maintainer accepts the local candidate.
+
 ## 2026-11-15 - Hide the stage pill with Fork artwork
 
 - Upstream baseline: `0200dcf2423c1b954c9ebca092d112426009c04d`.
