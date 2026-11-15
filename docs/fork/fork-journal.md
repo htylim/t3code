@@ -33,8 +33,11 @@
   its surviving config subscription with setup local to that case. Follow-up runs pass all 80
   launch cases and all 13 ChatView browser cases. The shortcut failure also reproduces on pinned
   upstream. All 134 selected React Compiler checks and six real Auto-color evaluations pass.
-- Limits: no native mobile, remote/tunnel, installed Electron GUI, live background stop, or full
-  live HTML storage pass. Automation covers the corresponding service paths. Leaving a worktree
+- A real Personal Luna Low background exec session remains tracked after the reply. The UI's
+  background Stop removes the banner and the captured process exits. Native mobile cannot be
+  exercised in this session because Device hub and Agent device access are disabled.
+- Limits: no native mobile, remote/tunnel, installed Electron GUI, or full in-app HTML storage
+  pass. Browser-enabled HTML tests cover storage, compression, and sandbox behavior. Leaving a worktree
   rename page before Save finishes can interrupt metadata updates after the directory moves;
   this client workflow is unchanged from the fork baseline. Wait for Save to finish.
   Keep release branches unchanged until the maintainer accepts the local candidate.
