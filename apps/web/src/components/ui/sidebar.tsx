@@ -691,19 +691,22 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
+/** Scroll sidebar content beneath an optional fixed header. */
 function SidebarContent({
   className,
   fixedHeader,
+  scrollFade = true,
   ...props
 }: React.ComponentProps<"div"> & {
   fixedHeader?: React.ReactNode;
+  scrollFade?: React.ComponentProps<typeof ScrollArea>["scrollFade"];
 }) {
   return (
     <>
       {fixedHeader ? <div className="w-full shrink-0">{fixedHeader}</div> : null}
       <ScrollArea
         hideScrollbars
-        scrollFade
+        scrollFade={scrollFade}
         scrollFadePadding={false}
         // Rows provide keyboard access; exclude the viewport from tab order to flatten VoiceOver's WebKit
         // interaction boundary.
@@ -725,11 +728,17 @@ function SidebarContent({
   );
 }
 
-function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
+/** Group sidebar content, optionally joining it directly to the footer. */
+function SidebarGroup({
+  className,
+  flushBottom = false,
+  ...props
+}: React.ComponentProps<"div"> & { flushBottom?: boolean }) {
   return (
     <div
       className={cn(
         "relative flex w-full min-w-0 flex-col p-[var(--sidebar-content-inset)]",
+        flushBottom && "pb-0",
         className,
       )}
       data-sidebar="group"

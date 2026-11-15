@@ -57,7 +57,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   );
   const artworkUsesWhiteControls = backdropVariant !== null && backdropVariant !== "fork";
   const pillLabel =
-    environmentIdentificationMode === "pill" || backdropVariant === "fork"
+    environmentIdentificationMode === "pill"
       ? resolveEnvironmentIdentificationPillLabel(stageLabel)
       : null;
 

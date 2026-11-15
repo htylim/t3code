@@ -55,7 +55,7 @@ export function ForkSettings() {
         />
         <SettingsRow
           {...searchableSetting("fork-ui-changes")}
-          description="Enable Fork interface tweaks, including sidebar section lines. Saved on this device."
+          description="Enable Fork interface tweaks, including tinted sidebar shelves. Saved on this device."
           resetAction={
             forkUiChanges !== DEFAULT_CLIENT_SETTINGS.forkUiChanges ? (
               <SettingResetButton

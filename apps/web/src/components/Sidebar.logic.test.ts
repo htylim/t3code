@@ -35,6 +35,9 @@ import {
   groupSidebarThreadsByProject,
   resolveSidebarFolderDot,
   sidebarFolderExpansionKeys,
+  sidebarMarkerId,
+  sidebarShelfTrayEdges,
+  SIDEBAR_SETTLED_FOOTER_TRAY_ID,
 } from "./Sidebar.logic";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
@@ -1667,5 +1670,51 @@ describe("shouldCreateNewThreadInCurrentProject", () => {
     expect(shouldCreateNewThreadInCurrentProject(false, 1, 3)).toBe(true);
     expect(shouldCreateNewThreadInCurrentProject(false, 0, 0)).toBe(true);
     expect(shouldCreateNewThreadInCurrentProject(true, 2, 2)).toBe(true);
+  });
+});
+
+describe("sidebarShelfTrayEdges", () => {
+  const marker = (name: SidebarListMarker): SidebarListItem => ({ kind: "marker", marker: name });
+  const row = (key: string, section: SidebarSection): SidebarListItem => ({
+    kind: "thread",
+    key,
+    section,
+  });
+  const items: readonly SidebarListItem[] = [
+    marker("pinned-header"),
+    row("p1", "pinned"),
+    marker("pinned-divider"),
+    marker("active-placeholder"),
+    row("a1", "active"),
+    marker("working-header"),
+    row("w1", "working"),
+    marker("postponed-header"),
+    row("o1", "postponed"),
+    row("o2", "postponed"),
+    row("o3", "postponed"),
+    marker("snoozed-header"),
+    marker("settled-header"),
+    marker("settled-placeholder"),
+    row("s1", "settled"),
+  ];
+
+  it("starts each tray at its shelf header and closes it before the next header", () => {
+    expect(Object.fromEntries(sidebarShelfTrayEdges(items, false))).toEqual({
+      [sidebarMarkerId("working-header")]: "top",
+      w1: "bottom",
+      [sidebarMarkerId("postponed-header")]: "top",
+      o1: "middle",
+      o2: "middle",
+      o3: "bottom",
+      [sidebarMarkerId("snoozed-header")]: "single",
+      [sidebarMarkerId("settled-header")]: "top",
+      s1: "bottom",
+    });
+  });
+
+  it("ends the Settled tray at its Show more footer", () => {
+    const edges = sidebarShelfTrayEdges(items, true);
+    expect(edges.get("s1")).toBe("middle");
+    expect(edges.get(SIDEBAR_SETTLED_FOOTER_TRAY_ID)).toBe("bottom");
   });
 });

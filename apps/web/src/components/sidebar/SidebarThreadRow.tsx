@@ -91,6 +91,7 @@ import {
   hasUnseenCompletion,
   resolveSidebarRowAccessibility,
   type SidebarDropVerb,
+  type SidebarShelfTrayEdge,
   resolveSidebarThreadStatus,
   resolveThreadLastVisitedAt,
   shouldRecedeSidebarThread,
@@ -597,6 +598,8 @@ type SidebarThreadRowProps = {
   navigationParent?: string | undefined;
   workspaceRowPosition?: SidebarWorkspaceRow["position"] | undefined;
   separateCards?: boolean | undefined;
+  /** Set when the row sits on its shelf's tray (Fork UI Changes). */
+  shelfTrayEdge?: SidebarShelfTrayEdge | undefined;
   workspaceThreadCount?: number | undefined;
   workspaceBranch?: string | null | undefined;
   workspaceCanSnooze?: boolean | undefined;
@@ -1386,10 +1389,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     return (
       <li
         data-thread-item={threadKey}
+        data-shelf-tray-edge={props.shelfTrayEdge}
         {...sortableRootProps}
         {...(fileDropHandlers ?? {})}
         className={cn(
           "list-none [content-visibility:auto] [contain-intrinsic-size:auto_--spacing(9)]",
+          // A dragged row leaves its tray behind.
+          props.shelfTrayEdge && !sortable?.isDragging && "sidebar-shelf-tray",
           metaLine !== null && multiline && "[contain-intrinsic-size:auto_--spacing(13.5)]",
           sortable?.isDragging && "relative z-20",
         )}
@@ -1646,12 +1652,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   return (
     <li
       data-thread-item={threadKey}
+      data-shelf-tray-edge={props.shelfTrayEdge}
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
       onContextMenu={props.workspaceRowPosition ? handleWorkspaceCardContextMenu : undefined}
       className={cn(
         // Adjacent rows keep threads as direct list children for drag, selection, and motion.
         "list-none [content-visibility:auto]",
+        // A dragged row leaves its tray behind.
+        props.shelfTrayEdge && !sortable?.isDragging && "sidebar-shelf-tray",
         !props.workspaceRowPosition && "py-0.5 [contain-intrinsic-size:auto_78px]",
         !props.workspaceRowPosition && metaLineEmpty && "[contain-intrinsic-size:auto_60px]",
         !props.workspaceRowPosition && props.separateCards && "mb-1",

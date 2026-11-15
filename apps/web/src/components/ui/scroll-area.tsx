@@ -19,6 +19,7 @@ function getVirtualizedScrollFadeClassName({ top, bottom }: { top: boolean; bott
   );
 }
 
+/** Scroll content with optional fades at overflowing edges or only at the top. */
 function ScrollArea({
   className,
   children,
@@ -31,7 +32,7 @@ function ScrollArea({
   viewportTabIndex,
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
-  scrollFade?: boolean;
+  scrollFade?: boolean | "top";
   scrollFadePadding?: boolean;
   scrollbarGutter?: boolean;
   hideScrollbars?: boolean;
@@ -54,7 +55,9 @@ function ScrollArea({
           "h-full max-h-[inherit] overflow-auto overscroll-contain rounded-[inherit] outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background data-has-overflow-x:overscroll-x-contain",
           chainVerticalScroll && "overscroll-y-auto",
           scrollFade &&
-            "mask-t-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-start)))] mask-b-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-end)))] mask-l-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-start)))] mask-r-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-end)))] focus-visible:mask-none [--fade-size:1.5rem]",
+            "mask-t-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-start)))] focus-visible:mask-none [--fade-size:1.5rem]",
+          scrollFade === true &&
+            "mask-b-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-end)))] mask-l-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-start)))] mask-r-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-end)))]",
           scrollFade && scrollFadePadding && "scroll-p-[var(--fade-size)]",
           scrollFade && !scrollFadePadding && "has-focus-visible:mask-none",
           scrollbarGutter && "scrollbar-gutter-stable",

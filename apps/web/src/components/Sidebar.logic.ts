@@ -235,6 +235,55 @@ export function sidebarListItemId(item: SidebarListItem): string {
   return item.kind === "thread" ? item.key : sidebarMarkerId(item.marker);
 }
 
+/** Where a row sits on its shelf tray: `single` is a header with no rows below it. */
+export type SidebarShelfTrayEdge = "top" | "middle" | "bottom" | "single";
+
+/** Tray id of the Settled shelf's "Show more" row, which is not a list item. */
+export const SIDEBAR_SETTLED_FOOTER_TRAY_ID = "sidebar-settled-footer";
+
+const SIDEBAR_SHELF_HEADER_MARKERS: ReadonlySet<SidebarListMarker> = new Set([
+  "working-header",
+  "postponed-header",
+  "snoozed-header",
+  "settled-header",
+]);
+
+const SIDEBAR_SHELF_SECTIONS: ReadonlySet<SidebarSection> = new Set([
+  "working",
+  "postponed",
+  "snoozed",
+  "settled",
+]);
+
+/**
+ * Map each shelf header and row (by `sidebarListItemId`) to its tray edge. A tray runs from a
+ * shelf header to the last row before the next header; placeholders, pinned, and active rows
+ * get none. The list stays flat for drag and drop, so each row paints its own part of the tray.
+ */
+export function sidebarShelfTrayEdges(
+  items: readonly SidebarListItem[],
+  hasSettledFooter: boolean,
+): ReadonlyMap<string, SidebarShelfTrayEdge> {
+  const trayMembers: Array<{ readonly id: string; readonly isHeader: boolean }> = [];
+  for (const item of items) {
+    const isHeader = item.kind === "marker" && SIDEBAR_SHELF_HEADER_MARKERS.has(item.marker);
+    const isShelfRow = item.kind === "thread" && SIDEBAR_SHELF_SECTIONS.has(item.section);
+    if (isHeader || isShelfRow) trayMembers.push({ id: sidebarListItemId(item), isHeader });
+  }
+  // Settled is always the last shelf, so its footer closes the last tray.
+  if (hasSettledFooter && trayMembers.length > 0) {
+    trayMembers.push({ id: SIDEBAR_SETTLED_FOOTER_TRAY_ID, isHeader: false });
+  }
+  const edges = new Map<string, SidebarShelfTrayEdge>();
+  trayMembers.forEach((member, index) => {
+    const nextMember = trayMembers[index + 1];
+    const endsTray = nextMember === undefined || nextMember.isHeader;
+    if (member.isHeader) edges.set(member.id, endsTray ? "single" : "top");
+    else edges.set(member.id, endsTray ? "bottom" : "middle");
+  });
+  return edges;
+}
+
 function sectionAtSidebarSlot(items: readonly SidebarListItem[], index: number): SidebarSection {
   let section: SidebarSection = "pinned";
   for (let i = 0; i < index && i < items.length; i += 1) {

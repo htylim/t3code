@@ -2471,6 +2471,55 @@ code {
   }
 }
 
+/* Fork: each sidebar shelf sits on a tray. Rows stay flat list children for drag and drop, so
+   each row paints its own part of the tray (see sidebarShelfTrayEdges). The color mixes on the
+   row so theme sidebar tokens apply. sRGB, because OKLab leaves the tray black on black. */
+@layer components {
+  .sidebar-shelf-tray,
+  .sidebar-shelf-footer {
+    --sidebar-shelf-tray: color-mix(in srgb, var(--sidebar), var(--sidebar-foreground) 5%);
+    background-color: var(--sidebar-shelf-tray);
+  }
+
+  .sidebar-shelf-tray {
+    --sidebar-shelf-tray-lip: color-mix(in srgb, var(--sidebar-foreground) 9%, transparent);
+    /* Covers the 1px list gap plus adjacent workspace-card margins (6px below, 2px above). */
+    --sidebar-shelf-tray-gap: calc(var(--spacing) * 2 + 1px);
+    margin-inline: calc(0px - var(--sidebar-content-inset));
+    padding-inline: var(--sidebar-content-inset);
+    box-shadow: 0 var(--sidebar-shelf-tray-gap) 0 var(--sidebar-shelf-tray);
+  }
+
+  .sidebar-shelf-footer {
+    /* Keeps the spacing above footer controls outside the scroll mask. */
+    padding-top: var(--sidebar-content-inset);
+  }
+
+  .dark :is(.sidebar-shelf-tray, .sidebar-shelf-footer) {
+    --sidebar-shelf-tray: color-mix(in srgb, var(--sidebar), var(--sidebar-foreground) 7%);
+  }
+
+  .sidebar-shelf-tray:is([data-shelf-tray-edge="top"], [data-shelf-tray-edge="single"]) {
+    margin-top: 0.5rem;
+    border-start-start-radius: 0.75rem;
+    border-start-end-radius: 0.75rem;
+    box-shadow:
+      inset 0 1px 0 var(--sidebar-shelf-tray-lip),
+      0 var(--sidebar-shelf-tray-gap) 0 var(--sidebar-shelf-tray);
+  }
+
+  .sidebar-shelf-tray[data-shelf-tray-edge="bottom"] {
+    padding-bottom: 0.25rem;
+  }
+
+  .sidebar-shelf-tray
+    ~ .sidebar-shelf-tray:is([data-shelf-tray-edge="top"], [data-shelf-tray-edge="single"]) {
+    margin-top: -1px;
+    border-start-start-radius: 0;
+    border-start-end-radius: 0;
+  }
+}
+
 /* Rich text composer (Tiptap). The stored prompt stays markdown; only the
    surface renders styled text. Markers (** * ` ~~) appear as non-editable
    widgets while the caret is on styled text. */

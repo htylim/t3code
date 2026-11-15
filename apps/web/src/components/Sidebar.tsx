@@ -213,13 +213,17 @@ import {
   shouldCreateNewThreadInCurrentProject,
   shouldNavigateAfterThreadPark,
   sidebarListItemId,
+  sidebarMarkerId,
+  sidebarShelfTrayEdges,
   sidebarThreadKeyAtY,
+  SIDEBAR_SETTLED_FOOTER_TRAY_ID,
   sortInboxThreadsByReturn,
   useSnoozeWakeClock,
   threadShortcutContext,
   useThreadJumpHintsVisible,
   type SidebarListItem,
   type SidebarSection,
+  type SidebarShelfTrayEdge,
   resolveSidebarRowThreadId,
 } from "./Sidebar.logic";
 import {
@@ -343,6 +347,7 @@ const EMPTY_THREADS: readonly EnvironmentThreadShell[] = [];
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
+const NO_SHELF_TRAY_EDGES: ReadonlyMap<string, SidebarShelfTrayEdge> = new Map();
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded";
 
@@ -2141,6 +2146,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       cancelThreadDrag();
     }
   }, [cancelThreadDrag, dragState, sidebarListItems]);
+  const forkUiChanges = useClientSettings((settings) => settings.forkUiChanges);
+  const shelfTrayEdges = forkUiChanges
+    ? sidebarShelfTrayEdges(sidebarListItems, settledShelfExpanded && hiddenSettledCount > 0)
+    : NO_SHELF_TRAY_EDGES;
   // Only order, section, or draft changes need layout reads and motion.
   const listMotionLayoutKey = [
     sidebarListItemsKey,
@@ -3314,6 +3323,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       <SidebarContent
         ref={sidebarContentRef}
         className="min-h-full"
+        // The lower edge must stay opaque where the trays meet the footer.
+        scrollFade={shelfTrayEdges.size > 0 ? "top" : true}
         fixedHeader={
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
@@ -3546,7 +3557,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           </SidebarGroup>
         }
       >
-        <SidebarGroup className="flex-1" role="presentation">
+        <SidebarGroup className="flex-1" flushBottom={shelfTrayEdges.size > 0} role="presentation">
           {isSearchingThreads ? (
             threadSearchResults.length > 0 ? (
               <TooltipProvider
@@ -3754,6 +3765,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             presentation={presentation}
                             variant={rowVariant}
                             separateCards={groupWorkspaces}
+                            shelfTrayEdge={shelfTrayEdges.get(threadKey)}
                             workspaceRowPosition={workspaceRow?.position}
                             workspaceThreadCount={workspaceRow?.count}
                             workspaceBranch={workspaceRow?.branch}
@@ -3946,6 +3958,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarSectionHeader
                                 key="working-shelf-header"
                                 marker="working-header"
+                                shelfTrayEdge={shelfTrayEdges.get(
+                                  sidebarMarkerId("working-header"),
+                                )}
                                 className="mt-auto"
                                 label="Working"
                                 count={workingThreads.length}
@@ -3961,6 +3976,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarSectionHeader
                                 key="postponed-shelf-header"
                                 marker="postponed-header"
+                                shelfTrayEdge={shelfTrayEdges.get(
+                                  sidebarMarkerId("postponed-header"),
+                                )}
                                 className={cn(workingThreads.length === 0 && "mt-auto")}
                                 label="Postponed"
                                 count={postponedThreads.length}
@@ -3976,6 +3994,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarSectionHeader
                                 key="snoozed-shelf-header"
                                 marker="snoozed-header"
+                                shelfTrayEdge={shelfTrayEdges.get(
+                                  sidebarMarkerId("snoozed-header"),
+                                )}
                                 className={cn(
                                   workingThreads.length + postponedThreads.length === 0 &&
                                     "mt-auto",
@@ -3994,6 +4015,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarSectionHeader
                                 key="settled-shelf-header"
                                 marker="settled-header"
+                                shelfTrayEdge={shelfTrayEdges.get(
+                                  sidebarMarkerId("settled-header"),
+                                )}
                                 className={cn(
                                   workingThreads.length +
                                     postponedThreads.length +
@@ -4034,7 +4058,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       return items;
                     })()}
                     {settledShelfExpanded && hiddenSettledCount > 0 ? (
-                      <li className="list-none">
+                      <li
+                        data-shelf-tray-edge={shelfTrayEdges.get(SIDEBAR_SETTLED_FOOTER_TRAY_ID)}
+                        className={cn(
+                          "list-none",
+                          shelfTrayEdges.has(SIDEBAR_SETTLED_FOOTER_TRAY_ID) &&
+                            "sidebar-shelf-tray",
+                        )}
+                      >
                         <button
                           type="button"
                           data-sidebar-row="settled:more"
@@ -4064,7 +4095,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) : null}
         </SidebarGroup>
       </SidebarContent>
-      <SidebarChromeFooter />
+      <div className={shelfTrayEdges.size > 0 ? "sidebar-shelf-footer" : undefined}>
+        <SidebarChromeFooter />
+      </div>
     </SidebarFolderDrop>
   );
 }

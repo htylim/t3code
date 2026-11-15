@@ -408,7 +408,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "fork-ui-changes",
     title: "Fork UI Changes",
     to: "/settings/fork",
-    searchTerms: ["sidebar section lines separators accordion postponed settled"],
+    searchTerms: [
+      "sidebar section shelves trays separators accordion working postponed snoozed settled",
+    ],
     forkOnly: true,
   },
   {

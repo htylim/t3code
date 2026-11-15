@@ -1,5 +1,32 @@
 # Fork journal
 
+## 2026-11-15 - Hide the stage pill with Fork artwork
+
+- Upstream baseline: `0200dcf2423c1b954c9ebca092d112426009c04d`.
+- Fork artwork no longer adds a stage pill beside the H3 branding. The explicit pill
+  mode still shows the environment label. Web and desktop share this header; native
+  mobile is unchanged.
+
+## 2026-11-15 - Put sidebar shelves on tinted trays
+
+- Upstream baseline: `0200dcf2423c1b954c9ebca092d112426009c04d`.
+- With Fork UI Changes on, Working, Postponed, Snoozed, and Settled sit on full-width
+  trays that touch, with rounded top corners. The tint continues through the footer
+  to the bottom of the window.
+  Active and pinned rows stay on the plain sidebar, with the gap above the trays preserved.
+  The trays replace the shelf header lines. You can tell a shelf row from an Active row
+  even when its header has scrolled away.
+  Only the top edge fades while scrolling; the lower edge stays opaque where the trays
+  meet the footer.
+- The tray mixes the sidebar text color into the sidebar color: 5% in light and 7% in dark.
+  The mix happens on each row, so custom theme sidebars apply. Mix in sRGB, because OKLab
+  leaves a near-black tray on the black default dark sidebar. The tray adds no hue, so it
+  does not compete with the worktree pills.
+- The list stays flat for drag and drop, so each row paints its own part of the tray.
+  The fill covers the list gap and workspace-card margins so no sidebar-colored seams show.
+  `sidebarShelfTrayEdges` gives each row its edge. A dragged row does not paint the tray.
+  Web and desktop share this UI. Native mobile is unchanged.
+
 ## 2026-11-14 - Brand the fork desktop app as H3 Code
 
 - Upstream baseline: `0200dcf2423c1b954c9ebca092d112426009c04d`.

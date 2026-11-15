@@ -8,6 +8,7 @@ import {
   animateSidebarLayoutChanges,
   sidebarMarkerId,
   type SidebarListMarker,
+  type SidebarShelfTrayEdge,
 } from "../Sidebar.logic";
 import { SIDEBAR_SORTABLE_DRAG_DISABLED } from "./SidebarThreadRow";
 
@@ -16,6 +17,7 @@ function SortableSidebarMarker(props: {
   className?: string;
   children?: ReactNode;
   revealOverflow?: boolean;
+  shelfTrayEdge?: SidebarShelfTrayEdge | undefined;
   "data-testid"?: string;
 }) {
   const { node, setNodeRef, transform, transition } = useSortable({
@@ -34,7 +36,8 @@ function SortableSidebarMarker(props: {
       ref={setNodeRef}
       data-thread-selection-safe
       data-testid={props["data-testid"]}
-      className={cn("list-none", props.className)}
+      data-shelf-tray-edge={props.shelfTrayEdge}
+      className={cn("list-none", props.shelfTrayEdge && "sidebar-shelf-tray", props.className)}
       style={{
         transform: CSS.Translate.toString(transform),
         transition: props.marker.endsWith("-placeholder") ? "none" : transition,
@@ -120,6 +123,8 @@ export function SidebarSectionHeader(props: {
   className?: string;
   dragging?: boolean;
   isDropTarget?: boolean;
+  /** Set when the shelf sits on a tray (Fork UI Changes). */
+  shelfTrayEdge?: SidebarShelfTrayEdge | undefined;
   toggle: {
     expanded: boolean;
     onToggle: () => void;
@@ -127,18 +132,21 @@ export function SidebarSectionHeader(props: {
 }) {
   const shelf = props.marker.replace("-header", "");
   const forkUiChanges = useClientSettings((settings) => settings.forkUiChanges);
+  const onTray = props.shelfTrayEdge !== undefined;
   return (
     <SortableSidebarMarker
       marker={props.marker}
       data-testid={`sidebar-${props.marker}`}
-      className={cn("relative mx-0.5 h-8", props.className)}
+      shelfTrayEdge={props.shelfTrayEdge}
+      // The tray widens the row by its own padding, so the label keeps its inset.
+      className={cn("relative h-8", onTray ? "px-2.5" : "mx-0.5", props.className)}
     >
       <CollapsibleSectionHeader
         data-sidebar-row={`shelf:${shelf}`}
         onClick={props.toggle.onToggle}
         expanded={props.toggle.expanded}
-        showLineWithAccessory={forkUiChanges}
-        tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
+        showLineWithAccessory={forkUiChanges && !onTray}
+        tone={props.isDropTarget ? "accent" : props.dragging || onTray ? "emphasized" : "muted"}
         data-testid={`sidebar-${shelf}-shelf-toggle`}
         accessory={<span className="font-normal tabular-nums">{props.count}</span>}
       >
