@@ -129,9 +129,9 @@ export function useComposerMenuItems({
   const isThreadTrigger = composerTriggerKind === "thread";
   const projects = useProjects();
   const environmentThreadShells = useVisibleThreadShells(isPathTrigger || isThreadTrigger);
-  // Mounts older settled threads matching the mention, which shells may leave out.
+  // Older settled mentions can belong to this environment or a linked one.
   useThreadSearch(
-    isPathTrigger || isThreadTrigger ? [environmentId] : [],
+    isPathTrigger || isThreadTrigger ? [environmentId, ...linkedEnvironments.keys()] : [],
     composerTrigger?.query ?? "",
     { titlesOnly: true },
   );

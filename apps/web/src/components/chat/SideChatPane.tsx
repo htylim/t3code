@@ -128,7 +128,7 @@ export default function SideChatPane(props: {
 
   return (
     <div
-      data-side-chat-pane
+      data-side-chat-pane={threadId}
       data-side-chat-thread-id={threadId}
       className="flex h-full min-h-0 flex-col"
     >

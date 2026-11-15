@@ -19,6 +19,7 @@ import { act, fakeTimers, render } from "../../test/render";
 import { openCommandPalette } from "../commandPaletteBus";
 import { makeThreadFixture } from "../test-fixtures";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useNowMinute } from "../hooks/useNowMinute";
 import { __setClientSettingsForTests, getClientSettings } from "../hooks/useSettings";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import { useProjects, useServerConfigs, useQuietThreadShells } from "../state/entities";
@@ -38,9 +39,7 @@ vi.mock(import("../state/olderSettledShelf"), async (original) => {
 });
 vi.mock("../state/entities", { spy: true });
 vi.mock("../hooks/useHandleNewThread", { spy: true });
-vi.mock("../hooks/useNowMinute", () => ({
-  useNowMinute: () => "2026-11-06T10:20",
-}));
+vi.mock("../hooks/useNowMinute", { spy: true });
 vi.mock("../hooks/useThreadRouteTarget", { spy: true });
 vi.mock("./sidebar/SidebarThreadRow", { spy: true });
 vi.mock("../state/session", { spy: true });
@@ -131,6 +130,7 @@ describe("sidebar header new thread", () => {
 });
 
 it("shows the same recency that positions reactivated threads and their workspace cards", async () => {
+  vi.mocked(useNowMinute).mockReturnValue("2026-11-06T10:20");
   using stack = new DisposableStack();
   const previousSettings = getClientSettings();
   stack.defer(() => __setClientSettingsForTests(previousSettings));
@@ -206,6 +206,8 @@ describe("sidebar render isolation", () => {
       threadId: threads[0]!.id,
     };
     threads.unshift(threadShell(activeProject.id, 100));
+    // A real wall-clock minute tick mid-test re-renders every row and reads as a leak.
+    vi.mocked(useNowMinute).mockReturnValue("2026-01-01T00:00");
     vi.mocked(useProjects).mockReturnValue([activeProject]);
     vi.mocked(useQuietThreadShells).mockReturnValue(threads);
     vi.mocked(useThreadRouteTarget).mockReturnValue({ kind: "server", threadRef: routeThreadRef });
