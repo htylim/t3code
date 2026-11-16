@@ -15,6 +15,7 @@
   to the bottom of the window.
   A soft upward shadow and a 1px top highlight keep the first tray raised above Active.
   Later shelves join flush without another shadow.
+  The footer uses the same 1px separator as the shelf headers.
   Active and pinned rows stay on the plain sidebar, with the gap above the trays preserved.
   The trays replace the shelf header lines. You can tell a shelf row from an Active row
   even when its header has scrolled away.
