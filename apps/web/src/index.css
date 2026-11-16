@@ -2500,23 +2500,29 @@ code {
   }
 
   .sidebar-shelf-tray:is([data-shelf-tray-edge="top"], [data-shelf-tray-edge="single"]) {
+    --sidebar-shelf-tray-lift: color-mix(in srgb, black 10%, transparent);
     margin-top: 0.5rem;
-    border-start-start-radius: 0.75rem;
-    border-start-end-radius: 0.75rem;
     box-shadow:
       inset 0 1px 0 var(--sidebar-shelf-tray-lip),
+      0 -6px 12px -6px var(--sidebar-shelf-tray-lift),
       0 var(--sidebar-shelf-tray-gap) 0 var(--sidebar-shelf-tray);
+  }
+
+  .dark .sidebar-shelf-tray:is([data-shelf-tray-edge="top"], [data-shelf-tray-edge="single"]) {
+    --sidebar-shelf-tray-lift: color-mix(in srgb, black 45%, transparent);
   }
 
   .sidebar-shelf-tray[data-shelf-tray-edge="bottom"] {
     padding-bottom: 0.25rem;
   }
 
+  /* Only the first shelf casts the lift shadow; later shelves join it flush. */
   .sidebar-shelf-tray
     ~ .sidebar-shelf-tray:is([data-shelf-tray-edge="top"], [data-shelf-tray-edge="single"]) {
     margin-top: -1px;
-    border-start-start-radius: 0;
-    border-start-end-radius: 0;
+    box-shadow:
+      inset 0 1px 0 var(--sidebar-shelf-tray-lip),
+      0 var(--sidebar-shelf-tray-gap) 0 var(--sidebar-shelf-tray);
   }
 }
 
