@@ -2493,7 +2493,6 @@ code {
   .sidebar-shelf-footer {
     /* Keeps the spacing above footer controls outside the scroll mask. */
     padding-top: var(--sidebar-content-inset);
-    box-shadow: inset 0 1px 0 var(--sidebar-shelf-tray-lip);
   }
 
   .dark :is(.sidebar-shelf-tray, .sidebar-shelf-footer) {
@@ -2503,6 +2502,8 @@ code {
   .sidebar-shelf-tray:is([data-shelf-tray-edge="top"], [data-shelf-tray-edge="single"]) {
     --sidebar-shelf-tray-lift: color-mix(in srgb, black 10%, transparent);
     margin-top: 0.5rem;
+    border-start-start-radius: var(--radius-md);
+    border-start-end-radius: var(--radius-md);
     box-shadow:
       inset 0 1px 0 var(--sidebar-shelf-tray-lip),
       0 -6px 12px -6px var(--sidebar-shelf-tray-lift),
@@ -2517,13 +2518,11 @@ code {
     padding-bottom: 0.25rem;
   }
 
-  /* Only the first shelf casts the lift shadow; later shelves join it flush. */
+  /* Only the first shelf has a raised edge; later shelves join it without dividers. */
   .sidebar-shelf-tray
     ~ .sidebar-shelf-tray:is([data-shelf-tray-edge="top"], [data-shelf-tray-edge="single"]) {
     margin-top: -1px;
-    box-shadow:
-      inset 0 1px 0 var(--sidebar-shelf-tray-lip),
-      0 var(--sidebar-shelf-tray-gap) 0 var(--sidebar-shelf-tray);
+    box-shadow: 0 var(--sidebar-shelf-tray-gap) 0 var(--sidebar-shelf-tray);
   }
 }
 

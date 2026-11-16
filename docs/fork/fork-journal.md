@@ -60,11 +60,10 @@
 
 - Upstream baseline: `0200dcf2423c1b954c9ebca092d112426009c04d`.
 - With Fork UI Changes on, Working, Postponed, Snoozed, and Settled sit on full-width
-  trays that touch, with square corners. The tint continues through the footer
-  to the bottom of the window.
+  trays that touch, with upper corners that match the thread selection radius.
+  The tint continues through the footer to the bottom of the window.
   A soft upward shadow and a 1px top highlight keep the first tray raised above Active.
-  Later shelves join flush without another shadow.
-  The footer uses the same 1px separator as the shelf headers.
+  Later shelves and the footer join flush without separator lines or another shadow.
   Active and pinned rows stay on the plain sidebar, with the gap above the trays preserved.
   The trays replace the shelf header lines. You can tell a shelf row from an Active row
   even when its header has scrolled away.
@@ -78,8 +77,9 @@
   The fill covers the list gap and workspace-card margins so no sidebar-colored seams show.
   `sidebarShelfTrayEdges` gives each row its edge. A dragged row does not paint the tray.
   Web and desktop share this UI. Native mobile is unchanged.
-- Verification: light and dark captures from an isolated dev server show the square corners
-  and raised top edge. The applied CSS matches the approved preview.
+- Verification: light and dark captures from an isolated dev server verified the tint
+  and raised top edge. The upper corner radius and removed section/footer dividers
+  match the approved live theme previews.
 
 ## 2026-11-14 - Brand the fork desktop app as H3 Code
 
