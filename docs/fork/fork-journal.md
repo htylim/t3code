@@ -36,8 +36,15 @@
 - A real Personal Luna Low background exec session remains tracked after the reply. The UI's
   background Stop removes the banner and the captured process exits. Native mobile cannot be
   exercised in this session because Device hub and Agent device access are disabled.
-- Limits: no native mobile, remote/tunnel, installed Electron GUI, or full in-app HTML storage
-  pass. Browser-enabled HTML tests cover storage, compression, and sandbox behavior. Leaving a worktree
+- Local candidate `0.1.0-fork.54` (arm64) is built from
+  `64dad8f4dd9d4865c8d7f8fbf0bef82a0881a9f6`. Both DMG/ZIP bundle signatures, identifiers,
+  exact app/server/client versions, embedded commit, architecture, and update-feed isolation pass.
+  The packaged server/client pass with fresh state. The extracted app starts with an isolated
+  Electron profile; native About, Fork controls, Connect availability, and the local mock update
+  feed pass. The app is quit and its signature remains valid. This verification note changes no
+  shipped code; installation still needs the maintainer's sign-off.
+- Limits: no native mobile, remote/tunnel, or full in-app HTML storage pass.
+  Browser-enabled HTML tests cover storage, compression, and sandbox behavior. Leaving a worktree
   rename page before Save finishes can interrupt metadata updates after the directory moves;
   this client workflow is unchanged from the fork baseline. Wait for Save to finish.
   Keep release branches unchanged until the maintainer accepts the local candidate.
