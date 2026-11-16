@@ -158,7 +158,7 @@ database; never recursively rewrite every database found on the machine.
 
 ## Develop and verify
 
-The repository requires Node 24 and Vite+ (`vp`):
+Vite+ (`vp`) selects the Node version pinned in `package.json`:
 
 ```bash
 curl -fsSL https://vite.plus | bash

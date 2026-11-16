@@ -1,5 +1,54 @@
 # Fork journal
 
+## 2026-11-15 - Integrate upstream through f5d86e31e8
+
+- Upstream baseline: `0200dcf2423c1b954c9ebca092d112426009c04d`; target
+  `f5d86e31e82ff5db595426c06598493a6d587f2b` adds 593 commits. Start from fork
+  `8104011e8013166eb58f895edaffedb7ab75b07b`, including the unpushed shelf styling.
+  Prepare the integration separately; shared release branches remain unchanged for review.
+- Adopt Node 26.13.1, upstream migrations, atomic initial-message launches, base-ref fallback,
+  worktree cancellation cleanup, submodule protections, repository ownership, checkpoint-ref
+  pruning, native side-chat routing, sent-message citations, and sidebar rendering fixes.
+- Keep physical worktree names/colors and shared cleanup policy. A saved branch name remains
+  insufficient to block physical checkout cleanup. Keep the branchless running-thread guard,
+  and test cleanup after an idle checkout changes its branch.
+- Keep selected-text comments, newest saved side-chat reuse, parent drafts, Postpone, workspace
+  grouping and presentation clocks, shelf trays, H3 identity, account usage exclusions, HTML
+  compatibility, Fork update-feed precedence, Connect defaults, and independent runtime caches.
+- The new implicit default-home usage scan must not reintroduce an excluded account's history.
+  Resolve explicit account directories first; permit a shared directory when an included account
+  still owns it. Keep historical default-home usage when every account moves elsewhere.
+  The default-home Codex and Claude cases failed before this adaptation.
+- Baseline: 2,575 focused assertions passed in 101 files. A browser-enabled HTML rerun
+  passed 17 assertions; the Linux-only invalid-UTF-8 filename case remained skipped on macOS.
+  The current live-state copy was too new for the baseline decoder. Use the preserved prior
+  stopped-thread snapshot, then apply normal migrations; do not edit migration history.
+- Verification: formatting, lint, unused-code checks, affected package type checks, and web/server
+  builds passed. The evidence bundle records exact final test output and packaging results.
+  Live checks cover Fork switches/reload, light/dark/narrow layouts, Replay, Postpone/restore,
+  references, rename cancellation, physical directory rename, and Personal Luna Low main/side turns.
+  Selection comments keep the parent draft and reuse the newest saved side chat.
+- The changed-file batch selects 172 test files. Its two fixture failures are resolved: independent
+  launch mocks use separate directories and branch names; the custom-keybinding case refreshes
+  its surviving config subscription with setup local to that case. Follow-up runs pass all 80
+  launch cases and all 13 ChatView browser cases. The shortcut failure also reproduces on pinned
+  upstream. All 134 selected React Compiler checks and six real Auto-color evaluations pass.
+- A real Personal Luna Low background exec session remains tracked after the reply. The UI's
+  background Stop removes the banner and the captured process exits. Native mobile cannot be
+  exercised in this session because Device hub and Agent device access are disabled.
+- Local candidate `0.1.0-fork.54` (arm64) is built from
+  `64dad8f4dd9d4865c8d7f8fbf0bef82a0881a9f6`. Both DMG/ZIP bundle signatures, identifiers,
+  exact app/server/client versions, embedded commit, architecture, and update-feed isolation pass.
+  The packaged server/client pass with fresh state. The extracted app starts with an isolated
+  Electron profile; native About, Fork controls, Connect availability, and the local mock update
+  feed pass. The app is quit and its signature remains valid. This verification note changes no
+  shipped code; installation still needs the maintainer's sign-off.
+- Limits: no native mobile, remote/tunnel, or full in-app HTML storage pass.
+  Browser-enabled HTML tests cover storage, compression, and sandbox behavior. Leaving a worktree
+  rename page before Save finishes can interrupt metadata updates after the directory moves;
+  this client workflow is unchanged from the fork baseline. Wait for Save to finish.
+  Keep release branches unchanged until the maintainer accepts the local candidate.
+
 ## 2026-11-15 - Hide the stage pill with Fork artwork
 
 - Upstream baseline: `0200dcf2423c1b954c9ebca092d112426009c04d`.

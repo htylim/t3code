@@ -3,6 +3,7 @@ import { assistantCitationSource } from "@t3tools/shared/assistantCitations";
 import { htmlRenderFromToolItem } from "@t3tools/shared/toolOutput";
 import { useAtomValue } from "@effect/atom-react";
 import { type AtomCommandSuccess, runAtomCommand } from "@t3tools/client-runtime/state/runtime";
+import { sentMessageFromToolItem } from "@t3tools/shared/toolOutput";
 import { Atom, type AtomRegistry } from "effect/reactivity";
 import type { TimelineEntry } from "../../session-logic";
 import { environmentThreadDetails, threadEnvironment } from "../../state/threads";
@@ -98,7 +99,8 @@ export function matchesCitationSource(
 ): boolean {
   const source = assistantCitationSource(citation);
   return source.kind === "assistant-message"
-    ? entry.kind === "message" && entry.message?.id === source.messageId
+    ? (entry.kind === "message" && entry.message?.id === source.messageId) ||
+        (entry.kind === "sent-message" && entry.id === source.messageId)
     : entry.kind === "html-render" &&
         entry.id === source.itemId &&
         entry.htmlRender?.attachmentId === source.attachmentId;
@@ -116,19 +118,22 @@ export function resolveCitationPhase(input: {
   const source = input.entries.find((entry) =>
     input.citation
       ? matchesCitationSource(input.citation, entry)
-      : entry.kind === "message" && entry.message.id === input.messageId,
+      : (entry.kind === "message" && entry.message.id === input.messageId) ||
+        (entry.kind === "sent-message" && entry.id === input.messageId),
   );
   // The history store can hold the message a render before the entries do.
   if (!source) return { _tag: "loading" };
   if (
     source.kind !== "html-render" &&
+    source.kind !== "sent-message" &&
     (source.kind !== "message" || source.message.role !== "assistant")
   )
     return { _tag: "failed" };
   const row = input.rows.find((candidate) =>
     input.citation
       ? matchesCitationSource(input.citation, candidate)
-      : candidate.kind === "message" && candidate.message.id === input.messageId,
+      : (candidate.kind === "message" && candidate.message.id === input.messageId) ||
+        (candidate.kind === "sent-message" && candidate.id === input.messageId),
   );
   if (row) return { _tag: "ready", rowId: row.id };
   return { _tag: "expanding" };
@@ -162,16 +167,15 @@ export function citedThreadSnapshot(input: {
       ? row.item.id === input.messageId &&
         row.item.type === "dynamic_tool" &&
         htmlRenderFromToolItem(row.item)?.attachmentId === input.attachmentId
-      : (row.item.type === "assistant_message" || row.item.type === "user_message") &&
-        row.item.messageId === input.messageId,
+      : ((row.item.type === "assistant_message" || row.item.type === "user_message") &&
+          row.item.messageId === input.messageId) ||
+        (row.item.type === "dynamic_tool" &&
+          row.item.id === input.messageId &&
+          row.item.status === "completed" &&
+          sentMessageFromToolItem(row.item) !== undefined),
   )?.item;
   return {
-    message:
-      item === undefined
-        ? null
-        : item.type === "assistant_message" || input.attachmentId !== undefined
-          ? "assistant"
-          : "other",
+    message: item === undefined ? null : item.type !== "user_message" ? "assistant" : "other",
     hasMoreHistory: input.history.hasMoreHistory,
   };
 }
