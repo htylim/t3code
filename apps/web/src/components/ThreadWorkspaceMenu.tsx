@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
@@ -71,6 +72,7 @@ export function ThreadWorkspaceMenu({
   draftId,
   ...menuProps
 }: ThreadWorkspaceMenuProps) {
+  const gt = useGT();
   const thread = useQuietThreadShell(threadRef);
   const draft = useComposerDraftStore((state) =>
     draftId ? state.getDraftSession(draftId) : state.getDraftThreadByRef(threadRef),
@@ -247,11 +249,11 @@ export function ThreadWorkspaceMenu({
         <ThreadDetailsControl
           panel={menuProps.displayMode === "panel"}
           part="select"
-          aria-label={menuProps.ariaLabel ?? "Change worktree"}
+          aria-label={menuProps.ariaLabel ?? gt("Change worktree")}
           disabled={running}
           onClick={() => setOpen(true)}
         >
-          {menuProps.trigger ?? "Change worktree"}
+          {menuProps.trigger ?? gt("Change worktree")}
         </ThreadDetailsControl>
       ) : null}
       {open ? (

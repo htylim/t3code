@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import type { ProviderInstanceConfig, ProviderInstanceId } from "@t3tools/contracts";
 import {
   isForkUsageDashboardIncluded,
@@ -20,6 +21,7 @@ export function ForkUsageDashboardSetting({
   readonly readOnly: boolean;
   readonly onUpdate: (instance: ProviderInstanceConfig) => void;
 }) {
+  const gt = useGT();
   if (!supportsForkUsageDashboardToggle(instance.driver)) return null;
 
   /** The server settings stream refreshes usage summaries after this preference changes. */
@@ -30,11 +32,13 @@ export function ForkUsageDashboardSetting({
   return (
     <SettingsRow
       id={`provider-instance-${instanceId}-usage-dashboard`}
-      title="Include in usage dashboard"
-      description="Include this account's history in Cost and Tokens. Limits are unchanged. Accounts sharing a history directory count together."
+      title={gt("Include in usage dashboard")}
+      description={gt(
+        "Include this account's history in Cost and Tokens. Limits are unchanged. Accounts sharing a history directory count together.",
+      )}
       control={
         <Switch
-          aria-label="Include in usage dashboard"
+          aria-label={gt("Include in usage dashboard")}
           checked={isForkUsageDashboardIncluded(instance)}
           disabled={readOnly}
           onCheckedChange={updateIncluded}

@@ -53,15 +53,28 @@ export function useWorkspaceChoices(props: {
     activeProjectCwd: props.projectCwd,
     activeWorktreePath: props.activeWorktreePath,
     activeBranch: props.activeBranch,
-  }).filter(
-    (row) =>
-      props.includeUnnamed ||
-      row.worktreePath === props.activeWorktreePath ||
-      isNamedWorktree(
-        row.worktreePath,
-        namedWorktrees[namedWorktreeKey(props.projectRef, row.worktreePath)]?.color,
-      ),
-  );
+  })
+    .map((row) => {
+      const taskFolder = refsQuery.data?.taskFolders?.find(
+        (folder) => folder.projectPath === row.worktreePath,
+      );
+      return taskFolder
+        ? {
+            ...row,
+            dirName: taskFolder.root.split(/[\\/]/).at(-1) ?? row.dirName,
+            rootPath: taskFolder.root,
+          }
+        : row;
+    })
+    .filter(
+      (row) =>
+        props.includeUnnamed ||
+        row.worktreePath === props.activeWorktreePath ||
+        isNamedWorktree(
+          row.worktreePath,
+          namedWorktrees[namedWorktreeKey(props.projectRef, row.worktreePath)]?.color,
+        ),
+    );
   const localRef = refs.find((ref) => ref.worktreePath === props.projectCwd);
   return { refsQuery, archived, threads, rows, localRef };
 }

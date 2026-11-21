@@ -1,4 +1,4 @@
-import type { ScopedProjectRef } from "@t3tools/contracts";
+import { supportsForkWorktrees, type ScopedProjectRef } from "@t3tools/contracts";
 
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult, Atom } from "effect/reactivity";
@@ -7,6 +7,7 @@ import { vcsEnvironment } from "../state/vcs";
 import { useEnvironment } from "../state/environments";
 import { namedWorktreeKey, useNamedWorktreeStore } from "../namedWorktreeStore";
 import { useProject } from "../state/entities";
+import { useEnvironmentQuery } from "../state/query";
 import { resolveWorktreeDisplay } from "../worktreeDisplay";
 
 /** Index each project snapshot once, shared by all visible workspace pills. */
@@ -37,6 +38,19 @@ export function useWorktreeDisplay(
   const environment = useEnvironment(projectRef?.environmentId ?? null);
   const supportsColors =
     environment?.serverConfig?.environment.capabilities.fork?.worktrees?.workspaceColors === true;
+  const folders = useEnvironmentQuery(
+    projectRef &&
+      (project?.trackedFolders?.length ?? 0) > 0 &&
+      supportsForkWorktrees(environment?.serverConfig?.environment.capabilities)
+      ? vcsEnvironment.listRefs({
+          environmentId: projectRef.environmentId,
+          input: { cwd: projectCwd ?? project?.workspaceRoot ?? "", worktreesOnly: true },
+        })
+      : null,
+  );
+  const taskFolder = folders.data?.taskFolders?.find(
+    (folder) => folder.projectPath === worktreePath,
+  );
   const colors = useAtomValue(
     projectRef && supportsColors
       ? colorIndex(
@@ -67,5 +81,10 @@ export function useWorktreeDisplay(
   if (!display) return null;
   let colorMode = savedColor?.colorMode;
   if (!savedColor && serverColor) colorMode = "auto";
-  return { ...display, colorMode };
+  return {
+    ...display,
+    name: taskFolder ? (taskFolder.root.split(/[\\/]/).at(-1) ?? display.name) : display.name,
+    rootPath: taskFolder?.root,
+    colorMode,
+  };
 }

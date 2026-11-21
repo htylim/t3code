@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { PauseIcon } from "lucide-react";
@@ -9,6 +10,7 @@ import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 export function usePostponedThreadBanner(
   threadRef: ScopedThreadRef | null,
 ): ComposerBannerStackItem | null {
+  const gt = useGT();
   const isPostponed = usePostponedThreadStore(
     (state) => threadRef !== null && state.byThreadKey[scopedThreadKey(threadRef)] !== undefined,
   );
@@ -19,11 +21,11 @@ export function usePostponedThreadBanner(
       id: `thread-postponed:${scopedThreadKey(threadRef)}`,
       variant: "info",
       icon: <PauseIcon />,
-      title: "This thread is postponed",
-      description: "Send a message to move it to active",
+      title: gt("This thread is postponed"),
+      description: gt("Send a message to move it to active"),
       actions: (
         <Button size="xs" variant="ghost" onClick={() => void moveToActive(threadRef)}>
-          Un-postpone thread
+          <T>Un-postpone thread</T>
         </Button>
       ),
     };

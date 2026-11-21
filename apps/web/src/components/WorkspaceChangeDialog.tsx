@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 import { WorktreeDirectoryName } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -42,6 +43,7 @@ const newWorktreeChoice = "new-worktree";
 
 /** Review a destination and apply it within the same modal, using the composer's workspace list. */
 export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
+  const gt = useGT();
   const { rows, localRef, refsQuery } = useWorkspaceChoices(props);
   const colors = useNamedWorktreeStore((state) => state.worktrees);
   const currentPath = props.activeWorktreePath ?? props.projectCwd;
@@ -84,12 +86,16 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
     >
       <DialogPopup showCloseButton={!props.pending} finalFocus={() => props.returnFocus ?? true}>
         <DialogHeader>
-          <DialogTitle>Change worktree</DialogTitle>
-          <DialogDescription>Choose the checkout this thread will use.</DialogDescription>
+          <DialogTitle>
+            <T>Change worktree</T>
+          </DialogTitle>
+          <DialogDescription>
+            <T>Choose the checkout this thread will use.</T>
+          </DialogDescription>
         </DialogHeader>
         <DialogPanel>
           <RadioGroup
-            aria-label="Destination workspace"
+            aria-label={gt("Destination workspace")}
             value={destination}
             disabled={props.envLocked}
             onValueChange={(nextDestination) => setDestination(String(nextDestination))}
@@ -97,7 +103,7 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
             <label className="flex cursor-pointer items-center gap-3">
               <Radio value={props.projectCwd} />
               <span className="min-w-0 flex-1 text-sm">
-                Local checkout
+                <T>Local checkout</T>
                 <span className="block truncate text-xs text-muted-foreground">
                   {localRef?.name ?? props.projectCwd}
                 </span>
@@ -124,7 +130,7 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
                 <span className="min-w-0 flex-1 text-sm">
                   <span className="block truncate">{row.dirName}</span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {row.refName ?? "Detached HEAD"}
+                    {row.refName ?? gt("Detached HEAD")}
                   </span>
                 </span>
                 <span className="text-xs text-muted-foreground">
@@ -139,12 +145,16 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
                 value={newWorktreeChoice}
                 disabled={props.canCreateWorktree === false || !props.activeBranch}
               />
-              <span className="text-sm">New worktree</span>
+              <span className="text-sm">
+                <T>New worktree</T>
+              </span>
             </label>
           </RadioGroup>
           {creating ? (
             <div className="grid gap-2">
-              <Label htmlFor={nameInputId}>Worktree name</Label>
+              <Label htmlFor={nameInputId}>
+                <T>Worktree name</T>
+              </Label>
               <div className="flex items-center gap-2">
                 <Input
                   id={nameInputId}
@@ -165,7 +175,7 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
               </div>
               {invalidName ? (
                 <p className="text-sm text-destructive">
-                  Enter a directory name without path separators.
+                  <T>Enter a directory name without path separators.</T>
                 </p>
               ) : null}
             </div>
@@ -174,15 +184,20 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
             <div className="space-y-2 text-sm">
               <p>
                 {creating
-                  ? `Create worktree "${directoryName || "..."}" from branch "${props.activeBranch}" and move this thread to it.`
-                  : "Move this thread to the selected checkout."}
+                  ? gt(
+                      'Create worktree "{value1}" from branch "{activeBranch}" and move this thread to it.',
+                      { value1: directoryName || "...", activeBranch: props.activeBranch },
+                    )
+                  : gt("Move this thread to the selected checkout.")}
               </p>
               {!creating ? (
                 <p className="break-all text-xs text-muted-foreground">{destination}</p>
               ) : null}
               <p className="text-muted-foreground">
-                Files and uncommitted changes will stay in the current checkout. They will not be
-                transferred.
+                <T>
+                  Files and uncommitted changes will stay in the current checkout. They will not be
+                  transferred.
+                </T>
               </p>
             </div>
           ) : null}
@@ -203,10 +218,10 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
             disabled={props.pending}
             onClick={() => props.onOpenChange?.(false)}
           >
-            Cancel
+            <T>Cancel</T>
           </Button>
           <Button disabled={disabled} onClick={() => void changeWorkspace()}>
-            {props.pending ? "Changing worktree..." : "Change worktree"}
+            {props.pending ? gt("Changing worktree...") : gt("Change worktree")}
           </Button>
         </DialogFooter>
       </DialogPopup>

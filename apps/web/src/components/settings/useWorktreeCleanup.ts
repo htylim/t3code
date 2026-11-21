@@ -1,3 +1,5 @@
+import { m, type MessageResolver } from "../../i18n/messages";
+import { useGT, msg, useLocale } from "gt-react";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import {
   AuthSourceControlWriteScope,
@@ -67,7 +69,7 @@ const measurementsAtom = Atom.family((targetsKey: string) =>
           measurements.set(worktreeCleanupKey(target), {
             bytes: null,
             pending: false,
-            error: "Update this Fork server to stream worktree sizes.",
+            error: m(msg("Update this Fork server to stream worktree sizes.")),
           });
         continue;
       }
@@ -102,7 +104,8 @@ const measurementsAtom = Atom.family((targetsKey: string) =>
           let error: string | null = null;
           if (subscription._tag === "Failure")
             error = formatEnvironmentQueryError(subscription.cause);
-          else if (measurement?.state === "unavailable") error = "Space estimate unavailable";
+          else if (measurement?.state === "unavailable")
+            error = m(msg("Space estimate unavailable"));
           byPath.set(measurementPathKey(target.cwd, target.path), {
             bytes: measurement?.reclaimableBytes ?? null,
             pending:
@@ -127,19 +130,21 @@ const measurementsAtom = Atom.family((targetsKey: string) =>
 
 /** Share batched size subscriptions per environment and keep selection totals on the same results. */
 export function useWorktreeMeasurements(targets: readonly WorktreeCleanupTarget[]) {
+  const locale = useLocale();
   const { environments } = useEnvironments();
   const supported = environments
     .filter((environment) =>
       supportsForkWorktreeMeasurements(environment.serverConfig?.environment.capabilities),
     )
     .map((environment) => environment.environmentId);
-  return useAtomValue(measurementsAtom(JSON.stringify([targets, supported])));
+  return useAtomValue(measurementsAtom(JSON.stringify([targets, supported, locale])));
 }
 
 /** Sum only known estimates and keep unknown or pending sizes visible to the user. */
 export function worktreeSpaceEstimate(
   measurements: ReadonlyMap<string, WorktreeMeasurement>,
   compact = false,
+  resolve: MessageResolver = m,
 ): string {
   const summary = summarizeWorktreeBytes(
     [...measurements.values()].map((measurement) =>
@@ -147,11 +152,13 @@ export function worktreeSpaceEstimate(
     ),
   );
   if (summary.knownCount === 0 && summary.unknownCount > 0)
-    return compact ? "Size unknown" : "Space estimate unavailable";
+    return compact ? resolve(msg("Size unknown")) : resolve(msg("Space estimate unavailable"));
   const estimate = compact
     ? `~${formatBytes(summary.bytes)}`
-    : `~${formatBytes(summary.bytes)} to reclaim`;
-  return summary.unknownCount > 0 ? `${estimate} + ${summary.unknownCount} unknown` : estimate;
+    : resolve(msg("~{bytes} to reclaim", { bytes: formatBytes(summary.bytes) }));
+  return summary.unknownCount > 0
+    ? resolve(msg("{estimate} + {count} unknown", { estimate, count: summary.unknownCount }))
+    : estimate;
 }
 
 /** Recheck destination permissions, checkout ownership and local changes around one bulk confirmation. */
@@ -159,6 +166,7 @@ export function useWorktreeCleanup(
   measurements: ReadonlyMap<string, WorktreeMeasurement>,
   onRemoved: (target: WorktreeCleanupTarget) => void,
 ) {
+  const gt = useGT();
   const registry = useContext(RegistryContext);
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
@@ -286,7 +294,7 @@ export function useWorktreeCleanup(
             `${title}\n${warning}${estimate}\n\nDeletion removes each entire directory, including untracked and ignored files.\nBranches and thread history are kept.`,
             {
               variant: "destructive",
-              confirmLabel: `Remove ${targetLabel}`,
+              confirmLabel: gt("Remove {targetLabel}", { targetLabel: targetLabel }),
               worktrees: inspections.map(({ target, protectedChanges, protectionReason }) => ({
                 key: worktreeCleanupKey(target),
                 name: target.name,
@@ -320,16 +328,17 @@ export function useWorktreeCleanup(
           toastManager.add({
             type: outcome.failures.length > 0 ? "error" : "success",
             title: `${outcome.removed.length} ${outcome.removed.length === 1 ? "worktree" : "worktrees"} removed${outcome.failures.length > 0 ? `, ${outcome.failures.length} kept` : ""}`,
-            description: outcome.failures[0]?.message ?? "Branches and thread history were kept.",
+            description:
+              outcome.failures[0]?.message ?? gt("Branches and thread history were kept."),
           });
         }
       })
       .catch((cause: unknown) => {
         toastManager.add({
           type: "error",
-          title: "Cleanup could not proceed",
+          title: gt("Cleanup could not proceed"),
           description:
-            cause instanceof Error ? cause.message : "Unable to check the selected worktrees.",
+            cause instanceof Error ? cause.message : gt("Unable to check the selected worktrees."),
         });
       })
       .finally(() => {

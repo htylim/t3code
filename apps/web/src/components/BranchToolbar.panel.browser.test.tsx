@@ -127,6 +127,9 @@ it.each([true, false])(
       option.textContent?.startsWith("New worktree"),
     );
     expect(newWorktree?.getAttribute("aria-disabled")).toBe("true");
+    await expect
+      .element(page.getByRole("menuitem", { name: /^Previous worktree/ }))
+      .not.toBeInTheDocument();
     await userEvent.click(page.getByRole("menuitemradio", { name: "remote" }));
     expect(onEnvironmentChange).toHaveBeenCalledWith("remote");
   },
@@ -174,7 +177,10 @@ it.each([
       expect(state.writeTextToClipboard).not.toHaveBeenCalled();
     } else {
       await vi.waitFor(() =>
-        expect(state.writeTextToClipboard).toHaveBeenCalledWith(copiedPath, "workspace path"),
+        expect(state.writeTextToClipboard).toHaveBeenCalledWith(
+          copiedPath,
+          expect.objectContaining({ target: "workspace path" }),
+        ),
       );
     }
   },

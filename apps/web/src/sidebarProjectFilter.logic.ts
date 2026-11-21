@@ -1,12 +1,18 @@
+import { msg } from "gt-react";
+import { m, type MessageResolver } from "./i18n/messages";
 import type { ScopedProjectRef } from "@t3tools/contracts";
 import type { SidebarProjectSnapshot } from "./sidebarProjectGrouping";
 
 export function resolveSidebarProjectFilterLabel(
   groups: ReadonlyArray<SidebarProjectSnapshot>,
   scopeKey: string | null,
+  resolve: MessageResolver = m,
 ): string {
-  if (scopeKey === null) return "All projects";
-  return groups.find((group) => group.projectKey === scopeKey)?.displayName ?? "All projects";
+  if (scopeKey === null) return resolve(msg("All projects"));
+  return (
+    groups.find((group) => group.projectKey === scopeKey)?.displayName ??
+    resolve(msg("All projects"))
+  );
 }
 
 export function resolveSidebarNewChatAction(

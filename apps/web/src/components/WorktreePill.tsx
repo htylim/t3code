@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import type { ScopedProjectRef, ScopedThreadRef } from "@t3tools/contracts";
 import { readLocalApi } from "../localApi";
 import { readThreadShell, useQuietThreadShell } from "../state/entities";
@@ -23,6 +24,7 @@ export function WorktreePill({
   worktree: WorktreeDisplay;
   className?: string;
 }) {
+  const gt = useGT();
   const thread = useQuietThreadShell(threadRef);
   const busy = thread !== null && isThreadWorkspaceBusy(thread);
   if (!projectRef || !projectCwd || !worktreePath) return null;
@@ -30,7 +32,9 @@ export function WorktreePill({
     <SoftPill
       color={worktree.color}
       className={className}
-      render={<button type="button" aria-label={`Rename worktree ${worktree.name}`} />}
+      render={
+        <button type="button" aria-label={gt("Rename worktree {name}", { name: worktree.name })} />
+      }
       onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
@@ -44,6 +48,7 @@ export function WorktreePill({
           projectRef,
           projectCwd,
           worktreePath,
+          rootPath: worktree.rootPath,
           returnFocus: event.detail === 0 ? event.currentTarget : false,
         });
       }}
@@ -56,15 +61,21 @@ export function WorktreePill({
         const returnFocus = event.button === 0 && !event.ctrlKey ? event.currentTarget : false;
         const action = await api.contextMenu.show(
           [
-            { id: "rename-worktree", label: "Rename worktree", icon: "pencil", disabled: busy },
-            { id: "change-worktree", label: "Change worktree", icon: "folder", disabled: busy },
+            { id: "rename-worktree", label: gt("Rename worktree"), icon: "pencil", disabled: busy },
+            { id: "change-worktree", label: gt("Change worktree"), icon: "folder", disabled: busy },
           ],
           position,
         );
         const currentThread = readThreadShell(threadRef);
         if (currentThread && isThreadWorkspaceBusy(currentThread)) return;
         if (action === "rename-worktree") {
-          requestNamedWorktreeEdit({ projectRef, projectCwd, worktreePath, returnFocus });
+          requestNamedWorktreeEdit({
+            projectRef,
+            projectCwd,
+            worktreePath,
+            rootPath: worktree.rootPath,
+            returnFocus,
+          });
         } else if (action === "change-worktree") {
           requestThreadWorkspaceEdit({ threadRef, position, returnFocus });
         }

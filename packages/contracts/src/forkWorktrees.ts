@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { VcsCreateWorktreeResult, VcsListRefsResult } from "./git.ts";
 import { ProjectId } from "./baseSchemas.ts";
+import { TaskFolder } from "./workspaceFolders.ts";
 import { WorktreeKeepWhen } from "./worktreeCleanup.ts";
 
 export const FORK_WORKTREES_API_VERSION = 1;
@@ -43,6 +44,7 @@ export type ForkWorktreeListInput = typeof ForkWorktreeListInput.Type;
 
 export const ForkWorktreeListResult = Schema.Struct({
   ...VcsListRefsResult.fields,
+  taskFolders: Schema.optionalKey(Schema.Array(TaskFolder)),
   mainWorktreePath: Schema.optional(TrimmedNonEmptyString.pipe(Schema.NullOr)),
 });
 export type ForkWorktreeListResult = typeof ForkWorktreeListResult.Type;

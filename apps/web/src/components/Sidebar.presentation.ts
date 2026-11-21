@@ -1,3 +1,4 @@
+import { msg } from "gt-react";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
   resolveInboxThreadTimestamp,
@@ -49,29 +50,32 @@ function resolveRecency(
     case "inbox":
       return {
         timestamp: resolveInboxThreadTimestamp(thread, order.returnedAt(thread)),
-        description: "Returned to inbox",
+        description: msg("Returned to inbox"),
       };
     case "sent":
-      return { timestamp: resolveWorkingThreadTimestamp(thread), description: "Last message sent" };
+      return {
+        timestamp: resolveWorkingThreadTimestamp(thread),
+        description: msg("Last message sent"),
+      };
     case "active":
       return {
         timestamp: activeThreadAnchorTimestampMs(thread),
-        description: "Active since; manually placed rows keep their position",
+        description: msg("Active since; manually placed rows keep their position"),
       };
     case "pinned":
       return {
         timestamp: toSortableTimestamp(thread.createdAt),
-        description: "Created; pinned rows use manual order",
+        description: msg("Created; pinned rows use manual order"),
       };
     case "snoozed":
       return {
         timestamp: toSortableTimestamp(thread.snoozedUntil ?? undefined),
-        description: "Wakes",
+        description: msg("Wakes"),
       };
     case "settled":
       return {
         timestamp: toSortableTimestamp(resolveSettledThreadTimestamp(thread) ?? undefined),
-        description: "Settled",
+        description: msg("Settled"),
       };
   }
 }

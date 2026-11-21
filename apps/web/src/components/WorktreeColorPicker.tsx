@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import { useEffect, useState } from "react";
 import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
 import type { WorkspaceColorMode } from "@t3tools/contracts";
@@ -13,7 +14,7 @@ import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 /** Choose a worktree color while keeping the workspace menu open. */
 export function WorktreeColorPicker({
   color,
-  ariaLabel = "Worktree color",
+  ariaLabel: requestedAriaLabel,
   colorMode,
   allowModes = true,
   allowCustom = true,
@@ -32,6 +33,8 @@ export function WorktreeColorPicker({
   onChange: (color: string, colorMode?: WorkspaceColorMode) => void;
   onOpen?: () => void;
 }) {
+  const gt = useGT();
+  const ariaLabel = requestedAriaLabel ?? gt("Worktree color");
   const [committer] = useState(createFrameCommitter);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- commits the last custom color when its picker unmounts
   useEffect(() => committer.flush, [committer]);
@@ -116,7 +119,7 @@ export function WorktreeColorPicker({
             <ThemeColorPickerPanel
               width="full"
               committer={committer}
-              label="Worktree"
+              label={gt("Worktree")}
               value={color}
               onChange={(customColor) => onChange(customColor)}
             />

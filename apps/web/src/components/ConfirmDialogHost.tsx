@@ -1,4 +1,6 @@
+import { useGT } from "gt-react";
 import { TriangleAlertIcon } from "lucide-react";
+import { msg, T, useMessages } from "gt-react";
 import { useSyncExternalStore } from "react";
 
 import {
@@ -19,16 +21,20 @@ import {
 } from "./ui/alert-dialog";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import type { MessageResolver } from "../i18n/messages";
 
 type ConfirmationCopy = {
   readonly title: string;
   readonly description: string | null;
 };
 
-function resolveConfirmDialogCopy(message: string): ConfirmationCopy {
+// LocalApi.confirm takes one string; translated questions may end in a full-width mark.
+const QUESTION_MARK = /[?？]/;
+
+function resolveConfirmDialogCopy(message: string, resolve: MessageResolver): ConfirmationCopy {
   const normalizedMessage = message.trim();
   const lines = normalizedMessage.split("\n");
-  const questionLineIndex = lines.findIndex((line) => line.trim().endsWith("?"));
+  const questionLineIndex = lines.findIndex((line) => QUESTION_MARK.test(line.trim().slice(-1)));
 
   if (questionLineIndex >= 0) {
     const title = lines[questionLineIndex]!.trim();
@@ -39,7 +45,7 @@ function resolveConfirmDialogCopy(message: string): ConfirmationCopy {
     return { title, description: description || null };
   }
 
-  const questionMarkIndex = normalizedMessage.indexOf("?");
+  const questionMarkIndex = normalizedMessage.search(QUESTION_MARK);
   if (questionMarkIndex >= 0) {
     return {
       title: normalizedMessage.slice(0, questionMarkIndex + 1).trim(),
@@ -48,19 +54,21 @@ function resolveConfirmDialogCopy(message: string): ConfirmationCopy {
   }
 
   return {
-    title: "Confirm action",
-    description: normalizedMessage || "This action requires your confirmation.",
+    title: resolve(msg("Confirm action")),
+    description: normalizedMessage || resolve(msg("This action requires your confirmation.")),
   };
 }
 
 export function ConfirmDialogHost() {
+  const gt = useGT();
+  const m = useMessages();
   const state = useSyncExternalStore(
     subscribeConfirmDialogHost,
     readConfirmDialogState,
     readConfirmDialogState,
   );
 
-  const copy = resolveConfirmDialogCopy(state.status === "idle" ? "" : state.message);
+  const copy = resolveConfirmDialogCopy(state.status === "idle" ? "" : state.message, m);
   const confirmVariant = state.status === "idle" ? "default" : state.variant;
   const focusConfirm = state.status !== "idle" && state.initialFocus === "confirm";
   const onCancel = () => respondToConfirmDialog(false);
@@ -86,14 +94,14 @@ export function ConfirmDialogHost() {
           ) : null}
           {state.status !== "idle" && state.worktrees ? (
             <ul
-              aria-label="Selected worktrees"
+              aria-label={gt("Selected worktrees")}
               className="max-h-72 overflow-y-auto divide-y divide-border rounded-md border border-border text-left"
             >
               {state.worktrees.map((worktree) => (
                 <li key={worktree.key} className="flex items-start gap-2 px-3 py-2">
                   {worktree.warning ? (
                     <TriangleAlertIcon
-                      aria-label="Protected local changes"
+                      aria-label={gt("Protected local changes")}
                       className="mt-0.5 size-4 shrink-0 text-warning-foreground"
                     />
                   ) : (
@@ -128,14 +136,16 @@ export function ConfirmDialogHost() {
           ) : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+          <AlertDialogClose render={<Button variant="outline" />}>
+            <T>Cancel</T>
+          </AlertDialogClose>
           {focusConfirm && confirmVariant === "default" ? (
             <AlertDialogAction onClick={onConfirm}>
-              {state.confirmLabel ?? "Confirm"}
+              {state.confirmLabel ?? <T>Confirm</T>}
             </AlertDialogAction>
           ) : (
             <Button variant={confirmVariant} onClick={onConfirm}>
-              {state.status !== "idle" ? (state.confirmLabel ?? "Confirm") : "Confirm"}
+              {state.status !== "idle" ? (state.confirmLabel ?? <T>Confirm</T>) : <T>Confirm</T>}
             </Button>
           )}
         </AlertDialogFooter>

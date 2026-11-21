@@ -1,3 +1,5 @@
+import { msg } from "gt-react";
+import { m, type MessageResolver } from "../../i18n/messages";
 import { formatBytes } from "../../lib/formatBytes";
 import type { WorktreeMeasurement } from "./useWorktreeCleanup";
 import type { WorktreeRow } from "../BranchToolbar.logic";
@@ -44,13 +46,14 @@ export function worktreeThreadsLabel(
   worktree: ForkWorktreeActivityResult["worktrees"][number] | undefined,
   ready: boolean,
   unavailable: boolean,
+  resolve: MessageResolver = m,
 ): string {
-  if (unavailable) return "Unavailable";
-  if (!ready) return "Loading...";
-  if (worktree === undefined) return "No threads";
-  if (worktree.parentDeleted) return "Deleted parent";
-  if (worktree.threadsSettled === undefined) return "Unavailable";
-  return worktree.threadsSettled ? "Settled" : "Active";
+  if (unavailable) return resolve(msg("Unavailable"));
+  if (!ready) return resolve(msg("Loading..."));
+  if (worktree === undefined) return resolve(msg("No threads"));
+  if (worktree.parentDeleted) return resolve(msg("Deleted parent"));
+  if (worktree.threadsSettled === undefined) return resolve(msg("Unavailable"));
+  return worktree.threadsSettled ? resolve(msg("Settled")) : resolve(msg("Active"));
 }
 
 /** One project's filtered row subscriptions and worktree-list availability. */
@@ -64,6 +67,7 @@ export interface ProjectWorktreeMeasurements {
 /** Count each environment/directory once and distinguish incomplete estimates from totals. */
 export function worktreeTotalSpaceLabel(
   projects: readonly (ProjectWorktreeMeasurements | undefined)[],
+  resolve: MessageResolver = m,
 ): string | null {
   if (projects.length > 0 && projects.every((project) => project?.unavailable)) return null;
   const measurements = new Map<string, WorktreeMeasurement>();
@@ -91,57 +95,67 @@ export function worktreeTotalSpaceLabel(
       bytes += measurement.bytes;
     }
   }
-  const parts = [`~${formatBytes(bytes)} total used`];
-  if (pendingCount > 0) parts.push(`${pendingCount} pending`);
-  if (unknownCount > 0) parts.push(`${unknownCount} unknown`);
-  if (listsPending) parts.push("Loading worktrees...");
+  const parts = [resolve(msg("~{bytes} total used", { bytes: formatBytes(bytes) }))];
+  if (pendingCount > 0) parts.push(resolve(msg("{count} pending", { count: pendingCount })));
+  if (unknownCount > 0) parts.push(resolve(msg("{count} unknown", { count: unknownCount })));
+  if (listsPending) parts.push(resolve(msg("Loading worktrees...")));
   return parts.join(" · ");
 }
 
 /** A reason deletion is blocked, shared by the badge and disabled checkbox tooltip. */
 export interface WorktreeSelectionBlocker {
-  readonly label: "Project" | "Busy" | "Loading" | "Error" | "Read-only" | "Unsupported";
+  readonly label: string;
   readonly reason: string;
 }
 
 /** Keep loading distinct from failure and report each applicable deletion restriction. */
-export function worktreeSelectionBlockers(input: {
-  readonly supported: boolean;
-  readonly containsProject: boolean;
-  readonly isIdle: boolean;
-  readonly historyReady: boolean;
-  readonly historyError: string | null;
-  readonly canRemove: boolean;
-}): WorktreeSelectionBlocker[] {
+export function worktreeSelectionBlockers(
+  input: {
+    readonly supported: boolean;
+    readonly containsProject: boolean;
+    readonly isIdle: boolean;
+    readonly historyReady: boolean;
+    readonly historyError: string | null;
+    readonly canRemove: boolean;
+  },
+  resolve: MessageResolver = m,
+): WorktreeSelectionBlocker[] {
   const blockers: WorktreeSelectionBlocker[] = [];
   if (!input.supported)
     blockers.push({
-      label: "Unsupported",
-      reason: "Worktree management requires a compatible Fork server.",
+      label: resolve(msg("Unsupported")),
+      reason: resolve(msg("Worktree management requires a compatible Fork server.")),
     });
   if (input.containsProject)
     blockers.push({
-      label: "Project",
-      reason: "Contains a registered T3 project and cannot be removed.",
+      label: resolve(msg("Project")),
+      reason: resolve(msg("Contains a registered T3 project and cannot be removed.")),
     });
   if (!input.isIdle)
     blockers.push({
-      label: "Busy",
-      reason: "An agent is queued, starting, or running here. Stop it before cleanup.",
+      label: resolve(msg("Busy")),
+      reason: resolve(
+        msg("An agent is queued, starting, or running here. Stop it before cleanup."),
+      ),
     });
   if (input.supported) {
     if (input.historyError !== null)
       blockers.push({
-        label: "Error",
-        reason: `Unable to load thread history: ${input.historyError}`,
+        label: resolve(msg("Error")),
+        reason: resolve(
+          msg("Unable to load thread history: {error}", { error: input.historyError }),
+        ),
       });
     else if (!input.historyReady)
       blockers.push({
-        label: "Loading",
-        reason: "Thread history must finish loading before cleanup.",
+        label: resolve(msg("Loading")),
+        reason: resolve(msg("Thread history must finish loading before cleanup.")),
       });
   }
   if (!input.canRemove)
-    blockers.push({ label: "Read-only", reason: "This connection cannot remove worktrees." });
+    blockers.push({
+      label: resolve(msg("Read-only")),
+      reason: resolve(msg("This connection cannot remove worktrees.")),
+    });
   return blockers;
 }

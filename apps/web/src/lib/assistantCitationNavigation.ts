@@ -120,7 +120,7 @@ export function revealSideChatCitation(
   }
   useRightPanelStore
     .getState()
-    .openSideChat(scopeThreadRef(source.environmentId, parentThreadId), source.threadId);
+    .openThread(scopeThreadRef(source.environmentId, parentThreadId), source.threadId);
   if (routeThreadRef.threadId === parentThreadId) return;
   return router.navigate({
     to: "/$environmentId/$threadId",

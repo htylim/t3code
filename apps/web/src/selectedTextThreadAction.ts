@@ -35,8 +35,10 @@ export function buildAskInNewThreadPrompt(input: {
     threadContextReference(threadContextRecord(input.sourceThreadRef, input.sourceThreadTitle)),
   );
   if (input.citation && assistantCitationSource(input.citation).kind === "html-attachment") {
+    // oxlint-disable-next-line t3code/no-untranslated-copy -- prompt sent to the agent, not UI copy
     return `Regarding this selection from ${source}:\n\n${serializeAssistantCitation(input.citation)}\n\n`;
   }
+  // oxlint-disable-next-line t3code/no-untranslated-copy -- prompt sent to the agent, not UI copy
   return `Regarding this selection from ${source}:\n\n${markdownBlockquote(input.selectedMarkdown)}\n\n`;
 }
 
