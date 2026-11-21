@@ -33,6 +33,8 @@ import { readLocalApi } from "../localApi";
 import type { Project } from "../types";
 import Sidebar from "./Sidebar";
 import { THREAD_JUMP_HINT_SHOW_DELAY_MS } from "./Sidebar.logic";
+import { requestSidebarProjectFilterScope } from "../sidebarProjectFilterBus";
+import { useUiStateStore } from "../uiStateStore";
 import { SortableThreadRow } from "./sidebar/SidebarThreadRow";
 import { SidebarProvider } from "./ui/sidebar";
 
@@ -132,6 +134,25 @@ describe("sidebar header new thread", () => {
       expect(startThread).toHaveBeenCalledExactlyOnceWith(currentProjectRef);
     }
   });
+});
+
+it("clears thread search when a project scope is selected", async () => {
+  using stack = new DisposableStack();
+  const initialUiState = useUiStateStore.getState();
+  stack.defer(() => useUiStateStore.setState(initialUiState, true));
+  const selectedProject = project("selected");
+  vi.mocked(useProjects).mockReturnValue([selectedProject]);
+  vi.mocked(useQuietThreadShells).mockReturnValue([threadShell(selectedProject.id, 0)]);
+  stack.defer(() => vi.mocked(useQuietThreadShells).mockReset());
+  await using screen = await render(
+    <SidebarProvider>
+      <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+    </SidebarProvider>,
+  );
+  const search = screen.getByRole("combobox", { name: "Search threads", exact: true });
+  await userEvent.fill(search, "Old project query");
+  await act(() => requestSidebarProjectFilterScope(null));
+  await expect.element(search).toHaveValue("");
 });
 
 it("shows the same recency that positions reactivated threads and their workspace cards", async () => {

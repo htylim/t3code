@@ -5879,16 +5879,21 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
         assert.notEqual(yield* snapshot, fetched);
 
         const head = yield* git(cwd, ["rev-parse", "HEAD"]);
-        yield* driver.execute({
-          operation: "GitVcsDriver.test.git",
+        const existingRefs = yield* git(cwd, ["show-ref"]);
+        // Write the large packed fixture directly instead of fsyncing 16,000 loose refs.
+        yield* writeTextFile(
           cwd,
-          args: ["update-ref", "--stdin"],
-          stdin: Array.from(
-            { length: 16_000 },
-            (_, index) => `create refs/heads/snapshot-${String(index).padStart(5, "0")} ${head}\n`,
-          ).join(""),
-        });
-        yield* git(cwd, ["pack-refs", "--all"]);
+          ".git/packed-refs",
+          [
+            "# pack-refs with: peeled fully-peeled",
+            existingRefs.trim(),
+            ...Array.from(
+              { length: 16_000 },
+              (_, index) => `${head} refs/heads/snapshot-${String(index).padStart(5, "0")}`,
+            ),
+            "",
+          ].join("\n"),
+        );
         const large = yield* snapshot;
         assert.isNotNull(large);
         assert.isAbove(Buffer.byteLength(large ?? "", "utf8"), 1_000_000);

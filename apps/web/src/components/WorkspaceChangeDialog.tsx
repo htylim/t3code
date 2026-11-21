@@ -101,7 +101,7 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
             onValueChange={(nextDestination) => setDestination(String(nextDestination))}
           >
             <label className="flex cursor-pointer items-center gap-3">
-              <Radio value={props.projectCwd} />
+              <Radio value={props.projectCwd} aria-label={gt("Local checkout")} />
               <span className="min-w-0 flex-1 text-sm">
                 <T>Local checkout</T>
                 <span className="block truncate text-xs text-muted-foreground">
@@ -117,7 +117,7 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
                 key={row.worktreePath}
                 className="flex min-w-0 cursor-pointer items-center gap-3"
               >
-                <Radio value={row.worktreePath} />
+                <Radio value={row.worktreePath} aria-label={row.dirName} />
                 <span
                   aria-hidden
                   className="size-3 shrink-0 rounded-full"
@@ -143,6 +143,7 @@ export function WorkspaceChangeDialog(props: WorkspaceChangeDialogProps) {
             <label className="flex cursor-pointer items-center gap-3">
               <Radio
                 value={newWorktreeChoice}
+                aria-label={gt("New worktree")}
                 disabled={props.canCreateWorktree === false || !props.activeBranch}
               />
               <span className="text-sm">

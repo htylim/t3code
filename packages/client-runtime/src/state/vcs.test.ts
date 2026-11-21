@@ -467,13 +467,13 @@ describe("cached VCS refs", () => {
       expect(Exit.isSuccess(prepareResult)).toBe(true);
       expect(yield* Ref.get(clears)).toBe(3);
       expect(registry.get(vcsRefsCacheStateAtom(TARGET)).revision).toBe(3);
-      const refreshedWorktrees = yield* Effect.promise(() =>
+      const refreshedWorktrees = yield* Effect.exit(
         atoms.refreshWorktrees.run(registry, {
           environmentId: TARGET.environmentId,
           input: { cwd: "/repo", refresh: true },
         }),
       );
-      expect(AsyncResult.isSuccess(refreshedWorktrees)).toBe(true);
+      expect(Exit.isSuccess(refreshedWorktrees)).toBe(true);
       expect(yield* Ref.get(clears)).toBe(4);
       expect(registry.get(vcsRefsCacheStateAtom(TARGET)).revision).toBe(4);
     }),

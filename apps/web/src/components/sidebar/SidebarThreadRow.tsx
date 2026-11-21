@@ -1921,7 +1921,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 </span>
               ) : null}
               {props.workspaceRowPosition ? (
-                title
+                <>
+                  {title}
+                  {issueBadge}
+                </>
               ) : (
                 <>
                   {draftIndicator}

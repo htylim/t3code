@@ -1662,6 +1662,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   useEffect(() => subscribeThreadRename(handleRequestedRename), [handleRequestedRename]);
   const handleRequestedProjectScope = useStableCallback(
     (update: import("../sidebarProjectFilterBus").SidebarProjectFilterUpdate) => {
+      clearThreadSearch();
       const currentKeys = useUiStateStore.getState().sidebarProjectScopeKeys;
       const next = typeof update === "function" ? update(currentKeys[0] ?? null) : update;
       setProjectScopeKeys(next === null ? [] : [next]);

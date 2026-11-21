@@ -89,6 +89,9 @@ export function ThreadWorkspaceMenu({
   );
   const createWorktree = useAtomCommand(vcsEnvironment.createWorktree, { reportFailure: false });
   const refreshStatus = useAtomCommand(vcsEnvironment.refreshStatus, { reportFailure: false });
+  const refreshWorktrees = useAtomCommand(vcsEnvironment.refreshWorktrees, {
+    reportFailure: false,
+  });
   const updateMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -182,10 +185,24 @@ export function ThreadWorkspaceMenu({
         input: { cwd: seed.worktreePath },
       });
       if (status._tag === "Failure") throw squashAtomCommandFailure(status);
-      if (!status.value.isRepo)
-        throw new Error("This workspace is unavailable. Choose another checkout.");
+      let branch = status.value.refName;
+      if (!status.value.isRepo) {
+        if (!project) throw new Error("This workspace is unavailable. Choose another checkout.");
+        const refreshed = await refreshWorktrees({
+          environmentId: threadRef.environmentId,
+          input: { cwd: project.workspaceRoot, refresh: true },
+        });
+        if (refreshed._tag === "Failure") throw squashAtomCommandFailure(refreshed);
+        const registered = refreshed.value.taskFolders?.some(
+          (folder) => folder.projectPath === seed.worktreePath,
+        );
+        const checkout = refreshed.value.refs.find((ref) => ref.worktreePath === seed.worktreePath);
+        if (!registered || !checkout)
+          throw new Error("This workspace is unavailable. Choose another checkout.");
+        branch = checkout.isDetached ? null : checkout.name;
+      }
       if (!canChangeWorkspace()) return false;
-      await assignWorkspace({ worktreePath: seed.worktreePath, branch: status.value.refName });
+      await assignWorkspace({ worktreePath: seed.worktreePath, branch });
       return true;
     });
   }

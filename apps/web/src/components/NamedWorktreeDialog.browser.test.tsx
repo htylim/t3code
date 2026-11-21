@@ -126,6 +126,7 @@ vi.mock("../state/vcs", async () => {
       renameWorktree: { permissionAtom: () => Atom.make(state.allowed) },
       createWorktree: { permissionAtom: () => Atom.make(state.allowed) },
       refreshStatus: { kind: "refreshStatus" },
+      refreshWorktrees: { kind: "refreshWorktrees" },
       removeWorktree: {},
       listRefs: () => null,
       status: () => null,

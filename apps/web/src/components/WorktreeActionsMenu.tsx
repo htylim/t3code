@@ -131,7 +131,8 @@ export function WorktreeActionsMenu(props: WorktreeActionsMenuProps) {
       });
       const status = refreshedStatus._tag === "Success" ? refreshedStatus.value : null;
       const details = [
-        status
+        failure.detail,
+        status?.isRepo
           ? `${status.workingTree.files.length} uncommitted files`
           : "Working tree status unavailable",
         resolveWorktreeUnpushedWarning(status, forkMessages),

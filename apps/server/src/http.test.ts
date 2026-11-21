@@ -124,14 +124,18 @@ describe("workspace page preview responses", () => {
       const response = HttpServerResponse.toWeb(
         yield* assetFileResponse({ path: page, renderIntent: "file-preview" }, "bytes=0-1"),
       );
-      const expected = html + FILE_PREVIEW_SCROLL_SCRIPT;
+      const expected = injectHtmlRenderStorageBootstrap(
+        injectHtmlRenderCitationBridge(html) + FILE_PREVIEW_SCROLL_SCRIPT,
+      );
       expect(response.status).toBe(200);
       expect(response.headers.get("content-length")).toBe(
         String(new TextEncoder().encode(expected).byteLength),
       );
       expect(yield* Effect.promise(() => response.text())).toBe(expected);
       expect(yield* read({ path: page, renderIntent: "file-preview", download: true })).toBe(html);
-      expect(yield* read({ path: page })).toBe(html);
+      expect(yield* read({ path: page })).toBe(
+        injectHtmlRenderStorageBootstrap(injectHtmlRenderCitationBridge(html)),
+      );
       expect(yield* read({ path: style, renderIntent: "file-preview" })).toBe("body{}");
     }).pipe(Effect.provide(layerFileResponse)),
   );

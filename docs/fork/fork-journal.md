@@ -1,5 +1,35 @@
 # Fork journal
 
+## 2026-11-21 - Integrate upstream task folders
+
+- Upstream baseline `f5d86e31e82f`, target `dd941b9c3b58`, fork source `89090e81aecd`.
+  The local integration branch contains the reviewed 990 upstream commits. Shared release
+  branches stay unchanged until the installable candidate is accepted.
+- Use upstream's shared task-folder root, relative repository paths, common branch, leases,
+  registry, setup order, and stable automatic folder allocation. A chosen name names both
+  the folder and the common branch in every selected repository. Explicit collisions fail;
+  empty names retain upstream generation. No upstream migration or registry entry is changed.
+- Keep H3 name/color controls and the Previous worktree submenu within upstream eligibility.
+  Existing-thread selection validates plain task folders against the registry and current
+  common branch. Physical root rename repairs all Git registrations and updates saved thread
+  paths together, with rollback. Labels and color binding use the containing root when the
+  project itself is nested inside it. Manual directory rename preserves branch names.
+- Adopt upstream side-thread panels and parent-composer settings. Keep quote comments,
+  newest-side-chat draft reuse, parent drafts, and shortcuts as extensions. Selection callbacks
+  use upstream's stable-callback pattern so old thread structures can be collected.
+- Keep upstream issue badges interactive in grouped rows. Restore search clearing when a
+  project switch changes the sidebar scope. Background commands block workspace edits in the
+  UI as well as on the server; Stop still reaches the provider's command.
+- Keep shared cleanup clocks, family inheritance, measurements, and progress on upstream's
+  branch reconciliation and repository protections. Task-folder status inspects every checkout
+  and measurements cover the shared root. Large Git test fixtures write packed refs directly
+  while retaining their original large-output and mutation assertions.
+- Focused workspace, chat, usage, HTML, sidebar, and packaging regressions were adapted to the
+  current APIs. Before/after client checks use isolated state and disposable repositories.
+  Native mobile verification is unavailable because Device agent access is disabled. Remote
+  relay/tunnel operation is not established by these local checks. Exact test output and
+  candidate verification accompany the local review build.
+
 ## 2026-11-15 - Integrate upstream through f5d86e31e8
 
 - Upstream baseline: `0200dcf2423c1b954c9ebca092d112426009c04d`; target
@@ -265,27 +295,18 @@
   The real client showed cleanup ages and a lock-failure icon with its diagnostic on hover.
   Runtime checks used copied preview data, never the daily-use database.
 
-## 2026-11-04 - Stop using saved branch names to block worktree cleanup
+## 2026-11-04 - Keep cleanup branch records current
 
-- Reason: Agents and external Git commands can rename or switch a worktree's branch while T3's
-  saved thread branch stays unchanged. These stale names must not indefinitely protect an
-  otherwise eligible T3-managed worktree from cleanup.
-- Upstream baseline remains `cefb544af3`. Cleanup allows renamed branches, switched branches,
-  detached HEAD, missing saved branches, and different saved branches among associated threads.
-  It still checks thread activity, project policies, protected files, open sessions and terminals,
-  repository validity, and changes during the sweep. Merge-based eligibility uses the actual
-  checked-out branch and HEAD for its evidence.
-- Upstream integration watchpoint: review future changes to branch synchronization, worktree
-  ownership, and cleanup guards before merging. Preserve this intentional fork behavior unless
-  an upstream change gives us a concrete reason to revise it. Do not restore saved-name equality
-  as a prerequisite for cleanup by age, settlement, or deletion.
-- Regression coverage uses disposable Git repositories for branch changes, detached and absent
-  branch records, shared worktrees, deleted owners, merge evidence, and repository safeguards.
-  All 200 changed-file tests passed, along with formatting, lint, unused-code checks, and affected
-  type checks. A real isolated server received project, thread, and settings commands through RPC.
-  It verified all three file-protection modes, removed five eligible worktrees while retaining
-  their branches, and preserved tracked edits, staged edits, disabled project policies, unmerged
-  commits, unmanaged paths, and a fresh orphan. No live worktree or saved record was changed.
+- Reason: External Git commands can rename or switch a worktree's branch. Live thread records
+  must follow those changes so stale metadata does not indefinitely prevent cleanup.
+- Upstream integration uses upstream branch reconciliation and repository protections. A sweep
+  that sees a branch change keeps the checkout and updates live records. A later sweep can remove
+  it after the usual activity, ownership, file, session, terminal, and project-policy checks.
+  Missing or inconsistent owner branches remain protected. Detached checkouts also retain
+  upstream's unreferenced-commit and in-progress-operation checks.
+- Shared cleanup clocks and parent inheritance remain fork extensions. Regression cases use real
+  disposable Git repositories for branch changes, deleted owners, shared worktrees, and invalid
+  repositories. No saved record in live userdata is changed during verification.
 
 ## 2026-11-04 - Match worktree status to cleanup protection
 
@@ -862,8 +883,9 @@
   breadcrumbs show project / worktree pill / thread, and sidebar project labels use the
   same pill. Settled and compact rows prefix their thread title with the worktree pill.
   Sidebar card and search-result tooltips show the worktree pill on its own row below the branch.
-  Pills always show the current directory name. First-prompt naming moves automatic directories
-  before setup or agent work starts and updates thread paths. Explicit directory names stay put.
+  Pills show the containing worktree directory name. For a multi-repository task, this is the shared
+  root rather than an individual repository checkout. Automatic paths follow upstream allocation
+  and remain stable when generated branch names change.
   Unsaved colors default to gray, which is also available in both color pickers.
   Static worktree branch naming defaults to an empty prefix across clients. Explicitly
   saved prefixes remain unchanged; resetting the prefix selects no prefix.
@@ -902,10 +924,11 @@
   without moving the directory twice. Directory listings refresh on opening and after moves.
   Assigned worktrees that Git no longer recognizes show an unavailable-checkout error instead
   of Initialize Git. Their named-worktree pill stays visible independently of Git status.
-- Reason: A useful directory name must exist before checkout and setup scripts run. The launch
-  passes an optional `directoryName` through the existing worktree creation service. Git branch
-  generation stays independent for explicit directory names. Automatic directories move only
-  before setup or provider work starts; cancellation cleanup follows the moved path.
+- Reason: A chosen name must exist before checkout and setup scripts run. The launch passes an
+  optional `directoryName` through upstream worktree creation. The chosen name names both the
+  physical folder and the common Git branch in all selected repositories. Invalid names and
+  existing branches or folders fail without silent suffixes. An empty name retains upstream's
+  automatic folder allocation and branch naming. Manual directory rename preserves the branch.
 - Scope: `namedWorktreeStore.ts` owns fork-only localStorage choices and colors, scoped by
   environment, project, and actual path. Named-worktree metadata needs no database migration.
   Worktree labels derive from current thread metadata, independently of saved creation choices.
@@ -1014,9 +1037,10 @@
   panel verified its folder icon, dropdown arrow, picker access, and selected local checkout;
   the named-worktree pill still renders on a worktree thread.
 - Upstream conflict map: Preserve the optional directory-name field in contracts, client launch
-  forwarding, and `ThreadLaunchService`, including automatic-directory naming before setup;
-  path validation and initial path choice stay in
-  `GitVcsDriverCore`. The picker row, palette, and metadata store are separate fork-owned modules.
+  forwarding, and `ThreadLaunchService`. Task folders retain upstream's shared root, relative
+  repository paths, common branch, leases, and registry. The narrow extension supplies an explicit
+  folder/branch name and coordinates manual root renames across all saved thread paths.
+  Ordinary single-repository creation remains in `GitVcsDriverCore`. The picker row, palette, and metadata store are separate fork-owned modules.
   `BranchToolbar`, `WorkspaceMenu`, and the first-send bootstrap in `ChatView` are the web seams.
   Existing-thread editing adds only the optional idle guard to metadata updates in contracts,
   client command forwarding, and the orchestrator; automatic provisioning does not opt into it.

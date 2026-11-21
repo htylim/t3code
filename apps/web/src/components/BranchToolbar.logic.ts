@@ -446,6 +446,7 @@ export interface WorktreeThreadState {
   readonly settledOverride: string | null;
   readonly relationshipToParent: OrchestrationV2ThreadShell["lineage"]["relationshipToParent"];
   readonly status: OrchestrationV2ThreadShell["status"];
+  readonly pendingBackgroundTasks?: OrchestrationV2ThreadShell["pendingBackgroundTasks"];
 }
 
 export interface WorktreeRow {
@@ -458,24 +459,31 @@ export interface WorktreeRow {
 }
 
 /** Keeps workspace actions blocked while a turn is queued, starting or executing. */
-export function isWorktreeThreadRunning(thread: Pick<WorktreeThreadState, "status">): boolean {
+export function isWorktreeThreadRunning(
+  thread: Pick<WorktreeThreadState, "status" | "pendingBackgroundTasks">,
+): boolean {
   return (
     thread.status === "preparing" ||
     thread.status === "queued" ||
     thread.status === "starting" ||
     thread.status === "running" ||
-    thread.status === "waiting"
+    thread.status === "waiting" ||
+    (thread.pendingBackgroundTasks?.length ?? 0) > 0
   );
 }
 
 /** Keep a thread's checkout fixed while a run or provider question still owns it. */
 export function isThreadWorkspaceBusy(
-  thread: Pick<EnvironmentThreadShell, "runtime" | "hasPendingApprovals" | "hasPendingUserInput">,
+  thread: Pick<
+    EnvironmentThreadShell,
+    "runtime" | "hasPendingApprovals" | "hasPendingUserInput" | "pendingBackgroundTasks"
+  >,
 ): boolean {
   return (
     threadRuntimeIsActive(thread.runtime) ||
     thread.hasPendingApprovals ||
-    thread.hasPendingUserInput
+    thread.hasPendingUserInput ||
+    (thread.pendingBackgroundTasks?.length ?? 0) > 0
   );
 }
 
@@ -584,10 +592,11 @@ export function resolveWorktreeStatusWord(input: {
 
 /** Counts unpushed commits only against the branch's configured upstream. */
 export function resolveWorktreeUnpushedWarning(
-  status: { hasUpstream: boolean; aheadCount: number } | null,
+  status: { isRepo?: boolean; hasUpstream: boolean; aheadCount: number } | null,
   resolve: MessageResolver = m,
 ): string {
-  if (status === null) return resolve(msg("Unpushed commit count unavailable"));
+  if (status === null || status.isRepo === false)
+    return resolve(msg("Unpushed commit count unavailable"));
   if (!status.hasUpstream) return resolve(msg("No upstream"));
   return resolve(msg("{count} unpushed commits", { count: status.aheadCount }));
 }

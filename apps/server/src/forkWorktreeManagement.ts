@@ -66,14 +66,14 @@ export const make = Effect.gen(function* () {
             detail: "Stop running agents in this task folder before renaming it.",
           });
       }).pipe(
-        Effect.mapError(
-          (cause) =>
-            new TaskFolderError({
-              operation: "create",
-              detail: "Could not check task-folder activity.",
-              cause,
-            }),
-        ),
+        Effect.mapError((cause) => {
+          if (cause._tag === "TaskFolderError") return cause;
+          return new TaskFolderError({
+            operation: "create",
+            detail: "Could not check task-folder activity.",
+            cause,
+          });
+        }),
       );
       const moved = yield* folders.renameDirectory({
         root: folder.root,

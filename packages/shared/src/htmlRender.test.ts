@@ -21,7 +21,7 @@ describe("injectHtmlRenderBootstrap", () => {
   });
 
   it("provides isolated string storage with method and property access", () => {
-    const injected = injectHtmlRenderBootstrap("<!doctype html><p>Storage</p>");
+    const injected = injectHtmlRenderStorageBootstrap("<!doctype html><p>Storage</p>");
     const scripts = [...injected.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)];
     const bootstrap = scripts.map((script) => script[1]).join("\n");
     const window = {};

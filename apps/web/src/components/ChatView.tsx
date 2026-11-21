@@ -3078,6 +3078,7 @@ export default function ChatView(props: ChatViewProps) {
     }
     selectedTextThreadActionInFlightRef.current = false;
   };
+  const askAboutSelectionStable = useStableCallback(askAboutSelection);
   const openSideChatStable = useStableCallback(() => void sideChat.open());
   const openSurfaceInMainView = useOpenSurfaceInMainView(activeThreadRef);
   const sendSideChatStable = useStableCallback(sideChat.open);
@@ -3686,7 +3687,7 @@ export default function ChatView(props: ChatViewProps) {
                   syncing={threadSyncPhase !== null}
                   detailLoading={threadDetailLoading}
                   {...(isServerThread && activeProjectRef
-                    ? { onAskAboutSelection: askAboutSelection }
+                    ? { onAskAboutSelection: askAboutSelectionStable }
                     : {})}
                   citationRequest={citationRequest}
                   citationHistory={citationHistory}

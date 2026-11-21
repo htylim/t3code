@@ -39,8 +39,19 @@ export function useWorkspaceChoices(props: {
   const namedWorktrees = useNamedWorktreeStore((state) => state.worktrees);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records discovered workspace assignments in the persistent named-worktree store
   useEffect(() => {
-    useNamedWorktreeStore.getState().record(props.projectRef, threads);
-  }, [props.projectRef, threads]);
+    const taskFolderRoots = new Map(
+      refsQuery.data?.taskFolders?.map((folder) => [folder.projectPath, folder.root]),
+    );
+    useNamedWorktreeStore.getState().record(
+      props.projectRef,
+      threads.map((thread) => ({
+        id: thread.id,
+        worktreePath: thread.worktreePath,
+        status: thread.status,
+        rootPath: thread.worktreePath ? taskFolderRoots.get(thread.worktreePath) : undefined,
+      })),
+    );
+  }, [props.projectRef, threads, refsQuery.data?.taskFolders]);
   const rows = resolveWorktreeRows({
     refs,
     threads: threads.map((thread) => ({
@@ -49,6 +60,7 @@ export function useWorkspaceChoices(props: {
       settledOverride: thread.settledOverride,
       relationshipToParent: thread.lineage.relationshipToParent,
       status: thread.status,
+      pendingBackgroundTasks: thread.pendingBackgroundTasks,
     })),
     activeProjectCwd: props.projectCwd,
     activeWorktreePath: props.activeWorktreePath,

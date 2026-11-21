@@ -698,12 +698,26 @@ describe("workspace rows", () => {
     },
   );
 
-  it.each(["preparing", "queued", "starting", "running", "waiting"] as const)(
-    "reserves a worktree for a %s subagent even when archived or settled",
-    (status) => {
+  it.each([
+    { status: "preparing", pendingBackgroundTasks: [] },
+    { status: "queued", pendingBackgroundTasks: [] },
+    { status: "starting", pendingBackgroundTasks: [] },
+    { status: "running", pendingBackgroundTasks: [] },
+    { status: "waiting", pendingBackgroundTasks: [] },
+    { status: "completed", pendingBackgroundTasks: [{ taskId: "sleep", kind: "command" }] },
+  ] as const)(
+    "reserves a worktree for a $status subagent with $pendingBackgroundTasks even when archived or settled",
+    ({ status, pendingBackgroundTasks }) => {
       const rows = resolveWorktreeRows({
         refs: [ref("alpha", "/trees/alpha")],
-        threads: [worktreeThread({ status, archivedAt: "2026-10-07", settledOverride: "settled" })],
+        threads: [
+          worktreeThread({
+            status,
+            pendingBackgroundTasks,
+            archivedAt: "2026-10-07",
+            settledOverride: "settled",
+          }),
+        ],
         activeProjectCwd: "/repo",
         activeWorktreePath: null,
       });
@@ -748,6 +762,9 @@ describe("worktree removal upstream warning", () => {
   });
   it("does not invent a count before status loads", () => {
     expect(resolveWorktreeUnpushedWarning(null)).toBe("Unpushed commit count unavailable");
+    expect(
+      resolveWorktreeUnpushedWarning({ isRepo: false, hasUpstream: false, aheadCount: 0 }),
+    ).toBe("Unpushed commit count unavailable");
   });
 });
 

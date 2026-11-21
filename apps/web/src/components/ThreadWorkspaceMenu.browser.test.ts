@@ -25,6 +25,7 @@ const state = vi.hoisted(() => ({
   threadAvailable: true,
   create: vi.fn(),
   refresh: vi.fn(),
+  worktrees: vi.fn(),
   update: vi.fn(),
 }));
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => true }));
@@ -46,10 +47,11 @@ vi.mock("../state/vcs", () => ({
   vcsEnvironment: {
     createWorktree: { kind: "create", permissionAtom: () => null },
     refreshStatus: { kind: "refresh" },
+    refreshWorktrees: { kind: "worktrees" },
   },
 }));
 vi.mock("../state/use-atom-command", () => ({
-  useAtomCommand: (command: { kind: "create" | "refresh" }) => state[command.kind],
+  useAtomCommand: (command: { kind: "create" | "refresh" | "worktrees" }) => state[command.kind],
 }));
 vi.mock("../state/use-orchestration-command", () => ({
   useOrchestrationCommand: () => state.update,
@@ -96,6 +98,7 @@ async function createTestSurface() {
   state.refresh
     .mockReset()
     .mockResolvedValue(AsyncResult.success({ isRepo: true, refName: "actual-target" }));
+  state.worktrees.mockReset().mockResolvedValue(AsyncResult.success({ refs: [], taskFolders: [] }));
   state.create
     .mockReset()
     .mockResolvedValue(
@@ -275,18 +278,37 @@ it("rechecks thread permission before creating a checkout", async () => {
   expect(state.create).not.toHaveBeenCalled();
 });
 
-it("keeps an unavailable destination from changing the thread", async () => {
-  await using surface = await createTestSurface();
-  const { openPicker } = surface;
-
-  state.refresh.mockResolvedValue(AsyncResult.success({ isRepo: false }));
-  const picker = await openPicker();
-  await act(async () => {
-    expect(await picker.onUseWorktree({ branch: "old", worktreePath: "/missing" })).toBe(false);
-  });
-  expect(state.update).not.toHaveBeenCalled();
-  expect(pickerProps().selectionHint).toContain("unavailable");
-});
+it.each([false, true])(
+  "validates a non-Git destination against task-folder registration (%s)",
+  async (registered) => {
+    await using surface = await createTestSurface();
+    const { openPicker } = surface;
+    const destination = "/trees/shared";
+    state.refresh.mockResolvedValue(AsyncResult.success({ isRepo: false }));
+    state.worktrees.mockResolvedValue(
+      AsyncResult.success({
+        refs: registered ? [{ name: "common-actual", worktreePath: destination }] : [],
+        taskFolders: registered ? [{ projectPath: destination }] : [],
+      }),
+    );
+    const picker = await openPicker();
+    await act(async () => {
+      expect(await picker.onUseWorktree({ branch: "old", worktreePath: destination })).toBe(
+        registered,
+      );
+    });
+    if (registered) {
+      expect(state.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: expect.objectContaining({ worktreePath: destination, branch: "common-actual" }),
+        }),
+      );
+    } else {
+      expect(state.update).not.toHaveBeenCalled();
+      expect(pickerProps().selectionHint).toContain("unavailable");
+    }
+  },
+);
 
 it("keeps a newly created checkout available for retry if the thread changes before assignment", async () => {
   await using surface = await createTestSurface();

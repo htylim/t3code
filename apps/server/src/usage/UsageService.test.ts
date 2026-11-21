@@ -584,6 +584,7 @@ describe("UsageService", () => {
           const service = yield* UsageService.make;
           const initial = yield* service.readSummary(WINDOW);
           assert.strictEqual(totalOutputTokens(initial), 30);
+          yield* service.awaitPersisted;
           const currentSettings = yield* settingsService.getSettings;
           const personalInstanceId = ProviderInstanceId.make("personal");
           const personalInstance = currentSettings.providerInstances[personalInstanceId]!;
@@ -602,6 +603,7 @@ describe("UsageService", () => {
             personalHistoryPath,
           );
 
+          yield* service.awaitPersisted;
           const restartedService = yield* UsageService.make;
           const afterRestart = yield* restartedService.readSummary(WINDOW);
           assert.strictEqual(totalOutputTokens(afterRestart), 10);
