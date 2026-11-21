@@ -3,7 +3,8 @@ import {
   threadRuntimeIsActive,
   type EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/models";
-import type {
+import {
+  GitCommandError,
   EnvironmentId,
   EnvironmentMachineKind,
   VcsRef,
@@ -11,14 +12,28 @@ import type {
   WorktreeSubmodules,
   OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import type { ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell";
 import * as Schema from "effect/Schema";
 import * as DateTime from "effect/DateTime";
+import { msg } from "gt-react";
 import { sanitizeNewRefName } from "@t3tools/shared/git";
 import { workspaceRelativeFilePath } from "@t3tools/shared/path";
 import { toSortableTimestamp } from "@t3tools/client-runtime/state/thread-sort";
+import { m, type MessageResolver } from "../i18n/messages";
 import { deriveCanInterruptRunningThread } from "../session-logic";
 export { deriveLocalBranchNameFromRemoteRef, sanitizeNewRefName } from "@t3tools/shared/git";
+
+const isGitCommandError = Schema.is(GitCommandError);
+
+// A toast clamps to a few lines, so Git failures show their sanitized detail
+// rather than the message's operation and cwd prefix.
+export function toBranchActionErrorMessage(error: unknown): string {
+  if (isGitCommandError(error)) {
+    return error.reason === undefined ? error.detail : `${error.detail} (${error.reason})`;
+  }
+  return thrownErrorMessage(error, m) ?? m(msg("An error occurred."));
+}
 
 export interface EnvironmentOption {
   environmentId: EnvironmentId;
@@ -42,12 +57,15 @@ function normalizeDisplayLabel(value: string | null | undefined): string | null 
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
-export function resolveEnvironmentOptionLabel(input: {
-  isPrimary: boolean;
-  environmentId: EnvironmentId;
-  runtimeLabel?: string | null;
-  savedLabel?: string | null;
-}): string {
+export function resolveEnvironmentOptionLabel(
+  input: {
+    isPrimary: boolean;
+    environmentId: EnvironmentId;
+    runtimeLabel?: string | null;
+    savedLabel?: string | null;
+  },
+  resolve: MessageResolver = m,
+): string {
   const runtimeLabel = normalizeDisplayLabel(input.runtimeLabel);
   const savedLabel = normalizeDisplayLabel(input.savedLabel);
 
@@ -56,7 +74,7 @@ export function resolveEnvironmentOptionLabel(input: {
       if (!label) return false;
       return !GENERIC_LOCAL_ENVIRONMENT_LABELS.has(label.toLowerCase());
     });
-    return preferredLocalLabel ?? "This device";
+    return preferredLocalLabel ?? resolve(msg("This device"));
   }
 
   return runtimeLabel ?? savedLabel ?? input.environmentId;
@@ -98,14 +116,14 @@ export function resolveContextStripLabelsCompact(input: {
     : input.neededWidth > input.availableWidth;
 }
 
-export function resolveEnvModeLabel(mode: EnvMode): string {
-  return mode === "worktree" ? "New worktree" : "Current checkout";
+export function resolveEnvModeLabel(mode: EnvMode, resolve: MessageResolver = m): string {
+  return mode === "worktree" ? resolve(msg("New worktree")) : resolve(msg("Current checkout"));
 }
 
 export const WORKTREE_SUBMODULES_LABELS: Record<WorktreeSubmodules, string> = {
-  recursive: "Recursive",
-  "top-level": "Top level only",
-  none: "Skip",
+  recursive: msg("Recursive"),
+  "top-level": msg("Top level only"),
+  none: msg("Skip"),
 };
 
 /** Returns the directory name shown for a worktree on either host platform. */
@@ -119,19 +137,26 @@ function resolveWorktreeDirectoryName(worktreePath: string): string {
 }
 
 /** Names the selected worktree or the project checkout. */
-export function resolveCurrentWorkspaceLabel(activeWorktreePath: string | null): string {
+export function resolveCurrentWorkspaceLabel(
+  activeWorktreePath: string | null,
+  resolve: MessageResolver = m,
+): string {
   return activeWorktreePath
     ? resolveWorktreeDirectoryName(activeWorktreePath)
-    : resolveEnvModeLabel("local");
+    : resolveEnvModeLabel("local", resolve);
 }
 
 /** Keeps the workspace name visible after the picker locks. */
 export function resolveLockedWorkspaceLabel(
   activeWorktreePath: string | null,
   effectiveEnvMode: EnvMode,
+  resolve: MessageResolver = m,
 ): string {
-  if (activeWorktreePath) return activeWorktreePath.split(/[\\/]/).findLast(Boolean) ?? "Worktree";
-  return effectiveEnvMode === "worktree" ? resolveEnvModeLabel("worktree") : "Local checkout";
+  if (activeWorktreePath)
+    return activeWorktreePath.split(/[\\/]/).findLast(Boolean) ?? resolve(msg("Worktree"));
+  return effectiveEnvMode === "worktree"
+    ? resolveEnvModeLabel("worktree", resolve)
+    : resolve(msg("Local checkout"));
 }
 
 export interface PreviousWorktreeSeed {
@@ -170,6 +195,15 @@ export function resolvePreviousWorktreeSeed(input: {
     }
   }
   return latest === null ? null : { branch: latest.branch, worktreePath: latest.worktreePath };
+}
+
+export function resolvePreviousWorktreeLabel(
+  seed: PreviousWorktreeSeed,
+  resolve: MessageResolver = m,
+): string {
+  return seed.branch
+    ? resolve(msg("Previous worktree ({branch})", { branch: seed.branch }))
+    : resolve(msg("Previous worktree"));
 }
 
 export function resolveEffectiveEnvMode(input: {
@@ -256,13 +290,16 @@ export function resolveDefaultWorktreeBaseBranch(
   return (refs.find((ref) => ref.isDefault) ?? refs.find((ref) => ref.current))?.name ?? null;
 }
 
-export function resolveBranchTriggerLabel(input: {
-  activeWorktreePath: string | null;
-  effectiveEnvMode: EnvMode;
-  resolvedActiveBranch: string | null;
-  resolvedActiveBranchIsRemote: boolean | null;
-  startFromOrigin: boolean;
-}): string {
+export function resolveBranchTriggerLabel(
+  input: {
+    activeWorktreePath: string | null;
+    effectiveEnvMode: EnvMode;
+    resolvedActiveBranch: string | null;
+    resolvedActiveBranchIsRemote: boolean | null;
+    startFromOrigin: boolean;
+  },
+  resolve: MessageResolver = m,
+): string {
   const {
     activeWorktreePath,
     effectiveEnvMode,
@@ -271,13 +308,13 @@ export function resolveBranchTriggerLabel(input: {
     startFromOrigin,
   } = input;
   if (!resolvedActiveBranch) {
-    return "Select ref";
+    return resolve(msg("Select ref"));
   }
   if (effectiveEnvMode === "worktree" && !activeWorktreePath) {
     // Only the server can determine a local branch's configured remote.
     return startFromOrigin && resolvedActiveBranchIsRemote === false
-      ? `From ${resolvedActiveBranch} (remote)`
-      : `From ${resolvedActiveBranch}`;
+      ? resolve(msg("From {branch} (remote)", { branch: resolvedActiveBranch }))
+      : resolve(msg("From {branch}", { branch: resolvedActiveBranch }));
   }
   return resolvedActiveBranch;
 }
@@ -409,9 +446,11 @@ export interface WorktreeThreadState {
   readonly settledOverride: string | null;
   readonly relationshipToParent: OrchestrationV2ThreadShell["lineage"]["relationshipToParent"];
   readonly status: OrchestrationV2ThreadShell["status"];
+  readonly pendingBackgroundTasks?: OrchestrationV2ThreadShell["pendingBackgroundTasks"];
 }
 
 export interface WorktreeRow {
+  rootPath?: string;
   worktreePath: string;
   dirName: string;
   refName: string | null;
@@ -420,24 +459,31 @@ export interface WorktreeRow {
 }
 
 /** Keeps workspace actions blocked while a turn is queued, starting or executing. */
-export function isWorktreeThreadRunning(thread: Pick<WorktreeThreadState, "status">): boolean {
+export function isWorktreeThreadRunning(
+  thread: Pick<WorktreeThreadState, "status" | "pendingBackgroundTasks">,
+): boolean {
   return (
     thread.status === "preparing" ||
     thread.status === "queued" ||
     thread.status === "starting" ||
     thread.status === "running" ||
-    thread.status === "waiting"
+    thread.status === "waiting" ||
+    (thread.pendingBackgroundTasks?.length ?? 0) > 0
   );
 }
 
 /** Keep a thread's checkout fixed while a run or provider question still owns it. */
 export function isThreadWorkspaceBusy(
-  thread: Pick<EnvironmentThreadShell, "runtime" | "hasPendingApprovals" | "hasPendingUserInput">,
+  thread: Pick<
+    EnvironmentThreadShell,
+    "runtime" | "hasPendingApprovals" | "hasPendingUserInput" | "pendingBackgroundTasks"
+  >,
 ): boolean {
   return (
     threadRuntimeIsActive(thread.runtime) ||
     thread.hasPendingApprovals ||
-    thread.hasPendingUserInput
+    thread.hasPendingUserInput ||
+    (thread.pendingBackgroundTasks?.length ?? 0) > 0
   );
 }
 
@@ -546,9 +592,11 @@ export function resolveWorktreeStatusWord(input: {
 
 /** Counts unpushed commits only against the branch's configured upstream. */
 export function resolveWorktreeUnpushedWarning(
-  status: { hasUpstream: boolean; aheadCount: number } | null,
+  status: { isRepo?: boolean; hasUpstream: boolean; aheadCount: number } | null,
+  resolve: MessageResolver = m,
 ): string {
-  if (status === null) return "Unpushed commit count unavailable";
-  if (!status.hasUpstream) return "No upstream";
-  return `${status.aheadCount} unpushed commits`;
+  if (status === null || status.isRepo === false)
+    return resolve(msg("Unpushed commit count unavailable"));
+  if (!status.hasUpstream) return resolve(msg("No upstream"));
+  return resolve(msg("{count} unpushed commits", { count: status.aheadCount }));
 }

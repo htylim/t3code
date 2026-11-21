@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import { SOFT_PILL_COLOR_PRESETS } from "@t3tools/client-runtime/soft-pill-colors";
 import type { WorkspaceColorMode } from "@t3tools/contracts";
 import { PipetteIcon, ShuffleIcon, BotIcon, type LucideIcon } from "lucide-react";
@@ -24,7 +25,7 @@ export function WorkspaceColorOptions({
   colorMode,
   customOpen,
   disabled,
-  label = "Worktree",
+  label: requestedLabel,
   size = "compact",
   onColorChange,
   onCustomClick,
@@ -40,6 +41,8 @@ export function WorkspaceColorOptions({
   onCustomClick?: (() => void) | undefined;
   onModeChange?: ((mode: WorkspaceColorMode) => void) | undefined;
 }) {
+  const gt = useGT();
+  const label = requestedLabel ?? gt("Worktree");
   const presetSelected = SOFT_PILL_COLOR_PRESETS.some(
     (preset) => preset.color === color.toLowerCase(),
   );
@@ -47,15 +50,15 @@ export function WorkspaceColorOptions({
   const iconSize = size === "compact" ? "size-2.5" : "size-3.5";
   const choices: WorkspaceColorCircleChoice[] = [
     {
-      label: "Random",
-      tooltip: "Random",
+      label: gt("Random"),
+      tooltip: gt("Random"),
       Icon: ShuffleIcon,
       selected: !customOpen && colorMode === "random",
       onClick: onModeChange ? () => onModeChange("random") : undefined,
     },
     {
-      label: "Auto",
-      tooltip: "Auto",
+      label: gt("Auto"),
+      tooltip: gt("Auto"),
       Icon: BotIcon,
       selected: !customOpen && colorMode === "auto",
       onClick: onModeChange ? () => onModeChange("auto") : undefined,
@@ -68,8 +71,8 @@ export function WorkspaceColorOptions({
       onClick: () => onColorChange(preset.color),
     })),
     {
-      label: "Custom color",
-      tooltip: "Custom color",
+      label: gt("Custom color"),
+      tooltip: gt("Custom color"),
       Icon: PipetteIcon,
       selected: customOpen || (!colorMode && !presetSelected),
       expanded: customOpen,

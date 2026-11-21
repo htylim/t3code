@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import { getWorkspaceColorPreferences } from "../workspaceColors";
 import { WorktreeActionsMenu } from "./WorktreeActionsMenu";
 import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
@@ -70,6 +71,8 @@ export interface WorkspaceMenuProps {
   envLocked: boolean;
   forceNewWorktree?: boolean;
   canUseWorktree: boolean;
+  /** Composer reuse follows upstream eligibility; standalone editing offers all checkouts. */
+  canUsePreviousWorktree?: boolean;
   effectiveEnvMode: EnvMode;
   onEnvModeChange: (mode: EnvMode) => void | Promise<boolean>;
   namedWorktreeSelection?: NamedWorktreeSelection | null;
@@ -95,6 +98,7 @@ export interface WorkspaceMenuProps {
 }
 /** Share the Workspace picker across composer controls and existing-thread entry points. */
 export function WorkspaceMenu(props: WorkspaceMenuProps) {
+  const gt = useGT();
   const composerFloatingLayerProps = useComposerMenuProps();
   const shortcutLabel = shortcutLabelForCommand(
     useAtomValue(primaryServerKeybindingsAtom),
@@ -142,7 +146,7 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
       <span
         className="inline-flex h-7 min-w-0 items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
         data-composer-context-control
-        aria-label={props.displayMode === "panel" ? "Run context" : undefined}
+        aria-label={props.displayMode === "panel" ? gt("Run context") : undefined}
         onContextMenu={props.onContextMenu}
       >
         {triggerContent}
@@ -177,7 +181,8 @@ export function WorkspaceMenu(props: WorkspaceMenuProps) {
                   )
                 }
                 aria-label={
-                  props.ariaLabel ?? (props.displayMode === "panel" ? "Run context" : "Workspace")
+                  props.ariaLabel ??
+                  (props.displayMode === "panel" ? gt("Run context") : gt("Workspace"))
                 }
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => event.stopPropagation()}
@@ -238,6 +243,7 @@ function WorkspaceMenuContents(
     close: () => void;
   },
 ) {
+  const gt = useGT();
   const { refsQuery, archived, threads, rows, localRef } = useWorkspaceChoices(props);
   const [worktreesOpen, setWorktreesOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -262,7 +268,9 @@ function WorkspaceMenuContents(
       ) : null}
       <MenuRadioGroup value={props.activeWorktreePath ?? props.effectiveEnvMode}>
         <MenuGroup>
-          <MenuGroupLabel>Workspace</MenuGroupLabel>
+          <MenuGroupLabel>
+            <T>Workspace</T>
+          </MenuGroupLabel>
           <MenuRadioItem
             value="local"
             closeOnClick={false}
@@ -284,9 +292,11 @@ function WorkspaceMenuContents(
               <FolderIcon className="size-3" />
               <span className="flex-1 truncate">{props.projectCwd.split(/[\\/]/).at(-1)}</span>
               <span className="text-muted-foreground text-xs">
-                {localRef?.isDetached ? "(detached)" : localRef?.name}
+                {localRef?.isDetached ? gt("(detached)") : localRef?.name}
               </span>
-              <span className="text-muted-foreground text-3xs">local checkout</span>
+              <span className="text-muted-foreground text-3xs">
+                <T>local checkout</T>
+              </span>
             </span>
           </MenuRadioItem>
           <NewWorktreeRow
@@ -304,69 +314,75 @@ function WorkspaceMenuContents(
             }}
           />
         </MenuGroup>
-        <MenuSub
-          open={worktreesOpen}
-          onOpenChange={(open) => {
-            setWorktreesOpen(open);
-            if (!open) setQuery("");
-          }}
-        >
-          <MenuSubTrigger data-workspace-initial-focus={props.activeWorktreePath ? "" : undefined}>
-            <HistoryIcon />
-            <span className="min-w-0">
-              <span className="block">Previous worktree</span>
-              {selectedWorktreeName ? (
-                <span className="block truncate text-xs text-muted-foreground">
-                  {selectedWorktreeName}
-                </span>
-              ) : null}
-            </span>
-          </MenuSubTrigger>
-          <MenuSubPopup
-            className="w-[400px] max-w-[calc(100vw-24px)] 2xl:w-[540px]"
-            sideOffset={4}
-            {...composerFloatingLayerProps}
+        {props.canUsePreviousWorktree !== false ? (
+          <MenuSub
+            open={worktreesOpen}
+            onOpenChange={(open) => {
+              setWorktreesOpen(open);
+              if (!open) setQuery("");
+            }}
           >
-            {worktreesOpen ? (
-              <>
-                <MenuSearchInput
-                  autoFocus
-                  aria-label="Search worktrees"
-                  placeholder="Search worktrees..."
-                  value={query}
-                  onChange={(event) => setQuery(event.currentTarget.value)}
-                />
-                <div className="max-h-80 overflow-y-auto overscroll-contain">
-                  <MenuRadioGroup value={props.activeWorktreePath ?? ""}>
-                    {filteredRows.map((row) => (
-                      <WorkspaceRow
-                        key={row.worktreePath}
-                        {...props}
-                        row={row}
-                        lastUsedAt={row.lastUsedAt}
-                        current={row.worktreePath === props.activeWorktreePath}
-                        threads={threads}
-                        archivedReady={!archived.isLoading && !archived.error}
-                      />
-                    ))}
-                  </MenuRadioGroup>
-                  {refsQuery.error ? (
-                    <div className="px-3 py-2 text-xs text-destructive">{refsQuery.error}</div>
-                  ) : null}
-                  {refsQuery.isPending && !refsQuery.data ? (
-                    <div role="status" className="px-3 py-2 text-xs text-muted-foreground">
-                      Loading worktrees...
-                    </div>
-                  ) : !filteredRows.length && !refsQuery.error ? (
-                    <div role="status" className="px-3 py-2 text-xs text-muted-foreground">
-                      {query.trim() ? "No worktrees found" : "No named worktrees"}
-                    </div>
-                  ) : null}
-                </div>
-              </>
-            ) : null}
-          </MenuSubPopup>
-        </MenuSub>
+            <MenuSubTrigger
+              data-workspace-initial-focus={props.activeWorktreePath ? "" : undefined}
+            >
+              <HistoryIcon />
+              <span className="min-w-0">
+                <span className="block">
+                  <T>Previous worktree</T>
+                </span>
+                {selectedWorktreeName ? (
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {selectedWorktreeName}
+                  </span>
+                ) : null}
+              </span>
+            </MenuSubTrigger>
+            <MenuSubPopup
+              className="w-[400px] max-w-[calc(100vw-24px)] 2xl:w-[540px]"
+              sideOffset={4}
+              {...composerFloatingLayerProps}
+            >
+              {worktreesOpen ? (
+                <>
+                  <MenuSearchInput
+                    autoFocus
+                    aria-label={gt("Search worktrees")}
+                    placeholder={gt("Search worktrees...")}
+                    value={query}
+                    onChange={(event) => setQuery(event.currentTarget.value)}
+                  />
+                  <div className="max-h-80 overflow-y-auto overscroll-contain">
+                    <MenuRadioGroup value={props.activeWorktreePath ?? ""}>
+                      {filteredRows.map((row) => (
+                        <WorkspaceRow
+                          key={row.worktreePath}
+                          {...props}
+                          row={row}
+                          lastUsedAt={row.lastUsedAt}
+                          current={row.worktreePath === props.activeWorktreePath}
+                          threads={threads}
+                          archivedReady={!archived.isLoading && !archived.error}
+                        />
+                      ))}
+                    </MenuRadioGroup>
+                    {refsQuery.error ? (
+                      <div className="px-3 py-2 text-xs text-destructive">{refsQuery.error}</div>
+                    ) : null}
+                    {refsQuery.isPending && !refsQuery.data ? (
+                      <div role="status" className="px-3 py-2 text-xs text-muted-foreground">
+                        <T>Loading worktrees...</T>
+                      </div>
+                    ) : !filteredRows.length && !refsQuery.error ? (
+                      <div role="status" className="px-3 py-2 text-xs text-muted-foreground">
+                        {query.trim() ? gt("No worktrees found") : gt("No named worktrees")}
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+            </MenuSubPopup>
+          </MenuSub>
+        ) : null}
       </MenuRadioGroup>
     </>
   );
@@ -401,6 +417,7 @@ function WorkspaceRow(
     close: () => void;
   },
 ) {
+  const gt = useGT();
   const { row } = props;
   const metadata = useNamedWorktreeStore(
     (state) => state.worktrees[namedWorktreeKey(props.projectRef, row.worktreePath)],
@@ -450,7 +467,7 @@ function WorkspaceRow(
           {row.refName !== row.dirName ? (
             <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
               <GitBranchIcon aria-hidden className="size-3 shrink-0" />
-              <span className="truncate">{row.refName ?? "(detached)"}</span>
+              <span className="truncate">{row.refName ?? gt("(detached)")}</span>
             </span>
           ) : null}
         </span>

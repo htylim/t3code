@@ -1,3 +1,8 @@
+vi.mock("../themeBackground", () => ({ applyThemeBackground: () => {} }));
+vi.mock("./ui/toast", () => ({
+  toastManager: { add: vi.fn() },
+  stackedThreadToast: (copy: unknown) => copy,
+}));
 vi.mock("../hooks/useSettings", () => ({
   getClientSettings: () => ({ forkDefaultWorkspaceColor: "#808080" }),
 }));
@@ -103,6 +108,7 @@ vi.mock("../state/server", async () => {
   return {
     primaryServerKeybindingsAtom: Atom.make([]),
     themeServerEnvironmentThemesAtom: Atom.make([]),
+    environmentServerConfigsAtom: Atom.make(new Map()),
   };
 });
 vi.mock("../state/query", () => ({
@@ -120,6 +126,7 @@ vi.mock("../state/vcs", async () => {
       renameWorktree: { permissionAtom: () => Atom.make(state.allowed) },
       createWorktree: { permissionAtom: () => Atom.make(state.allowed) },
       refreshStatus: { kind: "refreshStatus" },
+      refreshWorktrees: { kind: "refreshWorktrees" },
       removeWorktree: {},
       listRefs: () => null,
       status: () => null,
@@ -150,6 +157,7 @@ vi.mock("../state/use-orchestration-command", () => ({
 }));
 vi.mock("../state/threads", () => ({ threadEnvironment: { updateMetadata: {} } }));
 vi.mock("../composerDraftStore", () => ({
+  clearComposerDraftsEnvironment: () => {},
   DraftId: { make: (draftId: string) => draftId },
   useComposerDraftStore: Object.assign(
     (select: (store: { getDraftThreadByRef: () => null }) => unknown) =>

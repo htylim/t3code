@@ -10,6 +10,10 @@ import { useMovePostponedThreadToActive } from "./useMovePostponedThreadToActive
 
 const commands = vi.hoisted(() => ({ unsettleThread: vi.fn(), unsnoozeThread: vi.fn() }));
 const shellReader = vi.hoisted(() => vi.fn());
+vi.mock("gt-react", async (original) => ({
+  ...(await original<typeof import("gt-react")>()),
+  useGT: () => (message: string) => message,
+}));
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
   useCallback: (callback: unknown) => callback,

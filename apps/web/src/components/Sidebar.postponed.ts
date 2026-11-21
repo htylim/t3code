@@ -1,3 +1,5 @@
+import { msg } from "gt-react";
+import { m, type MessageResolver } from "../i18n/messages";
 import type { ContextMenuItem } from "@t3tools/contracts";
 
 /** Add parking actions with the sibling settlement label's wording and actionable counts. */
@@ -8,6 +10,7 @@ export function withPostponedThreadMenu(
     readonly activeCount: number;
     readonly bulk?: boolean;
   },
+  resolve: MessageResolver = m,
 ): ContextMenuItem<string>[] {
   const settlementLabel = menu.find(
     (entry) => entry.id === "settle" || entry.id === "unsettle",
@@ -22,8 +25,12 @@ export function withPostponedThreadMenu(
     actions.push({
       id: "postpone",
       label: selection.bulk
-        ? `Postpone${labelSuffix} (${selection.activeCount})`
-        : `Postpone${labelSuffix}`,
+        ? resolve(msg("Postpone ({count})", { count: selection.activeCount }))
+        : labelSuffix === " Thread"
+          ? resolve(msg("Postpone Thread"))
+          : labelSuffix
+            ? resolve(msg("Postpone thread"))
+            : resolve(msg("Postpone")),
       ...(selection.bulk ? {} : { icon: "arrow-down" }),
     });
   }
@@ -31,8 +38,14 @@ export function withPostponedThreadMenu(
     actions.push({
       id: "move-to-active",
       label: selection.bulk
-        ? `${unpostponeVerb}${labelSuffix} (${selection.postponedCount})`
-        : `${unpostponeVerb}${labelSuffix}`,
+        ? resolve(msg("Un-postpone ({count})", { count: selection.postponedCount }))
+        : unpostponeVerb === "Un-Postpone"
+          ? labelSuffix
+            ? resolve(msg("Un-Postpone Thread"))
+            : resolve(msg("Un-Postpone"))
+          : labelSuffix
+            ? resolve(msg("Un-postpone thread"))
+            : resolve(msg("Un-postpone")),
       ...(selection.bulk ? {} : { icon: "arrow-up" }),
     });
   }

@@ -35,7 +35,12 @@ interface NamedWorktreeState {
   /** Bind a pending choice to the actual path once normal provisioning records it. */
   record: (
     projectRef: ScopedProjectRef,
-    threads: readonly { id: ThreadId; worktreePath: string | null; status?: string | undefined }[],
+    threads: readonly {
+      id: ThreadId;
+      worktreePath: string | null;
+      rootPath?: string | undefined;
+      status?: string | undefined;
+    }[],
   ) => void;
   /** Save the color of an existing named worktree. */
   setColor: (
@@ -96,7 +101,8 @@ export const useNamedWorktreeStore = create<NamedWorktreeState>()(
           const selectionKey = namedWorktreeKey(projectRef, thread.id);
           const selection = selections[selectionKey];
           if (!selection || !thread.worktreePath) continue;
-          const directoryName = thread.worktreePath.split(/[\\/]/).at(-1) ?? thread.worktreePath;
+          const directoryName =
+            (thread.rootPath ?? thread.worktreePath).split(/[\\/]/).at(-1) ?? thread.worktreePath;
           // Explicit names must match before a pending choice can claim the directory's color.
           if (selection.name && directoryName !== selection.name) continue;
           const worktreeKey = namedWorktreeKey(projectRef, thread.worktreePath);
@@ -114,7 +120,7 @@ export const useNamedWorktreeStore = create<NamedWorktreeState>()(
             };
             changed = true;
           }
-          // Automatic naming moves the temporary directory after provisioning records it.
+          // Keep a color-only choice until provisioning has finished.
           if (selection.name || (thread.status !== undefined && thread.status !== "preparing")) {
             delete selections[selectionKey];
             changed = true;

@@ -1,3 +1,5 @@
+import { useMessages } from "gt-react";
+import { useGT, T } from "gt-react";
 import { useEnvironment } from "../state/environments";
 import { useEnvironmentScope } from "../state/session";
 import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
@@ -50,6 +52,7 @@ interface WorktreeEditRequest {
   readonly projectRef: ScopedProjectRef;
   readonly projectCwd: string;
   readonly worktreePath: string;
+  readonly rootPath?: string | undefined;
   /** Return keyboard users to their trigger without refocusing pointer-opened pills. */
   readonly returnFocus?: HTMLElement | false;
 }
@@ -82,6 +85,8 @@ export function NamedWorktreeDialogHost() {
 
 /** Keep rejected edits open and retain the moved path if updating a thread needs a retry. */
 function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
+  const forkMessages = useMessages();
+  const gt = useGT();
   const { projectRef, projectCwd } = request;
   const environment = useEnvironment(projectRef.environmentId);
   const worktreeRenameSupported = supportsForkWorktrees(
@@ -89,7 +94,8 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
   );
   const worktreeDisplay = useWorktreeDisplay(projectRef, request.worktreePath, projectCwd);
   const [worktreePath, setWorktreePath] = useState(request.worktreePath);
-  const initialName = request.worktreePath.split(/[\\/]/).at(-1) ?? request.worktreePath;
+  const physicalPath = request.rootPath ?? worktreeDisplay?.rootPath ?? worktreePath;
+  const initialName = physicalPath.split(/[\\/]/).at(-1) ?? request.worktreePath;
   const initialColor = worktreeDisplay?.color ?? DEFAULT_SOFT_PILL_COLOR;
   const [name, setName] = useState(worktreeDisplay?.name ?? initialName);
   const initialColorMode = useNamedWorktreeStore(
@@ -115,7 +121,7 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
   });
   const liveThreads = useThreadShellsForProjectRefs([projectRef]);
   const archived = useArchivedThreadSnapshots([projectRef.environmentId]);
-  const parentPath = getBrowseParentPath(worktreePath);
+  const parentPath = getBrowseParentPath(physicalPath);
   const siblings = useEnvironmentQuery(
     parentPath
       ? filesystemEnvironment.browse({
@@ -138,7 +144,7 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
   for (const thread of liveThreads) threadsById.set(thread.id, thread.source);
   const threads = [...threadsById.values()];
   const directoryName = name.trim();
-  const currentName = worktreePath.split(/[\\/]/).at(-1) ?? worktreePath;
+  const currentName = physicalPath.split(/[\\/]/).at(-1) ?? worktreePath;
   const renaming = directoryName !== currentName;
   const running =
     liveThreads.some(
@@ -151,11 +157,14 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
         (thread.worktreePath === worktreePath || thread.worktreePath === request.worktreePath) &&
         isWorktreeThreadRunning(thread),
     );
-  let validationMessage = resolveWorktreeRenameIssue({
-    worktreePath,
-    name,
-    existingPaths: siblings.data?.entries.map((entry) => entry.fullPath) ?? [],
-  });
+  let validationMessage = resolveWorktreeRenameIssue(
+    {
+      worktreePath: physicalPath,
+      name,
+      existingPaths: siblings.data?.entries.map((entry) => entry.fullPath) ?? [],
+    },
+    forkMessages,
+  );
   if (directoryName === rejectedName)
     validationMessage = "A directory with that name already exists.";
   if (renaming && !validationMessage) {
@@ -213,7 +222,9 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
         });
         if (updated._tag === "Failure") {
           setSaveError(
-            "The directory was renamed, but a thread could not be updated. Save again to retry.",
+            gt(
+              "The directory was renamed, but a thread could not be updated. Save again to retry.",
+            ),
           );
           setSaving(false);
           return;
@@ -265,9 +276,13 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
     >
       <DialogPopup finalFocus={() => request.returnFocus ?? true}>
         <DialogHeader>
-          <DialogTitle>Rename worktree</DialogTitle>
+          <DialogTitle>
+            <T>Rename worktree</T>
+          </DialogTitle>
           <DialogDescription>
-            Rename the worktree directory and choose its color. The Git branch keeps its name.
+            <T>
+              Rename the worktree directory and choose its color. The Git branch keeps its name.
+            </T>
           </DialogDescription>
         </DialogHeader>
         <form
@@ -280,7 +295,9 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
           <DialogPanel>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor={inputId}>Worktree directory name</Label>
+                <Label htmlFor={inputId}>
+                  <T>Worktree directory name</T>
+                </Label>
                 <Input
                   id={inputId}
                   autoFocus
@@ -300,7 +317,7 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
                 ) : null}
               </div>
               <SoftPillColorPicker
-                label="Worktree"
+                label={gt("Worktree")}
                 color={color}
                 colorMode={colorMode}
                 onModeChange={(nextColor, mode) => {
@@ -330,10 +347,10 @@ function NamedWorktreeDialog({ request }: { request: WorktreeEditRequest }) {
               disabled={saving || worktreePath !== request.worktreePath}
               onClick={() => closeWorktreeEditor(request)}
             >
-              Cancel
+              <T>Cancel</T>
             </Button>
             <Button type="submit" disabled={disabled}>
-              {saving ? "Saving..." : "Save"}
+              {saving ? gt("Saving...") : gt("Save")}
             </Button>
           </DialogFooter>
         </form>

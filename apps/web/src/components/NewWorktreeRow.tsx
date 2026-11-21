@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 import { WorktreeDirectoryName } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -32,6 +33,7 @@ export function NewWorktreeRow({
   onSelect: (selection: NamedWorktreeSelection | null) => void;
   onSelectionChange?: (selection: NamedWorktreeSelection | null) => void;
 }) {
+  const gt = useGT();
   const [name, setName] = useState(selection?.name ?? "");
   const [initialColor] = useState(
     () =>
@@ -83,7 +85,7 @@ export function NewWorktreeRow({
         <span className="flex items-center gap-2">
           <span className="flex shrink-0 items-center gap-2">
             <PlusIcon className="size-3" />
-            New worktree
+            <T>New worktree</T>
           </span>
           <span
             className="min-w-0 flex-1"
@@ -99,9 +101,9 @@ export function NewWorktreeRow({
           >
             <Input
               size="compact"
-              aria-label="Worktree name"
+              aria-label={gt("Worktree name")}
               data-workspace-initial-focus={active && selection?.name.trim() ? "" : undefined}
-              placeholder={nameRequired ? "Name (required)" : "Name (optional)"}
+              placeholder={nameRequired ? gt("Name (required)") : gt("Name (optional)")}
               aria-required={nameRequired}
               value={name}
               disabled={disabled}
@@ -138,7 +140,7 @@ export function NewWorktreeRow({
       </MenuRadioItem>
       {invalid ? (
         <p className="px-2 py-1 text-xs text-destructive">
-          Enter a directory name without path separators.
+          <T>Enter a directory name without path separators.</T>
         </p>
       ) : null}
     </>

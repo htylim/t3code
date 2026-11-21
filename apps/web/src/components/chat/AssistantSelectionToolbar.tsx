@@ -5,6 +5,7 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { MessageSquarePlusIcon, PanelRightIcon, QuoteIcon } from "lucide-react";
+import { useGT } from "gt-react";
 import { use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { chatMarkdownClipboardPayload } from "~/markdown-clipboard";
@@ -71,6 +72,7 @@ export function AssistantSelectionToolbar({
   const toolbarRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<ReturnType<typeof observeSelectionActions> | null>(null);
   const backgroundThread = use(BackgroundThreadContext);
+  const gt = useGT();
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- highlights the selected source while its comment popup is open and closes it if the source disappears
   useEffect(() => {
@@ -263,7 +265,7 @@ export function AssistantSelectionToolbar({
       >
         <PopoverPopup
           {...composerFloatingLayerProps}
-          aria-label="Edit citation comment"
+          aria-label={gt("Edit citation comment")}
           width="md"
           padding="compact"
           side="bottom"
@@ -316,7 +318,7 @@ export function AssistantSelectionToolbar({
     <div
       ref={toolbarRef}
       role="group"
-      aria-label="Selection actions"
+      aria-label={gt("Selection actions")}
       className="surface-glass fixed z-50 flex w-max max-w-[calc(100vw-1rem)] flex-wrap items-center gap-0.5 rounded-2xl border border-border/60 p-0.5 shadow-sm"
       style={{ left: selection.position.x, top: selection.position.y }}
       onPointerDown={(event) => event.preventDefault()}
@@ -333,11 +335,15 @@ export function AssistantSelectionToolbar({
         size="xs"
         variant="ghost"
         disabled={tooLong}
-        aria-label={tooLong ? "Selection is too long to cite" : "Cite selection in composer"}
+        aria-label={
+          tooLong ? gt("Selection is too long to cite") : gt("Cite selection in composer")
+        }
         onClick={cite}
       >
         <QuoteIcon aria-hidden="true" className="size-3.5" />
-        {tooLong ? "Shorten selection" : "Cite"}
+        {tooLong
+          ? gt("Shorten selection")
+          : gt("Cite", { $context: "verb, button that quotes the selected text" })}
       </Button>
       {onAskAboutSelection ? (
         <>
@@ -349,7 +355,7 @@ export function AssistantSelectionToolbar({
             onClick={() => ask("ask-in-new-thread")}
           >
             <MessageSquarePlusIcon aria-hidden="true" className="size-3.5" />
-            Ask in new thread
+            {gt("Ask in new thread")}
           </Button>
           <Button
             type="button"
@@ -359,7 +365,7 @@ export function AssistantSelectionToolbar({
             onClick={() => ask("ask-in-side-chat")}
           >
             <PanelRightIcon aria-hidden="true" className="size-3.5" />
-            Ask in side chat
+            {gt("Ask in side chat")}
           </Button>
         </>
       ) : null}

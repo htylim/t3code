@@ -102,7 +102,15 @@ function SelectionSideChat() {
       >
         Ask in side chat
       </button>
-      <button onClick={() => void sideChat.open("Explain the main thread's approach")}>
+      <button
+        onClick={() =>
+          void sideChat.open({
+            text: "Explain the main thread's approach",
+            attachments: [],
+            titleSeed: "Explain the main thread's approach",
+          })
+        }
+      >
         Ask immediately
       </button>
     </>
@@ -150,8 +158,8 @@ it.each([
     });
     const firstPanel = useRightPanelStore.getState().byThreadKey[scopedThreadKey(parentRef)]!;
     const firstSideChat = firstPanel.surfaces[0]!;
-    expect(firstSideChat.kind).toBe("side-chat");
-    if (firstSideChat.kind !== "side-chat") throw new Error("Expected a native side-chat tab.");
+    expect(firstSideChat.kind).toBe("thread");
+    if (firstSideChat.kind !== "thread") throw new Error("Expected a native side-chat tab.");
     const firstRef = { ...parentRef, threadId: firstSideChat.threadId };
     const draft = useComposerDraftStore.getState().getComposerDraft(firstRef)!;
     expect(draft.modelSelectionByProvider[ProviderInstanceId.make("codex")]).toEqual({
@@ -244,13 +252,13 @@ it("reopens the newest side chat by creation time, regardless of tab order or ac
     updatedAt: "2026-11-06T00:00:00Z",
     archivedAt: ref.threadId === archivedRef.threadId ? "2026-11-06T00:00:00Z" : null,
   }));
-  useRightPanelStore.getState().openSideChat(parentRef, olderRef.threadId);
+  useRightPanelStore.getState().openThread(parentRef, olderRef.threadId);
   useComposerDraftStore.getState().setPrompt(newestRef, "Existing question");
   await using screen = await render(<SelectionSideChat />);
   await userEvent.click(screen.getByRole("button", { name: "Ask in side chat" }));
   await vi.waitFor(() => {
     const panel = useRightPanelStore.getState().byThreadKey[scopedThreadKey(parentRef)]!;
-    expect(panel.activeSurfaceId).toBe(`side-chat:${newestRef.threadId}`);
+    expect(panel.activeSurfaceId).toBe(`thread:${newestRef.threadId}`);
     expect(panel.surfaces).toHaveLength(2);
   });
   expect(server.fork).not.toHaveBeenCalled();

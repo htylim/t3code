@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
@@ -12,6 +13,7 @@ import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import * as ThreadUndo from "@t3tools/client-runtime/state/thread-undo";
 /** Clear underlying parking states before removing the local postponement preference. */
 export function useMovePostponedThreadToActive() {
+  const gt = useGT();
   const unsettleThread = useOrchestrationCommand(threadEnvironment.unsettle, {
     reportFailure: false,
   });
@@ -43,8 +45,8 @@ export function useMovePostponedThreadToActive() {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Could not move thread to active",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: gt("Could not move thread to active"),
+            description: error instanceof Error ? error.message : gt("An error occurred."),
           }),
         );
       }

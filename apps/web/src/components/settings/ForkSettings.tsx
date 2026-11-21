@@ -1,10 +1,11 @@
+import { useGT } from "gt-react";
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 
 import { WorkspaceColorSettings } from "./WorkspaceColorSettings";
 import { FORK_SETTINGS_AVAILABLE } from "./forkSettingsAvailability";
 import { useClientSettings, persistClientSettingsPatch } from "../../hooks/useSettings";
 import { Switch } from "../ui/switch";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import {
   SettingResetButton,
   SettingsPageContainer,
@@ -14,6 +15,8 @@ import {
 
 /** Edit the fork preferences saved on this device. */
 export function ForkSettings() {
+  const gt = useGT();
+  const searchableSetting = useSearchableSetting();
   const forkUiChanges = useClientSettings((settings) => settings.forkUiChanges);
   const forkGroupSidebarWorkspaces = useClientSettings(
     (settings) => settings.forkGroupSidebarWorkspaces,
@@ -27,14 +30,16 @@ export function ForkSettings() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection id="fork-interface" title="Interface">
+      <SettingsSection id="fork-interface" title={gt("Interface")}>
         <SettingsRow
           {...searchableSetting("fork-workspace-picker")}
-          description="Use named worktrees, colors, and workspace management. Turn off to use the original T3 workspace picker. Saved on this device."
+          description={gt(
+            "Use named worktrees, colors, and workspace management. Turn off to use the original T3 workspace picker. Saved on this device.",
+          )}
           resetAction={
             forkUseH3WorkspacePicker !== DEFAULT_CLIENT_SETTINGS.forkUseH3WorkspacePicker ? (
               <SettingResetButton
-                label="workspace picker"
+                ariaLabel={gt("workspace picker")}
                 onClick={() =>
                   persistClientSettingsPatch({
                     forkUseH3WorkspacePicker: DEFAULT_CLIENT_SETTINGS.forkUseH3WorkspacePicker,
@@ -45,7 +50,7 @@ export function ForkSettings() {
           }
           control={
             <Switch
-              aria-label="Enable H3 Workspace picker"
+              aria-label={gt("Enable H3 Workspace picker")}
               checked={forkUseH3WorkspacePicker}
               onCheckedChange={(checked) =>
                 persistClientSettingsPatch({ forkUseH3WorkspacePicker: checked })
@@ -55,11 +60,13 @@ export function ForkSettings() {
         />
         <SettingsRow
           {...searchableSetting("fork-ui-changes")}
-          description="Enable Fork interface tweaks, including tinted sidebar shelves. Saved on this device."
+          description={gt(
+            "Enable Fork interface tweaks, including tinted sidebar shelves. Saved on this device.",
+          )}
           resetAction={
             forkUiChanges !== DEFAULT_CLIENT_SETTINGS.forkUiChanges ? (
               <SettingResetButton
-                label="Fork UI Changes"
+                ariaLabel={gt("Fork UI Changes")}
                 onClick={() =>
                   persistClientSettingsPatch({
                     forkUiChanges: DEFAULT_CLIENT_SETTINGS.forkUiChanges,
@@ -70,7 +77,7 @@ export function ForkSettings() {
           }
           control={
             <Switch
-              aria-label="Fork UI Changes"
+              aria-label={gt("Fork UI Changes")}
               checked={forkUiChanges}
               onCheckedChange={(checked) => persistClientSettingsPatch({ forkUiChanges: checked })}
             />
@@ -78,11 +85,13 @@ export function ForkSettings() {
         />
         <SettingsRow
           {...searchableSetting("fork-group-sidebar-workspaces")}
-          description="Combine threads in the same project and workspace into one card in the current sidebar. Applies within each section except Settled. Saved on this device."
+          description={gt(
+            "Combine threads in the same project and workspace into one card in the current sidebar. Applies within each section except Settled. Saved on this device.",
+          )}
           resetAction={
             forkGroupSidebarWorkspaces !== DEFAULT_CLIENT_SETTINGS.forkGroupSidebarWorkspaces ? (
               <SettingResetButton
-                label="workspace grouping"
+                ariaLabel={gt("workspace grouping")}
                 onClick={() =>
                   persistClientSettingsPatch({
                     forkGroupSidebarWorkspaces: DEFAULT_CLIENT_SETTINGS.forkGroupSidebarWorkspaces,
@@ -93,7 +102,7 @@ export function ForkSettings() {
           }
           control={
             <Switch
-              aria-label="Group threads by workspace"
+              aria-label={gt("Group threads by workspace")}
               checked={forkGroupSidebarWorkspaces}
               onCheckedChange={(checked) =>
                 persistClientSettingsPatch({ forkGroupSidebarWorkspaces: checked })
@@ -103,11 +112,13 @@ export function ForkSettings() {
         />
         <SettingsRow
           {...searchableSetting("fork-wordmark")}
-          description="Show H3 Code above the sidebar. Turn off to use T3 Code. Saved on this device."
+          description={gt(
+            "Show H3 Code above the sidebar. Turn off to use T3 Code. Saved on this device.",
+          )}
           resetAction={
             forkUseH3Wordmark !== DEFAULT_CLIENT_SETTINGS.forkUseH3Wordmark ? (
               <SettingResetButton
-                label="wordmark"
+                ariaLabel="wordmark"
                 onClick={() =>
                   persistClientSettingsPatch({
                     forkUseH3Wordmark: DEFAULT_CLIENT_SETTINGS.forkUseH3Wordmark,
@@ -118,7 +129,7 @@ export function ForkSettings() {
           }
           control={
             <Switch
-              aria-label="Use H3 wordmark"
+              aria-label={gt("Use H3 wordmark")}
               checked={forkUseH3Wordmark}
               onCheckedChange={(checked) =>
                 persistClientSettingsPatch({ forkUseH3Wordmark: checked })

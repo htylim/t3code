@@ -1,6 +1,9 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
+import { msg } from "gt-react";
+import { m } from "./i18n/messages";
+
 import { toastManager } from "./components/ui/toast";
 import { getClientSettings } from "./hooks/useSettings";
 import { useThreadNotificationStore } from "./threadNotificationStore";
@@ -18,7 +21,7 @@ export async function toggleThreadNotifications(threadRef: ScopedThreadRef): Pro
   if (permissionError !== null) {
     toastManager.add({
       type: "error",
-      title: "Could not enable notifications",
+      title: m(msg("Could not enable notifications")),
       description: permissionError,
     });
     return;

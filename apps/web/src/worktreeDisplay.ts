@@ -2,6 +2,7 @@ import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-color
 
 export interface WorktreeDisplay {
   readonly name: string;
+  readonly rootPath?: string | undefined;
   readonly color: string;
 }
 

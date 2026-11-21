@@ -1,3 +1,4 @@
+import { useGT, T } from "gt-react";
 import {
   WORKSPACE_COLOR_PRESETS,
   type ClientSettingsPatch,
@@ -17,10 +18,12 @@ import { WorktreeColorPicker } from "../WorktreeColorPicker";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 
 /** Configure workspace colors for this server, including unattended launches. */
 export function WorkspaceColorSettings() {
+  const gt = useGT();
+  const searchableSetting = useSearchableSetting();
   const legacy = useClientSettings((settings) => settings);
   const preferences = usePrimarySettings((settings) => settings.forkWorkspaceColors);
   const updateSettings = useUpdatePrimarySettings();
@@ -57,13 +60,15 @@ export function WorkspaceColorSettings() {
   }
 
   return (
-    <SettingsSection id="fork-workspace-colors" title="Workspace colors">
+    <SettingsSection id="fork-workspace-colors" title={gt("Workspace colors")}>
       <SettingsRow
         {...searchableSetting("fork-default-workspace-color")}
-        description="Preselected for new workspaces. You can change it in the workspace picker. Saved on this server. Auto also applies to scheduled launches."
+        description={gt(
+          "Preselected for new workspaces. You can change it in the workspace picker. Saved on this server. Auto also applies to scheduled launches.",
+        )}
         control={
           <WorktreeColorPicker
-            ariaLabel="Default Workspace Color"
+            ariaLabel={gt("Default Workspace Color")}
             color={mode ? WORKSPACE_COLOR_PRESETS[0].color : choice}
             colorMode={mode}
             disabled={!available}
@@ -76,10 +81,12 @@ export function WorkspaceColorSettings() {
       />
       <SettingsRow
         {...searchableSetting("fork-workspace-fallback-color")}
-        description="Used by Auto when no color prompt matches or color selection is unavailable. Saved on this server. Auto also applies to scheduled launches."
+        description={gt(
+          "Used by Auto when no color prompt matches or color selection is unavailable. Saved on this server. Auto also applies to scheduled launches.",
+        )}
         control={
           <WorktreeColorPicker
-            ariaLabel="Fallback color"
+            ariaLabel={gt("Fallback color")}
             color={fallbackColor}
             disabled={!available}
             allowModes={false}
@@ -92,14 +99,16 @@ export function WorkspaceColorSettings() {
       />
       <SettingsRow
         {...searchableSetting("fork-color-picker-prompts")}
-        description="When Auto is selected, choose a color using the first prompt and project context. The most specific match wins; ties use the first rule. No match uses the fallback color."
+        description={gt(
+          "When Auto is selected, choose a color using the first prompt and project context. The most specific match wins; ties use the first rule. No match uses the fallback color.",
+        )}
       >
         <div className="mt-3 flex max-w-2xl flex-col gap-3 pb-3.5">
           {rules.map((rule, index) => (
             <div key={rule.id} className="grid gap-2 rounded-lg border border-border p-3">
               <div className="flex items-center justify-between gap-2">
                 <WorktreeColorPicker
-                  ariaLabel={`Color for prompt ${index + 1}`}
+                  ariaLabel={gt("Color for prompt {value1}", { value1: index + 1 })}
                   color={rule.color}
                   disabled={!available}
                   allowModes={false}
@@ -109,7 +118,7 @@ export function WorkspaceColorSettings() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={`Delete color prompt ${index + 1}`}
+                  aria-label={gt("Delete color prompt {value1}", { value1: index + 1 })}
                   onClick={() =>
                     persistColorSettings({
                       forkColorPickerPrompts: rules.filter((candidate) => candidate.id !== rule.id),
@@ -120,11 +129,11 @@ export function WorkspaceColorSettings() {
                 </Button>
               </div>
               <Textarea
-                aria-label={`Color prompt ${index + 1}`}
+                aria-label={gt("Color prompt {value1}", { value1: index + 1 })}
                 rows={3}
                 maxLength={4000}
                 defaultValue={rule.prompt}
-                placeholder="For example: Code reviews and pull request reviews"
+                placeholder={gt("For example: Code reviews and pull request reviews")}
                 onBlur={(event) => {
                   if (event.target.value !== rule.prompt)
                     updateRule(rule.id, { prompt: event.target.value });
@@ -134,7 +143,7 @@ export function WorkspaceColorSettings() {
           ))}
           {rules.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Add a color and describe when Auto should choose it.
+              <T>Add a color and describe when Auto should choose it.</T>
             </p>
           ) : null}
           <div>
@@ -152,7 +161,7 @@ export function WorkspaceColorSettings() {
               }
             >
               <PlusIcon />
-              Add prompt
+              <T>Add prompt</T>
             </Button>
           </div>
         </div>

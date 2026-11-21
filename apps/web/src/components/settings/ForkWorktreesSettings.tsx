@@ -1,3 +1,5 @@
+import { useMessages } from "gt-react";
+import { useGT, T } from "gt-react";
 import {
   supportsForkWorktrees,
   type OrchestrationV2ThreadShell,
@@ -14,7 +16,7 @@ import {
   SearchIcon,
   LockKeyholeIcon,
 } from "lucide-react";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, type ReactNode } from "react";
 
 import { DEFAULT_SOFT_PILL_COLOR } from "@t3tools/client-runtime/soft-pill-colors";
 import { useStableCallback } from "../../hooks/useStableCallback";
@@ -62,6 +64,8 @@ import { SettingsPageContainer } from "./settingsLayout";
 
 /** Manage existing worktrees in the selected projects and environments. */
 export function ForkWorktreesSettings() {
+  const forkMessages = useMessages();
+  const gt = useGT();
   const { scope, groups, environments } = useSettingsScope();
   const [search, setSearch] = useState("");
   const [cleaning, setCleaning] = useState(false);
@@ -122,10 +126,11 @@ export function ForkWorktreesSettings() {
       const snapshot = projectMeasurements.get(project.physicalProjectKey);
       return snapshot?.search === search ? snapshot : undefined;
     }),
+    forkMessages,
   );
   const spaceLabel =
     totalSpace !== null && cleaning && selected.size > 0
-      ? `${worktreeSpaceEstimate(selectedSizes)} (of ${totalSpace}) · ${selected.size} selected`
+      ? `${worktreeSpaceEstimate(selectedSizes, false, forkMessages)} (of ${totalSpace}) · ${selected.size} selected`
       : totalSpace;
 
   return (
@@ -136,18 +141,18 @@ export function ForkWorktreesSettings() {
       >
         <div className="space-y-1 px-3 sm:px-4">
           <h2 id="fork-worktrees-heading" className="text-base font-semibold">
-            Worktree Manager
+            <T>Worktree Manager</T>
           </h2>
           <p className="text-sm text-muted-foreground">
-            Manage existing worktrees across projects and environments.
+            <T>Manage existing worktrees across projects and environments.</T>
           </p>
         </div>
         <div className="grid grid-cols-[minmax(8rem,1fr)_auto] items-center gap-3 px-3 @min-[48rem]/worktree-list:grid-cols-[minmax(8rem,1fr)_auto_auto] sm:px-4">
           <div className="min-w-0 @min-[48rem]/worktree-list:max-w-xs">
             <Input
               type="search"
-              aria-label="Search worktrees"
-              placeholder="Search worktrees..."
+              aria-label={gt("Search worktrees")}
+              placeholder={gt("Search worktrees...")}
               value={search}
               disabled={cleanup.pending}
               onChange={(event) => {
@@ -171,8 +176,11 @@ export function ForkWorktreesSettings() {
                 {spaceLabel}
               </TooltipTrigger>
               <TooltipPopup>
-                {spaceLabel}. Estimated space for the worktrees matching the current filters. Shared
-                files and dependency stores are excluded. Actual freed space may differ.
+                {spaceLabel}
+                <T>
+                  . Estimated space for the worktrees matching the current filters. Shared files and
+                  dependency stores are excluded. Actual freed space may differ.
+                </T>
               </TooltipPopup>
             </Tooltip>
           ) : (
@@ -186,7 +194,7 @@ export function ForkWorktreesSettings() {
                 disabled={projects.length === 0}
                 onClick={() => setCleaning(true)}
               >
-                <Trash2Icon /> Delete Worktrees...
+                <Trash2Icon /> <T>Delete Worktrees...</T>
               </Button>
             ) : (
               <>
@@ -201,7 +209,7 @@ export function ForkWorktreesSettings() {
                       setCleaning(false);
                     }}
                   >
-                    Cancel
+                    <T>Cancel</T>
                   </Button>
                   <Button
                     variant="destructive"
@@ -210,8 +218,10 @@ export function ForkWorktreesSettings() {
                     onClick={() => void cleanup.clean(selectedTargets)}
                   >
                     {cleanup.pending
-                      ? "Deleting..."
-                      : `Delete selected${selected.size > 0 ? ` (${selected.size})` : ""}`}
+                      ? gt("Deleting...")
+                      : gt("Delete selected{value1}", {
+                          value1: selected.size > 0 ? ` (${selected.size})` : "",
+                        })}
                   </Button>
                 </div>
               </>
@@ -219,7 +229,9 @@ export function ForkWorktreesSettings() {
           </div>
         </div>
         {projects.length === 0 ? (
-          <p className="px-4 text-sm text-muted-foreground">No projects in this selection.</p>
+          <p className="px-4 text-sm text-muted-foreground">
+            <T>No projects in this selection.</T>
+          </p>
         ) : null}
         {projects.map(({ project, title }) => (
           <ProjectWorktrees
@@ -288,6 +300,8 @@ function ProjectWorktrees({
     measurements: ProjectWorktreeMeasurements | null,
   ) => void;
 }) {
+  const forkMessages = useMessages();
+  const gt = useGT();
   const { environments } = useSettingsScope();
   const cleanupStatusSupported =
     environments.find((environment) => environment.environmentId === project.environmentId)
@@ -414,14 +428,17 @@ function ProjectWorktrees({
   for (const row of visibleRows) {
     blockersByPath.set(
       row.worktreePath,
-      worktreeSelectionBlockers({
-        supported,
-        containsProject: worktreeContainsProject(row.worktreePath, projectRoots),
-        isIdle: row.isIdle,
-        historyReady: archivedReady,
-        historyError: choices.archived.error ?? activity.error,
-        canRemove,
-      }),
+      worktreeSelectionBlockers(
+        {
+          supported,
+          containsProject: worktreeContainsProject(row.worktreePath, projectRoots),
+          isIdle: row.isIdle,
+          historyReady: archivedReady,
+          historyError: choices.archived.error ?? activity.error,
+          canRemove,
+        },
+        forkMessages,
+      ),
     );
   }
   const selectableTargets = targets.filter(
@@ -475,39 +492,48 @@ function ProjectWorktrees({
             <span className="shrink-0">{project.environmentLabel}</span>
           </div>
         </div>
-        <WorktreeColumnHelp label="Cleanup age">
-          Elapsed 24-hour days under the enabled cleanup rules. Uses inactivity, time since all
-          threads settled, or the lower age when both rules apply. Either enabled time rule can
-          qualify a worktree for cleanup. Not settled means the settlement clock has not started.
-          Other cleanup protections still apply.
+        <WorktreeColumnHelp label={gt("Cleanup age")}>
+          <T>
+            Elapsed 24-hour days under the enabled cleanup rules. Uses inactivity, time since all
+            threads settled, or the lower age when both rules apply. Either enabled time rule can
+            qualify a worktree for cleanup. Not settled means the settlement clock has not started.
+            Other cleanup protections still apply.
+          </T>
         </WorktreeColumnHelp>
-        <WorktreeColumnHelp label="Size">
-          Estimated disk space reclaimable by removal. Shared files and dependency stores are
-          excluded. Actual freed space may differ.
+        <WorktreeColumnHelp label={gt("Size")}>
+          <T>
+            Estimated disk space reclaimable by removal. Shared files and dependency stores are
+            excluded. Actual freed space may differ.
+          </T>
         </WorktreeColumnHelp>
-        <WorktreeColumnHelp label="Threads" centered>
-          Settled means all associated threads are settled under the cleanup rules, including
-          archived threads. Subagents and side chats can inherit settlement from a parent in the
-          same thread family, including separate worktrees. Active means at least one thread is not
-          settled. No threads means none are associated. Deleted parent means dependent threads
-          inherit a deleted parent. Loading or Unavailable means thread state could not yet be
-          determined. Settled does not mean eligible for automatic cleanup.
+        <WorktreeColumnHelp label={gt("Threads")} centered>
+          <T>
+            Settled means all associated threads are settled under the cleanup rules, including
+            archived threads. Subagents and side chats can inherit settlement from a parent in the
+            same thread family, including separate worktrees. Active means at least one thread is
+            not settled. No threads means none are associated. Deleted parent means dependent
+            threads inherit a deleted parent. Loading or Unavailable means thread state could not
+            yet be determined. Settled does not mean eligible for automatic cleanup.
+          </T>
         </WorktreeColumnHelp>
-        <WorktreeColumnHelp label="Status" centered>
-          Dirty means local files prevent automatic cleanup under the effective Keep worktrees with
-          local changes policy. Clean means no files trigger that protection. Shared worktrees use
-          the most protective policy among their associated projects. Busy means a thread has queued
-          or active agent work. Unavailable means protection could not be checked. Clean does not
-          mean eligible for automatic cleanup; age, settlement and other safeguards still apply.
+        <WorktreeColumnHelp label={gt("Status")} centered>
+          <T>
+            Dirty means local files prevent automatic cleanup under the effective Keep worktrees
+            with local changes policy. Clean means no files trigger that protection. Shared
+            worktrees use the most protective policy among their associated projects. Busy means a
+            thread has queued or active agent work. Unavailable means protection could not be
+            checked. Clean does not mean eligible for automatic cleanup; age, settlement and other
+            safeguards still apply.
+          </T>
         </WorktreeColumnHelp>
       </div>
       {!connected ? (
         <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
-          Environment offline. Reconnect to manage its worktrees.
+          <T>Environment offline. Reconnect to manage its worktrees.</T>
         </p>
       ) : !supported ? (
         <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
-          Worktree management requires a compatible Fork server on this environment.
+          <T>Worktree management requires a compatible Fork server on this environment.</T>
         </p>
       ) : choices.refsQuery.error ? (
         <p role="alert" className="px-4 py-3 text-sm text-destructive">
@@ -515,11 +541,11 @@ function ProjectWorktrees({
         </p>
       ) : choices.refsQuery.data === null ? (
         <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
-          Loading worktrees...
+          <T>Loading worktrees...</T>
         </p>
       ) : visibleRows.length === 0 ? (
         <p className="px-4 py-3 text-sm text-muted-foreground">
-          {rows.length === 0 ? "No worktrees found." : "No matching worktrees."}
+          {rows.length === 0 ? gt("No worktrees found.") : gt("No matching worktrees.")}
         </p>
       ) : (
         sortedRows.map((row) => (
@@ -538,6 +564,7 @@ function ProjectWorktrees({
               worktreeThreadsByPath.get(row.worktreePath),
               activity.isSuccess,
               Boolean(activity.error),
+              forkMessages,
             )}
             archivedReady={archivedReady}
             now={now}
@@ -568,7 +595,7 @@ function ProjectWorktrees({
       )}
       {choices.archived.error || activity.error ? (
         <p role="alert" className="px-4 py-3 text-xs text-destructive">
-          Unable to load thread history. Cleanup age and management actions are unavailable.
+          <T>Unable to load thread history. Cleanup age and management actions are unavailable.</T>
         </p>
       ) : null}
     </SettingsGroup>
@@ -615,6 +642,7 @@ function ManagedWorktreeRow({
   readonly measurement: WorktreeMeasurement | null;
   readonly onSelectionChange: (targets: readonly WorktreeCleanupTarget[], checked: boolean) => void;
 }) {
+  const gt = useGT();
   const color =
     useNamedWorktreeStore(
       (state) => state.worktrees[namedWorktreeKey(projectRef, row.worktreePath)]?.color,
@@ -764,10 +792,10 @@ function ManagedWorktreeRow({
         </div>
         <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           <GitBranchIcon aria-hidden className="size-3 shrink-0" />
-          <span className="truncate">{row.refName ?? "Detached HEAD"}</span>
+          <span className="truncate">{row.refName ?? gt("Detached HEAD")}</span>
         </span>
         <span className="text-xs text-muted-foreground @min-[42rem]/worktree-list:hidden">
-          {inactivity} cleanup age · {sizeLabel} · {threadsLabel} · {statusLabel}
+          {inactivity} <T>cleanup age ·</T> {sizeLabel} · {threadsLabel} · {statusLabel}
         </span>
       </div>
       <Tooltip>
@@ -829,7 +857,7 @@ function WorktreeColumnHelp({
   centered = false,
 }: {
   readonly label: string;
-  readonly children: string;
+  readonly children: ReactNode;
   readonly centered?: boolean;
 }) {
   return (
@@ -870,10 +898,11 @@ function WorktreeSelectionCheckbox({
   readonly indeterminate?: boolean;
   readonly onCheckedChange: (checked: boolean) => void;
 }) {
+  const gt = useGT();
   const disabled = pending || reason !== null;
   const checkbox = (
     <Checkbox
-      aria-label={`Select ${name}`}
+      aria-label={gt("Select {name}", { name: name })}
       checked={checked}
       indeterminate={indeterminate}
       disabled={disabled}
@@ -894,7 +923,7 @@ function WorktreeSelectionCheckbox({
           />
         ) : null}
       </TooltipTrigger>
-      <TooltipPopup>{reason ?? "Deletion is in progress."}</TooltipPopup>
+      <TooltipPopup>{reason ?? gt("Deletion is in progress.")}</TooltipPopup>
     </Tooltip>
   );
 }

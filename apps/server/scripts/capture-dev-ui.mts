@@ -39,6 +39,14 @@ if ((await NodeFSP.realpath(baseDir)) !== baseDir)
   throw new Error("The development home must not be a symlink.");
 await NodeFSP.mkdir(outputDirectory, { recursive: true });
 const contexts = new ServerBrowserContexts({
+  chrome: {
+    version: NodeChildProcess.execFileSync(chromeExecutable, ["--version"], { encoding: "utf8" })
+      .trim()
+      .split(" ")
+      .at(-1)!,
+    // oxlint-disable-next-line t3code/no-global-process-runtime -- standalone browser evidence script reads the host running its executable
+    platform: process.platform,
+  },
   profilesDir: outputDirectory + "/headless-profile",
   executable: async () => chromeExecutable,
 });

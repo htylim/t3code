@@ -48,24 +48,32 @@ describe("named worktree metadata", () => {
     expect(Object.keys(useNamedWorktreeStore.getState().selections)).toHaveLength(2);
   });
 
-  it("waits for the selected directory before binding its color to the actual path", () => {
-    const store = useNamedWorktreeStore.getState();
-    store.select(projectRef, threadId, selection);
-    store.record(projectRef, [{ id: threadId, worktreePath: null }]);
-    store.record(projectRef, [{ id: threadId, worktreePath: "/repo-worktrees/automatic" }]);
-    expect(useNamedWorktreeStore.getState().worktrees).toEqual({});
-    const worktreePath = "/custom/worktrees/repo/billing-fix";
-    store.record(projectRef, [{ id: threadId, worktreePath }]);
-    expect(useNamedWorktreeStore.getState().selections).toEqual({});
-    expect(useNamedWorktreeStore.getState().worktrees).toEqual({
-      [namedWorktreeKey(projectRef, worktreePath)]: { color: selection.color, manuallyNamed: true },
-    });
-    // Another thread can reuse the same directory without owning its color.
-    store.record(projectRef, [{ id: ThreadId.make("followup"), worktreePath }]);
-    expect(
-      useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, worktreePath)]?.color,
-    ).toBe(selection.color);
-  });
+  it.each([false, true])(
+    "binds the color after the chosen containing directory exists (nested project: %s)",
+    (nested) => {
+      const store = useNamedWorktreeStore.getState();
+      store.select(projectRef, threadId, selection);
+      store.record(projectRef, [{ id: threadId, worktreePath: null }]);
+      store.record(projectRef, [{ id: threadId, worktreePath: "/repo-worktrees/automatic" }]);
+      expect(useNamedWorktreeStore.getState().worktrees).toEqual({});
+      const rootPath = "/custom/worktrees/repo/billing-fix";
+      const worktreePath = nested ? `${rootPath}/app` : rootPath;
+      store.record(projectRef, [{ id: threadId, worktreePath, rootPath }]);
+      expect(useNamedWorktreeStore.getState().selections).toEqual({});
+      expect(useNamedWorktreeStore.getState().worktrees).toEqual({
+        [namedWorktreeKey(projectRef, worktreePath)]: {
+          color: selection.color,
+          manuallyNamed: true,
+        },
+      });
+      // Another thread can reuse the same directory without owning its color.
+      store.record(projectRef, [{ id: ThreadId.make("followup"), worktreePath }]);
+      expect(
+        useNamedWorktreeStore.getState().worktrees[namedWorktreeKey(projectRef, worktreePath)]
+          ?.color,
+      ).toBe(selection.color);
+    },
+  );
 
   it("preserves color through a directory rename and removes it after deletion", () => {
     const store = useNamedWorktreeStore.getState();
@@ -100,11 +108,11 @@ describe("named worktree metadata", () => {
     expect(useNamedWorktreeStore.getState().worktrees).toEqual({});
   });
 
-  it("keeps a color-only choice through temporary provisioning and automatic naming", () => {
+  it("keeps a color-only choice through provisioning at the upstream stable path", () => {
     const store = useNamedWorktreeStore.getState();
     const automaticSelection = { name: "", color: "#14b8a6" };
     const temporaryPath = "/worktrees/t3-abcd1234-0b5a4ef1d3c92208";
-    const finalPath = "/worktrees/fix-sidebar-colors";
+    const finalPath = temporaryPath;
     store.select(projectRef, threadId, automaticSelection);
     store.record(projectRef, [{ id: threadId, worktreePath: null }]);
     expect(useNamedWorktreeStore.getState().worktrees).toEqual({});

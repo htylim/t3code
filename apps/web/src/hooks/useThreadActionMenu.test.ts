@@ -48,6 +48,10 @@ vi.mock("../components/ThreadWorkspaceMenu", () => ({
   },
 }));
 vi.mock("../components/CustomSnoozeDialog", () => ({ requestCustomSnooze: vi.fn() }));
+vi.mock("gt-react", async (original) => ({
+  ...(await original<typeof import("gt-react")>()),
+  useGT: () => (message: string) => message,
+}));
 vi.mock("react", () => ({
   useCallback: (callback: unknown) => callback,
   useMemo: (factory: () => unknown) => factory(),

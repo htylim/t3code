@@ -1,3 +1,6 @@
+import { useMessages } from "gt-react";
+import { useGT, T } from "gt-react";
+import { msg } from "gt-react";
 import { useAtomValue } from "@effect/atom-react";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import {
@@ -65,6 +68,8 @@ function WorktreeAction(props: {
 }
 /** Share worktree management and removal confirmations across the picker and Settings. */
 export function WorktreeActionsMenu(props: WorktreeActionsMenuProps) {
+  const forkMessages = useMessages();
+  const gt = useGT();
   const { row } = props;
   const environmentId = props.projectRef.environmentId;
   const [internalOpen, setInternalOpen] = useState(false);
@@ -102,7 +107,7 @@ export function WorktreeActionsMenu(props: WorktreeActionsMenuProps) {
     if (
       !(await requestConfirmDialog(message, {
         variant: "destructive",
-        confirmLabel: "Remove worktree",
+        confirmLabel: gt("Remove worktree"),
       }))
     )
       return;
@@ -113,7 +118,7 @@ export function WorktreeActionsMenu(props: WorktreeActionsMenuProps) {
       if (!isGitCommandError(failure)) {
         toastManager.add({
           type: "error",
-          title: "Unable to remove worktree",
+          title: gt("Unable to remove worktree"),
           description: String(failure),
         });
         return;
@@ -126,16 +131,17 @@ export function WorktreeActionsMenu(props: WorktreeActionsMenuProps) {
       });
       const status = refreshedStatus._tag === "Success" ? refreshedStatus.value : null;
       const details = [
-        status
+        failure.detail,
+        status?.isRepo
           ? `${status.workingTree.files.length} uncommitted files`
           : "Working tree status unavailable",
-        resolveWorktreeUnpushedWarning(status),
+        resolveWorktreeUnpushedWarning(status, forkMessages),
         `${props.threads.filter((thread) => thread.worktreePath === row.worktreePath && thread.archivedAt === null).length} non-archived threads`,
       ];
       if (
         !(await requestConfirmDialog(message, {
           variant: "destructive",
-          confirmLabel: "Force remove",
+          confirmLabel: gt("Force remove"),
           details,
         }))
       )
@@ -148,7 +154,7 @@ export function WorktreeActionsMenu(props: WorktreeActionsMenuProps) {
     if (removed._tag === "Failure") {
       toastManager.add({
         type: "error",
-        title: "Unable to remove worktree",
+        title: gt("Unable to remove worktree"),
         description: String(Cause.squash(removed.cause)),
       });
       return;
@@ -160,7 +166,7 @@ export function WorktreeActionsMenu(props: WorktreeActionsMenuProps) {
   return (
     <Menu open={actionsOpen} onOpenChange={setActionsOpen}>
       <MenuTrigger
-        aria-label={`Actions for ${row.dirName}`}
+        aria-label={gt("Actions for {dirName}", { dirName: row.dirName })}
         render={<Button size="icon-micro" variant="ghost-muted" />}
         onPointerDown={(event) => event.stopPropagation()}
         onPointerUp={(event) => event.stopPropagation()}
@@ -185,20 +191,25 @@ export function WorktreeActionsMenu(props: WorktreeActionsMenuProps) {
               projectRef: props.projectRef,
               projectCwd: props.projectCwd,
               worktreePath: row.worktreePath,
+              rootPath: row.rootPath,
             });
           }}
         >
-          Rename…
+          <T>Rename…</T>
         </WorktreeAction>
         <MenuItem
           onClick={() => {
-            void writeTextToClipboard(row.worktreePath, "path").then(
-              () => toastManager.add({ type: "success", title: "Path copied" }),
+            void writeTextToClipboard(row.worktreePath, {
+              target: "path",
+              unavailableMessage: msg("Clipboard API is unavailable while copying path."),
+              failureMessage: msg("Failed to copy path to the clipboard."),
+            }).then(
+              () => toastManager.add({ type: "success", title: gt("Path copied") }),
               (cause: unknown) => toastManager.add({ type: "error", title: String(cause) }),
             );
           }}
         >
-          Copy path
+          <T>Copy path</T>
         </MenuItem>
         {localApi?.shell.revealPath &&
         environment &&
@@ -225,7 +236,7 @@ export function WorktreeActionsMenu(props: WorktreeActionsMenuProps) {
             void remove();
           }}
         >
-          Remove worktree…
+          <T>Remove worktree…</T>
         </WorktreeAction>
       </MenuPopup>
     </Menu>

@@ -223,5 +223,5 @@ function expectSideChatRevealedOnParent(router: ReturnType<typeof createCitation
       useRightPanelStore.getState().byThreadKey,
       scopeThreadRef(EnvironmentId.make("environment-one"), parentThreadId),
     ),
-  ).toMatchObject({ kind: "side-chat", threadId: sideChatCitation.threadId });
+  ).toMatchObject({ kind: "thread", threadId: sideChatCitation.threadId });
 }

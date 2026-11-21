@@ -4,7 +4,7 @@ import {
   createAssistantTextSelector,
   findAssistantCitationText,
   type AssistantTextSelector,
-} from "@t3tools/shared/assistantCitationText";
+} from "@t3tools/shared/assistantCitations";
 import { mathWrapperOf } from "../markdown-clipboard";
 
 type CitationAnchorElement = {
