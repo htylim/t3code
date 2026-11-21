@@ -1,4 +1,10 @@
 import {
+  getThreadNotificationMode,
+  resolveThreadNotificationMode,
+  THREAD_NOTIFICATION_STORAGE_KEY,
+  useThreadNotificationStore,
+} from "../threadNotificationStore";
+import {
   type EnvironmentThreadShell,
   type PendingSubagentRequest,
   presentThreadShell,
@@ -140,7 +146,9 @@ export function startThreadNotifications(
         .has(threadKey({ environmentId, threadId: thread.id }))
     )
       return;
-    const { notificationMode: mode, inAppNotificationsEnabled } = getClientSettings();
+    const { notificationMode, inAppNotificationsEnabled } = getClientSettings();
+    const notificationThreadRef = { environmentId, threadId: thread.id };
+    const mode = getThreadNotificationMode(notificationMode, notificationThreadRef);
     const active = activeThread();
     const title =
       kind === "completion"
@@ -156,7 +164,9 @@ export function startThreadNotifications(
                 : "Input needed";
     if (hasNotificationSound(mode)) {
       void playNotificationSound(kind, () =>
-        hasNotificationSound(getClientSettings().notificationMode),
+        hasNotificationSound(
+          getThreadNotificationMode(getClientSettings().notificationMode, notificationThreadRef),
+        ),
       );
     }
     if (
@@ -360,7 +370,10 @@ export function startThreadNotifications(
 
   const syncEnvironments = () => {
     const { notificationMode, inAppNotificationsEnabled } = getClientSettings();
-    const enabled = notificationMode !== "off" || inAppNotificationsEnabled;
+    const enabled =
+      notificationMode !== "off" ||
+      inAppNotificationsEnabled ||
+      Object.keys(useThreadNotificationStore.getState().enabledThreadKeys).length > 0;
     if (!enabled) closeToasts(() => true);
     const environmentIds = enabled ? registry.get(environmentSummaries.environmentIdsAtom) : [];
     const activeIds = new Set(environmentIds);
@@ -390,7 +403,10 @@ export function startThreadNotifications(
   let appliedMode: ClientSettings["notificationMode"] | null = null;
   let stopModeListeners = () => {};
   const applyMode = () => {
-    const nextMode = getClientSettings().notificationMode;
+    const nextMode = resolveThreadNotificationMode(
+      getClientSettings().notificationMode,
+      Object.keys(useThreadNotificationStore.getState().enabledThreadKeys).length > 0,
+    );
     if (nextMode === appliedMode) return;
     appliedMode = nextMode;
     stopModeListeners();
@@ -421,7 +437,27 @@ export function startThreadNotifications(
   const onSettings = () => {
     applyMode();
     syncEnvironments();
+    const count = pending.size;
+    for (const [tag, entry] of pending) {
+      if (
+        hasDesktopNotifications(
+          getThreadNotificationMode(getClientSettings().notificationMode, entry),
+        )
+      )
+        continue;
+      entry.notification.close();
+      pending.delete(tag);
+    }
+    if (pending.size !== count) setNotificationBadge(pending.size);
   };
+  const unsubscribeThreadPreferences = useThreadNotificationStore.subscribe(onSettings);
+  // Other tabs share the preference, but storage events do not fire in the writing tab.
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === THREAD_NOTIFICATION_STORAGE_KEY || event.key === null) {
+      void useThreadNotificationStore.persist.rehydrate();
+    }
+  };
+  window.addEventListener("storage", onStorage);
   const unsubscribeSettings = subscribeClientSettings(onSettings);
   const unsubscribeEnvironmentIds = registry.subscribe(
     environmentSummaries.environmentIdsAtom,
@@ -440,6 +476,8 @@ export function startThreadNotifications(
 
   return () => {
     unsubscribeSettings();
+    unsubscribeThreadPreferences();
+    window.removeEventListener("storage", onStorage);
     unsubscribeEnvironmentIds();
     for (const unsubscribe of unsubscribeHidden) unsubscribe();
     unsubscribeRoute();

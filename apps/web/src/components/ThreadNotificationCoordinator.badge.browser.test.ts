@@ -1,5 +1,7 @@
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { useThreadNotificationStore } from "../threadNotificationStore";
 import type { AnyRouter } from "@tanstack/react-router";
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import { Atom, AtomRegistry } from "effect/reactivity";
@@ -196,6 +198,7 @@ function setup() {
   registry = AtomRegistry.make();
   const testRegistry = registry;
   stack.defer(() => testRegistry.dispose());
+  useThreadNotificationStore.setState({ enabledThreadKeys: {} });
   state.mode = "notifications";
   state.inApp = false;
   state.settingsListeners.clear();
@@ -452,4 +455,37 @@ it("opening a thread or removing its environment closes only its in-app toasts, 
   state.inApp = false;
   app.changeSettings();
   expect(state.closeToast.mock.calls.slice(3)).toEqual([["one-other"]]);
+});
+
+it("watches selected threads while Off, keeps other threads silent, and cancels disabled sounds and badges", async () => {
+  await using app = setup();
+  state.mode = "off";
+  app.start();
+  const selectedThread = scopeThreadRef(EnvironmentId.make("one"), ThreadId.make("thread"));
+  state.shells.set("one", shell({}, { id: "other" }));
+  useThreadNotificationStore.getState().setEnabled(selectedThread, true);
+  expect(TestNotification.sent).toHaveLength(0);
+  const completed = {
+    latestTurn: { turnId: "turn", state: "completed", completedAt: "2026-09-13T07:01:00Z" },
+  };
+  state.shells.set("one", shell(completed, { ...completed, id: "other" }));
+  state.shells.set("two", shell(completed));
+  expect(TestNotification.sent.map((sent) => sent.title)).toEqual(["Thread completed"]);
+  expect(state.sound).toHaveBeenCalledTimes(1);
+  const shouldPlay = state.sound.mock.calls[0]![1] as () => boolean;
+  expect(shouldPlay()).toBe(true);
+  expect(state.badge).toHaveBeenLastCalledWith(1);
+  window.dispatchEvent(new Event("focus"));
+  expect(state.badge).toHaveBeenLastCalledWith(0);
+
+  state.shells.set("one", shell({ ...completed, hasPendingApprovals: true }, { id: "other" }));
+  expect(TestNotification.sent).toHaveLength(2);
+  const anotherSelectedThread = scopeThreadRef(EnvironmentId.make("two"), ThreadId.make("thread"));
+  useThreadNotificationStore.getState().setEnabled(anotherSelectedThread, true);
+  useThreadNotificationStore.getState().setEnabled(selectedThread, false);
+  expect(shouldPlay()).toBe(false);
+  expect(TestNotification.sent[1]!.close).toHaveBeenCalled();
+  expect(state.badge).toHaveBeenLastCalledWith(0);
+  useThreadNotificationStore.getState().setEnabled(selectedThread, true);
+  expect(TestNotification.sent).toHaveLength(2);
 });

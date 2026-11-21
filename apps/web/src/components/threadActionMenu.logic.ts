@@ -2,6 +2,7 @@ import type { ContextMenuItem } from "@t3tools/contracts";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 
 export type ThreadActionMenuId =
+  | "notify-me"
   | "find"
   | "new-thread-on-branch"
   | "filter-by-project"
@@ -71,6 +72,7 @@ export function buildDraftActionMenuItems(options: {
 export interface ThreadActionMenuState {
   readonly canOperate: boolean;
   readonly canFind?: boolean;
+  readonly notifyMe?: boolean | undefined;
   readonly branch: string | null;
   readonly canEditWorkspace?: boolean;
   /**
@@ -106,6 +108,7 @@ export interface ThreadActionMenuState {
 /** Local navigation, read markers, and copying remain available to read-only clients. */
 export function threadActionRequiresOperate(action: string): boolean {
   return ![
+    "notify-me",
     "find",
     "new-thread-on-branch",
     "postpone",
@@ -135,6 +138,9 @@ export function buildThreadActionMenuItems(
             icon: "message-square-plus",
           },
         ]
+      : []),
+    ...(state.notifyMe !== undefined
+      ? [{ id: "notify-me" as const, label: "Notify me", checked: state.notifyMe }]
       : []),
     ...(state.supports.pinning
       ? [

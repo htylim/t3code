@@ -102,3 +102,31 @@ describe("playNotificationSound", () => {
     expect(audio.started).toBe(1);
   });
 });
+
+describe("prepareThreadNotifications", () => {
+  it.each(["granted", "denied", "default", "failed"])(
+    "handles system permission %s before enabling notifications",
+    async (permission) => {
+      vi.stubGlobal("window", { isSecureContext: true });
+      vi.stubGlobal("Notification", {
+        requestPermission: async () => {
+          if (permission === "failed") throw new Error("Unavailable");
+          return permission;
+        },
+      });
+      const { prepareThreadNotifications } = await import("./threadNotifications");
+      const permissionError = await prepareThreadNotifications("notifications-and-sound");
+      if (permission === "granted") expect(permissionError).toBeNull();
+      else expect(permissionError).toEqual(expect.any(String));
+    },
+  );
+
+  it("rejects system alerts in an insecure context but allows sound", async () => {
+    vi.stubGlobal("window", { isSecureContext: false });
+    vi.stubGlobal("Notification", {});
+    const { prepareThreadNotifications } = await import("./threadNotifications");
+    expect(await prepareThreadNotifications("notifications")).toContain("HTTPS");
+    expect(await prepareThreadNotifications("sound")).toBeNull();
+    expect(await prepareThreadNotifications("off")).toBeNull();
+  });
+});

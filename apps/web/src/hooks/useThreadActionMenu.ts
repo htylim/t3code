@@ -1,3 +1,5 @@
+import { toggleThreadNotifications } from "../threadNotificationActions";
+import { useThreadNotificationStore } from "../threadNotificationStore";
 import { scopeProjectRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { requestThreadWorkspaceEdit } from "../components/ThreadWorkspaceMenu";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
@@ -51,7 +53,7 @@ import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
 import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
-import { useClientSettings } from "./useSettings";
+import { getClientSettings, useClientSettings } from "./useSettings";
 import { canTurnThreadIntoProject, useThreadActions } from "./useThreadActions";
 
 function failureToast(title: string, error: unknown) {
@@ -146,6 +148,12 @@ export function useThreadActionMenu(input: {
         usePostponedThreadStore.getState().byThreadKey[scopedThreadKey(threadRef)] !== undefined;
       const snoozePresets = resolveSnoozePresets(now, timestampFormat, threadRef.environmentId);
       const items = buildThreadActionMenuItems({
+        notifyMe:
+          getClientSettings().notificationMode === "off"
+            ? useThreadNotificationStore.getState().enabledThreadKeys[
+                scopedThreadKey(threadRef)
+              ] === true
+            : undefined,
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
         canFind: onFind !== undefined,
         branch: thread.branch ?? null,
@@ -186,6 +194,10 @@ export function useThreadActionMenu(input: {
           "Thread action unavailable",
           new Error("This connection cannot change threads."),
         );
+        return;
+      }
+      if (action === "notify-me") {
+        await toggleThreadNotifications(threadRef);
         return;
       }
       if (action === "postpone") {

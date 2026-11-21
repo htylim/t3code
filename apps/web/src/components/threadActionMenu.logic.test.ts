@@ -99,3 +99,18 @@ describe("buildThreadActionMenuItems", () => {
     expect(items.find((item) => item.id === "turn-into-project")?.disabled).toBe(true);
   });
 });
+
+it("offers a local notification checkbox only when the caller supplies its state", () => {
+  expect(ids(baseState)).not.toContain("notify-me");
+  for (const notifyMe of [false, true]) {
+    expect(
+      buildThreadActionMenuItems({ ...baseState, canOperate: false, notifyMe }).find(
+        (action) => action.id === "notify-me",
+      ),
+    ).toEqual({
+      id: "notify-me",
+      label: "Notify me",
+      checked: notifyMe,
+    });
+  }
+});

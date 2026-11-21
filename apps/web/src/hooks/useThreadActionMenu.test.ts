@@ -125,6 +125,7 @@ vi.mock("./useHandleNewThread", () => ({
   useNewThreadHandler: () => async () => recordEffect("draft"),
 }));
 vi.mock("./useSettings", () => ({
+  getClientSettings: () => ({ notificationMode: "off" }),
   useLegacySidebarEnabled: () => false,
   useClientSettings: (select: (settings: unknown) => unknown) =>
     select({

@@ -79,6 +79,18 @@ in a dialog and confirm the move. The Git branch keeps its name when renaming a 
 or an existing sibling directory. Rename and Change worktree are unavailable while the thread is
 busy. Stop agents using the worktree before editing it.
 
+## Get alerts for selected threads
+
+On web and desktop, set **Settings → Notifications → Thread notifications** to **Off**.
+Right-click a thread in the sidebar and select **Notify me** to enable system notifications
+with sound for that thread. Select it again to disable them. T3 Code must stay open,
+and your browser or system must allow notifications. The separate **In-app notifications**
+setting still controls toasts while the app has focus.
+
+These choices stay in this browser or desktop app and do not sync to other devices.
+When the global setting is not **Off**, it applies to all threads and **Notify me** is hidden.
+Your thread choices are kept if you later return to **Off**.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

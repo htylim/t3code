@@ -1,3 +1,5 @@
+import { toggleThreadNotifications } from "../threadNotificationActions";
+import { useThreadNotificationStore } from "../threadNotificationStore";
 import { presentSidebarThreadSection } from "./Sidebar.presentation";
 import { isThreadWorkspaceBusy } from "./BranchToolbar.logic";
 import {
@@ -142,7 +144,7 @@ import { useProjectPin } from "../hooks/useProjectGroupUpdate";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
-import { useClientSettings } from "../hooks/useSettings";
+import { getClientSettings, useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -2961,6 +2963,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           api.contextMenu.show(
             withPostponedThreadMenu(
               buildThreadActionMenuItems({
+                notifyMe:
+                  getClientSettings().notificationMode === "off"
+                    ? useThreadNotificationStore.getState().enabledThreadKeys[threadKey] === true
+                    : undefined,
                 canOperate: readEnvironmentScope(
                   threadRef.environmentId,
                   AuthOrchestrationOperateScope,
@@ -3024,6 +3030,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           return;
         }
         switch (clicked.value) {
+          case "notify-me":
+            await toggleThreadNotifications(threadRef);
+            return;
           case "postpone":
             postponeThreads([threadKey]);
             return;

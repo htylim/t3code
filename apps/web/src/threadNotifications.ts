@@ -1,3 +1,4 @@
+import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { ClientSettings } from "@t3tools/contracts/settings";
 
@@ -18,6 +19,23 @@ export function hasNotificationSound(mode: NotificationMode) {
 
 export function hasDesktopNotifications(mode: NotificationMode) {
   return mode === "notifications" || mode === "notifications-and-sound";
+}
+
+/** Unlock sound and request system permission before enabling a notification mode. */
+export async function prepareThreadNotifications(mode: NotificationMode): Promise<string | null> {
+  if (hasNotificationSound(mode)) unlockNotificationAudio();
+  if (!hasDesktopNotifications(mode)) return null;
+  if (typeof Notification === "undefined" || !window.isSecureContext) {
+    return "Notifications need a supported browser over HTTPS, or the desktop app. Sound only is still available.";
+  }
+  const permission = await settlePromise(() => Notification.requestPermission());
+  if (permission._tag === "Failure") {
+    return "Notifications are unavailable in this browser. Sound only is still available.";
+  }
+  if (permission.value !== "granted") {
+    return "Allow notifications in your browser or system settings, then choose this option again. Sound only is still available.";
+  }
+  return null;
 }
 
 const TAG_HASH_OFFSET_BASIS = 0xcbf29ce484222325n;

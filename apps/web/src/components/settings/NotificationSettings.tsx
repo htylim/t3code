@@ -1,12 +1,6 @@
-import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import { useState } from "react";
 
-import {
-  hasDesktopNotifications,
-  hasNotificationSound,
-  NOTIFICATION_MODE_LABELS,
-  unlockNotificationAudio,
-} from "../../threadNotifications";
+import { NOTIFICATION_MODE_LABELS, prepareThreadNotifications } from "../../threadNotifications";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SettingsRow } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
@@ -38,29 +32,12 @@ export function NotificationSettings() {
             )
               return;
             setPermissionMessage(null);
-            if (hasNotificationSound(value)) unlockNotificationAudio();
-            if (hasDesktopNotifications(value)) {
-              if (typeof Notification === "undefined" || !window.isSecureContext) {
-                setPermissionMessage(
-                  "Notifications need a supported browser over HTTPS, or the desktop app. Sound only is still available.",
-                );
-                return;
-              }
-              setRequesting(true);
-              const permission = await settlePromise(() => Notification.requestPermission());
-              setRequesting(false);
-              if (permission._tag === "Failure") {
-                setPermissionMessage(
-                  "Notifications are unavailable in this browser. Sound only is still available.",
-                );
-                return;
-              }
-              if (permission.value !== "granted") {
-                setPermissionMessage(
-                  "Allow notifications in your browser or system settings, then choose this option again. Sound only is still available.",
-                );
-                return;
-              }
+            setRequesting(true);
+            const permissionError = await prepareThreadNotifications(value);
+            setRequesting(false);
+            if (permissionError !== null) {
+              setPermissionMessage(permissionError);
+              return;
             }
             updateSettings({ notificationMode: value });
           }}
