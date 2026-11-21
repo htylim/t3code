@@ -34,6 +34,8 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -293,6 +295,8 @@ const make = Effect.gen(function* () {
   const eventSink = yield* EventSink.EventSinkV2;
   const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
   const taskFolders = yield* TaskFolders.TaskFolders;
+  const path = yield* Path.Path;
+  const fileSystem = yield* FileSystem.FileSystem;
   // A project-folder launch that names no branch records the folder's checkout, as the composer does.
   const launchBranch = (strategy: ThreadLaunchWorkspaceStrategy, workspaceRoot: string) =>
     strategy.type === "root" && strategy.branch === undefined
@@ -574,6 +578,7 @@ const make = Effect.gen(function* () {
     let runReleased = false;
     // Stop background renames before forgetting worktrees; completed renames record them again.
     let branchRename: Fiber.Fiber<unknown, ThreadLaunchError> | null = null;
+    let namedBranch: string | null = null;
     if (input.workspaceStrategy.type === "worktree") {
       yield* setupTracker.begin({
         threadId,
@@ -991,6 +996,8 @@ const make = Effect.gen(function* () {
                     );
                 }
               }
+
+              namedBranch = renamed.branch;
             }),
           ),
           Effect.catchCause((cause) =>
@@ -1008,6 +1015,136 @@ const make = Effect.gen(function* () {
             ),
           ),
           Effect.forkIn(preparationScope),
+        );
+      }
+
+      // Setup scripts and the agent must use the final directory.
+      if (branchRename !== null) yield* Fiber.join(branchRename);
+
+      const folderBranch = namedBranch ?? (branchRename === null ? branch : null);
+      if (
+        input.workspaceStrategy.type === "worktree" &&
+        input.workspaceStrategy.directoryName === undefined &&
+        reused === undefined &&
+        worktreePath !== null &&
+        folderBranch !== null
+      ) {
+        const worktreeCwd = worktreePath;
+        yield* Effect.gen(function* () {
+          // Branch prefixes are not subdirectories; keep one portable folder component.
+          let directoryName = folderBranch
+            .replace(/\s/g, "-")
+            .replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, "")
+            .replace(/[. ]+$/, "");
+          if (!directoryName || directoryName === "." || directoryName === "..") return;
+          if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(directoryName)) {
+            directoryName = `_${directoryName}`;
+          }
+          const oldRoot = createdTaskFolder ?? worktreeCwd;
+          if (directoryName === path.basename(oldRoot)) return;
+          const baseDirectoryName = directoryName;
+          let newRoot = path.join(path.dirname(oldRoot), directoryName);
+          let suffix = 2;
+          while (yield* fileSystem.exists(newRoot)) {
+            directoryName = `${baseDirectoryName}-${suffix}`;
+            newRoot = path.join(path.dirname(oldRoot), directoryName);
+            suffix++;
+          }
+          const snapshot = yield* threads.getShellSnapshot();
+          const sharing = [...snapshot.threads, ...snapshot.archivedThreads].filter((thread) => {
+            if (thread.worktreePath === null) return false;
+            if (createdTaskFolder === null) return thread.worktreePath === worktreeCwd;
+            const relative = path.relative(oldRoot, thread.worktreePath);
+            return (
+              relative === "" ||
+              (!path.isAbsolute(relative) &&
+                relative !== ".." &&
+                !relative.startsWith(`..${path.sep}`))
+            );
+          });
+          const movedThreads: typeof sharing = [];
+          const updatePaths = Effect.forEach(
+            sharing,
+            (thread) =>
+              threads
+                .dispatch({
+                  type: "thread.metadata.update",
+                  commandId: CommandId.make(`${input.commandId}:directory-rename:${thread.id}`),
+                  threadId: thread.id,
+                  worktreePath: path.join(newRoot, path.relative(oldRoot, thread.worktreePath!)),
+                  expectedWorktreePath: thread.worktreePath,
+                })
+                .pipe(Effect.tap(() => Effect.sync(() => movedThreads.push(thread)))),
+            { discard: true },
+          ).pipe(
+            Effect.onError(() =>
+              Effect.forEach(
+                movedThreads,
+                (thread) =>
+                  threads
+                    .dispatch({
+                      type: "thread.metadata.update",
+                      commandId: CommandId.make(
+                        `${input.commandId}:directory-rollback:${thread.id}`,
+                      ),
+                      threadId: thread.id,
+                      worktreePath: thread.worktreePath,
+                    })
+                    .pipe(Effect.ignoreCause({ log: true })),
+                { discard: true },
+              ),
+            ),
+            Effect.mapError(
+              (cause) =>
+                new TaskFolderError({
+                  operation: "create",
+                  detail: "Could not update the renamed worktree paths.",
+                  cause,
+                }),
+            ),
+          );
+          yield* Effect.gen(function* () {
+            if (createdTaskFolder !== null) {
+              const moved = yield* taskFolders.renameDirectory({
+                root: createdTaskFolder,
+                newDirName: directoryName,
+                beforeMove: Effect.void,
+                onMoved: () => updatePaths,
+              });
+              createdTaskFolder = moved.root;
+              worktreePath = moved.projectPath;
+            } else {
+              const moved = yield* git.renameWorktree({
+                cwd: project.workspaceRoot,
+                path: worktreeCwd,
+                newDirName: directoryName,
+              });
+              yield* updatePaths.pipe(
+                Effect.onError(() =>
+                  git
+                    .renameWorktree({
+                      cwd: project.workspaceRoot,
+                      path: moved.worktree.path,
+                      newDirName: path.basename(worktreeCwd),
+                    })
+                    .pipe(Effect.ignoreCause({ log: true })),
+                ),
+              );
+              worktreePath = moved.worktree.path;
+            }
+            createdWorktreePath = worktreePath;
+            yield* setupTracker.update(threadId, (snapshot) => ({
+              ...snapshot,
+              branch: folderBranch,
+            }));
+          }).pipe(Effect.uninterruptible);
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("Thread worktree directory rename failed", {
+              threadId,
+              cause,
+            }),
+          ),
         );
       }
 
@@ -1109,8 +1246,6 @@ const make = Effect.gen(function* () {
       } else {
         yield* setupTracker.stageStatus(threadId, "setup-script", "skipped");
       }
-      // The agent must start on the branch name the thread will show.
-      if (branchRename !== null) yield* Fiber.join(branchRename);
       yield* setupTracker.markUncancellable(threadId);
       yield* setupTracker.stageStatus(threadId, "agent", "running");
       if (runId !== null) {
