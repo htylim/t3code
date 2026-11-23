@@ -7,7 +7,7 @@ import { userEvent } from "vite-plus/test/browser";
 import { render } from "../../../test/render";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { useRightPanelStore } from "../../rightPanelStore";
-import { buildAskInSideChatPrompt } from "../../selectedTextThreadAction";
+import { buildSelectedCitationPrompt } from "../../selectedTextThreadAction";
 import { useSideChat } from "./useSideChat";
 import { useChatShortcuts } from "./useChatShortcuts";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
@@ -97,7 +97,7 @@ function SelectionSideChat() {
     <>
       <button
         onClick={() =>
-          void sideChat.open(undefined, { draftPrompt: buildAskInSideChatPrompt(citation) })
+          void sideChat.open(undefined, { draftPrompt: buildSelectedCitationPrompt(citation) })
         }
       >
         Ask in side chat
@@ -202,7 +202,7 @@ it.each([
       expect(panel.isOpen).toBe(true);
       expect(panel.activeSurfaceId).toBe(firstSideChat.id);
       expect(useComposerDraftStore.getState().getComposerDraft(firstRef)?.prompt).toBe(
-        `Keep this draft. ${buildAskInSideChatPrompt(citation)}`,
+        `Keep this draft. ${buildSelectedCitationPrompt(citation)}`,
       );
     });
     expect(server.delete).not.toHaveBeenCalled();
@@ -264,6 +264,6 @@ it("reopens the newest side chat by creation time, regardless of tab order or ac
   expect(server.fork).not.toHaveBeenCalled();
   expect(server.send).not.toHaveBeenCalled();
   expect(useComposerDraftStore.getState().getComposerDraft(newestRef)?.prompt).toBe(
-    `Existing question ${buildAskInSideChatPrompt(citation)}`,
+    `Existing question ${buildSelectedCitationPrompt(citation)}`,
   );
 });

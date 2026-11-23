@@ -448,7 +448,7 @@ export function HtmlRenderTimelineRow({
         title: row.htmlRender.title,
       },
       onCite: ctx.onCiteAssistantText,
-      onAskAboutSelection: ctx.onAskAboutSelection,
+      selectionThreadActions: ctx.selectionThreadActions,
       request,
       onReveal: revealQuote,
     };

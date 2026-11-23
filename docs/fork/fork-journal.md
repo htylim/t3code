@@ -1,5 +1,18 @@
 # Fork journal
 
+## Route side-chat selections to the parent composer
+
+- Upstream baseline: `dd941b9c3b58`.
+- A side chat offers **Ask in parent** to add a selected quote to the parent thread's
+  draft. The action uses the side chat's saved parent and preserves the existing
+  draft text. A side chat opened in the main view returns to its parent.
+- Scope: Web and desktop selection controls for assistant responses and HTML
+  previews. **Cite** uses the current chat's composer, and **Ask in new thread**
+  opens a regular thread draft from either view.
+- Verification: Focused toolbar, HTML citation, and side-chat tests plus a web
+  typecheck. An isolated dev session verified the composer destinations and retained
+  citation sources.
+
 ## 2026-11-21 - Integrate upstream task folders
 
 - Upstream baseline `f5d86e31e82f`, target `dd941b9c3b58`, fork source `89090e81aecd`.

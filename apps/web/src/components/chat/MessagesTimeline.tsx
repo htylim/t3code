@@ -78,7 +78,7 @@ import {
   resolveDisclosureRevealScrollDelta,
 } from "./timelineScrollAnchoring";
 import { AssistantSelectionToolbar } from "./AssistantSelectionToolbar";
-import type { SelectedTextThreadActionHandler } from "~/selectedTextThreadAction";
+import type { SelectedTextThreadActions } from "~/selectedTextThreadAction";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { type AssistantCitationRequest } from "./AssistantCitationSource";
 import { useAssistantCitationTarget } from "./useAssistantCitationTarget";
@@ -227,7 +227,7 @@ export interface MessagesTimelineHistoryControls {
 }
 
 interface MessagesTimelineProps {
-  onAskAboutSelection?: SelectedTextThreadActionHandler;
+  selectionThreadActions?: SelectedTextThreadActions | undefined;
   pendingApprovals?: ReadonlyArray<PendingApproval>;
   heldApprovalRequestIds?: ReadonlySet<string> | undefined;
   respondingRequestIds?: TimelineRowSharedState["respondingRequestIds"];
@@ -362,7 +362,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   citationRequest = null,
   citationHistory = CITED_HISTORY_LOADING,
   onCiteAssistantText,
-  onAskAboutSelection,
+  selectionThreadActions,
   onReplyToResponse,
 
   isWorking,
@@ -1130,7 +1130,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   );
   const sharedState: TimelineRowSharedState = {
     onCiteAssistantText,
-    onAskAboutSelection,
+    selectionThreadActions,
     pendingApprovals: pendingApprovalsByRequestId,
     respondingRequestIds,
     canOperateThread,
@@ -1476,7 +1476,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
                 viewport={timelineViewportElement}
                 threadRef={citationThreadRef}
                 onCite={onCiteAssistantText}
-                {...(onAskAboutSelection ? { onAskAboutSelection } : {})}
+                selectionThreadActions={selectionThreadActions}
               />
             ) : null}
             <LegendList<MessagesTimelineRow>

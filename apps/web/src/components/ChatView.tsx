@@ -303,10 +303,12 @@ import {
 import { useEnvironmentShellHasSnapshot } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import {
+  appendSelectionToThreadDraft,
   buildAskInNewThreadPrompt,
-  buildAskInSideChatPrompt,
+  buildSelectedCitationPrompt,
   createSelectedTextThreadDraft,
   type SelectedTextThreadActionHandler,
+  type SelectedTextThreadActions,
 } from "../selectedTextThreadAction";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
@@ -3031,6 +3033,17 @@ export default function ChatView(props: ChatViewProps) {
       selectedTextThreadActionInFlightRef.current
     )
       return;
+    if (action === "ask-in-parent") {
+      if (sideChatParentRef === null) return;
+      appendSelectionToThreadDraft(sideChatParentRef, buildSelectedCitationPrompt(citation));
+      if (parentPanel?.hostRef.threadId !== sideChatParentRef.threadId) {
+        await navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(sideChatParentRef),
+        });
+      }
+      return;
+    }
     if (action === "ask-in-side-chat" && sideChatDisabledReason !== null) {
       toastManager.add(
         stackedThreadToast({
@@ -3044,7 +3057,7 @@ export default function ChatView(props: ChatViewProps) {
     selectedTextThreadActionInFlightRef.current = true;
     try {
       if (action === "ask-in-side-chat") {
-        await sideChat.open(undefined, { draftPrompt: buildAskInSideChatPrompt(citation) });
+        await sideChat.open(undefined, { draftPrompt: buildSelectedCitationPrompt(citation) });
       } else {
         const prompt = buildAskInNewThreadPrompt({
           selectedMarkdown,
@@ -3079,6 +3092,18 @@ export default function ChatView(props: ChatViewProps) {
     selectedTextThreadActionInFlightRef.current = false;
   };
   const askAboutSelectionStable = useStableCallback(askAboutSelection);
+  const selectionThreadActions: SelectedTextThreadActions | undefined =
+    isServerThread && activeProjectRef
+      ? {
+          ask: askAboutSelectionStable,
+          chatAction:
+            activeThread?.lineage.sideChat === true
+              ? sideChatParentRef !== null
+                ? "ask-in-parent"
+                : null
+              : "ask-in-side-chat",
+        }
+      : undefined;
   const openSideChatStable = useStableCallback(() => void sideChat.open());
   const openSurfaceInMainView = useOpenSurfaceInMainView(activeThreadRef);
   const sendSideChatStable = useStableCallback(sideChat.open);
@@ -3686,9 +3711,7 @@ export default function ChatView(props: ChatViewProps) {
                   activeThreadKey={activeThreadKey}
                   syncing={threadSyncPhase !== null}
                   detailLoading={threadDetailLoading}
-                  {...(isServerThread && activeProjectRef
-                    ? { onAskAboutSelection: askAboutSelectionStable }
-                    : {})}
+                  selectionThreadActions={selectionThreadActions}
                   citationRequest={citationRequest}
                   citationHistory={citationHistory}
                   onCiteAssistantText={citeAssistantTextStable}

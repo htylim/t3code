@@ -13,6 +13,7 @@ import { useRef } from "react";
 import { requestWorkspaceFocus } from "../../lib/workspaceFocus";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
+import { appendSelectionToThreadDraft } from "../../selectedTextThreadAction";
 import { newMessageId, newThreadId } from "~/lib/utils";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { useRightPanelStore } from "../../rightPanelStore";
@@ -156,10 +157,7 @@ export function useSideChat(input: {
       )[0];
       if (newestSideChat) {
         const targetRef = scopeThreadRef(threadRef.environmentId, newestSideChat.id);
-        const drafts = useComposerDraftStore.getState();
-        const existingPrompt = drafts.getComposerDraft(targetRef)?.prompt ?? "";
-        const separator = existingPrompt && !/\s$/.test(existingPrompt) ? " " : "";
-        drafts.setPrompt(targetRef, `${existingPrompt}${separator}${options.draftPrompt}`);
+        appendSelectionToThreadDraft(targetRef, options.draftPrompt);
         revealSideChat(threadRef, newestSideChat.id, true);
         pendingRef.current = false;
         return true;

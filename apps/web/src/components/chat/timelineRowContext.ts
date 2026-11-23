@@ -48,7 +48,7 @@ export interface TurnItemSource {
 
 export interface TimelineRowSharedState {
   onCiteAssistantText?: HtmlCitationContext["onCite"] | undefined;
-  onAskAboutSelection?: HtmlCitationContext["onAskAboutSelection"] | undefined;
+  selectionThreadActions?: HtmlCitationContext["selectionThreadActions"] | undefined;
   pendingApprovals: ReadonlyMap<RuntimeRequestId, PendingApproval>;
   respondingRequestIds: ReadonlyArray<RuntimeRequestId>;
   canOperateThread: boolean;

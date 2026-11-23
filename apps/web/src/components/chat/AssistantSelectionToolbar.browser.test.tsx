@@ -13,11 +13,11 @@ const threadRef = {
   threadId: ThreadId.make("message-thread"),
 };
 
-it("creates the same v2 source structure for a regular assistant message", async () => {
+it("cites assistant text and offers the destination for the current chat", async () => {
   const onCite = vi.fn<HtmlCitationContext["onCite"]>(() => true);
   const onAskAboutSelection = vi.fn<SelectedTextThreadActionHandler>().mockResolvedValue(undefined);
   /** Supplies the message identity that the actual timeline puts on rendered replies. */
-  function MessagePreview() {
+  function MessagePreview({ sideChat = false }: { sideChat?: boolean }) {
     const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
     return (
       <div ref={setViewport} style={{ width: 600 }}>
@@ -32,7 +32,10 @@ it("creates the same v2 source structure for a regular assistant message", async
           viewport={viewport}
           threadRef={threadRef}
           onCite={onCite}
-          onAskAboutSelection={onAskAboutSelection}
+          selectionThreadActions={{
+            ask: onAskAboutSelection,
+            chatAction: sideChat ? "ask-in-parent" : "ask-in-side-chat",
+          }}
         />
       </div>
     );
@@ -91,4 +94,19 @@ it("creates the same v2 source structure for a regular assistant message", async
     "Use a native table.",
   );
   expect(onAskAboutSelection).toHaveBeenCalledTimes(2);
+
+  await screen.rerender(<MessagePreview sideChat />);
+  await selectMessage();
+  const askInParent = page.getByRole("button", { name: "Ask in parent" });
+  await expect.element(askInParent).toBeVisible();
+  await expect
+    .element(page.getByRole("button", { name: "Ask in side chat" }))
+    .not.toBeInTheDocument();
+  await expect.element(page.getByRole("button", { name: "Ask in new thread" })).toBeVisible();
+  await userEvent.click(askInParent);
+  expect(onAskAboutSelection).toHaveBeenLastCalledWith(
+    "ask-in-parent",
+    onCite.mock.calls[0]![0],
+    "Use a native table.",
+  );
 });

@@ -174,15 +174,15 @@ Leaving reasoning level or service tier unset uses the provider's own configurat
 ## Quote an assistant response
 
 On web and desktop, select text within one assistant response or HTML preview and choose
-**Cite in composer**. You can add a comment about the quote and write instructions
-around it.
+**Cite** to add a quote to the composer in the chat where you selected it. You can
+add a comment about the quote and write instructions around it.
 
-Choose **Ask in new thread** to start an unsent draft with the selected passage and a source
-reference. **Ask in side chat** first lets you add an optional comment, just like Cite.
-Save appends the quote and comment to the newest side chat's unsent draft and focuses its
-composer. If there is no side chat, it opens one. Cancel
-leaves without creating a side chat. Side chats
-inherit the main thread's context and follow the [standard side-chat lifecycle](./thread-sidebar.md#side-chats).
+Choose **Ask in new thread** to open a regular thread draft with the selected
+passage and a source reference. In a main thread, **Ask in side chat** lets you
+add an optional comment. Save adds the quote and comment to the newest side
+chat's draft or opens a side chat if needed. In a side chat, **Ask in parent**
+adds the quote to the parent thread's draft. Side chats inherit the main
+thread's context and follow the [standard side-chat lifecycle](./thread-sidebar.md#side-chats).
 
 Quotes from HTML previews identify the source attachment and include its title. The agent
 receives the selected text and your comment, without attaching the entire HTML document.

@@ -96,11 +96,14 @@ export function HtmlRenderFrame(props: {
         return citationContext.onCite(citation);
       },
     };
-    const askAboutSelection = citationContext.onAskAboutSelection;
-    if (askAboutSelection) {
-      expandedCitation.onAskAboutSelection = async (...args) => {
-        setExpandedSrc(null);
-        await askAboutSelection(...args);
+    const selectionThreadActions = citationContext.selectionThreadActions;
+    if (selectionThreadActions) {
+      expandedCitation.selectionThreadActions = {
+        ...selectionThreadActions,
+        ask: async (...args) => {
+          setExpandedSrc(null);
+          await selectionThreadActions.ask(...args);
+        },
       };
     }
   }

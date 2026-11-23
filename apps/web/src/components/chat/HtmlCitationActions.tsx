@@ -3,7 +3,7 @@ import { readHtmlCitationMessage } from "@t3tools/shared/htmlRenderCitation";
 import { useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { isSelectionRectVisible, resolveSelectionActionPosition } from "~/lib/selectionActions";
-import type { SelectedTextThreadActionHandler } from "~/selectedTextThreadAction";
+import type { SelectedTextThreadActions } from "~/selectedTextThreadAction";
 import type { AssistantCitationTarget } from "./AssistantCitationSource";
 import {
   AssistantSelectionToolbar,
@@ -13,7 +13,7 @@ import {
 export interface HtmlCitationContext {
   source: Extract<AssistantCitationSource, { kind: "html-attachment" }>;
   onCite: (citation: AssistantCitation, anchor?: AssistantCitationSourceAnchor) => boolean;
-  onAskAboutSelection?: SelectedTextThreadActionHandler | undefined;
+  selectionThreadActions?: SelectedTextThreadActions | undefined;
   request?: AssistantCitationTarget | null | undefined;
   onReveal?: ((rect: DOMRect, found: boolean) => void) | undefined;
 }
@@ -184,7 +184,7 @@ export function HtmlCitationActions({
       viewport={captured?.viewport ?? null}
       threadRef={context.source}
       onCite={context.onCite}
-      {...(context.onAskAboutSelection ? { onAskAboutSelection: context.onAskAboutSelection } : {})}
+      selectionThreadActions={context.selectionThreadActions}
       externalSelection={captured?.selection ?? null}
       onDismissExternal={() => setCaptured(null)}
       onClearExternal={() => command("clear-selection")}

@@ -4,12 +4,19 @@ import {
   serializeAssistantCitation,
 } from "@t3tools/shared/assistantCitations";
 
-import { type DraftId } from "./composerDraftStore";
+import { type DraftId, useComposerDraftStore } from "./composerDraftStore";
 import { formatInlineContextReference } from "./lib/composerContextReferences";
 import { threadContextRecord } from "@t3tools/shared/composerContextReferences";
 import { threadContextReference } from "./lib/composerContextRecords";
 
-export type SelectedTextThreadAction = "ask-in-new-thread" | "ask-in-side-chat";
+type SelectionChatAction = "ask-in-side-chat" | "ask-in-parent";
+
+export type SelectedTextThreadAction = "ask-in-new-thread" | SelectionChatAction;
+
+export interface SelectedTextThreadActions {
+  readonly ask: SelectedTextThreadActionHandler;
+  readonly chatAction: SelectionChatAction | null;
+}
 
 export type SelectedTextThreadActionHandler = (
   action: SelectedTextThreadAction,
@@ -42,8 +49,17 @@ export function buildAskInNewThreadPrompt(input: {
   return `Regarding this selection from ${source}:\n\n${markdownBlockquote(input.selectedMarkdown)}\n\n`;
 }
 
-export function buildAskInSideChatPrompt(assistantCitation: AssistantCitation): string {
+/** Builds an unsent citation with space for a question after it. */
+export function buildSelectedCitationPrompt(assistantCitation: AssistantCitation): string {
   return `${serializeAssistantCitation(assistantCitation)} `;
+}
+
+/** Appends a selection to a thread's unsent draft without replacing existing text. */
+export function appendSelectionToThreadDraft(threadRef: ScopedThreadRef, selectionPrompt: string) {
+  const drafts = useComposerDraftStore.getState();
+  const existingPrompt = drafts.getComposerDraft(threadRef)?.prompt ?? "";
+  const separator = existingPrompt && !/\s$/.test(existingPrompt) ? " " : "";
+  drafts.setPrompt(threadRef, `${existingPrompt}${separator}${selectionPrompt}`);
 }
 
 /** Prefill the exact draft returned by navigation, including reused project drafts. */

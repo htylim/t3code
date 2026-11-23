@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { DraftId } from "./composerDraftStore";
 import {
   buildAskInNewThreadPrompt,
-  buildAskInSideChatPrompt,
+  buildSelectedCitationPrompt,
   createSelectedTextThreadDraft,
 } from "./selectedTextThreadAction";
 
@@ -53,7 +53,7 @@ describe("Ask in new thread prompt", () => {
   });
 });
 
-describe("Ask in side chat prompt", () => {
+describe("Selected citation prompt", () => {
   it("uses an assistant citation when the selection came from an assistant message", () => {
     const citation: AssistantCitation = {
       version: 1,
@@ -67,7 +67,7 @@ describe("Ask in side chat prompt", () => {
       suffix: " here",
     };
 
-    const prompt = buildAskInSideChatPrompt(citation);
+    const prompt = buildSelectedCitationPrompt(citation);
 
     expect(collectAssistantCitations(prompt).map((match) => match.citation)).toEqual([citation]);
     expect(prompt).not.toContain("> the selected answer");

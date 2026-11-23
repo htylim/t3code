@@ -4,14 +4,14 @@ import {
   type AssistantCitation,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
-import { MessageSquarePlusIcon, PanelRightIcon, QuoteIcon } from "lucide-react";
+import { ArrowUpLeftIcon, MessageSquarePlusIcon, PanelRightIcon, QuoteIcon } from "lucide-react";
 import { useGT } from "gt-react";
 import { use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { chatMarkdownClipboardPayload } from "~/markdown-clipboard";
 import type {
   SelectedTextThreadAction,
-  SelectedTextThreadActionHandler,
+  SelectedTextThreadActions,
 } from "~/selectedTextThreadAction";
 import {
   captureAssistantTextSelection,
@@ -46,7 +46,7 @@ export function AssistantSelectionToolbar({
   viewport,
   threadRef,
   onCite,
-  onAskAboutSelection,
+  selectionThreadActions,
   externalSelection,
   onDismissExternal,
   onClearExternal,
@@ -55,7 +55,7 @@ export function AssistantSelectionToolbar({
   viewport: HTMLElement | null;
   threadRef: ScopedThreadRef;
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
-  onAskAboutSelection?: SelectedTextThreadActionHandler;
+  selectionThreadActions?: SelectedTextThreadActions | undefined;
   externalSelection?: AssistantToolbarSelection | null;
   onDismissExternal?: () => void;
   onClearExternal?: () => void;
@@ -235,10 +235,10 @@ export function AssistantSelectionToolbar({
     const captured = sideChatComment.selection;
     /** Open the unsent side chat only after the citation comment is saved. */
     const saveComment = (comment: string) => {
-      if (!onAskAboutSelection) return false;
+      if (!selectionThreadActions) return false;
       setSideChatComment(null);
       dismiss();
-      void onAskAboutSelection(
+      void selectionThreadActions.ask(
         "ask-in-side-chat",
         withAssistantCitationComment(captured.citation, comment),
         captured.selectedMarkdown,
@@ -302,7 +302,7 @@ export function AssistantSelectionToolbar({
     return true;
   };
   const ask = (action: SelectedTextThreadAction) => {
-    if (tooLong || !onAskAboutSelection) return;
+    if (tooLong || !selectionThreadActions) return;
     if (action === "ask-in-side-chat") {
       draftCommentRef.current = null;
       setSideChatComment({ selection, portalContainer: portalContainer ?? document.body });
@@ -311,7 +311,7 @@ export function AssistantSelectionToolbar({
     else window.getSelection()?.removeAllRanges();
     dismiss();
     if (action !== "ask-in-side-chat") {
-      void onAskAboutSelection(action, selection.citation, selection.selectedMarkdown);
+      void selectionThreadActions.ask(action, selection.citation, selection.selectedMarkdown);
     }
   };
   return createPortal(
@@ -345,7 +345,7 @@ export function AssistantSelectionToolbar({
           ? gt("Shorten selection")
           : gt("Cite", { $context: "verb, button that quotes the selected text" })}
       </Button>
-      {onAskAboutSelection ? (
+      {selectionThreadActions ? (
         <>
           <Button
             type="button"
@@ -357,16 +357,30 @@ export function AssistantSelectionToolbar({
             <MessageSquarePlusIcon aria-hidden="true" className="size-3.5" />
             {gt("Ask in new thread")}
           </Button>
-          <Button
-            type="button"
-            size="xs"
-            variant="ghost"
-            disabled={tooLong}
-            onClick={() => ask("ask-in-side-chat")}
-          >
-            <PanelRightIcon aria-hidden="true" className="size-3.5" />
-            {gt("Ask in side chat")}
-          </Button>
+          {selectionThreadActions.chatAction === "ask-in-parent" ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              disabled={tooLong}
+              onClick={() => ask("ask-in-parent")}
+            >
+              <ArrowUpLeftIcon aria-hidden="true" className="size-3.5" />
+              {gt("Ask in parent")}
+            </Button>
+          ) : null}
+          {selectionThreadActions.chatAction === "ask-in-side-chat" ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              disabled={tooLong}
+              onClick={() => ask("ask-in-side-chat")}
+            >
+              <PanelRightIcon aria-hidden="true" className="size-3.5" />
+              {gt("Ask in side chat")}
+            </Button>
+          ) : null}
         </>
       ) : null}
     </div>,
