@@ -26,13 +26,13 @@ describe("web runtime relay telemetry policy", () => {
     {
       surface: "desktop enabled",
       desktopBridge: { getRelayTelemetryEnabled: () => true },
-      exports: true,
+      exports: false,
     },
     {
       // The desktop host reads the login shell after the renderer has started.
       surface: "desktop enabled once the login shell is read",
       desktopBridge: { getRelayTelemetryEnabled: answers(null, true) },
-      exports: true,
+      exports: false,
     },
     {
       surface: "desktop opt-out found in the login shell",
@@ -42,7 +42,7 @@ describe("web runtime relay telemetry policy", () => {
     {
       surface: "ordinary browser ignores host opt-out",
       desktopBridge: undefined,
-      exports: true,
+      exports: false,
     },
   ])("applies $surface before the first relay span", async ({ desktopBridge, exports }) => {
     vi.resetModules();

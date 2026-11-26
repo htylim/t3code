@@ -1,5 +1,10 @@
 # Product usage data
 
+This fork disables product usage events and relay connection trace export on the server,
+desktop, web, and mobile clients. Environment variables cannot enable them. Mobile crash
+reports and host activity publishing are separate features and retain their existing settings.
+The sections below describe upstream behavior and those separate features.
+
 The T3 Code server sends product usage events to T3 Code's own endpoint at `ingest.t3.codes`,
 associated with a hashed account or installation identifier. To count how many installations one person
 uses, the server also sends hashed account identifiers: your T3 Connect account, your OpenAI and

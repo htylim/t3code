@@ -17,7 +17,7 @@ vi.mock("expo-constants", () => ({
   },
 }));
 
-it.effect("does not let OTLP serialization failures alter application effects", () => {
+it.effect("keeps application failures intact without exporting relay traces", () => {
   const fetchFn = vi.fn<typeof fetch>(async () => new Response(null, { status: 202 }));
   const layerTracing = Tracing.layerFromConfig(
     {
@@ -52,10 +52,7 @@ it.effect("does not let OTLP serialization failures alter application effects", 
     Effect.scoped,
     Effect.andThen(
       Effect.sync(() => {
-        expect(fetchFn).toHaveBeenCalledOnce();
-        expect(new TextDecoder().decode(fetchFn.mock.calls[0]?.[1]?.body as Uint8Array)).toContain(
-          "mobile.test.failed-span",
-        );
+        expect(fetchFn).not.toHaveBeenCalled();
       }),
     ),
   );

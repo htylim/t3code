@@ -1,5 +1,18 @@
 # Fork journal
 
+## Disable upstream product analytics and relay tracing
+
+- Upstream baseline: `dd941b9c3b58`; checkout before this change: `3924bfef83`.
+- Replace the analytics service and shared relay exporter with no-op implementations.
+  Product usage and account identity events cannot leave through analytics, and relay
+  traces cannot leave from server, desktop, web, or mobile builds, even with configured
+  credentials or telemetry enable variables. No new controls are added.
+- Keep service contracts to reduce downstream changes at callers. Mobile crash reports,
+  host activity publishing, and user-configured diagnostic exports retain their settings.
+- Verification: Changed-file checks passed formatting, lint, unused-code checks, generated
+  GraphQL checks, and 23 tests across seven files. The affected-package type check failed
+  with existing `schemaClassMissingBrand` diagnostics outside these changes.
+
 ## Route side-chat selections to the parent composer
 
 - Upstream baseline: `dd941b9c3b58`.

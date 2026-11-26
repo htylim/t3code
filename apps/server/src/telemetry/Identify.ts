@@ -294,11 +294,6 @@ export const getTelemetryIdentityForHome = Effect.fn("getTelemetryIdentityForHom
   };
 });
 
-export const getTelemetryIdentity = Effect.flatMap(
-  HostProcess.HomeDirectory,
-  getTelemetryIdentityForHome,
-);
-
 /**
  * Owners the server can read without a client: the linked T3 Connect account
  * and the provider logins under `homeDirectory`. Clients add `connect` and
