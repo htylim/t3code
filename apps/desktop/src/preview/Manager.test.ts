@@ -2252,6 +2252,50 @@ describe("PreviewManager", () => {
     ),
   );
 
+  effectIt.effect("keeps previews in another app window alive when one window closes", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const states = new Map<string, PreviewManager.PreviewTabState>();
+        yield* manager.subscribeStateChanges((tabId, state) =>
+          Effect.sync(() => {
+            states.set(tabId, state);
+          }),
+        );
+        const firstHost = makeTestHostWebContents();
+        const secondHost = makeTestHostWebContents();
+        let closeFirst: (() => void) | undefined;
+        yield* manager.setMainWindow({
+          isDestroyed: () => false,
+          webContents: firstHost,
+          once: (_event: string, listener: () => void) => {
+            closeFirst = listener;
+          },
+        } as never);
+        yield* manager.setMainWindow({
+          isDestroyed: () => false,
+          webContents: secondHost,
+          once: vi.fn(),
+        } as never);
+        const firstGuest = makeTestPreviewWebContents(async () => makeStillImage(), 41, firstHost);
+        const secondGuest = makeTestPreviewWebContents(
+          async () => makeStillImage(),
+          42,
+          secondHost,
+        );
+        fromId.mockImplementation((id) => (id === 41 ? firstGuest : secondGuest));
+        yield* manager.createTab("first-window-tab");
+        yield* manager.createTab("second-window-tab");
+        yield* manager.registerWebview("first-window-tab", 41);
+        yield* manager.registerWebview("second-window-tab", 42);
+        closeFirst?.();
+        // Creation waits for host cleanup, so assertions observe the completed close.
+        yield* manager.createTab("after-close");
+        expect(states.get("first-window-tab")?.webContentsId).toBeNull();
+        expect(states.get("second-window-tab")?.webContentsId).toBe(42);
+      }),
+    ),
+  );
+
   effectIt.effect("ignores close events from replaced main windows", () =>
     withManager((manager) =>
       Effect.gen(function* () {

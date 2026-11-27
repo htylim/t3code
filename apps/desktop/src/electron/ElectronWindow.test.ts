@@ -4,6 +4,7 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import type * as Electron from "electron";
 import { beforeEach, vi } from "vite-plus/test";
 
@@ -204,6 +205,39 @@ describe("ElectronWindow", () => {
         assert.strictEqual(error.cause, cause);
       }
       assert.equal(vi.mocked(laterWindow.destroy).mock.calls.length, 1);
+    }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect("keeps app windows registered and routes to the focused app window", () =>
+    Effect.gen(function* () {
+      const electronWindow = yield* ElectronWindow.ElectronWindow;
+      const first = {
+        isDestroyed: () => false,
+        webContents: { id: 1, send: vi.fn() },
+      } as unknown as Electron.BrowserWindow;
+      const second = {
+        isDestroyed: () => false,
+        webContents: { id: 2, send: vi.fn() },
+      } as unknown as Electron.BrowserWindow;
+      const popup = { isDestroyed: () => false } as unknown as Electron.BrowserWindow;
+      yield* electronWindow.setMain(first);
+      yield* electronWindow.setMain(second);
+      assert.strictEqual(Option.getOrThrow(yield* electronWindow.serverBrowserHost), first);
+      getFocusedWindowMock.mockReturnValue(first);
+      assert.strictEqual(Option.getOrThrow(yield* electronWindow.main), first);
+      assert.strictEqual(Option.getOrThrow(yield* electronWindow.fromWebContentsId(2)), second);
+      assert.isTrue(Option.isNone(yield* electronWindow.fromWebContentsId(3)));
+      getFocusedWindowMock.mockReturnValue(popup);
+      assert.strictEqual(Option.getOrThrow(yield* electronWindow.main), second);
+      yield* electronWindow.clearMain(Option.some(first));
+      assert.strictEqual(Option.getOrThrow(yield* electronWindow.main), second);
+      assert.strictEqual(Option.getOrThrow(yield* electronWindow.serverBrowserHost), second);
+      assert.deepEqual(vi.mocked(second.webContents.send).mock.calls, [
+        ["desktop:server-browser-host-change", true],
+      ]);
+      assert.isTrue(Option.isNone(yield* electronWindow.fromWebContentsId(1)));
+      yield* electronWindow.clearMain(Option.some(second));
+      assert.isTrue(Option.isNone(yield* electronWindow.main));
     }).pipe(Effect.provide(layerTest)),
   );
 

@@ -13,5 +13,6 @@ describe("previewRuntimeTabId", () => {
 
     expect(previewRuntimeTabId(ref, "epoch-a", "tab_1")).toBe(runtimeTabId);
     expect(previewRuntimeTabId(ref, "epoch-b", "tab_1")).not.toBe(runtimeTabId);
+    expect(previewRuntimeTabId(ref, "epoch-a", "tab_1", "second-window")).not.toBe(runtimeTabId);
   });
 });

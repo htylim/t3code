@@ -301,6 +301,8 @@ function layerTest(input: {
         Effect.as(input.window),
       ),
     main: Ref.get(input.mainWindow),
+    fromWebContentsId: () => Effect.die("unexpected app window lookup"),
+    serverBrowserHost: Effect.succeedNone,
     currentMainOrFirst: Ref.get(input.mainWindow).pipe(
       Effect.map(Option.orElse(() => Option.fromNullishOr(input.fallbackWindow ?? null))),
     ),
@@ -437,6 +439,8 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
         }),
       main: Ref.get(mainWindow),
       currentMainOrFirst,
+      fromWebContentsId: () => Effect.die("unexpected app window lookup"),
+      serverBrowserHost: Effect.succeedNone,
       focusedMainOrFirst: currentMainOrFirst,
       setMain: (window) => Ref.set(mainWindow, Option.some(window)),
       clearMain: () => Ref.set(mainWindow, Option.none()),
@@ -595,12 +599,14 @@ describe("DesktopWindow", () => {
           const desktopWindow = yield* DesktopWindow.DesktopWindow;
           yield* desktopWindow.createMainIfBackendReady;
           assert.equal(yield* Ref.get(createCount), 1);
-          yield* Ref.set(mainWindow, Option.none());
-          yield* desktopWindow.activate;
+          yield* desktopWindow.newWindow;
           assert.equal(yield* Ref.get(createCount), 2);
           yield* Ref.set(mainWindow, Option.none());
-          yield* desktopWindow.dispatchMenuAction("new-thread");
+          yield* desktopWindow.activate;
           assert.equal(yield* Ref.get(createCount), 3);
+          yield* Ref.set(mainWindow, Option.none());
+          yield* desktopWindow.dispatchMenuAction("new-thread");
+          assert.equal(yield* Ref.get(createCount), 4);
         }).pipe(Effect.provide(layer));
       }),
   );

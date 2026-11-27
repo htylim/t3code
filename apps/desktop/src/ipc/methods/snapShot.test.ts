@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Option from "effect/Option";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -44,7 +45,8 @@ describe("window capture IPC", () => {
       Effect.provide(
         Layer.mergeAll(
           Layer.succeed(ElectronWindow.ElectronWindow, {
-            main: Effect.succeedSome({ webContents: { id: 7 } }),
+            fromWebContentsId: (id: number) =>
+              Effect.succeed(id === 7 ? Option.some({ webContents: { id: 7 } }) : Option.none()),
           } as ElectronWindow.ElectronWindow["Service"]),
           Layer.succeed(DesktopSnapShot.DesktopSnapShot, {
             previewConfig: () =>
@@ -81,7 +83,8 @@ describe("window capture IPC", () => {
       Effect.provide(
         Layer.mergeAll(
           Layer.succeed(ElectronWindow.ElectronWindow, {
-            main: Effect.succeedSome({ webContents: { id: 7 } }),
+            fromWebContentsId: (id: number) =>
+              Effect.succeed(id === 7 ? Option.some({ webContents: { id: 7 } }) : Option.none()),
           } as ElectronWindow.ElectronWindow["Service"]),
           Layer.succeed(DesktopSnapShot.DesktopSnapShot, {
             setup: (action: string) =>

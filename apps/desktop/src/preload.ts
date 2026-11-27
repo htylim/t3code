@@ -104,6 +104,16 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  getServerBrowserHost: () =>
+    ipcRenderer.sendSync(IpcChannels.GET_SERVER_BROWSER_HOST_CHANNEL) === true,
+  onServerBrowserHostChange: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, hosting: unknown) => {
+      if (typeof hosting === "boolean") listener(hosting);
+    };
+    ipcRenderer.on(IpcChannels.SERVER_BROWSER_HOST_CHANGE_CHANNEL, handler);
+    return () =>
+      ipcRenderer.removeListener(IpcChannels.SERVER_BROWSER_HOST_CHANGE_CHANNEL, handler);
+  },
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {

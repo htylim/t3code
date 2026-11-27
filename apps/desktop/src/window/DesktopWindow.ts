@@ -124,6 +124,8 @@ export type MainWindowContentsCommand = "reload" | "forceReload" | "toggleDevToo
 export class DesktopWindow extends Context.Service<
   DesktopWindow,
   {
+    /** Opens another app window after backend bootstrap, sharing the running environment. */
+    readonly newWindow: Effect.Effect<void, DesktopWindowError>;
     readonly createMain: Effect.Effect<Electron.BrowserWindow, DesktopWindowError>;
     readonly ensureMain: Effect.Effect<Electron.BrowserWindow, DesktopWindowError>;
     readonly revealOrCreateMain: Effect.Effect<Electron.BrowserWindow, DesktopWindowError>;
@@ -407,7 +409,7 @@ export const make = Effect.gen(function* () {
   const revealMain = Effect.fn("desktop.window.revealMain")((window: Electron.BrowserWindow) =>
     Effect.suspend(() => pendingMainReveals.get(window) ?? electronWindow.reveal(window)),
   );
-  let flushMainWindowBounds: Effect.Effect<void> = Effect.void;
+  const windowBoundsFlushes = new Map<Electron.BrowserWindow, Effect.Effect<void>>();
 
   const dismissConnectingSplash = Effect.gen(function* () {
     const splash = yield* Ref.getAndSet(splashWindowRef, Option.none());
@@ -612,7 +614,7 @@ export const make = Effect.gen(function* () {
         fiber === undefined ? Effect.void : Fiber.join(fiber).pipe(Effect.asVoid),
       ),
     );
-    flushMainWindowBounds = flushBoundsPersist;
+    windowBoundsFlushes.set(window, flushBoundsPersist);
 
     yield* previewManager.setMainWindow(window);
     if (yield* Ref.get(desktopState.quitting)) {
@@ -1048,6 +1050,7 @@ export const make = Effect.gen(function* () {
       if (!backendHasStarted) mainClosedDuringStartup = true;
       clearDevelopmentLoadRetry();
       clearBoundsPersist();
+      windowBoundsFlushes.delete(window);
       void runPromise(electronWindow.clearMain(Option.some(window)));
     });
 
@@ -1173,6 +1176,14 @@ export const make = Effect.gen(function* () {
   });
 
   return DesktopWindow.of({
+    newWindow: Effect.gen(function* () {
+      if (yield* waitingForBackend) return;
+      yield* createMain;
+    }).pipe(
+      mainWindowMutex.withPermits(1),
+      Effect.asVoid,
+      Effect.withSpan("desktop.window.newWindow"),
+    ),
     createMain: createMain.pipe(Effect.flatMap(requireWindow)),
     ensureMain: ensureMain.pipe(Effect.flatMap(requireWindow)),
     revealOrCreateMain,
@@ -1214,9 +1225,9 @@ export const make = Effect.gen(function* () {
     handleBackendNotReady: Ref.set(backendReadyRef, false).pipe(
       Effect.withSpan("desktop.window.handleBackendNotReady"),
     ),
-    flushMainWindowBounds: Effect.suspend(() => flushMainWindowBounds).pipe(
-      Effect.withSpan("desktop.window.flushMainWindowBounds"),
-    ),
+    flushMainWindowBounds: Effect.suspend(() =>
+      Effect.all([...windowBoundsFlushes.values()], { discard: true }),
+    ).pipe(Effect.withSpan("desktop.window.flushMainWindowBounds")),
     dispatchMenuAction: Effect.fn("desktop.window.dispatchMenuAction")(function* (action, options) {
       yield* Effect.annotateCurrentSpan({ action });
       yield* dispatchRendererEvent(MENU_ACTION_CHANNEL, action, options);

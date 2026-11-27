@@ -155,3 +155,6 @@ export const COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:complete-legacy-lo
 export const RESTART_AUDIO_SERVICE_CHANNEL = "desktop:restart-audio-service";
 
 export const START_FILE_DRAG_CHANNEL = "desktop:start-file-drag";
+
+export const GET_SERVER_BROWSER_HOST_CHANNEL = "desktop:get-server-browser-host";
+export const SERVER_BROWSER_HOST_CHANGE_CHANNEL = "desktop:server-browser-host-change";

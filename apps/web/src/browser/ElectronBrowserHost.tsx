@@ -31,6 +31,7 @@ import { useBrowserPointerStore } from "./browserPointerStore";
 import { HostedBrowserWebview } from "./HostedBrowserWebview";
 import { openUrlInPreview } from "./openFileInPreview";
 import { rendersServerTabNatively } from "./previewRuntime";
+import { startDesktopBrowserHostSync, useHostsServerBrowser } from "./desktopBrowserHost";
 import { previewRuntimeTabId } from "./previewRuntimeTabId";
 
 /** Every session this window renders as a hosted webview, in a fixed (non-display) order. */
@@ -115,6 +116,7 @@ export function startElectronBrowserHost(): () => void {
   const preview = window.desktopBridge?.preview;
   if (!preview) return () => {};
   const disposers = [
+    startDesktopBrowserHostSync(),
     startAnnotationThemeSync(preview),
     preview.onPointerEvent((event) => {
       useBrowserPointerStore.getState().apply(event);
@@ -132,6 +134,7 @@ export function startElectronBrowserHost(): () => void {
 }
 
 export function ElectronBrowserHost() {
+  useHostsServerBrowser();
   const previewByThreadKey = useActivePreviewSessions();
   const primaryEnvironmentId = useAtomValue(primaryEnvironmentIdAtom);
   useDesktopHostedPreviewSessions(primaryEnvironmentId);

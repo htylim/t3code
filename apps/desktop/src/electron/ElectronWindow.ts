@@ -14,6 +14,8 @@ import * as Schema from "effect/Schema";
 
 import * as Electron from "electron";
 
+import { SERVER_BROWSER_HOST_CHANGE_CHANNEL } from "../ipc/channels.ts";
+
 import {
   activateWindowsForeground,
   isWindowsShellHostedForeground,
@@ -115,6 +117,12 @@ export class ElectronWindow extends Context.Service<
       options: Electron.BrowserWindowConstructorOptions,
       behavior?: { readonly auxiliary?: boolean },
     ) => Effect.Effect<Electron.BrowserWindow, ElectronWindowCreateError>;
+    /** Finds a registered app renderer; preview guests and popups are excluded. */
+    readonly fromWebContentsId: (
+      id: number,
+    ) => Effect.Effect<Option.Option<Electron.BrowserWindow>>;
+    /** The oldest open app window hosts environment browser tabs for all clients. */
+    readonly serverBrowserHost: Effect.Effect<Option.Option<Electron.BrowserWindow>>;
     readonly main: Effect.Effect<Option.Option<Electron.BrowserWindow>>;
     readonly currentMainOrFirst: Effect.Effect<Option.Option<Electron.BrowserWindow>>;
     readonly focusedMainOrFirst: Effect.Effect<Option.Option<Electron.BrowserWindow>>;
@@ -147,6 +155,7 @@ export const make = Effect.gen(function* () {
   const captureRevealWindows = new Set<number>();
   yield* Effect.addFinalizer(() => Effect.sync(() => windowsForegroundFocus?.close()));
   const mainWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+  const appWindows = new Set<Electron.BrowserWindow>();
   const auxiliaryWindows = new WeakSet<Electron.BrowserWindow>();
   const titleBarOverlayWindows = new WeakSet<Electron.BrowserWindow>();
 
@@ -176,11 +185,13 @@ export const make = Effect.gen(function* () {
     }).pipe(Effect.orDie);
 
   const liveMain = Effect.gen(function* () {
-    const main = yield* Ref.get(mainWindowRef);
-    if (Option.isNone(main) || (yield* isWindowDestroyed(main.value))) {
-      return Option.none<Electron.BrowserWindow>();
+    const focused = Electron.BrowserWindow.getFocusedWindow();
+    if (focused && appWindows.has(focused) && !focused.isDestroyed()) {
+      return Option.some(focused);
     }
-    return main;
+    const main = yield* Ref.get(mainWindowRef);
+    if (Option.isSome(main) && !(yield* isWindowDestroyed(main.value))) return main;
+    return Option.fromNullishOr([...appWindows].find((window) => !window.isDestroyed()));
   });
 
   const currentMainOrFirst = Effect.gen(function* () {
@@ -253,22 +264,53 @@ export const make = Effect.gen(function* () {
         catch: (cause) => new ElectronWindowCreateError({ options: diagnosticOptions, cause }),
       });
     }),
+    fromWebContentsId: Effect.fn("ElectronWindow.fromWebContentsId")(function (id) {
+      return Effect.sync(() =>
+        Option.fromNullishOr(
+          [...appWindows].find((window) => !window.isDestroyed() && window.webContents.id === id),
+        ),
+      );
+    }),
+    serverBrowserHost: Effect.sync(() =>
+      Option.fromNullishOr([...appWindows].find((window) => !window.isDestroyed())),
+    ),
     main: liveMain,
     currentMainOrFirst,
     focusedMainOrFirst,
     setMain: Effect.fn("ElectronWindow.setMain")(function (window) {
-      return Ref.set(mainWindowRef, Option.some(window));
+      return Effect.sync(() => appWindows.add(window)).pipe(
+        Effect.andThen(Ref.set(mainWindowRef, Option.some(window))),
+      );
     }),
     clearMain: Effect.fn("ElectronWindow.clearMain")(function (window) {
-      return Ref.update(mainWindowRef, (current) => {
-        if (Option.isNone(current)) {
-          return current;
+      return Effect.sync(() => {
+        const previousHost = appWindows.values().next().value;
+        if (Option.isSome(window)) appWindows.delete(window.value);
+        else appWindows.clear();
+        const nextHost = [...appWindows].find((candidate) => !candidate.isDestroyed());
+        if (previousHost !== nextHost) {
+          for (const candidate of appWindows) {
+            if (!candidate.isDestroyed()) {
+              candidate.webContents.send(
+                SERVER_BROWSER_HOST_CHANGE_CHANNEL,
+                candidate === nextHost,
+              );
+            }
+          }
         }
-        if (Option.isSome(window) && current.value !== window.value) {
-          return current;
-        }
-        return Option.none();
-      });
+      }).pipe(
+        Effect.andThen(
+          Ref.update(mainWindowRef, (current) => {
+            if (Option.isNone(current)) {
+              return current;
+            }
+            if (Option.isSome(window) && current.value !== window.value) {
+              return current;
+            }
+            return Option.none();
+          }),
+        ),
+      );
     }),
     prepareReveal: Effect.fn("ElectronWindow.prepareReveal")(function (window) {
       return Effect.promise(async () => {

@@ -48,6 +48,7 @@ import {
   getPreferredSystemLanguages,
   getPrimaryPasteEnabled,
   getWindowFullscreenState,
+  getServerBrowserHost,
   openExternal,
   revealPath,
   readMedia,
@@ -111,6 +112,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handleSync(getPreferredSystemLanguages);
   yield* ipc.handleSync(getPrimaryPasteEnabled);
   yield* ipc.handleSync(getWindowFullscreenState);
+  yield* ipc.handleSync(getServerBrowserHost);
   yield* ipc.handleSync(getLocalEnvironmentBootstraps);
   yield* ipc.handleSync(getLocalEnvironmentEnabled);
   yield* ipc.handle(setLocalEnvironmentEnabled);

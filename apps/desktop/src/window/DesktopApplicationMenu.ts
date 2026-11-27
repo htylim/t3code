@@ -281,6 +281,19 @@ export const make = Effect.gen(function* () {
       {
         label: m(msg("File", { $context: "menu bar title" })),
         submenu: [
+          {
+            label: m(msg("New Window")),
+            accelerator: "CmdOrCtrl+N",
+            click: () =>
+              runMenuEffect(
+                "new-window",
+                Effect.flatMap(
+                  DesktopWindow.DesktopWindow,
+                  (desktopWindow) => desktopWindow.newWindow,
+                ),
+              ),
+          },
+          { type: "separator" },
           ...(environment.platform === "darwin"
             ? []
             : [

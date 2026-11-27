@@ -6,6 +6,16 @@ also lists the command IDs and defaults available in your version.
 To free a default shortcut for another command, choose **Unassign** from its row's
 actions menu. **Reset to default** brings it back.
 
+## Desktop windows
+
+Choose **File → New Window**, or press `Cmd+N` on macOS and `Ctrl+N` on Windows
+or Linux, to open another desktop window. Each window can show a different thread.
+All windows share the same environments, running agents, and app zoom. Close a window from
+the File menu or its window controls; **Quit** closes the whole app.
+
+The environment browser is shared. Secondary windows use its streamed view. If
+the window that hosts the browser closes, another open window takes over.
+
 ## Composer controls
 
 `mod+shift+d` starts dictation in the focused editor, or the composer, and finishes it on the next press;
@@ -196,7 +206,8 @@ through the pages you have visited, like a browser's back and forward buttons.
 (`mod+alt+n`) starts a thread [without a project](./thread-sidebar.md#start-without-a-project).
 
 To keep the current thread's checkout or worktree, bind **Chat: New Local (Continue Workspace)**
-to `mod+n` in **Settings → Keybindings**. Its command ID is `chat.newLocalContinueWorkspace`,
+to an unused shortcut in **Settings → Keybindings**. The desktop app reserves `mod+n`
+for a new window. Its command ID is `chat.newLocalContinueWorkspace`,
 and it has no default shortcut. When launched from a draft, it keeps that draft's workspace choice.
 With no current thread or draft, it uses the project's new-thread defaults.
 

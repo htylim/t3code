@@ -140,12 +140,21 @@ export const getPreferredSystemLanguages = DesktopIpc.makeSyncIpcMethod({
   }),
 });
 
+export const getServerBrowserHost = DesktopIpc.makeSyncIpcMethod({
+  channel: IpcChannels.GET_SERVER_BROWSER_HOST_CHANNEL,
+  result: Schema.Boolean,
+  handler: Effect.fn("desktop.ipc.window.getServerBrowserHost")(function* (event) {
+    const host = yield* (yield* ElectronWindow.ElectronWindow).serverBrowserHost;
+    return Option.isSome(host) && host.value.webContents.id === event?.sender.id;
+  }),
+});
+
 export const getWindowFullscreenState = DesktopIpc.makeSyncIpcMethod({
   channel: IpcChannels.GET_WINDOW_FULLSCREEN_STATE_CHANNEL,
   result: Schema.Boolean,
-  handler: Effect.fn("desktop.ipc.window.getWindowFullscreenState")(function* () {
+  handler: Effect.fn("desktop.ipc.window.getWindowFullscreenState")(function* (event) {
     const electronWindow = yield* ElectronWindow.ElectronWindow;
-    const window = yield* electronWindow.currentMainOrFirst;
+    const window = yield* electronWindow.fromWebContentsId(event?.sender.id ?? -1);
     return Option.isSome(window) && window.value.isFullScreen();
   }),
 });
@@ -384,7 +393,9 @@ export const readMedia = DesktopIpc.makeIpcMethod({
   payload: Schema.String,
   result: Schema.NullOr(DesktopMediaReadSchema),
   handler: Effect.fn("desktop.ipc.window.readMedia")(function* (url, event) {
-    const window = yield* (yield* ElectronWindow.ElectronWindow).main;
+    const window = yield* (yield* ElectronWindow.ElectronWindow).fromWebContentsId(
+      event?.sender.id ?? -1,
+    );
     if (
       event === undefined ||
       Option.isNone(window) ||
@@ -468,7 +479,7 @@ export const pasteAsText = DesktopIpc.makeIpcMethod({
   result: Schema.Void,
   handler: Effect.fn("desktop.ipc.window.pasteAsText")(function* (_input, event) {
     const electronWindow = yield* ElectronWindow.ElectronWindow;
-    const window = yield* electronWindow.main;
+    const window = yield* electronWindow.fromWebContentsId(event?.sender.id ?? -1);
     if (
       event === undefined ||
       Option.isNone(window) ||
@@ -494,7 +505,7 @@ export const revealWindow = DesktopIpc.makeIpcMethod({
   result: Schema.Void,
   handler: Effect.fn("desktop.ipc.window.revealWindow")(function* (_input, event) {
     const electronWindow = yield* ElectronWindow.ElectronWindow;
-    const window = yield* electronWindow.main;
+    const window = yield* electronWindow.fromWebContentsId(event?.sender.id ?? -1);
     if (
       event === undefined ||
       Option.isNone(window) ||
@@ -532,7 +543,7 @@ export const syncHtmlFullscreen = DesktopIpc.makeIpcMethod({
   result: Schema.Void,
   handler: Effect.fn("desktop.ipc.window.syncHtmlFullscreen")(function* (fullscreen, event) {
     const electronWindow = yield* ElectronWindow.ElectronWindow;
-    const main = yield* electronWindow.main;
+    const main = yield* electronWindow.fromWebContentsId(event?.sender.id ?? -1);
     if (
       event === undefined ||
       Option.isNone(main) ||

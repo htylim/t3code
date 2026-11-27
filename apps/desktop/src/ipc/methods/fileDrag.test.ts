@@ -2,6 +2,7 @@ import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import { vi } from "vite-plus/test";
 
@@ -33,7 +34,10 @@ it.effect("only drags existing absolute paths from the host environment and app 
           platform,
         } as DesktopEnvironment.DesktopEnvironment["Service"]),
         Effect.provideService(ElectronWindow.ElectronWindow, {
-          main: Effect.succeedSome({ webContents: { id: 1, startDrag } }),
+          fromWebContentsId: (id: number) =>
+            Effect.succeed(
+              id === 1 ? Option.some({ webContents: { id: 1, startDrag } }) : Option.none(),
+            ),
         } as unknown as ElectronWindow.ElectronWindow["Service"]),
       );
     assert.isFalse(yield* run("remote", filePath));

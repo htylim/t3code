@@ -93,6 +93,7 @@ const layerDesktopUpdates = ({ checkResult }: MenuServices) =>
 
 const layerDesktopWindow = (selectedAction: Deferred.Deferred<string>) =>
   Layer.succeed(DesktopWindow.DesktopWindow, {
+    newWindow: Deferred.succeed(selectedAction, "new-window").pipe(Effect.asVoid),
     createMain: Effect.die("unexpected createMain"),
     ensureMain: Effect.die("unexpected ensureMain"),
     revealOrCreateMain: Effect.die("unexpected revealOrCreateMain"),
@@ -197,6 +198,26 @@ const checkForUpdatesFromMacMenu = (state: Partial<DesktopUpdateState>) =>
   });
 
 describe("DesktopApplicationMenu", () => {
+  it.effect.each(["darwin", "linux", "win32"] as const)(
+    "opens a new window from the File menu on %s",
+    (platform) =>
+      Effect.gen(function* () {
+        const selectedAction = yield* Deferred.make<string>();
+        const applicationMenuTemplate =
+          yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+        yield* configureMenu(selectedAction, applicationMenuTemplate, { platform });
+        const fileMenu = (yield* Deferred.await(applicationMenuTemplate)).find(
+          (entry) => entry.label === "File",
+        );
+        if (!Array.isArray(fileMenu?.submenu)) throw new Error("Expected the File menu.");
+        const newWindow = fileMenu.submenu.find((entry) => entry.label === "New Window");
+        if (typeof newWindow?.click !== "function") throw new Error("Expected New Window.");
+        assert.equal(newWindow.accelerator, "CmdOrCtrl+N");
+        newWindow.click({} as Electron.MenuItem, undefined, {} as KeyboardEvent);
+        assert.equal(yield* Deferred.await(selectedAction), "new-window");
+      }),
+  );
+
   it.effect("leaves the accelerator to Chromium instead of injecting a paste", () =>
     Effect.gen(function* () {
       const selectedAction = yield* Deferred.make<string>();

@@ -1114,6 +1114,9 @@ export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
 export interface DesktopBridge {
+  /** False in secondary windows, which view the environment browser through its stream. */
+  getServerBrowserHost?: () => boolean;
+  onServerBrowserHostChange?: (listener: (hosting: boolean) => void) => () => void;
   getAppBranding: () => DesktopAppBranding | null;
   /** `null` until the desktop host has read the login shell's environment; ask again later. */
   getRelayTelemetryEnabled: () => boolean | null;

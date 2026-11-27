@@ -20,7 +20,9 @@ export const startFileDrag = makeIpcMethod({
     if (!environment.path.isAbsolute(input.path)) return false;
     const hostEnvironmentId = yield* getHostEnvironmentId.handler(undefined);
     if (hostEnvironmentId === null || input.environmentId !== hostEnvironmentId) return false;
-    const window = yield* (yield* ElectronWindow.ElectronWindow).main;
+    const window = yield* (yield* ElectronWindow.ElectronWindow).fromWebContentsId(
+      event?.sender.id ?? -1,
+    );
     if (Option.isNone(window) || event?.sender.id !== window.value.webContents.id) return false;
     const fs = yield* FileSystem.FileSystem;
     if (!(yield* fs.exists(input.path))) return false;

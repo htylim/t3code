@@ -18,6 +18,8 @@ import {
 } from "~/state/entities";
 import { environmentServerConfigsAtom } from "~/state/server";
 
+import { hostsServerBrowser, useHostsServerBrowser } from "./desktopBrowserHost";
+
 import { tunnelsEnvironmentLoopback } from "./browserTargetResolver";
 
 /** Whether this desktop loads the environment's localhost itself: it is local, or its tunnel is on. */
@@ -76,6 +78,7 @@ export function rendersServerTabNatively(
 ): boolean {
   return (
     isElectron &&
+    hostsServerBrowser() &&
     snapshot?.runtime === "server" &&
     !snapshot.headless &&
     primaryEnvironmentId !== null &&
@@ -87,5 +90,6 @@ export function useRendersServerTabNatively(
   environmentId: EnvironmentId,
   snapshot: Pick<PreviewSessionSnapshot, "runtime" | "headless"> | null | undefined,
 ): boolean {
+  useHostsServerBrowser();
   return rendersServerTabNatively(environmentId, useAtomValue(primaryEnvironmentIdAtom), snapshot);
 }

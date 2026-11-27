@@ -204,6 +204,7 @@ function layerPool(
         } satisfies ElectronDialog.ElectronDialog["Service"]),
         ElectronApp.layer,
         Layer.succeed(DesktopWindow.DesktopWindow, {
+          newWindow: Effect.void,
           createMain: Effect.die("unexpected window create"),
           ensureMain: Effect.die("unexpected window ensure"),
           revealOrCreateMain: Effect.die("unexpected window reveal"),

@@ -14,6 +14,7 @@ import {
   readThreadPreviewState,
   reconcilePreviewServerSessions,
 } from "~/previewStateStore";
+import { useHostsServerBrowser } from "~/browser/desktopBrowserHost";
 import { isElectron } from "~/env";
 import { previewEnvironment } from "~/state/preview";
 
@@ -140,8 +141,9 @@ const desktopHostedPreviewSyncAtom = Atom.family((environmentId: EnvironmentId) 
 });
 
 export function useDesktopHostedPreviewSessions(environmentId: EnvironmentId | null): void {
+  const hosting = useHostsServerBrowser();
   useAtomValue(
-    isElectron && environmentId !== null
+    isElectron && hosting && environmentId !== null
       ? desktopHostedPreviewSyncAtom(environmentId)
       : inactiveAtom,
   );

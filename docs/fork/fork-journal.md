@@ -1,5 +1,24 @@
 # Fork journal
 
+## Open multiple desktop windows
+
+- Upstream baseline: `dd941b9c3b58`; checkout before this change: `c24b98d76d`.
+- Add **File → New Window** with Command/Ctrl+N. App windows share the running
+  environment; native requests use their sending window and menu actions use the
+  focused app window. Preview pages and login popups cannot gain app privileges.
+- Keep one native host for environment browser tabs. Other windows use the existing
+  stream, and the oldest remaining window takes over when the host closes. Give
+  desktop preview tabs a renderer-specific identity and clean up only the closed
+  window's previews. Flush bounds for every remaining window on quit.
+- Verification: focused window, IPC, and preview tests pass. The desktop and web
+  type checks, desktop bundle build, and locale catalog check pass. An isolated
+  native Electron run opened two windows from the menu, checked shared server
+  authentication and separate previews, closed the browser host, and reloaded the
+  remaining window. Screenshots and the runtime transcript remain outside source.
+  Changed-file checks pass except for the existing analytics `effectFnOpportunity`
+  diagnostic in `apps/server/src/telemetry/AnalyticsService.ts:28`. App zoom remains
+  shared through Chromium, as for browser tabs on the same origin.
+
 ## Disable upstream product analytics and relay tracing
 
 - Upstream baseline: `dd941b9c3b58`; checkout before this change: `3924bfef83`.

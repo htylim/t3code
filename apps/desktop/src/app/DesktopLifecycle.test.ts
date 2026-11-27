@@ -72,6 +72,8 @@ function layerElectronWindow(destroyAll: Effect.Effect<void> = Effect.void) {
   return Layer.succeed(ElectronWindow.ElectronWindow, {
     create: () => Effect.die("unexpected window creation"),
     main: Effect.die("unexpected main window read"),
+    fromWebContentsId: () => Effect.die("unexpected app window lookup"),
+    serverBrowserHost: Effect.succeedNone,
     currentMainOrFirst: Effect.die("unexpected current window read"),
     focusedMainOrFirst: Effect.die("unexpected focused window read"),
     setMain: () => Effect.void,
@@ -91,6 +93,7 @@ function layerDesktopWindow(
   } = {},
 ) {
   return Layer.succeed(DesktopWindow.DesktopWindow, {
+    newWindow: Effect.void,
     createMain: Effect.die("unexpected window creation"),
     ensureMain: Effect.die("unexpected window creation"),
     revealOrCreateMain: Effect.die("unexpected window creation"),
